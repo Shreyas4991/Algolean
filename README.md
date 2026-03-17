@@ -10,7 +10,7 @@ Algolean is a library of algorithms and complexity theory, defined broadly to in
 ## List of contributors
 (so far)
 
-* Shreyas Srinivas
+* Shreyas Srinivas - Maintainer and main author.
 * Tanner Duve
 * Eric Wieser
 
