@@ -176,6 +176,7 @@ section TimeComplexity
 
 open Algolean Algorithms AddWriter Nat
 
+/-- The n*log n function for mergesort time complexity -/
 abbrev T (n : ℕ) : ℕ := n * clog 2 n
 
 /-- Key Lemma: ⌈log2 ⌈n/2⌉⌉ ≤ ⌈log2 n⌉ - 1 for n > 1 -/
