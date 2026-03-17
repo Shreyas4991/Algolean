@@ -1,5 +1,22 @@
 # Algolean
 
+Algolean is a library of algorithms theory, defined broadly to include much of the Algorithms and Complexity theory literature. It is written in the lightweight free monad version of what I call the "query-combinator" model. It currently consists of code that lies in several CSLib pull requests.  
+
+## Nomenclature
+`Algolean` is a pun. It is intended to be read in two ways.
+* "Algo" + "Lean" : A library of algorithms theory in lean
+* "Algol" + "ean" (pronounced like "ene") : To pay homage to Algol which motivates a lot of modern algorithmic pseudocode, and whose simplicity this framework hopes to mimic (hence the "ene").
+
+## List of contributors
+(so far)
+
+* Shreyas Srinivas
+* Tanner Duve
+* Eric Wieser
+
+## Acknowledgements
+For timing it builds on top of the Writer monad `AddWriter` that was proposed in CSLib as the TimeM model by Sorrachai Yingchareonthawornchai and whose API was perfected by Eric Wieser. While it could be avoided, the lemmata provided simplify our proofs greatly, and we avoid recreating it from scratch.
+
 ## GitHub configuration
 
 To set up your new GitHub repository, follow these steps:

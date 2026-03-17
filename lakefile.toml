@@ -1,18 +1,21 @@
 name = "Algolean"
 version = "0.1.0"
-keywords = ["math"]
+keywords = ["computer science", "algorithms"]
 defaultTargets = ["Algolean"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
-relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
 maxSynthPendingDepth = 3
 
 [[require]]
-name = "mathlib"
-scope = "leanprover-community"
-rev = "v4.28.0"
+name = "cslib"
+scope = "leanprover"
+rev = "stable"
 
 [[lean_lib]]
 name = "Algolean"
+
+[[lean_lib]]
+name = "AlgoleanTests"
+globs = ["AlgoleanTests.+"]
