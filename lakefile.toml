@@ -2,7 +2,7 @@ name = "Algolean"
 version = "0.1.0"
 keywords = ["computer science", "algorithms"]
 defaultTargets = ["Algolean"]
-testDriver = "CslibTests"
+testDriver = "AlgoleanTests"
 lintDriver = "batteries/runLinter"
 
 [leanOptions]
