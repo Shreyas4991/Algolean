@@ -68,7 +68,9 @@ inductive RobertsonWebbQuery (α : Type) : Type → Type where
 /-- The cost structure of the Robertson Webb query model -/
 @[ext, grind]
 structure RWCosts where
+  /-- the number of calls to the `eval` query -/
   evals : ℕ
+  /-- the number of calls to the `mark` query -/
   marks : ℕ
 
 /-- Equivalence between SortOpsCost and a product type. -/
