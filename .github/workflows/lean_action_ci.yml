@@ -2,20 +2,43 @@ name: Lean Action CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
-  workflow_dispatch:
-
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
-permissions:
-  contents: read # Read access to repository contents
-  pages: write # Write access to GitHub Pages
-  id-token: write # Write access to ID tokens
+    branches:
+      - '*'
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
-      - uses: leanprover/lean-action@v1
-      #- uses: leanprover-community/docgen-action@v1
+    # Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    # Set up Lean
+    - name: Set up Lean
+      uses: leanprover/lean-action@v2
+
+    # Cache the documentation files
+    - name: Cache docgen4
+      uses: actions/cache@v3
+      with:
+        path: doc/
+        key: ${{ runner.os }}-doc-cache-${{ hashFiles('**/*.lean') }}
+        restore-keys: |
+          ${{ runner.os }}-doc-cache-
+
+    # Run the documentation generator
+    - name: Generate docs with docgen4
+      uses: leanprover-community/docgen4@v1
+      with:
+        output-path: doc/
+
+    # Upload artifacts for inspection if necessary
+    - name: Upload documentation artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: docs
+        path: doc/
