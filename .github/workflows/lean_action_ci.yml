@@ -22,6 +22,25 @@ jobs:
 
       - uses: leanprover/lean-action@v1
 
+      - name: Restore docs cache for main deploy
+        id: docs-cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            docbuild/.lake/build/doc
+            docbuild/.lake/build/doc-data
+            docbuild/.lake/build/doc/references.bib
+          key: docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-${{ github.run_id }}
+          restore-keys: |
+            docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-
+
+      - name: Show main docs cache status
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Docs cache hit = ${{ steps.docs-cache.outputs.cache-hit }}"
+          echo "Docs cache matched key = ${{ steps.docs-cache.outputs.cache-matched-key }}"
+
       - name: Build and deploy docs on main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: leanprover-community/docgen-action@main
@@ -29,22 +48,24 @@ jobs:
           build-page: false
           deploy: true
 
-      - name: Restore PR doc cache
+      - name: Restore docs cache for pull requests
         id: pr-doc-cache
         if: github.event_name == 'pull_request'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             docbuild/.lake/build/doc
             docbuild/.lake/build/doc-data
             docbuild/.lake/build/doc/references.bib
-          key: pr-docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}
+          key: docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-${{ github.run_id }}
           restore-keys: |
-            pr-docs-${{ runner.os }}-
+            docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-
 
-      - name: Show PR doc cache status
+      - name: Show PR docs cache status
         if: github.event_name == 'pull_request'
-        run: echo "PR doc cache hit = ${{ steps.pr-doc-cache.outputs.cache-hit }}"
+        run: |
+          echo "Docs cache hit = ${{ steps.pr-doc-cache.outputs.cache-hit }}"
+          echo "Docs cache matched key = ${{ steps.pr-doc-cache.outputs.cache-matched-key }}"
 
       - name: Build docs on pull requests (no deploy)
         if: github.event_name == 'pull_request'
@@ -102,3 +123,13 @@ jobs:
           fi
           MATHLIB_NO_CACHE_ON_UPDATE=1 ~/.elan/bin/lake update "$NAME"
           ~/.elan/bin/lake build $DOCS_FACETS
+
+      - name: Save docs cache from main docs build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            docbuild/.lake/build/doc
+            docbuild/.lake/build/doc-data
+            docbuild/.lake/build/doc/references.bib
+          key: ${{ steps.docs-cache.outputs.cache-primary-key }}
