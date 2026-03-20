@@ -30,7 +30,9 @@ jobs:
         id: build-docgen
         uses: leanprover-community/docgen-action@main
         with:
-          build-page: false
+          build-page: true
+
+
 
   deploy-webpage:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
