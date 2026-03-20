@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Algolean</title>
+    <meta
+      name="description"
+      content="Algolean is a Lean library for algorithmic models and complexity theory."
+    >
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&display=swap"
+      rel="stylesheet"
+    >
+    <script>
+      (() => {
+        const storageKey = "algolean-theme";
+        const saved = localStorage.getItem(storageKey);
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved === "light" || saved === "dark"
+          ? saved
+          : (prefersDark ? "dark" : "light");
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
+    <style>
+:root {
+  --bg-0: #f5f3ef;
+  --bg-1: #eaf0f5;
+  --bg-radial-a: #cfdbeb;
+  --bg-radial-b: #d8e6f3;
+  --ink: #1a2639;
+  --ink-soft: #4a5a74;
+  --accent: #0f5b74;
+  --accent-end: #164e63;
+  --accent-text: #ffffff;
+  --card-start: #ffffff;
+  --card-end: #fffffffb;
+  --surface: #ffffff;
+  --tag-bg: #f8fbff;
+  --button-muted-bg: #ffffff;
+  --logo-a: #0f5b74;
+  --logo-b: #3b7790;
+  --label: #4d628c;
+  --border: #1d2f4a20;
+  --focus: #0b3f7a;
+  --shadow: 0 18px 44px #10284a1a;
+  --accent-shadow: 0 10px 28px #0f5b7436;
+  --accent-shadow-hover: 0 14px 36px #0f5b7444;
+}
+
+:root[data-theme="dark"] {
+  --bg-0: #090f1b;
+  --bg-1: #121a2d;
+  --bg-radial-a: #1f2f4d;
+  --bg-radial-b: #123144;
+  --ink: #e9efff;
+  --ink-soft: #a7b6d6;
+  --accent: #4ea4e1;
+  --accent-end: #2f7db5;
+  --accent-text: #07121e;
+  --card-start: #111a2d;
+  --card-end: #0f1727;
+  --surface: #18253d;
+  --tag-bg: #1a2944;
+  --button-muted-bg: #1a2944;
+  --logo-a: #4ea4e1;
+  --logo-b: #6ac6f0;
+  --label: #8ea7d4;
+  --border: #7e95bc40;
+  --focus: #7ec7ff;
+  --shadow: 0 20px 60px #02061188;
+  --accent-shadow: 0 10px 28px #1f88d25c;
+  --accent-shadow-hover: 0 14px 36px #1f88d273;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Source Sans 3", "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(1400px 600px at 0% -10%, var(--bg-radial-a) 0%, transparent 50%),
+    radial-gradient(1000px 500px at 100% 0%, var(--bg-radial-b) 0%, transparent 55%),
+    linear-gradient(175deg, var(--bg-0), var(--bg-1));
+  padding: 1.4rem;
+}
+
+.shell {
+  width: min(860px, 100%);
+  margin: 3.5rem auto;
+  background: linear-gradient(180deg, var(--card-start), var(--card-end));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.top {
+  padding: 1.1rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 1.03rem;
+}
+
+.logo-mark {
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 0.35rem;
+  background: linear-gradient(135deg, var(--logo-a), var(--logo-b));
+}
+
+.tag {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--tag-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.26rem 0.62rem;
+}
+
+.top-right {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.theme-toggle {
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--tag-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.26rem 0.62rem;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.content {
+  padding: 2.2rem clamp(1.2rem, 4vw, 2.6rem) 2rem;
+}
+
+h1 {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 3.35rem);
+  letter-spacing: -0.02em;
+  line-height: 1.02;
+  margin: 0;
+  max-width: 16ch;
+}
+
+.lead {
+  margin: 1rem 0 0;
+  max-width: 60ch;
+  line-height: 1.56;
+  color: var(--ink-soft);
+  font-size: 1.07rem;
+}
+
+.actions {
+  margin-top: 1.45rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border-radius: 999px;
+  padding: 0.72rem 1.06rem;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-end));
+  color: var(--accent-text);
+  box-shadow: var(--accent-shadow);
+}
+
+.btn-secondary {
+  color: var(--ink);
+  background: var(--button-muted-bg);
+  border: 1px solid var(--border);
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary:hover {
+  box-shadow: var(--accent-shadow-hover);
+}
+
+.grid {
+  margin-top: 1.8rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.item {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0.8rem 0.88rem;
+  background: var(--surface);
+}
+
+.item dt {
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--label);
+}
+
+.item dd {
+  margin: 0.3rem 0 0;
+  font-size: 0.96rem;
+  font-weight: 600;
+}
+
+.foot {
+  border-top: 1px solid var(--border);
+  padding: 0.82rem 1.2rem 1.05rem;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(6px);
+  animation: rise 420ms ease forwards;
+}
+
+.reveal:nth-child(2) {
+  animation-delay: 70ms;
+}
+
+.reveal:nth-child(3) {
+  animation-delay: 120ms;
+}
+
+.reveal:nth-child(4) {
+  animation-delay: 170ms;
+}
+
+@keyframes rise {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 760px) {
+  .shell {
+    margin: 1.3rem auto;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .top-right {
+    justify-content: flex-start;
+  }
+}
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="top">
+        <div class="logo">
+          <span class="logo-mark" aria-hidden="true"></span>
+          <span>Algolean</span>
+        </div>
+        <div class="top-right">
+          <span class="tag">Lean 4 · Algorithms · Complexity</span>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">
+            Switch Theme
+          </button>
+        </div>
+      </header>
+
+      <section class="content">
+        <h1 class="reveal">A Lean library for algorithms and complexity</h1>
+        <p class="lead reveal">
+          Algolean aims to formalise algorithms and complexity theory in a top-down lightweight Free-Monad based DSL
+          which we call Prog. It allows and requires users to specifiy upfront, the basic operations that are counted and 
+          their cost models. The library is still at an early stage. It has all the pros and cons of using monads.
+          
+          Explore the generated documentation for definitions of queries, models, algorithms, and theorems.
+        </p>
+        <div class="actions reveal">
+          <a class="btn btn-primary" href="./docs/">Read API Docs</a>
+          <a class="btn btn-secondary" href="https://github.com/Shreyas4991/Algolean">View on GitHub</a>
+        </div>
+
+        <dl class="grid reveal">
+          <div class="item">
+            <dt>Primary Focus</dt>
+            <dd>Algorithms & complexity theory</dd>
+          </div>
+          <div class="item">
+            <dt>Core Idea</dt>
+            <dd>Explicit operations and costs. Free Monads</dd>
+          </div>
+        </dl>
+      </section>
+      
+      <footer class="foot">
+        Copyright Shreyas Srinivas. 2026
+      </footer>
+    </main>
+    <script>
+      (() => {
+        const storageKey = "algolean-theme";
+        const root = document.documentElement;
+        const toggle = document.getElementById("theme-toggle");
+        const media = window.matchMedia("(prefers-color-scheme: dark)");
+
+        const readTheme = () => (root.dataset.theme === "dark" ? "dark" : "light");
+
+        const applyTheme = (theme, persist) => {
+          root.dataset.theme = theme;
+          root.style.colorScheme = theme;
+          if (persist) {
+            localStorage.setItem(storageKey, theme);
+          }
+          const nextTheme = theme === "dark" ? "light" : "dark";
+          toggle.textContent = nextTheme === "dark" ? "Use Dark" : "Use Light";
+          toggle.setAttribute("aria-label", `Switch to ${nextTheme} mode`);
+          toggle.setAttribute("title", `Switch to ${nextTheme} mode`);
+        };
+
+        applyTheme(readTheme(), false);
+
+        toggle.addEventListener("click", () => {
+          const nextTheme = readTheme() === "dark" ? "light" : "dark";
+          applyTheme(nextTheme, true);
+        });
+
+        media.addEventListener("change", (event) => {
+          const saved = localStorage.getItem(storageKey);
+          if (saved !== "light" && saved !== "dark") {
+            applyTheme(event.matches ? "dark" : "light", false);
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
