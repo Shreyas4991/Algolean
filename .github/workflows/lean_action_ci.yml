@@ -2,134 +2,63 @@ name: Lean Action CI
 
 on:
   push:
+    branches:
+      - main
+      - nightly-testing
   pull_request:
+  merge_group:
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
-permissions:
-  contents: read # Read access to repository contents
-  pages: write # Write access to GitHub Pages
-  id-token: write # Write access to ID tokens
-
 jobs:
-  build:
+  ci-checks:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - uses: leanprover/lean-action@v1
-
-      - name: Restore docs cache for main deploy
-        id: docs-cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            docbuild/.lake/build/doc
-            docbuild/.lake/build/doc-data
-            docbuild/.lake/build/doc/references.bib
-          key: docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-${{ github.run_id }}
-          restore-keys: |
-            docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-
-
-      - name: Show main docs cache status
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - uses: actions/checkout@v4
+      - name: Set TEST_ARGS manually
         run: |
-          echo "Docs cache hit = ${{ steps.docs-cache.outputs.cache-hit }}"
-          echo "Docs cache matched key = ${{ steps.docs-cache.outputs.cache-matched-key }}"
-
-      - name: Build and deploy docs on main
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+          echo "TEST_ARGS='--wfail --iofail'" >> $GITHUB_ENV
+        shell: bash
+      - uses: leanprover/lean-action@v1
+        with:
+          build-args: "--wfail --iofail"
+          test-args: "--wfail --iofail"
+      - name: "lake exe mk_all --check --module"
+        run: |
+          set -e
+          lake exe mk_all --check --module
+      - name: Build project documentation
+        id: build-docgen
         uses: leanprover-community/docgen-action@main
         with:
           build-page: false
-          deploy: true
 
-      - name: Restore docs cache for pull requests
-        id: pr-doc-cache
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            docbuild/.lake/build/doc
-            docbuild/.lake/build/doc-data
-            docbuild/.lake/build/doc/references.bib
-          key: docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-${{ github.run_id }}
-          restore-keys: |
-            docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-
+  deploy-webpage:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Show PR docs cache status
-        if: github.event_name == 'pull_request'
-        run: |
-          echo "Docs cache hit = ${{ steps.pr-doc-cache.outputs.cache-hit }}"
-          echo "Docs cache matched key = ${{ steps.pr-doc-cache.outputs.cache-matched-key }}"
-
-      - name: Build docs on pull requests (no deploy)
-        if: github.event_name == 'pull_request'
+      - name: Prepare webpage artifact from docs/
         shell: bash
         run: |
           set -euo pipefail
+          test -f docs/index.html
+          rm -rf _site
+          mkdir -p _site
+          cp -a docs/* _site/
 
-          NAME="$(sed -n 's/^name = "\([^"]*\)"/\1/p' lakefile.toml | head -n1)"
-          if [ -z "$NAME" ]; then
-            echo "Failed to parse package name from lakefile.toml" >&2
-            exit 1
-          fi
-
-          TOOLCHAIN_REV="$(cut -d: -f2 lean-toolchain)"
-          if [ -z "$TOOLCHAIN_REV" ]; then
-            echo "Failed to parse lean-toolchain revision" >&2
-            exit 1
-          fi
-
-          TARGETS_RAW="$(sed -n 's/^defaultTargets = \[\(.*\)\]/\1/p' lakefile.toml | head -n1)"
-          if [ -z "$TARGETS_RAW" ]; then
-            TARGETS_RAW="\"$NAME\""
-          fi
-
-          DOCS_FACETS="$(
-            echo "$TARGETS_RAW" \
-              | tr ',' '\n' \
-              | sed -E 's/[[:space:]"]//g' \
-              | sed '/^$/d' \
-              | awk '{printf "%s:docs ", $0}'
-          )"
-          DOCS_FACETS="${DOCS_FACETS% }"
-
-          mkdir -p docbuild
-          cat <<EOF > docbuild/lakefile.toml
-          name = "docbuild"
-          reservoir = false
-          version = "0.1.0"
-          packagesDir = "../.lake/packages"
-
-          [[require]]
-          name = "$NAME"
-          path = "../"
-
-          [[require]]
-          scope = "leanprover"
-          name = "doc-gen4"
-          rev = "$TOOLCHAIN_REV"
-          EOF
-
-          cd docbuild
-          if [ -f ../references.bib ]; then
-            mkdir -p docs
-            cp ../references.bib ./docs/references.bib
-          fi
-          MATHLIB_NO_CACHE_ON_UPDATE=1 ~/.elan/bin/lake update "$NAME"
-          ~/.elan/bin/lake build $DOCS_FACETS
-
-      - name: Save docs cache from main docs build
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          path: |
-            docbuild/.lake/build/doc
-            docbuild/.lake/build/doc-data
-            docbuild/.lake/build/doc/references.bib
-          key: ${{ steps.docs-cache.outputs.cache-primary-key }}
+          path: _site
+
+      - name: Deploy webpage to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

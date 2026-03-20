@@ -6,7 +6,7 @@
    "subDir": null,
    "scope": "leanprover",
    "rev": "9a159ac9ab187d193682664d39b3aa7669875619",
-   "name": "cslib",
+   "name": "Cslib",
    "manifestFile": "lake-manifest.json",
    "inputRev": "v4.29.0-rc6",
    "inherited": false,
