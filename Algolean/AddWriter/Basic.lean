@@ -26,7 +26,7 @@ public import Mathlib.Algebra.Group.Defs
 This file was authored by Sorrachai Yingchareonthawornchai in the CSLib repository.
 It was named the Time monad `TimeM`. The standard name for this concept is the Writer Monad.
 Since Lean/Mathlib make a distinction between additive and multiplicative algebraic structures,
-and Mathlib already contains a Writer monad, we call this structure `AddWriter`
+and Mathlib already contains a Writer monad, we call this structure `AddWriter`.
 
 ## References
 1. [Elementary explanation of writer monads](https://williamyaoh.com/posts/2020-07-26-deriving-writer-monad.html)
