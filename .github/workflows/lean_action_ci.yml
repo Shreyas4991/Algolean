@@ -2,124 +2,32 @@ name: Lean Action CI
 
 on:
   push:
+    branches:
+      - main
+      - nightly-testing
   pull_request:
+  merge_group:
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
-permissions:
-  contents: read # Read access to repository contents
-  pages: write # Write access to GitHub Pages
-  id-token: write # Write access to ID tokens
-
 jobs:
-  build:
+  ci-checks:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - uses: leanprover/lean-action@v1
-
-      - name: Restore docs cache
-        id: pr-doc-cache
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            docbuild/.lake/build/doc
-            docbuild/.lake/build/doc-data
-            docbuild/.lake/build/doc/references.bib
-          key: docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-${{ github.run_id }}
-          restore-keys: |
-            docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-
-
-      - name: Show PR docs cache status
-        if: github.event_name == 'pull_request'
+      - uses: actions/checkout@v4
+      - name: Set TEST_ARGS manually
         run: |
-          echo "Docs cache hit = ${{ steps.pr-doc-cache.outputs.cache-hit }}"
-          echo "Docs cache matched key = ${{ steps.pr-doc-cache.outputs.cache-matched-key }}"
-
-      - name: Build docs on pull requests (no deploy)
-        if: github.event_name == 'pull_request'
+          echo "TEST_ARGS='--wfail --iofail'" >> $GITHUB_ENV
         shell: bash
-        run: bash .github/scripts/build_docs.sh
-
-  docs_main:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
       - uses: leanprover/lean-action@v1
         with:
-          auto-config: false
-          build: false
-          test: false
-          lint: false
-      
-      - name: Restore docs cache
-        id: pr-doc-cache
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            docbuild/.lake/build/doc
-            docbuild/.lake/build/doc-data
-            docbuild/.lake/build/doc/references.bib
-          key: docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-${{ github.run_id }}
-          restore-keys: |
-            docs-${{ runner.os }}-${{ hashFiles('lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}-
-      - name: Build API docs on main
-        shell: bash
-        run: bash .github/scripts/build_docs.sh
-
-      - name: Upload API docs artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-docs
-          path: docbuild/.lake/build/doc
-          if-no-files-found: error
-
-  deploy_pages:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && always() && needs.build.result == 'success'
-    needs:
-      - build
-      - docs_main
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Download API docs artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: api-docs
-          path: _api_docs
-
-      - name: Prepare Pages artifact from webpage and optional API docs
-        shell: bash
+          build-args: "--wfail --iofail"
+          test-args: "--wfail --iofail"
+      - name: "lake exe mk_all --check --module"
         run: |
-          set -euo pipefail
-          rm -rf _site
-          mkdir -p _site
-          cp -a docs/. _site/
-          if [ -d _api_docs ]; then
-            rm -rf _site/docs
-            mkdir -p _site/docs
-            cp -a _api_docs/. _site/docs/
-          fi
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+          set -e
+          lake exe mk_all --check --module
+      - name: Build project documentation
+        id: build-docgen
+        uses: leanprover-community/docgen-action@main
         with:
-          path: _site
-
-      - name: Deploy webpage to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          build-page: false
