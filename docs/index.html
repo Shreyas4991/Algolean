@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-      href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&family=Space+Grotesk:wght@600;700&display=swap"
       rel="stylesheet"
     >
     <script>
@@ -119,9 +119,10 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
+  font-family: "Space Grotesk", "Source Sans 3", "Avenir Next", "Segoe UI", sans-serif;
   font-weight: 700;
   letter-spacing: 0.02em;
-  font-size: 1.03rem;
+  font-size: 1.25rem;
 }
 
 .logo-mark {
@@ -151,15 +152,42 @@ body {
 
 .theme-toggle {
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--ink-soft);
   background: var(--tag-bg);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0.26rem 0.62rem;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
   cursor: pointer;
   transition: color 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.theme-toggle-icon {
+  position: relative;
+  display: block;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 50%;
+  background: currentColor;
+  transform: rotate(-42deg);
+  transform-origin: center;
+}
+
+.theme-toggle-icon::after {
+  content: "";
+  position: absolute;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--tag-bg);
+  top: 0.06rem;
+  left: 0.28rem;
 }
 
 .theme-toggle:hover {
@@ -322,12 +350,12 @@ h1 {
       <header class="top">
         <div class="logo">
           <span class="logo-mark" aria-hidden="true"></span>
-          <span>Algolean</span>
+          <span>ALGOLEAN</span>
         </div>
         <div class="top-right">
           <span class="tag">Lean 4 · Algorithms · Complexity</span>
           <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch theme">
-            Switch Theme
+            <span class="theme-toggle-icon" aria-hidden="true"></span>
           </button>
         </div>
       </header>
@@ -335,11 +363,10 @@ h1 {
       <section class="content">
         <h1 class="reveal">A Lean library for algorithms and complexity</h1>
         <p class="lead reveal">
-          Algolean aims to formalise algorithms and complexity theory in a top-down lightweight Free-Monad based DSL
-          which we call Prog. It allows and requires users to specifiy upfront, the basic operations that are counted and 
+          Algolean aims to formalise algorithms and complexity theory with a top-down approach. We build and use a lightweight Free-Monad 
+          based DSL which we call Prog. It allows and requires users to specifiy upfront, the basic operations that are counted and 
           their cost models. The library is still at an early stage. It has all the pros and cons of using monads.
-          
-          Explore the generated documentation for definitions of queries, models, algorithms, and theorems.
+          Explore the source and generated documentation for definitions of queries, models, algorithms, and theorems.
         </p>
         <div class="actions reveal">
           <a class="btn btn-primary" href="./docs/">Read API Docs</a>
@@ -378,7 +405,6 @@ h1 {
             localStorage.setItem(storageKey, theme);
           }
           const nextTheme = theme === "dark" ? "light" : "dark";
-          toggle.textContent = nextTheme === "dark" ? "Use Dark" : "Use Light";
           toggle.setAttribute("aria-label", `Switch to ${nextTheme} mode`);
           toggle.setAttribute("title", `Switch to ${nextTheme} mode`);
         };
