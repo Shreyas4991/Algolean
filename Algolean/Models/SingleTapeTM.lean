@@ -156,19 +156,19 @@ def TMDecisionProblem (L : Language Symbol) (x : List Symbol)
 /-- A language is in P if there exists a TM, a uniform family of
 programs, and a polynomial such that each program correctly decides
 `L` on input `x` within `p(|x|)` steps under `TMModel tm`. -/
-def InP (L : Language Symbol) : Prop :=
+def P (L : Language Symbol) : Prop :=
   ∃ (tm : SingleTapeTM Symbol)
-    (P : List Symbol → Prog (TMQuery tm) Bool)
+    (prog : List Symbol → Prog (TMQuery tm) Bool)
     (p : Polynomial ℕ),
-    ∀ x, ((P x).eval (TMModel tm) = true ↔ L x) ∧
-      ((P x).time (TMModel tm)).steps ≤ p.eval x.length
+    ∀ x, ((prog x).eval (TMModel tm) = true ↔ L x) ∧
+      ((prog x).time (TMModel tm)).steps ≤ p.eval x.length
 
 /-- A language is in NP if there exists a TM, a uniform verifier
 taking input and certificate separately, and polynomials `p` (time
 bound) and `q` (certificate bound) such that: the verifier runs in
 poly time on all valid-length certificates, and `L x` iff there
 exists a short certificate that the verifier accepts. -/
-def InNP (L : Language Symbol) : Prop :=
+def NP (L : Language Symbol) : Prop :=
   ∃ (tm : SingleTapeTM Symbol)
     (V : List Symbol → List Symbol → Prog (TMQuery tm) Bool)
     (p q : Polynomial ℕ),
@@ -205,7 +205,7 @@ theorem InP.bind
 
 /-- P ⊆ NP: every language in P is in NP (with trivial certificates).
 The verifier ignores the certificate and runs the decider. -/
-theorem InP.inNP {L : Language Symbol} (hP : InP L) : InNP L := by
+theorem NP.ofP {L : Language Symbol} (hP : P L) : NP L := by
   obtain ⟨tm, P, p, hP⟩ := hP
   refine ⟨tm, fun x _ => P x, p, 0, ?_, ?_⟩
   · intro x _ _

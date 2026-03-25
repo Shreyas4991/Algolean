@@ -70,7 +70,7 @@ def SolvesWithin [AddZero Cost] [Preorder Cost]
 
 /-- A problem is in the complexity class determined by `bound`:
 there exists a program solving it within that bound. -/
-def InQueryComplexity [AddZero Cost] [Preorder Cost]
+def InClass [AddZero Cost] [Preorder Cost]
     (prob : QueryProblem Q Cost α) (bound : Cost) : Prop :=
   ∃ P : Prog Q α, SolvesWithin P prob bound
 
@@ -169,8 +169,8 @@ theorem InQueryComplexity.of_reduces [AddZero Cost] [Preorder Cost]
     {prob prob' : QueryProblem Q Cost α}
     {bound overhead : Cost}
     (hRed : ProblemReducesTo prob prob' overhead)
-    (hIn : InQueryComplexity prob' bound) :
-    InQueryComplexity prob (bound + overhead) := by
+    (hIn : InClass prob' bound) :
+    InClass prob (bound + overhead) := by
   obtain ⟨P, hP⟩ := hIn
   obtain ⟨P', hP'⟩ := hRed P bound hP
   exact ⟨P', hP'⟩
