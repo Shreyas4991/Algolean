@@ -130,6 +130,17 @@ lemma Prog.time_bind [AddCommMonoid Cost] (M : Model Q Cost)
     specialize ih (M.evalQuery op)
     simp_all [add_assoc]
 
+/-- The `.ret` of the `AddWriter` interpretation agrees with `eval`. -/
+@[simp]
+lemma Prog.eval_eq_liftM_timeQuery_ret [AddZero Cost]
+    (P : Prog Q α) (M : Model Q Cost) :
+    P.eval M = (P.liftM M.timeQuery).ret := by
+  induction P with
+  | pure a => rfl
+  | liftBind op cont ih =>
+    simp only [eval, FreeM.liftM_liftBind]
+    exact ih (M.evalQuery op)
+
 section Reduction
 
 /-- A reduction structure from query type `Q₁` to query type `Q₂`. -/
@@ -144,6 +155,38 @@ structure Reduction (Q₁ Q₂ : Type u → Type u) where
 -/
 abbrev Prog.reduceProg (P : Prog Q₁ α) (red : Reduction Q₁ Q₂) : Prog Q₂ α :=
   P.liftM red.reduce
+
+/-- A reduction preserves evaluation when it correctly implements each query. -/
+theorem Prog.reduceProg_eval
+    (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
+    (M₁ : Model Q₁ Cost₁) (M₂ : Model Q₂ Cost₂)
+    (hCorrect : ∀ {ι} (q : Q₁ ι), (red.reduce q).eval M₂ = M₁.evalQuery q) :
+    (P.reduceProg red).eval M₂ = P.eval M₁ := by
+  simp only [reduceProg, Prog.eval]
+  induction P with
+  | pure a => rfl
+  | liftBind op cont ih =>
+    simp_all only [FreeM.liftM_liftBind, FreeM.liftM_bind, FreeM.bind_eq_bind,
+      Prog.eval, Id.run_bind, pure_bind]
+
+/-- The cost of a reduced program decomposes as the sum of per-query reduction costs. -/
+theorem Prog.reduceProg_time [AddCommMonoid Cost]
+    (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
+    (M₁ : Model Q₁ Cost₁) (M₂ : Model Q₂ Cost)
+    (hCorrect : ∀ {ι} (q : Q₁ ι), (red.reduce q).eval M₂ = M₁.evalQuery q) :
+    (P.reduceProg red).time M₂ =
+      (P.liftM (fun q => AddWriter.mk (M₁.evalQuery q)
+        ((red.reduce q).time M₂))).tell := by
+  simp only [reduceProg, Prog.time]
+  induction P with
+  | pure a => rfl
+  | liftBind op cont ih =>
+    simp only [FreeM.liftM_liftBind, FreeM.liftM_bind, FreeM.bind_eq_bind]
+    change (FreeM.liftM M₂.timeQuery (red.reduce op)).tell +
+      (FreeM.liftM M₂.timeQuery (FreeM.liftM red.reduce
+        (cont (FreeM.liftM M₂.timeQuery (red.reduce op)).ret))).tell = _
+    rw [← Prog.eval_eq_liftM_timeQuery_ret (red.reduce op) M₂, hCorrect op]
+    simp_all only [eval_eq_liftM_timeQuery_ret, AddWriter.tell_bind]
 
 end Reduction
 
