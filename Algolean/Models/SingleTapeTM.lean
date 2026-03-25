@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity
+public import Algolean.Complexity.Basic
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
 
 @[expose] public section

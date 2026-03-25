@@ -130,9 +130,9 @@ lemma Prog.time_bind [AddCommMonoid Cost] (M : Model Q Cost)
     specialize ih (M.evalQuery op)
     simp_all [add_assoc]
 
-/-- The `.ret` of the `AddWriter` interpretation agrees with `eval`. -/
-@[simp]
-lemma Prog.eval_eq_liftM_timeQuery_ret [AddZero Cost]
+/-- The `.ret` of the `AddWriter` interpretation agrees with `eval`.
+Private helper for `reduceProg_time`. -/
+private lemma Prog.eval_eq_liftM_timeQuery_ret [AddZero Cost]
     (P : Prog Q α) (M : Model Q Cost) :
     P.eval M = (P.liftM M.timeQuery).ret := by
   induction P with
