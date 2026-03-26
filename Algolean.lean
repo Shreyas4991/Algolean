@@ -1,14 +1,15 @@
-module  -- shake: keep-all
-
-public import Algolean.AddWriter.Basic
-public import Algolean.Algorithms.ListInsertionSort
-public import Algolean.Algorithms.ListLinearSearch
-public import Algolean.Algorithms.ListOrderedInsert
-public import Algolean.Algorithms.MergeSort
-public import Algolean.LowerBounds.ComparisonSort
-public import Algolean.Models.ListComparisonSearch
-public import Algolean.Models.ListComparisonSort
-public import Algolean.Models.NCCircuits
-public import Algolean.Models.RobertsonWebb
-public import Algolean.Models.SingleTapeTM
-public import Algolean.QueryModel
+import Algolean.AddWriter.Basic
+import Algolean.Algorithms.ListInsertionSort
+import Algolean.Algorithms.ListLinearSearch
+import Algolean.Algorithms.ListOrderedInsert
+import Algolean.Algorithms.MergeSort
+import Algolean.Algorithms.VecSearch
+import Algolean.Complexity.Basic
+import Algolean.LowerBounds.ComparisonSort
+import Algolean.Models.ListComparisonSearch
+import Algolean.Models.ListComparisonSort
+import Algolean.Models.NCCircuits
+import Algolean.Models.ReadOnlyVec
+import Algolean.Models.RobertsonWebb
+import Algolean.Models.SingleTapeTM
+import Algolean.QueryModel
