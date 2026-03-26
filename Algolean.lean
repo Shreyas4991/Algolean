@@ -1,6 +1,7 @@
 module  -- shake: keep-all
 
 public import Algolean.AddWriter.Basic
+public import Algolean.AddWriter.WPInstances
 public import Algolean.Algorithms.ListInsertionSort
 public import Algolean.Algorithms.ListLinearSearch
 public import Algolean.Algorithms.ListOrderedInsert
