@@ -23,8 +23,8 @@ expressible via `Model Q Cost`.
 - `QueryProblem Q Cost α`: a problem whose specification depends on the model
 - `Solves`: a program correctly solves a problem for all models
 - `SolvesWithin`: a program solves a problem within a cost bound for all models
-- `InQueryComplexity`: a problem is in a complexity class (existential over programs)
-- `ProblemReducesTo`: one problem reduces to another with bounded overhead
+- `QueryProblem.InClass`: a problem is in a complexity class (existential over programs)
+- `QueryProblem.ReducesTo`: one problem reduces to another with bounded overhead
 
 ## Design
 
@@ -70,7 +70,7 @@ def SolvesWithin [AddZero Cost] [Preorder Cost]
 
 /-- A problem is in the complexity class determined by `bound`:
 there exists a program solving it within that bound. -/
-def InClass [AddZero Cost] [Preorder Cost]
+def QueryProblem.InClass [AddZero Cost] [Preorder Cost]
     (prob : QueryProblem Q Cost α) (bound : Cost) : Prop :=
   ∃ P : Prog Q α, SolvesWithin P prob bound
 
@@ -141,12 +141,12 @@ theorem QueryProblem.comap_comp (prob : QueryProblem Q₁ Cost₁ α)
 implements each query, then the reduced program solves the transported
 problem. -/
 theorem Solves.reduceProg
-    (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
-    (prob : QueryProblem Q₁ Cost₁ α)
+    {P : Prog Q₁ α} {prob : QueryProblem Q₁ Cost₁ α}
+    (hSolves : Solves P prob)
+    (red : Reduction Q₁ Q₂)
     (pullback : Model Q₂ Cost₂ → Model Q₁ Cost₁)
     (hCorrect : ∀ (M₂ : Model Q₂ Cost₂) {ι} (q : Q₁ ι),
-      (red.reduce q).eval M₂ = (pullback M₂).evalQuery q)
-    (hSolves : Solves P prob) :
+      (red.reduce q).eval M₂ = (pullback M₂).evalQuery q) :
     Solves (P.reduceProg red) (prob.comap pullback) := by
   intro M₂
   simp only [QueryProblem.comap]
@@ -155,7 +155,7 @@ theorem Solves.reduceProg
 
 /-- A problem `prob₁` reduces to `prob₂` if any program solving `prob₂`
 can be transformed into one solving `prob₁` within bounded overhead. -/
-def ProblemReducesTo [AddZero Cost] [Preorder Cost]
+def QueryProblem.ReducesTo [AddZero Cost] [Preorder Cost]
     (prob₁ prob₂ : QueryProblem Q Cost α)
     (overhead : Cost) : Prop :=
   ∀ (P : Prog Q α) (bound : Cost),
@@ -165,12 +165,12 @@ def ProblemReducesTo [AddZero Cost] [Preorder Cost]
 /-- If `prob` is in the complexity class for `bound`, and has
 overhead `c` reduction to `prob'` which is in class `bound'`,
 then `prob` is in class `bound' + c`. -/
-theorem InQueryComplexity.of_reduces [AddZero Cost] [Preorder Cost]
+theorem QueryProblem.InClass.of_reduces [AddZero Cost] [Preorder Cost]
     {prob prob' : QueryProblem Q Cost α}
     {bound overhead : Cost}
-    (hRed : ProblemReducesTo prob prob' overhead)
-    (hIn : InClass prob' bound) :
-    InClass prob (bound + overhead) := by
+    (hIn : prob'.InClass bound)
+    (hRed : prob.ReducesTo prob' overhead) :
+    prob.InClass (bound + overhead) := by
   obtain ⟨P, hP⟩ := hIn
   obtain ⟨P', hP'⟩ := hRed P bound hP
   exact ⟨P', hP'⟩

@@ -181,7 +181,7 @@ def NP (L : Language Symbol) : Prop :=
 `p₁(|x|)` steps and `P₂` runs within `p₂(|x|)` steps on the
 result of `P₁`, then `P₁ >>= P₂` runs within
 `(p₁ + p₂)(|x|)` steps. -/
-theorem InP.bind
+theorem P.bind
     {tm : SingleTapeTM Symbol}
     {P₁ : List Symbol → Prog (TMQuery tm) α}
     {P₂ : α → List Symbol → Prog (TMQuery tm) β}
