@@ -94,17 +94,17 @@ lemma vecLinearSearch_eval [BEq α] [LawfulBEq α] (v : Vector α n) (x : α) :
       · intro hx
         exact Vector.extract_begin v (by simp) x hx (by simpa [eq_comm] using h₀)
 
-lemma listLinearSearchM_correct_true [BEq α] [LawfulBEq α] (v : Vector α n)
+lemma vecLinearSearchM_correct_true [BEq α] [LawfulBEq α] (v : Vector α n)
     {x : α} (x_mem_l : x ∈ v) : (vecLinearSearch v x).eval ReadOnlyVec.natCost = true := by
   rwa [vecLinearSearch_eval]
 
-lemma listLinearSearchM_correct_false [BEq α] [LawfulBEq α] (v : Vector α n)
+lemma vecLinearSearchM_correct_false [BEq α] [LawfulBEq α] (v : Vector α n)
     {x : α} (x_mem_l : x ∉ v) : (vecLinearSearch v x).eval ReadOnlyVec.natCost = false := by
   apply Bool.eq_false_iff.mpr
   intro hx
   exact x_mem_l (by simpa [vecLinearSearch_eval v x] using hx)
 
-lemma listLinearSearchM_time_complexity_upper_bound [BEq α] (v : Vector α n) (x : α) :
+lemma vecLinearSearchM_time_complexity_upper_bound [BEq α] (v : Vector α n) (x : α) :
     (vecLinearSearch v x).time ReadOnlyVec.natCost ≤ n := by
   fun_induction vecLinearSearch
   · simp
@@ -114,7 +114,7 @@ lemma listLinearSearchM_time_complexity_upper_bound [BEq α] (v : Vector α n) (
     · simp_all
       linarith
 
-lemma listLinearSearchM_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n : ℕ) :
+lemma vecLinearSearchM_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n : ℕ) :
     ∃ (v : Vector α n) (x : α), (vecLinearSearch v x).time ReadOnlyVec.natCost = n := by
   obtain ⟨x, y, hneq⟩ := exists_pair_ne α
   use Vector.replicate n y, x
@@ -215,10 +215,8 @@ private lemma vector_pairwise_extract (r : α → α → Prop) {v : Vector α n}
 
 @[simp, grind .]
 lemma vecBinarySearch_eval [BEq α] [LawfulBEq α] (le : α → α → Bool)
-    [Std.Total (fun x y => le x y)] [IsTrans _ (fun x y => le x y)]
-    [Std.Antisymm (fun x y => le x y)] (v : Vector α n)
-    (hSorted : v.toList.Pairwise (fun x y => le x y))
-    (x : α) :
+    [Std.Antisymm (fun x y => le x y)]
+    (v : Vector α n) (hSorted : v.toList.Pairwise (fun x y => le x y)) (x : α) :
     ((vecBinarySearch le v x).eval ReadOnlyVec.natCost) = (x ∈ v) := by
   fun_induction vecBinarySearch with
   | case1 v₀ =>

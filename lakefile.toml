@@ -11,7 +11,7 @@ weak.linter.mathlibStandardSet = true
 maxSynthPendingDepth = 3
 
 [[require]]
-name = "cslib"
+name = "Cslib"
 scope = "leanprover"
 rev = "v4.29.0-rc6"
 

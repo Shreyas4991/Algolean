@@ -40,7 +40,7 @@ inductive ReadOnlyVec (α : Type) : Type → Type _ where
 
 /-- A model of the `VecSearch` query type that assigns the cost as the number of queries. -/
 @[simps]
-def ReadOnlyVec.natCost [BEq α] : Model (ReadOnlyVec α) ℕ where
+def ReadOnlyVec.natCost : Model (ReadOnlyVec α) ℕ where
   evalQuery
     | .read a i => a[i]
   cost _ := 1

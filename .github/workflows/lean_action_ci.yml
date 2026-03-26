@@ -2,20 +2,74 @@ name: Lean Action CI
 
 on:
   push:
+    branches:
+      - main
+      - test-CI
   pull_request:
+  merge_group:
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read # Read access to repository contents
-  pages: write # Write access to GitHub Pages
-  id-token: write # Write access to ID tokens
+  contents: read
+  id-token: write
+  pages: write
 
 jobs:
-  build:
+  ci-checks:
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
+      - name: Set TEST_ARGS manually
+        run: |
+          echo "TEST_ARGS='--wfail --iofail'" >> $GITHUB_ENV
+        shell: bash
       - uses: leanprover/lean-action@v1
-      #- uses: leanprover-community/docgen-action@v1
+        with:
+          build-args: "--wfail --iofail"
+          test-args: "--wfail --iofail"
+      - name: "lake exe mk_all --check --module"
+        run: |
+          set -e
+          lake exe mk_all --check --module
+      - name: Build project documentation
+        id: build-docgen
+        uses: leanprover-community/docgen-action@main
+        with:
+          build-page: false
+    
+
+
+
+  deploy-webpage:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare webpage artifact from docs/
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/index.html
+          rm -rf _site
+          mkdir -p _site
+          cp -a docs/* _site/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: webpage-pages
+          path: _site
+
+      - name: Deploy webpage to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: webpage-pages

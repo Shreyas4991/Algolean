@@ -18,28 +18,15 @@ public import Mathlib.Algebra.Group.Defs
 
 `T` can be instantiated with AddCommMonoid types to count costs in types of varying complexity.
 
-## Design Principles
-1. **Pure inputs, telld outputs**: Functions take plain values and return `AddWriter` results
-2. **Time annotations are trusted**: The `tell` field is NOT verified against actual cost.
-   You must manually ensure annotations match the algorithm's complexity in your cost model.
-3. **Separation of concerns**: Prove correctness properties on `.ret`, prove complexity on `.tell`
-
-## Cost Model
-**Document your cost model explicitly** Decide and be consistent about:
-- **What costs 1 unit?** (comparison, arithmetic operation, etc.)
-- **What is free?** (variable lookup, pattern matching, etc.)
-- **Recursive calls:** Do you charge for the call itself?
-
 ## Notation
 - **`✓`** : A call to tell, see `tell`.
 - **`⟪tm⟫`** : Extract the pure value from a `AddWriter` computation (notation for `tm.ret`)
 
 ## Notes on Authorship and Terminology
 This file was authored by Sorrachai Yingchareonthawornchai in the CSLib repository.
-It was named, wrongly in my opinion, as the Time monad `TimeM`. The standard name for this concept
-is the Writer Monad. Since Lean/Mathlib make a distinction between additive and multiplicative
-algebraic structures, and Mathlib already contains a Writer monad, we call this
-structure `AddWriter`
+It was named the Time monad `TimeM`. The standard name for this concept is the Writer Monad.
+Since Lean/Mathlib make a distinction between additive and multiplicative algebraic structures,
+and Mathlib already contains a Writer monad, we call this structure `AddWriter`.
 
 ## References
 1. [Elementary explanation of writer monads](https://williamyaoh.com/posts/2020-07-26-deriving-writer-monad.html)
