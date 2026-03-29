@@ -106,7 +106,7 @@ def FanInTwoCircuit.circuitSize [DecidableEq α] (c : FanInTwoCircuit α β) :=
   | .neg c' => (subcircuits (.neg c')).card
 
 @[simp]
-lemma circuitSize_eq_subcircuits_card (c : FanInTwoCircuit Bool Bool) :
+lemma fanInTwocircuitSize_eq_subcircuits_card (c : FanInTwoCircuit Bool Bool) :
     c.subcircuits.card = c.circuitSize := by
   cases c <;> simp [FanInTwoCircuit.circuitSize, FanInTwoCircuit.subcircuits]
 
