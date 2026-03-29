@@ -36,6 +36,8 @@ inductive Circuit (α : Type u) : Type u → Type u where
   | neg (c : Circuit α α) : Circuit α α
 
 mutual
+
+  /-- one part of a mutually inductive definition of DecidableEq (Circuit α α) -/
   def circuitDecEq [DecidableEq α] : (c₁ c₂ : Circuit α α) → Decidable (c₁ = c₂)
     | .const x, .const y =>
         match decEq x y with
@@ -66,6 +68,7 @@ mutual
         | isTrue h => isTrue (by cases h; rfl)
         | isFalse h => isFalse (by intro hc; cases hc; exact h rfl)
 
+  /-- Decidable Equality of lists of Circuit α α -/
   def listCircuitDecEq [DecidableEq α] :
       (xs ys : List (Circuit α α)) → Decidable (xs = ys)
     | [], [] => isTrue rfl
