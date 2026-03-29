@@ -8,6 +8,7 @@ public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Complexity.Basic
 public import Algolean.LowerBounds.ComparisonSort
+public import Algolean.Models.Circuits
 public import Algolean.Models.FanInTwoCircuits
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
