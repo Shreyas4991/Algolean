@@ -7,6 +7,7 @@ public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Complexity.Basic
+public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.LowerBounds.ComparisonSort
 public import Algolean.Models.Circuits
 public import Algolean.Models.FanInTwoCircuits
