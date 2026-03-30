@@ -115,19 +115,21 @@ abbrev BoolLanguage := (n : ℕ) → (Fin (2 ^ n) → Bool) → Prop
 /-- A circuit family decides a language with bounded error. -/
 def CircuitFamily.DecidesBounded (fam : CircuitFamily)
     (L : BoolLanguage) : Prop :=
-  ∀ n (f : Fin (2 ^ n) → Bool),
-    (L n f → measureProbability (fam.output n f)
-      ⟨0, by positivity⟩ ≥ 2 / 3) ∧
-    (¬L n f → measureProbability (fam.output n f)
-      ⟨0, by positivity⟩ ≤ 1 / 3)
+  ∀ n (f : Fin (2 ^ n) → Bool)
+    (hn : (fam.output n f).IsNormalized),
+    (L n f → measureDistribution (fam.output n f) hn
+      ⟨0, by positivity⟩ ≥ ENNReal.ofReal (2 / 3)) ∧
+    (¬L n f → measureDistribution (fam.output n f) hn
+      ⟨0, by positivity⟩ ≤ ENNReal.ofReal (1 / 3))
 
 /-- A circuit family decides a language with zero error. -/
 def CircuitFamily.DecidesExact (fam : CircuitFamily)
     (L : BoolLanguage) : Prop :=
-  ∀ n (f : Fin (2 ^ n) → Bool),
-    (L n f → measureProbability (fam.output n f)
+  ∀ n (f : Fin (2 ^ n) → Bool)
+    (hn : (fam.output n f).IsNormalized),
+    (L n f → measureDistribution (fam.output n f) hn
       ⟨0, by positivity⟩ = 1) ∧
-    (¬L n f → measureProbability (fam.output n f)
+    (¬L n f → measureDistribution (fam.output n f) hn
       ⟨0, by positivity⟩ = 0)
 
 /-! ### Complexity classes -/
@@ -159,9 +161,9 @@ def QNCpoly (L : BoolLanguage) (k : ℕ) : Prop :=
 theorem EQPpoly.toBQPpoly {L : BoolLanguage} (h : EQPpoly L) :
     BQPpoly L := by
   obtain ⟨fam, p, hExact, hSize⟩ := h
-  exact ⟨fam, p, fun n f => ⟨
-    fun hL => by rw [hExact n f |>.1 hL]; norm_num,
-    fun hL => by rw [hExact n f |>.2 hL]; norm_num⟩, hSize⟩
+  exact ⟨fam, p, fun n f hn => ⟨
+    fun hL => by rw [(hExact n f hn).1 hL]; norm_num,
+    fun hL => by rw [(hExact n f hn).2 hL]; norm_num⟩, hSize⟩
 
 /-- QNC^k/poly ⊆ BQP/poly -/
 theorem QNCpoly.toBQPpoly {L : BoolLanguage} {k : ℕ}

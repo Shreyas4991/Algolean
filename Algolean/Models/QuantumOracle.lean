@@ -8,6 +8,8 @@ module
 
 public import Algolean.QueryModel
 public import Mathlib.Analysis.Complex.Exponential
+public import Mathlib.Probability.ProbabilityMassFunction.Basic
+public import Mathlib.Analysis.Complex.Trigonometric
 
 @[expose] public section
 
@@ -24,7 +26,7 @@ program.
 - `QState`: Pure quantum state vector over `n` qubits.
 - `QuantumQuery`: Query type returning state transformations (functions).
 - `quantumModel`: Model assigning cost 1 to oracle queries and 0 to gates.
-- `measureProbability`: Born rule probability of a measurement outcome.
+- `measureDistribution`: Born rule measurement distribution as a `PMF`.
 - `QState.initial`: The all-zeros state `|0⟩^⊗n`.
 
 ## Design
@@ -47,12 +49,24 @@ open Complex Prog Cslib
 
 /-! ### Quantum state -/
 
-/-- Pure quantum state vector over `n` qubits. -/
+/-- Amplitude vector over `n` qubits. -/
 abbrev QState (n : ℕ) := Fin (2 ^ n) → ℂ
 
+/-- A state is normalized when amplitudes squared sum to 1. -/
+def QState.IsNormalized (s : QState n) : Prop :=
+  ∑ i, normSq (s i) = 1
+
 /-- The all-zeros computational basis state `|0⟩^⊗n`. -/
-def QState.initial (n : ℕ) : QState n :=
+noncomputable def QState.initial (n : ℕ) : QState n :=
   fun i => if i = 0 then 1 else 0
+
+theorem QState.initial_isNormalized :
+    (QState.initial n).IsNormalized := by
+  simp only [QState.IsNormalized, QState.initial]
+  rw [Finset.sum_eq_single 0]
+  · simp
+  · intro i _ hi; simp [hi]
+  · simp
 
 /-! ### Bit manipulation for qubit indexing -/
 
@@ -147,6 +161,57 @@ noncomputable def gatePhase (q : Fin n) (θ : ℝ) : QState n → QState n :=
 `O_f|x⟩ = (-1)^{f(x)}|x⟩`. -/
 noncomputable def gateOracle (f : Fin (2 ^ n) → Bool) : QState n → QState n :=
   fun s i => if f i then -s i else s i
+
+/-! ### Gates preserve normalization -/
+
+theorem gatePauliX_preserves (q : Fin n) (s : QState n)
+    (hs : s.IsNormalized) : (gatePauliX q s).IsNormalized := by
+  simp only [QState.IsNormalized, gatePauliX]
+  rw [show ∑ i, normSq (s (flipBit i q)) = ∑ i, normSq (s i) from
+    Finset.sum_nbij (fun i => flipBit i q)
+      (fun _ _ => Finset.mem_univ _)
+      (fun _ _ _ _ h => by simpa using congr_arg (flipBit · q) h)
+      (fun b _ => ⟨flipBit b q, Finset.mem_univ _, by simp⟩)
+      (fun _ _ => rfl)]
+  exact hs
+
+theorem gatePauliZ_preserves (q : Fin n) (s : QState n)
+    (hs : s.IsNormalized) : (gatePauliZ q s).IsNormalized := by
+  unfold QState.IsNormalized gatePauliZ at *
+  rw [show ∑ i, normSq (if getBit i q then -s i else s i) =
+    ∑ i, normSq (s i) from Finset.sum_congr rfl fun i _ => by
+      split <;> simp [normSq_neg]]
+  exact hs
+
+theorem gatePhase_preserves (q : Fin n) (θ : ℝ) (s : QState n)
+    (hs : s.IsNormalized) : (gatePhase q θ s).IsNormalized := by
+  unfold QState.IsNormalized gatePhase at *
+  rw [show ∑ i, normSq (if getBit i q then Complex.exp (↑θ * I) * s i
+    else s i) = ∑ i, normSq (s i) from Finset.sum_congr rfl fun i _ => by
+      split
+      · rw [map_mul]
+        have : normSq (Complex.exp (↑θ * I)) = 1 := by
+          rw [Complex.normSq_eq_norm_sq, Complex.norm_exp_ofReal_mul_I]
+          simp
+        rw [this]; ring
+      · rfl]
+  exact hs
+
+theorem gateCNOT_preserves (c t : Fin n) (s : QState n)
+    (hs : s.IsNormalized) : (gateCNOT c t s).IsNormalized := by
+  sorry
+
+theorem gateOracle_preserves (f : Fin (2 ^ n) → Bool) (s : QState n)
+    (hs : s.IsNormalized) : (gateOracle f s).IsNormalized := by
+  unfold QState.IsNormalized gateOracle at *
+  rw [show ∑ i, normSq (if f i then -s i else s i) =
+    ∑ i, normSq (s i) from Finset.sum_congr rfl fun i _ => by
+      split <;> simp [normSq_neg]]
+  exact hs
+
+theorem gateHadamard_preserves (q : Fin n) (s : QState n)
+    (hs : s.IsNormalized) : (gateHadamard q s).IsNormalized := by
+  sorry
 
 /-! ### Query type -/
 
@@ -285,9 +350,16 @@ noncomputable def circuitModel (n : ℕ) (f : Fin (2 ^ n) → Bool) :
 
 /-! ### Measurement -/
 
-/-- Probability of measuring outcome `j` in state `s` (Born rule). -/
-def measureProbability (s : QState n) (j : Fin (2 ^ n)) : ℝ :=
-  normSq (s j)
+/-- The measurement distribution of a normalized state as a `PMF`.
+The Born rule assigns probability `‖s j‖²` to each outcome `j`. -/
+noncomputable def measureDistribution (s : QState n)
+    (hs : s.IsNormalized) : PMF (Fin (2 ^ n)) :=
+  ⟨fun j => ENNReal.ofReal (normSq (s j)), by
+    have hfin := hasSum_fintype (fun j => ENNReal.ofReal (normSq (s j)))
+    rwa [show ∑ j, ENNReal.ofReal (normSq (s j)) =
+      ENNReal.ofReal (∑ j, normSq (s j)) from
+        (ENNReal.ofReal_sum_of_nonneg fun _ _ => normSq_nonneg _).symm,
+      hs, ENNReal.ofReal_one] at hfin⟩
 
 /-! ### Helpers -/
 
