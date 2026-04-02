@@ -51,12 +51,25 @@ inductive QuantumCircuit (n : ℕ) : Type → Type where
 
 namespace QuantumCircuit
 
-/-- Evaluate a circuit as a state transformation. -/
-noncomputable def circEval (f : Fin (2 ^ n) → Bool) :
-    QuantumCircuit n ι → ι
-  | .gate q => (quantumModel n f).evalQuery q
-  | .seq c₁ c₂ => circEval f c₂ ∘ circEval f c₁
-  | .par c₁ c₂ => circEval f c₂ ∘ circEval f c₁
+/-- Evaluate a single quantum gate given an oracle unitary. -/
+noncomputable def evalGate (oracle : QState n → QState n) :
+    QuantumQuery n (QState n → QState n) → QState n → QState n
+  | .hadamard q => gateHadamard q
+  | .pauliX q => gatePauliX q
+  | .pauliZ q => gatePauliZ q
+  | .cnot c t => gateCNOT c t
+  | .phase q θ => gatePhase q θ
+  | .oracle => oracle
+
+/-- Evaluate a circuit as a state transformation given an oracle unitary.
+For `seq c₁ c₂`, the output state of `c₁` is fed as input to `c₂`.
+For `par c₁ c₂`, both act on disjoint qubits, so they compose
+(and commute); depth uses `max` rather than `+`. -/
+noncomputable def circEval (oracle : QState n → QState n) :
+    QuantumCircuit n (QState n → QState n) → QState n → QState n
+  | .gate q => evalGate oracle q
+  | .seq c₁ c₂ => fun s => circEval oracle c₂ (circEval oracle c₁ s)
+  | .par c₁ c₂ => circEval oracle c₂ ∘ circEval oracle c₁
 
 /-- Circuit depth. Sequential adds; parallel takes max. -/
 @[simp]
@@ -84,10 +97,14 @@ end QuantumCircuit
 
 /-! ### Model -/
 
-/-- Quantum circuit model. -/
-noncomputable def quantumCircuitModel (n : ℕ) (f : Fin (2 ^ n) → Bool) :
+/-- Quantum circuit model parameterized by an oracle unitary. -/
+noncomputable def quantumCircuitModel (n : ℕ) (oracle : QState n → QState n) :
     Model (QuantumCircuit n) CircuitCost where
-  evalQuery c := c.circEval f
+  evalQuery
+    | .gate q => QuantumCircuit.evalGate oracle q
+    | .seq c₁ c₂ =>
+        fun s => QuantumCircuit.circEval oracle c₂ (QuantumCircuit.circEval oracle c₁ s)
+    | .par c₁ c₂ => QuantumCircuit.circEval oracle c₂ ∘ QuantumCircuit.circEval oracle c₁
   cost c := ⟨c.size, c.depthOf, c.oracleCount⟩
 
 /-! ### Prog integration -/
@@ -104,32 +121,34 @@ structure CircuitFamily where
   /-- The circuit for input size `n`. -/
   circuit : (n : ℕ) → QuantumCircuit n (QState n → QState n)
 
-/-- The output state of a circuit family on input `f`. -/
+/-- The output state of a circuit family given an oracle unitary. -/
 noncomputable def CircuitFamily.output (fam : CircuitFamily)
-    (n : ℕ) (f : Fin (2 ^ n) → Bool) : QState n :=
-  fam.circuit n |>.circEval f (QState.initial n)
+    (n : ℕ) (oracle : QState n → QState n) : QState n :=
+  fam.circuit n |>.circEval oracle (QState.initial n)
 
-/-- A language over `n`-bit inputs. -/
+/-- A language over `n`-qubit inputs. -/
 abbrev BoolLanguage := (n : ℕ) → (Fin (2 ^ n) → Bool) → Prop
 
-/-- A circuit family decides a language with bounded error. -/
+/-- A circuit family decides a language with bounded error,
+using the phase kickback oracle `O_f`. -/
 def CircuitFamily.DecidesBounded (fam : CircuitFamily)
     (L : BoolLanguage) : Prop :=
   ∀ n (f : Fin (2 ^ n) → Bool)
-    (hn : (fam.output n f).IsNormalized),
-    (L n f → measureDistribution (fam.output n f) hn
+    (hn : (fam.output n (gateOracle f)).IsNormalized),
+    (L n f → measureDistribution (fam.output n (gateOracle f)) hn
       ⟨0, by positivity⟩ ≥ ENNReal.ofReal (2 / 3)) ∧
-    (¬L n f → measureDistribution (fam.output n f) hn
+    (¬L n f → measureDistribution (fam.output n (gateOracle f)) hn
       ⟨0, by positivity⟩ ≤ ENNReal.ofReal (1 / 3))
 
-/-- A circuit family decides a language with zero error. -/
+/-- A circuit family decides a language with zero error,
+using the phase kickback oracle `O_f`. -/
 def CircuitFamily.DecidesExact (fam : CircuitFamily)
     (L : BoolLanguage) : Prop :=
   ∀ n (f : Fin (2 ^ n) → Bool)
-    (hn : (fam.output n f).IsNormalized),
-    (L n f → measureDistribution (fam.output n f) hn
+    (hn : (fam.output n (gateOracle f)).IsNormalized),
+    (L n f → measureDistribution (fam.output n (gateOracle f)) hn
       ⟨0, by positivity⟩ = 1) ∧
-    (¬L n f → measureDistribution (fam.output n f) hn
+    (¬L n f → measureDistribution (fam.output n (gateOracle f)) hn
       ⟨0, by positivity⟩ = 0)
 
 /-! ### Complexity classes -/
