@@ -51,23 +51,13 @@ inductive QuantumCircuit (n : ℕ) : Type → Type where
 
 namespace QuantumCircuit
 
-/-- Evaluate a single quantum gate given an oracle unitary. -/
-noncomputable def evalGate (oracle : QState n → QState n) :
-    QuantumQuery n (QState n → QState n) → QState n → QState n
-  | .hadamard q => gateHadamard q
-  | .pauliX q => gatePauliX q
-  | .pauliZ q => gatePauliZ q
-  | .cnot c t => gateCNOT c t
-  | .phase q θ => gatePhase q θ
-  | .oracle => oracle
-
 /-- Evaluate a circuit as a state transformation given an oracle unitary.
 For `seq c₁ c₂`, the output state of `c₁` is fed as input to `c₂`.
 For `par c₁ c₂`, both act on disjoint qubits, so they compose
 (and commute); depth uses `max` rather than `+`. -/
 noncomputable def circEval (oracle : QState n → QState n) :
     QuantumCircuit n (QState n → QState n) → QState n → QState n
-  | .gate q => evalGate oracle q
+  | .gate q => Algorithms.evalGate oracle q
   | .seq c₁ c₂ => fun s => circEval oracle c₂ (circEval oracle c₁ s)
   | .par c₁ c₂ => circEval oracle c₂ ∘ circEval oracle c₁
 
@@ -95,13 +85,59 @@ def oracleCount : QuantumCircuit n ι → ℕ
 
 end QuantumCircuit
 
+/-! ### Circuit cost model -/
+
+/-- Cost structure for quantum circuits, tracking gate count, circuit depth,
+and oracle queries separately. -/
+@[ext]
+structure CircuitCost where
+  /-- Total number of gates (excluding oracle). -/
+  gates : ℕ
+  /-- Circuit depth (longest path from input to output). -/
+  depth : ℕ
+  /-- Number of oracle queries. -/
+  oracleQueries : ℕ
+  deriving DecidableEq
+
+namespace CircuitCost
+
+/-- Equivalence between `CircuitCost` and a product type. -/
+def equivProd : CircuitCost ≃ ℕ × ℕ × ℕ where
+  toFun c := (c.gates, c.depth, c.oracleQueries)
+  invFun p := ⟨p.1, p.2.1, p.2.2⟩
+  left_inv c := by cases c; rfl
+  right_inv p := by obtain ⟨a, b, c⟩ := p; rfl
+
+instance : Zero CircuitCost := ⟨0, 0, 0⟩
+
+instance : Add CircuitCost where
+  add c₁ c₂ := ⟨c₁.gates + c₂.gates, c₁.depth + c₂.depth,
+    c₁.oracleQueries + c₂.oracleQueries⟩
+
+instance : SMul ℕ CircuitCost where
+  smul n c := ⟨n * c.gates, n * c.depth, n * c.oracleQueries⟩
+
+instance : AddCommMonoid CircuitCost :=
+  equivProd.injective.addCommMonoid _ rfl (fun _ _ => rfl) (fun _ _ => rfl)
+
+instance : LE CircuitCost where
+  le c₁ c₂ := c₁.gates ≤ c₂.gates ∧ c₁.depth ≤ c₂.depth ∧
+    c₁.oracleQueries ≤ c₂.oracleQueries
+
+instance : Preorder CircuitCost where
+  le_refl a := ⟨le_refl _, le_refl _, le_refl _⟩
+  le_trans a b c h₁ h₂ := ⟨le_trans h₁.1 h₂.1, le_trans h₁.2.1 h₂.2.1,
+    le_trans h₁.2.2 h₂.2.2⟩
+
+end CircuitCost
+
 /-! ### Model -/
 
 /-- Quantum circuit model parameterized by an oracle unitary. -/
 noncomputable def quantumCircuitModel (n : ℕ) (oracle : QState n → QState n) :
     Model (QuantumCircuit n) CircuitCost where
   evalQuery
-    | .gate q => QuantumCircuit.evalGate oracle q
+    | .gate q => evalGate oracle q
     | .seq c₁ c₂ =>
         fun s => QuantumCircuit.circEval oracle c₂ (QuantumCircuit.circEval oracle c₁ s)
     | .par c₁ c₂ => QuantumCircuit.circEval oracle c₂ ∘ QuantumCircuit.circEval oracle c₁
