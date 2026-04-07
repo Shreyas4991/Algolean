@@ -163,29 +163,29 @@ noncomputable def CircuitFamily.output (fam : CircuitFamily)
   fam.circuit n |>.circEval oracle (QState.initial n)
 
 /-- A language over `n`-qubit inputs. -/
-abbrev BoolLanguage := (n : ℕ) → (Fin (2 ^ n) → Bool) → Prop
+abbrev BoolLanguage := (n : ℕ) → ((Fin n → Fin 2) → Bool) → Prop
 
 /-- A circuit family decides a language with bounded error,
 using the phase kickback oracle `O_f`. -/
 def CircuitFamily.DecidesBounded (fam : CircuitFamily)
     (L : BoolLanguage) : Prop :=
-  ∀ n (f : Fin (2 ^ n) → Bool)
+  ∀ n (f : (Fin n → Fin 2) → Bool)
     (hn : (fam.output n (gateOracle f)).IsNormalized),
     (L n f → measureDistribution (fam.output n (gateOracle f)) hn
-      ⟨0, by positivity⟩ ≥ ENNReal.ofReal (2 / 3)) ∧
+      0 ≥ ENNReal.ofReal (2 / 3)) ∧
     (¬L n f → measureDistribution (fam.output n (gateOracle f)) hn
-      ⟨0, by positivity⟩ ≤ ENNReal.ofReal (1 / 3))
+      0 ≤ ENNReal.ofReal (1 / 3))
 
 /-- A circuit family decides a language with zero error,
 using the phase kickback oracle `O_f`. -/
 def CircuitFamily.DecidesExact (fam : CircuitFamily)
     (L : BoolLanguage) : Prop :=
-  ∀ n (f : Fin (2 ^ n) → Bool)
+  ∀ n (f : (Fin n → Fin 2) → Bool)
     (hn : (fam.output n (gateOracle f)).IsNormalized),
     (L n f → measureDistribution (fam.output n (gateOracle f)) hn
-      ⟨0, by positivity⟩ = 1) ∧
+      0 = 1) ∧
     (¬L n f → measureDistribution (fam.output n (gateOracle f)) hn
-      ⟨0, by positivity⟩ = 0)
+      0 = 0)
 
 /-! ### Complexity classes -/
 

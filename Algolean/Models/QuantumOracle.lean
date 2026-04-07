@@ -6,7 +6,6 @@ Authors: Tanner Duve
 
 module
 
-public import Algolean.Models.BitOps
 public import Algolean.QueryModel
 public import Mathlib.Analysis.Complex.Exponential
 public import Mathlib.Probability.ProbabilityMassFunction.Basic
@@ -40,6 +39,9 @@ wrapper `applyGate`, and noncomputability only enters during `Prog.eval`.
 The oracle applies the phase kickback unitary `O_f : |x⟩ ↦ (-1)^{f(x)} |x⟩`.
 The oracle function `f` is provided by the model, mirroring how the
 comparison function `le` is provided by the sort model.
+
+Basis states are indexed by bitstrings `Fin n → Fin 2` rather than flat
+indices `Fin (2^n)`, making qubit access direct function evaluation.
 -/
 
 namespace Algolean
@@ -50,8 +52,8 @@ open Complex Prog Cslib
 
 /-! ### Quantum state -/
 
-/-- Amplitude vector over `n` qubits. -/
-abbrev QState (n : ℕ) := Fin (2 ^ n) → ℂ
+/-- Amplitude vector over `n` qubits, indexed by bitstrings. -/
+abbrev QState (n : ℕ) := (Fin n → Fin 2) → ℂ
 
 /-- A state is normalized when amplitudes squared sum to 1. -/
 def QState.IsNormalized (s : QState n) : Prop :=
@@ -59,7 +61,7 @@ def QState.IsNormalized (s : QState n) : Prop :=
 
 /-- The all-zeros computational basis state `|0⟩^⊗n`. -/
 noncomputable def QState.initial (n : ℕ) : QState n :=
-  fun i => if i = 0 then 1 else 0
+  fun x => if x = 0 then 1 else 0
 
 theorem QState.initial_isNormalized :
     (QState.initial n).IsNormalized := by
@@ -69,39 +71,72 @@ theorem QState.initial_isNormalized :
   · intro i _ hi; simp [hi]
   · simp
 
+/-! ### Qubit flip -/
+
+/-- Flip qubit `q` in a bitstring. -/
+def flipQubit (x : Fin n → Fin 2) (q : Fin n) : Fin n → Fin 2 :=
+  Function.update x q (1 - x q)
+
+@[simp]
+theorem flipQubit_self (x : Fin n → Fin 2) (q : Fin n) :
+    (flipQubit x q) q = 1 - x q :=
+  Function.update_self q _ x
+
+theorem flipQubit_ne (x : Fin n → Fin 2) {q q' : Fin n} (h : q' ≠ q) :
+    (flipQubit x q) q' = x q' :=
+  Function.update_of_ne h _ x
+
+@[simp]
+theorem flipQubit_flipQubit (x : Fin n → Fin 2) (q : Fin n) :
+    flipQubit (flipQubit x q) q = x := by
+  ext i
+  simp only [flipQubit]
+  by_cases h : i = q
+  · subst h; simp [Function.update_self]
+  · simp [Function.update_of_ne h]
+
+theorem flipQubit_comm (x : Fin n → Fin 2) {q₁ q₂ : Fin n} (h : q₁ ≠ q₂) :
+    flipQubit (flipQubit x q₁) q₂ = flipQubit (flipQubit x q₂) q₁ := by
+  ext i; simp only [flipQubit]
+  by_cases h1 : i = q₂ <;> by_cases h2 : i = q₁
+  · exact absurd (h2 ▸ h1) h
+  · subst h1; simp [Function.update_self, Function.update_of_ne (Ne.symm h)]
+  · subst h2; simp [Function.update_self, Function.update_of_ne h]
+  · simp [Function.update_of_ne h1, Function.update_of_ne h2]
+
 /-! ### Gate implementations -/
 
 /-- Hadamard gate on qubit `q`.
 `H|0⟩ = (|0⟩ + |1⟩)/√2`, `H|1⟩ = (|0⟩ - |1⟩)/√2`. -/
 noncomputable def gateHadamard (q : Fin n) : QState n → QState n :=
-  fun s i =>
-    let j := flipBit i q
-    if getBit i q
-    then (s j - s i) / ↑(Real.sqrt 2)
-    else (s j + s i) / ↑(Real.sqrt 2)
+  fun s x =>
+    let y := flipQubit x q
+    if x q = 1
+    then (s y - s x) / ↑(Real.sqrt 2)
+    else (s y + s x) / ↑(Real.sqrt 2)
 
 /-- Pauli-X (NOT) gate on qubit `q`. Flips `|0⟩ ↔ |1⟩`. -/
 def gatePauliX (q : Fin n) : QState n → QState n :=
-  fun s i => s (flipBit i q)
+  fun s x => s (flipQubit x q)
 
 /-- Pauli-Z gate on qubit `q`. `Z|0⟩ = |0⟩`, `Z|1⟩ = -|1⟩`. -/
 noncomputable def gatePauliZ (q : Fin n) : QState n → QState n :=
-  fun s i => if getBit i q then -s i else s i
+  fun s x => if x q = 1 then -s x else s x
 
 /-- CNOT gate with given control and target qubits.
 Flips the target when the control is `|1⟩`. -/
 def gateCNOT (control target : Fin n) : QState n → QState n :=
-  fun s i => if getBit i control then s (flipBit i target) else s i
+  fun s x => if x control = 1 then s (flipQubit x target) else s x
 
 /-- Phase gate `R(θ)` on qubit `q`.
 `R(θ)|0⟩ = |0⟩`, `R(θ)|1⟩ = e^{iθ}|1⟩`. -/
 noncomputable def gatePhase (q : Fin n) (θ : ℝ) : QState n → QState n :=
-  fun s i => if getBit i q then Complex.exp (↑θ * I) * s i else s i
+  fun s x => if x q = 1 then Complex.exp (↑θ * I) * s x else s x
 
 /-- Phase oracle for function `f`.
 `O_f|x⟩ = (-1)^{f(x)}|x⟩`. -/
-noncomputable def gateOracle (f : Fin (2 ^ n) → Bool) : QState n → QState n :=
-  fun s i => if f i then -s i else s i
+noncomputable def gateOracle (f : (Fin n → Fin 2) → Bool) : QState n → QState n :=
+  fun s x => if f x then -s x else s x
 
 /-! ### Unitarity -/
 
@@ -132,51 +167,56 @@ theorem IsUnitary.comp {f g : QState n → QState n}
 
 theorem gatePauliX_isUnitary (q : Fin n) : IsUnitary (gatePauliX q) := by
   intro s; unfold gatePauliX
-  exact Finset.sum_nbij (fun i => flipBit i q)
+  exact Finset.sum_nbij (fun x => flipQubit x q)
     (fun _ _ => Finset.mem_univ _)
-    (fun _ _ _ _ h => by simpa using congr_arg (flipBit · q) h)
-    (fun b _ => ⟨flipBit b q, Finset.mem_univ _, by simp⟩)
+    (fun _ _ _ _ h => by
+      have := congr_arg (flipQubit · q) h
+      simp at this; exact this)
+    (fun b _ => ⟨flipQubit b q, Finset.mem_univ _, by simp⟩)
     (fun _ _ => rfl)
 
 theorem gatePauliZ_isUnitary (q : Fin n) : IsUnitary (gatePauliZ q) := by
   intro s; unfold gatePauliZ
-  exact Finset.sum_congr rfl fun i _ => by
-    cases getBit i q <;> simp [normSq_neg]
+  exact Finset.sum_congr rfl fun x _ => by
+    by_cases h : x q = 1 <;> simp [h, normSq_neg]
 
 theorem gatePhase_isUnitary (q : Fin n) (θ : ℝ) :
     IsUnitary (gatePhase q θ) := by
   intro s; unfold gatePhase
-  exact Finset.sum_congr rfl fun i _ => by
-    cases h : getBit i q
-    · simp
-    · simp only [ite_true]
+  exact Finset.sum_congr rfl fun x _ => by
+    by_cases h : x q = 1
+    · simp only [h, ite_true]
       rw [map_mul]
       have : normSq (Complex.exp (↑θ * I)) = 1 := by
         rw [Complex.normSq_eq_norm_sq, Complex.norm_exp_ofReal_mul_I]; simp
       rw [this]; ring
+    · simp [h]
 
-theorem gateOracle_isUnitary (f : Fin (2 ^ n) → Bool) :
+theorem gateOracle_isUnitary (f : (Fin n → Fin 2) → Bool) :
     IsUnitary (gateOracle f) := by
   intro s; unfold gateOracle
-  exact Finset.sum_congr rfl fun i _ => by
-    cases f i <;> simp [normSq_neg]
+  exact Finset.sum_congr rfl fun x _ => by
+    cases f x <;> simp [normSq_neg]
 
 /-- CNOT is unitary when control and target differ. When `c = t`,
 the gate is a projection (sets bit `c` to 0) and does not preserve norms. -/
 theorem gateCNOT_isUnitary (c t : Fin n) (hct : c ≠ t) :
     IsUnitary (gateCNOT c t) := by
   intro s; unfold gateCNOT
-  let σ : Fin (2 ^ n) → Fin (2 ^ n) :=
-    fun i => if getBit i c then flipBit i t else i
-  have hσ_inv : ∀ i, σ (σ i) = i := fun i => by
-    simp only [σ]
-    cases h : getBit i c
+  let σ : (Fin n → Fin 2) → (Fin n → Fin 2) :=
+    fun x => if x c = 1 then flipQubit x t else x
+  have hσ_inv : ∀ x, σ (σ x) = x := fun x => by
+    show (fun x => if x c = 1 then flipQubit x t else x)
+      ((fun x => if x c = 1 then flipQubit x t else x) x) = x
+    by_cases h : x c = 1
+    · simp only [h, ite_true]
+      rw [show (flipQubit x t) c = 1 from by rw [flipQubit_ne x hct]; exact h]
+      simp [flipQubit_flipQubit]
     · simp [h]
-    · simp [h, getBit_flipBit_ne i t c hct.symm, flipBit_flipBit]
-  rw [show ∑ i, normSq (if getBit i c then s (flipBit i t) else s i) =
-      ∑ i, normSq (s (σ i)) from
-    Finset.sum_congr rfl fun i _ => by
-      simp only [σ]; cases getBit i c <;> rfl]
+  rw [show ∑ x, normSq (if x c = 1 then s (flipQubit x t) else s x) =
+      ∑ x, normSq (s (σ x)) from
+    Finset.sum_congr rfl fun x _ => by
+      simp only [σ]; by_cases h : x c = 1 <;> simp [h]]
   exact Finset.sum_nbij σ
     (fun _ _ => Finset.mem_univ _)
     (fun a _ b _ hab => by
@@ -200,38 +240,45 @@ private theorem normSq_hadamard_pair (a b : ℂ) :
 theorem gateHadamard_isUnitary (q : Fin n) :
     IsUnitary (gateHadamard q) := by
   intro s; unfold gateHadamard
-  let F := Finset.univ.filter (fun i : Fin (2 ^ n) => getBit i q = false)
-  let T := Finset.univ.filter (fun i : Fin (2 ^ n) => getBit i q = true)
+  let F := Finset.univ.filter (fun x : Fin n → Fin 2 => x q = 0)
+  let T := Finset.univ.filter (fun x : Fin n → Fin 2 => x q = 1)
   have hFT : Disjoint F T :=
     Finset.disjoint_filter.mpr fun _ _ h1 h2 => by simp_all
   have hunion : F ∪ T = Finset.univ := by
-    ext i; simp only [F, T, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and]
-    cases getBit i q <;> simp
-  have hmem : ∀ b, ∀ i ∈ Finset.univ.filter
-      (fun i => getBit i q = b), flipBit i q ∈
-      Finset.univ.filter (fun i => getBit i q = !b) := fun b i hi => by
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hi ⊢
-    rw [getBit_flipBit_self, hi]
-  have flipBij (S₁ S₂ : Finset (Fin (2 ^ n)))
-      (h₁ : ∀ i ∈ S₁, flipBit i q ∈ S₂) (h₂ : ∀ i ∈ S₂, flipBit i q ∈ S₁)
-      (f : Fin (2 ^ n) → ℝ) : ∑ i ∈ S₁, f (flipBit i q) = ∑ i ∈ S₂, f i :=
-    Finset.sum_nbij (flipBit · q) h₁
-      (fun _ _ _ _ h => by simpa using congr_arg (flipBit · q) h)
-      (fun b hb => ⟨flipBit b q, h₂ b hb, by simp⟩) (fun _ _ => rfl)
+    ext x; simp only [F, T, Finset.mem_union, Finset.mem_filter, Finset.mem_univ, true_and]
+    have : x q = 0 ∨ x q = 1 := by omega
+    tauto
+  have hmem : ∀ (v : Fin 2), ∀ x ∈ Finset.univ.filter
+      (fun x => x q = v), flipQubit x q ∈
+      Finset.univ.filter (fun x => x q = 1 - v) := fun v x hx => by
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hx ⊢
+    rw [flipQubit_self, hx]
+  have flipBij (S₁ S₂ : Finset (Fin n → Fin 2))
+      (h₁ : ∀ x ∈ S₁, flipQubit x q ∈ S₂) (h₂ : ∀ x ∈ S₂, flipQubit x q ∈ S₁)
+      (f : (Fin n → Fin 2) → ℝ) : ∑ x ∈ S₁, f (flipQubit x q) = ∑ x ∈ S₂, f x :=
+    Finset.sum_nbij (flipQubit · q) h₁
+      (fun _ _ _ _ h => by
+        have := congr_arg (flipQubit · q) h
+        simp at this; exact this)
+      (fun b hb => ⟨flipQubit b q, h₂ b hb, by simp⟩) (fun _ _ => rfl)
+  have hF0 : ∀ x ∈ F, x q = 0 := fun x hx => by
+    simp only [F, Finset.mem_filter, Finset.mem_univ, true_and] at hx; exact hx
+  have hT1 : ∀ x ∈ T, x q = 1 := fun x hx => by
+    simp only [T, Finset.mem_filter, Finset.mem_univ, true_and] at hx; exact hx
   rw [← hunion, Finset.sum_union hFT, Finset.sum_union hFT,
-    show ∑ i ∈ T, _ = ∑ i ∈ F, normSq ((s i - s (flipBit i q)) / ↑(Real.sqrt 2)) from
-      flipBij T F (hmem true) (hmem false) _ ▸
-        Finset.sum_congr rfl fun i hi => by
-          simp only [T, Finset.mem_filter, Finset.mem_univ, true_and] at hi
-          simp [hi, flipBit_flipBit],
-    show ∑ i ∈ F, _ = ∑ i ∈ F, normSq ((s (flipBit i q) + s i) / ↑(Real.sqrt 2)) from
-      Finset.sum_congr rfl fun i hi => by
-        simp only [F, Finset.mem_filter, Finset.mem_univ, true_and] at hi; simp [hi],
+    show ∑ x ∈ T, _ = ∑ x ∈ F, normSq ((s x - s (flipQubit x q)) / ↑(Real.sqrt 2)) from
+      flipBij T F (hmem 1) (hmem 0) _ ▸
+        Finset.sum_congr rfl fun x hx => by
+          have h1 := hT1 x hx
+          simp [h1, flipQubit_flipQubit],
+    show ∑ x ∈ F, _ = ∑ x ∈ F, normSq ((s (flipQubit x q) + s x) / ↑(Real.sqrt 2)) from
+      Finset.sum_congr rfl fun x hx => by
+        have h0 := hF0 x hx; simp [h0],
     ← Finset.sum_add_distrib,
-    show ∑ i ∈ F, _ = ∑ i ∈ F, (normSq (s i) + normSq (s (flipBit i q))) from
-      Finset.sum_congr rfl fun i _ => normSq_hadamard_pair (s i) (s (flipBit i q)),
+    show ∑ x ∈ F, _ = ∑ x ∈ F, (normSq (s x) + normSq (s (flipQubit x q))) from
+      Finset.sum_congr rfl fun x _ => normSq_hadamard_pair (s x) (s (flipQubit x q)),
     Finset.sum_add_distrib]
-  congr 1; exact flipBij F T (hmem false) (hmem true) (normSq ∘ s)
+  congr 1; exact flipBij F T (hmem 0) (hmem 1) (normSq ∘ s)
 
 /-! ### Gates preserve normalization -/
 
@@ -251,7 +298,7 @@ theorem gateCNOT_preserves (c t : Fin n) (hct : c ≠ t) (s : QState n)
     (hs : s.IsNormalized) : (gateCNOT c t s).IsNormalized :=
   (gateCNOT_isUnitary c t hct).preserves_normalized hs
 
-theorem gateOracle_preserves (f : Fin (2 ^ n) → Bool) (s : QState n)
+theorem gateOracle_preserves (f : (Fin n → Fin 2) → Bool) (s : QState n)
     (hs : s.IsNormalized) : (gateOracle f s).IsNormalized :=
   (gateOracle_isUnitary f).preserves_normalized hs
 
@@ -309,7 +356,7 @@ theorem applyGate_time [AddZeroClass Cost] (q : QuantumQuery n (QState n → QSt
 
 /-- Quantum oracle model parameterized by the oracle function `f`.
 Gates are free (cost 0); oracle queries cost 1. -/
-noncomputable def quantumModel (n : ℕ) (f : Fin (2 ^ n) → Bool) :
+noncomputable def quantumModel (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
     Model (QuantumQuery n) ℕ where
   evalQuery
     | .hadamard q => gateHadamard q
@@ -341,13 +388,13 @@ theorem quantumModel_cost_oracle :
 /-! ### Measurement -/
 
 /-- The measurement distribution of a normalized state as a `PMF`.
-The Born rule assigns probability `‖s j‖²` to each outcome `j`. -/
+The Born rule assigns probability `‖s x‖²` to each outcome `x`. -/
 noncomputable def measureDistribution (s : QState n)
-    (hs : s.IsNormalized) : PMF (Fin (2 ^ n)) :=
-  ⟨fun j => ENNReal.ofReal (normSq (s j)), by
-    have hfin := hasSum_fintype (fun j => ENNReal.ofReal (normSq (s j)))
-    rwa [show ∑ j, ENNReal.ofReal (normSq (s j)) =
-      ENNReal.ofReal (∑ j, normSq (s j)) from
+    (hs : s.IsNormalized) : PMF (Fin n → Fin 2) :=
+  ⟨fun x => ENNReal.ofReal (normSq (s x)), by
+    have hfin := hasSum_fintype (fun x => ENNReal.ofReal (normSq (s x)))
+    rwa [show ∑ x, ENNReal.ofReal (normSq (s x)) =
+      ENNReal.ofReal (∑ x, normSq (s x)) from
         (ENNReal.ofReal_sum_of_nonneg fun _ _ => normSq_nonneg _).symm,
       hs, ENNReal.ofReal_one] at hfin⟩
 
