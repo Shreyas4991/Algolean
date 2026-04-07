@@ -12,7 +12,6 @@ public import Algolean.Models.Circuits
 public import Algolean.Models.FanInTwoCircuits
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
-public import Algolean.Models.BitOps
 public import Algolean.Models.QuantumCircuit
 public import Algolean.Models.QuantumOracle
 public import Algolean.Models.ReadOnlyVec
