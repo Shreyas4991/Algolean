@@ -169,9 +169,7 @@ theorem gatePauliX_isUnitary (q : Fin n) : IsUnitary (gatePauliX q) := by
   intro s; unfold gatePauliX
   exact Finset.sum_nbij (fun x => flipQubit x q)
     (fun _ _ => Finset.mem_univ _)
-    (fun _ _ _ _ h => by
-      have := congr_arg (flipQubit · q) h
-      simp at this; exact this)
+    (fun _ _ _ _ h => by simpa using congr_arg (flipQubit · q) h)
     (fun b _ => ⟨flipQubit b q, Finset.mem_univ _, by simp⟩)
     (fun _ _ => rfl)
 
@@ -206,7 +204,7 @@ theorem gateCNOT_isUnitary (c t : Fin n) (hct : c ≠ t) :
   let σ : (Fin n → Fin 2) → (Fin n → Fin 2) :=
     fun x => if x c = 1 then flipQubit x t else x
   have hσ_inv : ∀ x, σ (σ x) = x := fun x => by
-    show (fun x => if x c = 1 then flipQubit x t else x)
+    change (fun x => if x c = 1 then flipQubit x t else x)
       ((fun x => if x c = 1 then flipQubit x t else x) x) = x
     by_cases h : x c = 1
     · simp only [h, ite_true]
@@ -257,9 +255,7 @@ theorem gateHadamard_isUnitary (q : Fin n) :
       (h₁ : ∀ x ∈ S₁, flipQubit x q ∈ S₂) (h₂ : ∀ x ∈ S₂, flipQubit x q ∈ S₁)
       (f : (Fin n → Fin 2) → ℝ) : ∑ x ∈ S₁, f (flipQubit x q) = ∑ x ∈ S₂, f x :=
     Finset.sum_nbij (flipQubit · q) h₁
-      (fun _ _ _ _ h => by
-        have := congr_arg (flipQubit · q) h
-        simp at this; exact this)
+      (fun _ _ _ _ h => by simpa using congr_arg (flipQubit · q) h)
       (fun b hb => ⟨flipQubit b q, h₂ b hb, by simp⟩) (fun _ _ => rfl)
   have hF0 : ∀ x ∈ F, x q = 0 := fun x hx => by
     simp only [F, Finset.mem_filter, Finset.mem_univ, true_and] at hx; exact hx
