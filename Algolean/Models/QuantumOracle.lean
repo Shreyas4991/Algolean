@@ -10,6 +10,7 @@ public import Algolean.QueryModel
 public import Mathlib.Analysis.Complex.Exponential
 public import Mathlib.Probability.ProbabilityMassFunction.Basic
 public import Mathlib.Analysis.Complex.Trigonometric
+public import Mathlib.Data.Fin.Tuple.Basic
 
 @[expose] public section
 
@@ -70,6 +71,47 @@ theorem QState.initial_isNormalized :
   · simp
   · intro i _ hi; simp [hi]
   · simp
+
+/-- Computational basis state `|x⟩` for bitstring `x`. -/
+noncomputable def QState.ofBitstring (x : Fin n → Fin 2) : QState n :=
+  fun y => if y = x then 1 else 0
+
+theorem QState.ofBitstring_isNormalized (x : Fin n → Fin 2) :
+    (QState.ofBitstring x).IsNormalized := by
+  simp only [QState.IsNormalized, QState.ofBitstring]
+  rw [Finset.sum_eq_single x]
+  · simp
+  · intro i _ hi; simp [hi]
+  · simp
+
+theorem QState.initial_eq_ofBitstring_zero :
+    QState.initial n = QState.ofBitstring 0 := rfl
+
+/-- Probability of measuring qubit `q` as value `v` in state `s`. -/
+noncomputable def measureQubitProb (s : QState n) (q : Fin n) (v : Fin 2) : ℝ :=
+  ∑ x ∈ Finset.univ.filter (fun x => x q = v), normSq (s x)
+
+/-! ### Tensor products -/
+
+/-- Tensor product of quantum states. The amplitude at a combined bitstring
+is the product of amplitudes at its first `m` and last `k` bits. -/
+noncomputable def QState.tensor (s₁ : QState m) (s₂ : QState k) : QState (m + k) :=
+  fun x => s₁ (fun i => x (Fin.castAdd k i)) * s₂ (fun j => x (Fin.natAdd m j))
+
+/-- Tensor product of quantum gates (linear operators).
+Applies `f` to the first `m` qubits and `g` to the last `k` qubits.
+On product states: `tensorGate f g (s₁.tensor s₂) = (f s₁).tensor (g s₂)`. -/
+noncomputable def tensorGate (f : QState m → QState m) (g : QState k → QState k) :
+    QState (m + k) → QState (m + k) :=
+  fun ψ x =>
+    f (fun a => g (fun b => ψ (Fin.append a b)) (fun j => x (Fin.natAdd m j)))
+      (fun i => x (Fin.castAdd k i))
+
+/-- Extend a size-`n` oracle to a family over all sizes,
+using the identity at sizes other than `n`. -/
+noncomputable def extendOracle {n : ℕ} (oracle : QState n → QState n) :
+    (m : ℕ) → QState m → QState m :=
+  fun m => if h : m = n then h ▸ oracle else id
 
 /-! ### Qubit flip -/
 
