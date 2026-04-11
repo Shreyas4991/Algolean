@@ -13,6 +13,7 @@ public import Algolean.Models.Circuits
 public import Algolean.Models.FanInTwoCircuits
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
+public import Algolean.Models.RandomSample
 public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
