@@ -141,9 +141,34 @@ theorem CircAndSimple_size : ∀ n : ℕ, ∀ x : Fin n → Bool,
         FanInTwoCircuit.subcircuits.eq_1, insert_empty_eq, Finset.singleton_union]
       grind[Finset.card_insert_le, fanInTwocircuitSize_eq_subcircuits_card]
 
+lemma tail_image_subset (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
+    Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf) ⊆
+    Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf) := by
+  intro d hd
+  obtain ⟨i, _, rfl⟩ := Finset.mem_image.mp hd
+  exact Finset.mem_image.mpr ⟨Fin.succ i, Finset.mem_univ _, by simp [Fin.tail]⟩
+
+lemma tail_max_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
+    (Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max.getD 0 ≤
+    (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
+  have h_mono := Finset.max_mono (tail_image_subset m x)
+  cases h_s : (Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max <;>
+  cases h_t : (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max <;>
+    simp_all [Option.getD_some, Option.getD_none, WithBot.coe_le_coe] <;>
+    first | exact Nat.zero_le _ | apply WithBot.coe_le_coe.mp ; simp only [WithBot.coe_le_coe] ; exact h_mono
+
+lemma head_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
+    (x 0).depthOf ≤
+    (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
+  have hmem : (x 0).depthOf ∈ Finset.univ.image (fun i => (x i).depthOf) :=
+    Finset.mem_image.mpr ⟨0, Finset.mem_univ _, rfl⟩
+  obtain ⟨l, hl⟩ := Finset.max_of_nonempty ⟨_, hmem⟩
+  simp only [hl]
+  exact Finset.le_max_of_eq hmem hl
 
 theorem AndDepthAtMostOne : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool Bool,
-    (CircAnd n x).depthOf ≤ n + (Finset.univ.image (fun i : Fin n => (x i).depthOf)).max.getD 0 := by
+    (CircAnd n x).depthOf ≤ n +
+    (Finset.univ.image (fun i : Fin n => (x i).depthOf)).max.getD 0 := by
   intro n x
   induction n with
   | zero =>
@@ -151,51 +176,20 @@ theorem AndDepthAtMostOne : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool 
   | succ m ih =>
     specialize ih (Fin.tail x)
     simp only [CircAnd, FanInTwoCircuit.depthOf]
-    have h_arith : ∀ a c, max a (m + c) ≤ m + max a c := by
-      intro a c
-      omega
-    have h_subset : Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf) ⊆
-        Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf) := by
-      intro d hd
-      obtain ⟨i, _, rfl⟩ := Finset.mem_image.mp hd
-      exact Finset.mem_image.mpr ⟨Fin.succ i, Finset.mem_univ _, by simp [Fin.tail]⟩
-    -- Therefore max of tail ≤ max of full
-    have h_tail_le : (Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max.getD 0 ≤
-        (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
-      by_cases h : Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf) = ∅
-      · simp only [h, Finset.max_empty, Option.getD]
-        exact Nat.zero_le _
-      · have htail_ne : (Finset.univ.image (fun i => (Fin.tail x i).depthOf)).Nonempty :=
-          Finset.nonempty_of_ne_empty h
-        have hfull_ne : (Finset.univ.image (fun i => (x i).depthOf)).Nonempty :=
-          ⟨(x 0).depthOf, Finset.mem_image.mpr ⟨0, Finset.mem_univ _, rfl⟩⟩
-        obtain ⟨k, hk⟩ := Finset.max_of_nonempty htail_ne
-        obtain ⟨l, hl⟩ := Finset.max_of_nonempty hfull_ne
-        have : k ≤ l := Finset.le_max_of_eq (h_subset (Finset.mem_of_max hk)) hl
-        simp only [hk, hl]
-        exact this
-    -- The head depth is also ≤ max of full
-    have h_head_le : (x 0).depthOf ≤
-        (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
-      have hmem : (x 0).depthOf ∈ Finset.univ.image (fun i => (x i).depthOf) :=
-        Finset.mem_image.mpr ⟨0, Finset.mem_univ _, rfl⟩
-      have hne : (Finset.univ.image (fun i => (x i).depthOf)).Nonempty := ⟨_, hmem⟩
-      obtain ⟨l, hl⟩ := Finset.max_of_nonempty hne
-      have : (x 0).depthOf ≤ l := Finset.le_max_of_eq hmem hl
-      simp only [hl]
-      exact this
     calc (mul (x 0) (CircAnd m (Fin.tail x))).depthOf
       _ = 1 + max (x 0).depthOf (CircAnd m (Fin.tail x)).depthOf := rfl
       _ ≤ 1 + max (x 0).depthOf (m + (Finset.univ.image (fun i : Fin m =>
       (Fin.tail x i).depthOf)).max.getD 0) := by gcongr
       _ ≤ 1 + (m + max (x 0).depthOf ((Finset.univ.image (fun i : Fin m =>
-      (Fin.tail x i).depthOf)).max.getD 0)) := by gcongr; exact h_arith _ _
+      (Fin.tail x i).depthOf)).max.getD 0)) := by gcongr; omega
       _ = (m + 1) + max (x 0).depthOf ((Finset.univ.image (fun i : Fin m =>
       (Fin.tail x i).depthOf)).max.getD 0) := by ring
       _ ≤ (m + 1) + max (x 0).depthOf ((Finset.univ.image (fun i : Fin (m + 1) =>
-      (x i).depthOf)).max.getD 0) := by gcongr
+      (x i).depthOf)).max.getD 0) := by gcongr ; apply tail_max_le_full_max
       _ = (m + 1) + (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
-        rw [max_eq_right h_head_le]
+        rw [max_eq_right (head_le_full_max m x)]
+
+
 
 theorem CircAndSimple_depth : ∀ n : ℕ, ∀ x : Fin n → Bool,
     (CircAndSimple n x).depthOf ≤ n + 1  := by
