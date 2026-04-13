@@ -141,24 +141,24 @@ theorem CircAndSimple_size : ∀ n : ℕ, ∀ x : Fin n → Bool,
         FanInTwoCircuit.subcircuits.eq_1, insert_empty_eq, Finset.singleton_union]
       grind[Finset.card_insert_le, fanInTwocircuitSize_eq_subcircuits_card]
 
-lemma tail_image_subset (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
+private lemma tail_image_subset (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
     Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf) ⊆
     Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf) := by
   intro d hd
   obtain ⟨i, _, rfl⟩ := Finset.mem_image.mp hd
   exact Finset.mem_image.mpr ⟨Fin.succ i, Finset.mem_univ _, by simp [Fin.tail]⟩
 
-lemma tail_max_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
+private lemma tail_max_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
     (Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max.getD 0 ≤
     (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
   have h_mono := Finset.max_mono (tail_image_subset m x)
   cases h_s : (Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max <;>
   cases h_t : (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max <;>
-    simp_all only [Std.le_refl,bot_le,ge_iff_le,le_bot_iff,
-    WithBot.coe_ne_bot, WithBot.coe_le_coe] <;>
+    simp_all only [Std.le_refl, bot_le, ge_iff_le, le_bot_iff,
+      WithBot.coe_ne_bot, WithBot.coe_le_coe] <;>
     first | exact Nat.zero_le _ | exact h_mono
 
-lemma head_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
+private lemma head_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
     (x 0).depthOf ≤
     (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
   have hmem : (x 0).depthOf ∈ Finset.univ.image (fun i => (x i).depthOf) :=
@@ -167,44 +167,42 @@ lemma head_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool)
   simp only [hl]
   exact Finset.le_max_of_eq hmem hl
 
-theorem AndDepthAtMostOne : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool Bool,
+theorem AndDepthAtMostOne (n : ℕ) (x : Fin n → FanInTwoCircuit Bool Bool) :
     (CircAnd n x).depthOf ≤ n +
-    (Finset.univ.image (fun i : Fin n => (x i).depthOf)).max.getD 0 := by
-  intro n x
+      (Finset.univ.image (fun i : Fin n => (x i).depthOf)).max.getD 0 := by
   induction n with
   | zero =>
-    simp [CircAnd, FanInTwoCircuit.depthOf]
+      simp [CircAnd, FanInTwoCircuit.depthOf]
   | succ m ih =>
-    specialize ih (Fin.tail x)
-    simp only [CircAnd, FanInTwoCircuit.depthOf]
-    calc (mul (x 0) (CircAnd m (Fin.tail x))).depthOf
-      _ = 1 + max (x 0).depthOf (CircAnd m (Fin.tail x)).depthOf := rfl
-      _ ≤ 1 + max (x 0).depthOf (m + (Finset.univ.image (fun i : Fin m =>
-      (Fin.tail x i).depthOf)).max.getD 0) := by gcongr
-      _ ≤ 1 + (m + max (x 0).depthOf ((Finset.univ.image (fun i : Fin m =>
-      (Fin.tail x i).depthOf)).max.getD 0)) := by gcongr; omega
-      _ = (m + 1) + max (x 0).depthOf ((Finset.univ.image (fun i : Fin m =>
-      (Fin.tail x i).depthOf)).max.getD 0) := by ring
-      _ ≤ (m + 1) + max (x 0).depthOf ((Finset.univ.image (fun i : Fin (m + 1) =>
-      (x i).depthOf)).max.getD 0) := by gcongr ; apply tail_max_le_full_max
-      _ = (m + 1) + (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 := by
-        rw [max_eq_right (head_le_full_max m x)]
+      specialize ih (Fin.tail x)
+      simp only [CircAnd, FanInTwoCircuit.depthOf]
+      calc
+        (mul (x 0) (CircAnd m (Fin.tail x))).depthOf
+        _ = 1 + max (x 0).depthOf (CircAnd m (Fin.tail x)).depthOf := rfl
+        _ ≤ 1 + (m + max (x 0).depthOf
+              ((Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max.getD 0)) :=
+            by gcongr; grind
+        _ = (m + 1) + max (x 0).depthOf
+              ((Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max.getD 0) :=
+            by ring
+        _ ≤ (m + 1) + max (x 0).depthOf
+              ((Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0) :=
+            by gcongr; apply tail_max_le_full_max
+        _ = (m + 1) + (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 :=
+            by rw [max_eq_right (head_le_full_max m x)]
 
-
-
-theorem CircAndSimple_depth (n : ℕ)  (x : Fin n → Bool) : 
-    (CircAndSimple n x).depthOf ≤ n + 1  := by
-  intros n x
+theorem CircAndSimple_depth (n : ℕ) (x : Fin n → Bool) :
+    (CircAndSimple n x).depthOf ≤ n + 1 := by
   induction n with
   | zero =>
       simp [CircAndSimple, FanInTwoCircuit.depthOf]
   | succ m ih =>
       specialize ih (Fin.tail x)
       simp only [CircAndSimple, FanInTwoCircuit.depthOf]
-      calc  1 + (CircAndSimple m (Fin.tail x)).depthOf
-      ≤ 1 + (m + 1) := by gcongr
-    _ = m + 1 + 1 := by ring
-
+      calc
+        1 + (CircAndSimple m (Fin.tail x)).depthOf
+        _ ≤ 1 + (m + 1) := by gcongr
+        _ = m + 1 + 1 := by ring
 
 
 -- /--
