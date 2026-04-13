@@ -192,7 +192,7 @@ theorem AndDepthAtMostOne : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool 
 
 
 
-theorem CircAndSimple_depth : ∀ n : ℕ, ∀ x : Fin n → Bool,
+theorem CircAndSimple_depth (n : ℕ)  (x : Fin n → Bool) : 
     (CircAndSimple n x).depthOf ≤ n + 1  := by
   intros n x
   induction n with
