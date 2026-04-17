@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026 Shreyas Srinivas. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Shreyas Srinivas, Eric Wieser
+Authors: Shreyas Srinivas, Eric Wieser, Ethan Ermovick
 -/
 module
 
@@ -29,6 +29,7 @@ the `SortOpsInsertHead` model. This insertionSort evaluates identically to the u
 - `insertionSort_sorted` : `insertionSort` outputs a sorted list.
 - `insertionSort_complexity` : `insertionSort` takes at most n * (n + 1) comparisons and
   (n + 1) * (n + 2) list head-insertions.
+- `insertionSort_stable` : `insertionSort` is a stable sorting algorithm.
 -/
 
 namespace Algolean
@@ -87,6 +88,56 @@ theorem insertionSort_complexity (l : List α) (le : α → α → Bool) :
   | cons head tail ih =>
     grind [insertOrd_complexity_upper_bound, List.length_insertionSort, SortOpsCost.le_def,
       insertionSort_time_compares, insertionSort_time_inserts]
+
+section Stability
+
+private lemma filter_orderedInsert {r : α → α → Prop} [DecidableRel r]
+    (a : α) (l : List α) (p : α → Bool)
+    (hcompat : p a = true → ∀ b, p b = true → r a b)
+    (hsorted : l.Pairwise r) :
+    (l.orderedInsert r a).filter p =
+      if p a then a :: l.filter p else l.filter p := by
+  induction l with
+  | nil =>
+    by_cases hpa : p a = true <;>
+      simp [hpa]
+  | cons b l ih =>
+    rw [List.pairwise_cons] at hsorted
+    by_cases hab : r a b
+    · by_cases hpa : p a = true <;>
+        simp [List.orderedInsert_cons, hab, hpa]
+    · by_cases hpa : p a = true
+      · by_cases hpb : p b = true
+        · exfalso
+          exact hab (hcompat hpa b hpb)
+        · simp [List.orderedInsert_cons, hab, hpa, hpb, ih hsorted.2]
+      · by_cases hpb : p b = true <;>
+          simp [List.orderedInsert_cons, hab, hpa, hpb, ih hsorted.2]
+
+theorem insertionSort_stable
+    (xs : List α)
+    (le : α → α → Bool)
+    [Std.Total (fun x y => le x y = true)]
+    [IsTrans α (fun x y => le x y = true)] :
+    IsStableSort (fun xs => (insertionSort xs).eval (sortModel le)) xs le := by
+  simp only [insertionSort_eval]
+  intro k
+  induction xs with
+  | nil => simp
+  | cons a rest ih =>
+    change
+      List.filter (fun x => le x k && le k x)
+          ((a :: rest).insertionSort (fun x y => le x y = true)) =
+        List.filter (fun x => le x k && le k x) (a :: rest)
+    rw [List.insertionSort_cons,
+      filter_orderedInsert _ _ _ _ (List.pairwise_insertionSort _ _)]
+    · by_cases hak : le a k = true ∧ le k a = true <;>
+        simp [hak, ih]
+    · intro ha b hb
+      simp only [Bool.and_eq_true] at ha hb
+      exact IsTrans.trans (r := fun x y => le x y = true) a k b ha.1 hb.2
+
+end Stability
 
 end Algorithms
 
