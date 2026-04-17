@@ -11,17 +11,16 @@ public import Algolean.QueryModel
 @[expose] public section
 
 /-!
-# Query Type for Comparison Search in Lists
+# Query Type for Read Only Vectors
 
-In this file we define a query type `VecSearch` for comparison based searching in Lists,
-whose sole query `compare` compares the head of the list with a given argument. It
-further defines a model `ListSearch.natCost` for this query.
+In this file we define a query type `ReadOnlyVec` for for read only algorithms
+on vectors `ReadOnlyVec.natCost` for this query.
 
 --
 ## Definitions
 
-- `VecSearch`: A query type for comparison based search in lists.
-- `VecSearch.natCost`:  A model for this query with costs in `ℕ`.
+- `ReadOnlyVec`: A query type for comparison based search in lists.
+- `ReadOnlyVec.natCost`:  A model for this query with costs in `ℕ`.
 
 -/
 
