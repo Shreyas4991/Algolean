@@ -114,18 +114,8 @@ private lemma isPrefixOf_eq_false_of_length_lt [BEq α] :
   | [], _, h => by simp at h
   | _ :: _, [], _ => by simp [List.isPrefixOf]
   | p :: ps, t :: ts, h => by
-      have htail : ts.length < ps.length := by simpa using h
-      by_cases heq : p == t
-      · simp [List.isPrefixOf, heq, isPrefixOf_eq_false_of_length_lt htail]
-      · simp [List.isPrefixOf, heq]
-
-private lemma shift_filter_gen [BEq α] (pat : List α) (t : α) (ts : List α) (l : List Nat) :
-    List.filter (fun i => pat.isPrefixOf (List.drop i (t :: ts))) (List.map Nat.succ l) =
-      List.map Nat.succ (List.filter (fun i => pat.isPrefixOf (List.drop i ts)) l) := by
-  induction l with
-  | nil => simp
-  | cons a l ih =>
-      by_cases h : pat.isPrefixOf (List.drop a ts) = true <;> simp [ih, h]
+      by_cases heq : p == t <;>
+        simp [List.isPrefixOf, heq, isPrefixOf_eq_false_of_length_lt (by simpa using h)]
 
 private lemma patternSearchAll_cons [BEq α] (pat : List α) (t : α) (ts : List α) :
     PatternSearchAll pat (t :: ts) =
@@ -134,52 +124,49 @@ private lemma patternSearchAll_cons [BEq α] (pat : List α) (t : α) (ts : List
       else
         (PatternSearchAll pat ts).map Nat.succ := by
   simp only [PatternSearchAll, List.length_cons, List.range_succ_eq_map, List.filter_cons]
-  rw [shift_filter_gen]
+  rw [show List.filter (fun i => pat.isPrefixOf (List.drop i (t :: ts)))
+          (List.map Nat.succ (List.range ts.length)) =
+        List.map Nat.succ
+          (List.filter (fun i => pat.isPrefixOf (List.drop i ts)) (List.range ts.length)) from by
+        induction List.range ts.length with
+        | nil => simp
+        | cons a l ih => by_cases h : pat.isPrefixOf (List.drop a ts) = true <;> simp [ih, h]]
   by_cases h : pat.isPrefixOf (t :: ts) = true <;> simp [List.drop, h]
 
 private lemma patternSearchAll_eq_nil_of_length_lt [BEq α] :
     ∀ {pat txt : List α}, txt.length < pat.length → PatternSearchAll pat txt = []
   | [], _, h => by simp at h
   | _ :: _, [], _ => by simp [PatternSearchAll]
-  | p :: ps, t :: ts, h => by
-      have hfalse : (p :: ps).isPrefixOf (t :: ts) = false :=
-        isPrefixOf_eq_false_of_length_lt h
-      have htail : ts.length < (p :: ps).length := by
-        exact lt_trans (Nat.lt_succ_self _) h
-      rw [patternSearchAll_cons]
-      simp [hfalse, patternSearchAll_eq_nil_of_length_lt htail]
-
-private lemma naivePatternSearchFrom_eval [BEq α] (pat txt : List α) (i : Nat) :
-    (naivePatternSearchFrom pat txt i).eval Comparison.natCost =
-      (PatternSearchAll pat txt).map (fun j => i + j) := by
-  cases pat with
-  | nil =>
-      induction txt generalizing i with
-      | nil =>
-          simp [naivePatternSearchFrom, PatternSearchAll]
-      | cons t ts ih =>
-          simp [naivePatternSearchFrom, Prog.eval_bind, patternSearchAll_cons, ih,
-            Nat.add_left_comm, Nat.add_comm]
-  | cons p ps =>
-      induction txt generalizing i with
-      | nil =>
-          simp [naivePatternSearchFrom, PatternSearchAll]
-      | cons t ts ih =>
-          by_cases hlen : (p :: ps).length ≤ (t :: ts).length
-          · have hlen' : ps.length ≤ ts.length := by simpa using hlen
-            by_cases h : (p :: ps).isPrefixOf (t :: ts) = true
-            · simp [naivePatternSearchFrom, prefixMatch_eval, patternSearchAll_cons,
-                ih, hlen', h, Nat.add_left_comm, Nat.add_comm]
-            · simp [naivePatternSearchFrom, prefixMatch_eval, patternSearchAll_cons,
-                ih, hlen', h, Nat.add_left_comm, Nat.add_comm]
-          · have hnil : PatternSearchAll (p :: ps) (t :: ts) = [] :=
-              patternSearchAll_eq_nil_of_length_lt (Nat.not_le.mp hlen)
-            have hlen' : ¬ ps.length ≤ ts.length := by simpa using hlen
-            simp [naivePatternSearchFrom, hlen', hnil]
+  | p :: ps, t :: ts, h => by simp [patternSearchAll_cons, isPrefixOf_eq_false_of_length_lt h,
+      patternSearchAll_eq_nil_of_length_lt (lt_trans (Nat.lt_succ_self _) h)]
 
 theorem naivePatternSearch_eval [BEq α] (pat txt : List α) :
     (naivePatternSearch pat txt).eval Comparison.natCost = PatternSearchAll pat txt := by
-  simpa [naivePatternSearch] using naivePatternSearchFrom_eval pat txt 0
+  simpa [naivePatternSearch] using
+    ((show ∀ i,
+        (naivePatternSearchFrom pat txt i).eval Comparison.natCost =
+          (PatternSearchAll pat txt).map (fun j => i + j) from by
+      intro i
+      cases pat with
+      | nil =>
+          induction txt generalizing i with
+          | nil => simp [naivePatternSearchFrom, PatternSearchAll]
+          | cons t ts ih =>
+              simp [naivePatternSearchFrom, Prog.eval_bind, patternSearchAll_cons, ih,
+                Nat.add_left_comm, Nat.add_comm]
+      | cons p ps =>
+          induction txt generalizing i with
+          | nil => simp [naivePatternSearchFrom, PatternSearchAll]
+          | cons t ts ih =>
+              by_cases hlen : (p :: ps).length ≤ (t :: ts).length
+              · by_cases h : (p :: ps).isPrefixOf (t :: ts) = true <;>
+                  simp [naivePatternSearchFrom, prefixMatch_eval, patternSearchAll_cons,
+                    ih, (show ps.length ≤ ts.length from by simpa using hlen),
+                    h, Nat.add_left_comm, Nat.add_comm]
+              · simp [naivePatternSearchFrom,
+                (show ¬ ps.length ≤ ts.length from by simpa using hlen),
+                  patternSearchAll_eq_nil_of_length_lt (Nat.not_le.mp hlen)]
+    ) 0)
 
 end Correctness
 
@@ -194,67 +181,43 @@ theorem prefixMatch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     | nil => simp [prefixMatch]
     | cons t ts =>
       by_cases h : p == t
-      · have hih := ih ts
-        simp [prefixMatch, h] at hih ⊢
-        omega
+      · have hih := ih ts; simp [prefixMatch, h] at hih ⊢; omega
       · simp [prefixMatch, h]
-
-private lemma naivePatternSearchFrom_time_complexity_upper_bound [BEq α]
-    (pat txt : List α) (i : Nat) :
-    (naivePatternSearchFrom pat txt i).time Comparison.natCost ≤
-      pat.length * (txt.length + 1 - pat.length) := by
-  cases pat with
-  | nil =>
-      induction txt generalizing i with
-      | nil =>
-          simp [naivePatternSearchFrom]
-      | cons t ts ih =>
-          simpa [naivePatternSearchFrom, Prog.time_bind] using ih (i + 1)
-  | cons p ps =>
-      induction txt generalizing i with
-      | nil =>
-          simp [naivePatternSearchFrom]
-      | cons t ts ih =>
-          by_cases hlen : (p :: ps).length ≤ (t :: ts).length
-          · have hpre : (prefixMatch (p :: ps) (t :: ts)).time Comparison.natCost ≤
-                (p :: ps).length :=
-              (prefixMatch_time_complexity_upper_bound (p :: ps) (t :: ts)).trans
-                (Nat.min_le_left _ _)
-            have hlen' : ps.length ≤ ts.length := by simpa using hlen
-            have htime :
-                (naivePatternSearchFrom (p :: ps) (t :: ts) i).time Comparison.natCost
-                  = (prefixMatch (p :: ps) (t :: ts)).time Comparison.natCost
-                      + (naivePatternSearchFrom (p :: ps) ts (i + 1)).time Comparison.natCost := by
-              simp [naivePatternSearchFrom, Prog.time_bind, hlen']
-              split <;> simp
-            have hmult :
-                (p :: ps).length * (ts.length + 1 - (p :: ps).length) + (p :: ps).length =
-                  (p :: ps).length * ((t :: ts).length + 1 - (p :: ps).length) := by
-              have hsub : (t :: ts).length + 1 - (p :: ps).length =
-                  (ts.length + 1 - (p :: ps).length) + 1 := by
-                simpa using (Nat.succ_sub hlen)
-              rw [hsub, Nat.mul_succ]
-            have hsum := Nat.add_le_add hpre (ih (i + 1))
-            have hsum' :
-                (prefixMatch (p :: ps) (t :: ts)).time Comparison.natCost +
-                    (naivePatternSearchFrom (p :: ps) ts (i + 1)).time Comparison.natCost ≤
-                  (p :: ps).length * (ts.length + 1 - (p :: ps).length) + (p :: ps).length := by
-              simpa [Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hsum
-            calc
-              (naivePatternSearchFrom (p :: ps) (t :: ts) i).time Comparison.natCost
-                  = (prefixMatch (p :: ps) (t :: ts)).time Comparison.natCost
-                      + (naivePatternSearchFrom (p :: ps) ts (i + 1)).time
-                          Comparison.natCost := htime
-              _ ≤ (p :: ps).length * (ts.length + 1 - (p :: ps).length) + (p :: ps).length :=
-                    hsum'
-              _ = (p :: ps).length * ((t :: ts).length + 1 - (p :: ps).length) := hmult
-          · have hlen' : ¬ ps.length ≤ ts.length := by simpa using hlen
-            simp [naivePatternSearchFrom, hlen']
 
 theorem naivePatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (naivePatternSearch pat txt).time Comparison.natCost ≤
       pat.length * (txt.length + 1 - pat.length) := by
-  simpa [naivePatternSearch] using naivePatternSearchFrom_time_complexity_upper_bound pat txt 0
+  simpa [naivePatternSearch] using
+    ((show ∀ i,
+        (naivePatternSearchFrom pat txt i).time Comparison.natCost ≤
+          pat.length * (txt.length + 1 - pat.length) from by
+      intro i
+      cases pat with
+      | nil =>
+          induction txt generalizing i with
+          | nil => simp [naivePatternSearchFrom]
+          | cons t ts ih => simpa [naivePatternSearchFrom, Prog.time_bind] using ih (i + 1)
+      | cons p ps =>
+          induction txt generalizing i with
+          | nil => simp [naivePatternSearchFrom]
+          | cons t ts ih =>
+              by_cases hlen : (p :: ps).length ≤ (t :: ts).length
+              · rw [show (naivePatternSearchFrom (p :: ps) (t :: ts) i).time Comparison.natCost =
+                    (prefixMatch (p :: ps) (t :: ts)).time Comparison.natCost +
+                      (naivePatternSearchFrom (p :: ps) ts (i + 1)).time
+                        Comparison.natCost from by
+                      simp [naivePatternSearchFrom, Prog.time_bind,
+                        (show ps.length ≤ ts.length from by simpa using hlen)]; split <;> simp]
+                exact (Nat.add_le_add
+                  ((prefixMatch_time_complexity_upper_bound _ _).trans (Nat.min_le_left _ _))
+                  (ih (i + 1))).trans_eq (by
+                    rw [show (t :: ts).length + 1 - (p :: ps).length =
+                        (ts.length + 1 - (p :: ps).length) + 1 from by
+                          simpa using Nat.succ_sub hlen,
+                      Nat.mul_succ, Nat.add_comm])
+              · simp [naivePatternSearchFrom,
+                  (show ¬ ps.length ≤ ts.length from by simpa using hlen)]
+    ) 0)
 
 end TimeComplexity
 
