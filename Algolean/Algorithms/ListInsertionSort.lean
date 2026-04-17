@@ -98,21 +98,11 @@ private lemma filter_orderedInsert {r : α → α → Prop} [DecidableRel r]
     (l.orderedInsert r a).filter p =
       if p a then a :: l.filter p else l.filter p := by
   induction l with
-  | nil =>
-    by_cases hpa : p a = true <;>
-      simp [hpa]
+  | nil => split <;> simp_all
   | cons b l ih =>
     rw [List.pairwise_cons] at hsorted
-    by_cases hab : r a b
-    · by_cases hpa : p a = true <;>
-        simp [List.orderedInsert_cons, hab, hpa]
-    · by_cases hpa : p a = true
-      · by_cases hpb : p b = true
-        · exfalso
-          exact hab (hcompat hpa b hpb)
-        · simp [List.orderedInsert_cons, hab, hpa, hpb, ih hsorted.2]
-      · by_cases hpb : p b = true <;>
-          simp [List.orderedInsert_cons, hab, hpa, hpb, ih hsorted.2]
+    by_cases hab : r a b <;> by_cases hpa : p a <;> by_cases hpb : p b <;>
+      simp_all [List.orderedInsert_cons]
 
 theorem insertionSort_stable
     (xs : List α)
@@ -125,16 +115,11 @@ theorem insertionSort_stable
   induction xs with
   | nil => simp
   | cons a rest ih =>
-    change
-      List.filter (fun x => le x k && le k x)
-          ((a :: rest).insertionSort (fun x y => le x y = true)) =
-        List.filter (fun x => le x k && le k x) (a :: rest)
+    change (List.filter _ ((a :: rest).insertionSort _)) = _
     rw [List.insertionSort_cons,
       filter_orderedInsert _ _ _ _ (List.pairwise_insertionSort _ _)]
-    · by_cases hak : le a k = true ∧ le k a = true <;>
-        simp [hak, ih]
-    · intro ha b hb
-      simp only [Bool.and_eq_true] at ha hb
+    · by_cases hak : le a k = true ∧ le k a = true <;> simp_all
+    · intro ha b hb; simp only [Bool.and_eq_true] at ha hb
       exact IsTrans.trans (r := fun x y => le x y = true) a k b ha.1 hb.2
 
 end Stability
