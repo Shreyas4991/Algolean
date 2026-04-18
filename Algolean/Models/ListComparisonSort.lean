@@ -18,10 +18,10 @@ public import Mathlib.Tactic.FastInstance
 # Query Type for Comparison Search in Lists
 
 In this file we define two query types `SortOps` which is suitable for insertion sort, and
-`SortOps`for comparison based searching in Lists. We define a model `sortModel` for `SortOps`
-which uses a custom cost structure `SortOpsCost`. We define a model `sortModelCmp` for `SortOpsCmp`
-which defines a `ℕ` based cost structure. We also define a notion of stability for sorting
-algorithms in lists.
+`SortOpsInsertHead`for comparison based searching in Lists. We define a model `sortModel` for
+`SortOps` which uses a custom cost structure `SortOpsCost`. We define a model `sortModelCmp`
+for `SortOpsCmp` which defines a `ℕ` based cost structure. We also define a notion of stability for
+sorting algorithms in lists.
 --
 ## Definitions
 
@@ -103,7 +103,7 @@ instance : AddCommMonoid SortOpsCost :=
 end SortOpsCost
 
 /--
-A model of `SortOps` that uses `SortOpsCost` as the cost type for operations.
+A model of `SortOpsInsertHead` that uses `SortOpsCost` as the cost type for operations.
 
 While this accepts any decidable relation `le`, most sorting algorithms are only well-behaved in the
 presence of `[Std.Total le] [IsTrans _ le]`.
@@ -124,7 +124,8 @@ section NatModel
 
 /--
 A model for comparison sorting on lists with only the comparison operation. This
-is used in mergeSort.
+is used in mergeSort. Note that this query can be re-used for other
+purely comparison based algorithms on any data structure.
 -/
 inductive SortOps.{u} (α : Type u) : Type → Type _ where
   /-- `cmpLE x y` is intended to return `true` if `x ≤ y` and `false` otherwise.
