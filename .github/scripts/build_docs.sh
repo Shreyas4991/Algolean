@@ -51,4 +51,12 @@ if [ -f ../references.bib ]; then
   cp ../references.bib ./docs/references.bib
 fi
 MATHLIB_NO_CACHE_ON_UPDATE=1 ~/.elan/bin/lake update "$NAME"
+
+# A restored docgen cache can contain the `*.docs_built` marker without the
+# corresponding static files in `.lake/build/doc`.  In that state Lake skips
+# doc generation and then fails while tracing files such as `doc/style.css`.
+if [ -d .lake/build/doc-data ]; then
+  find .lake/build/doc-data -name '*.docs_built' -delete
+fi
+
 ~/.elan/bin/lake build $DOCS_FACETS
