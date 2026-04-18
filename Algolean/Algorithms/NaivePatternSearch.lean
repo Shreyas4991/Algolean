@@ -24,6 +24,7 @@ upper bound for comparisons in the `Comparison` query model.
 
 - `prefixMatch`: checks whether a pattern is a prefix of some text.
 - `naivePatternSearch`: returns all start indices of contiguous matches.
+- `PatternSearchAll`: Pattern searching definition for finding all matches.
 
 ## Main results
 
@@ -40,6 +41,18 @@ namespace Algolean
 namespace Algorithms
 
 open Prog
+
+/--
+`PatternSearchAll pat txt` returns all starting positions in `txt` such that
+`pat` is a prefix of `txt` starting there, in increasing order.
+
+For the empty pattern, this returns every position inside the text
+`0, 1, ..., txt.length - 1`.
+
+TODO: move definition
+-/
+def PatternSearchAll [BEq α] (pat txt : List α) : List Nat :=
+  (List.range txt.length).filter fun i => pat.isPrefixOf (txt.drop i)
 
 open Comparison in
 /--
