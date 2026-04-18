@@ -98,7 +98,7 @@ private lemma filter_orderedInsert {r : α → α → Prop} [DecidableRel r]
     (l.orderedInsert r a).filter p =
       if p a then a :: l.filter p else l.filter p := by
   induction l with
-  | nil => grind only [= List.orderedInsert_nil, = List.filter_cons]
+  | nil => split <;> simp_all
   | cons b l ih =>
     rw [List.pairwise_cons] at hsorted
     grind only [= List.orderedInsert_cons, = List.filter_cons]
@@ -112,7 +112,7 @@ theorem insertionSort_stable
   simp only [insertionSort_eval]
   intro k
   induction xs with
-  | nil => grind only [= List.insertionSort_nil]
+  | nil => simp
   | cons a rest ih =>
     change (List.filter _ ((a :: rest).insertionSort _)) = _
     rw [List.insertionSort_cons,
