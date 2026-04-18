@@ -28,8 +28,7 @@ upper bound for comparisons in the `Comparison` query model.
 ## Main results
 
 - `prefixMatch_eval`: `prefixMatch` evaluates identically to `List.isPrefixOf`.
-- `naivePatternSearch_eval`: `naivePatternSearch` evaluates identically to
-  `PatternSearchAll`.
+- `naivePatternSearch_eval`: `naivePatternSearch` evaluates identically to `PatternSearchAll`.
 - `prefixMatch_time_complexity_upper_bound`: `prefixMatch` takes at most
   `min pat.length txt.length` comparisons.
 - `naivePatternSearch_time_complexity_upper_bound`: `naivePatternSearch` takes at most
