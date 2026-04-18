@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026 Shreyas Srinivas. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Shreyas Srinivas, Eric WIeser
+Authors: Shreyas Srinivas, Eric WIeser, Ethan Ermovick
 -/
 
 module
@@ -20,7 +20,8 @@ public import Mathlib.Tactic.FastInstance
 In this file we define two query types `SortOps` which is suitable for insertion sort, and
 `SortOps`for comparison based searching in Lists. We define a model `sortModel` for `SortOps`
 which uses a custom cost structure `SortOpsCost`. We define a model `sortModelCmp` for `SortOpsCmp`
-which defines a `ℕ` based cost structure.
+which defines a `ℕ` based cost structure. We also define a notion of stability for sorting
+algorithms in lists.
 --
 ## Definitions
 
@@ -30,6 +31,7 @@ which defines a `ℕ` based cost structure.
 - `SortOpsCmp`:  A query type for comparison based sorting that only includes a comparison query.
    This is more suitable for comparison based sorts for which it is only desirable to count
    comparisons
+- `IsStableSort`: A definition of stability for sorting algorithms in lists.
 
 -/
 namespace Algolean
@@ -144,6 +146,21 @@ def sortModelNat {α : Type*}
   cost _ := 1
 
 end NatModel
+
+section SortStability
+
+/--
+Definition of a stable list sorting algorithm.
+TODO: relocate or upstream definition
+-/
+def IsStableSort
+    (sortAlg : List α → List α)
+    (xs : List α)
+    (le : α → α → Bool) : Prop :=
+  let ys := sortAlg xs
+  ∀ k : α, ys.filter (fun x => le x k && le k x) = xs.filter (fun x => le x k && le k x)
+
+end SortStability
 
 end Algorithms
 

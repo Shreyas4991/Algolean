@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026 Shreyas Srinivas. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Shreyas Srinivas, Eric Wieser, Sorrachai Yingchareonthawornchai
+Authors: Shreyas Srinivas, Eric Wieser, Sorrachai Yingchareonthawornchai, Ethan Ermovick
 -/
 
 module
@@ -27,6 +27,7 @@ the `SortOps` model.
 - `mergeSort_sorted` :  `mergeSort` outputs a sorted list.
 - `mergeSort_perm` : The output of `mergeSort` is a permutation of the input list
 - `mergeSort_complexity` : `mergeSort` takes at most n * ⌈log n⌉ comparisons.
+- `mergeSort_stable` : `mergeSort` is a stable sorting algorithm.
 
 ## Notes on authorship
 
@@ -218,5 +219,53 @@ theorem mergeSort_complexity (xs : List α) (le : α → α → Bool) :
   grind [some_algebra (x.length - 2), mergeSort_eval, merge_timeComplexity, mergeSortNaive_length]
 
 end TimeComplexity
+
+section Stability
+
+theorem mergeSort_stable
+    (xs : List α)
+    (le : α → α → Bool)
+    [Std.Total (fun x y => le x y = true)]
+    [IsTrans _ (fun x y => le x y = true)] :
+    IsStableSort (fun xs => (mergeSort xs).eval (sortModelNat le)) xs le := by
+  intro k
+  change ((mergeSort xs).eval (sortModelNat le)).filter _ = xs.filter _
+  rw [mergeSort_eval]
+  fun_induction mergeSortNaive with
+  | case1 => simp
+  | case2 xs _ left right ihl ihr =>
+    have hmergeFilter :
+        (List.merge left right (le · ·)).filter (fun x => le x k && le k x) =
+        left.filter (fun x => le x k && le k x) ++ right.filter (fun x => le x k && le k x) := by
+      have hgeneric :
+          ∀ l r : List α,
+            l.Pairwise (fun a b => le a b = true) →
+            r.Pairwise (fun a b => le a b = true) →
+            (List.merge l r (le · ·)).filter (fun x => le x k && le k x) =
+            l.filter (fun x => le x k && le k x) ++ r.filter (fun x => le x k && le k x) := by
+        intro l r hl hr
+        fun_induction List.merge l r (le · ·) with
+        | case1 => simp
+        | case2 => simp
+        | case3 x xs y ys hxy ih => grind
+        | case4 x xs y ys hxy ih =>
+          rw [List.filter_cons, ih hl (hr.tail), List.filter_cons, List.filter_cons]
+          by_cases hyk : (le y k && le k y) = true
+          · have hky : le k y = true := by grind
+            have hxk : le x k = false := by
+              cases h : le x k
+              · rfl
+              · exact absurd (IsTrans.trans (r := fun x y => le x y = true) x k y h hky) hxy
+            have hfilter : xs.filter (fun x => le x k && le k x) = [] := by
+              simp only [List.filter_eq_nil_iff, Bool.and_eq_true]
+              intro a ha ⟨hak, _⟩
+              exact absurd (IsTrans.trans (r := fun x y => le x y = true) x a k
+                ((List.pairwise_cons.mp hl).1 a ha) hak) (by simp [hxk])
+            simp [hyk, hxk, hfilter]
+          · simp [hyk]
+      exact hgeneric left right (mergeSortNaive_sorted _ _) (mergeSortNaive_sorted _ _)
+    rw [hmergeFilter, ihl, ihr, ← List.filter_append, List.take_append_drop]
+
+end Stability
 
 end Algolean.Algorithms
