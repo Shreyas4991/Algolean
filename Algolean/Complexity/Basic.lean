@@ -175,5 +175,33 @@ theorem QueryProblem.InClass.of_reduces [AddZero Cost] [Preorder Cost]
   obtain ⟨P', hP'⟩ := hRed P bound hP
   exact ⟨P', hP'⟩
 
+/-! ## Uniform families of programs
+
+For complexity classes like BQP, we need a single program *family*
+`(n : ℕ) → Prog Q (α n)` that works uniformly across input sizes, with a
+polynomial bound on cost as `n` grows. This is the family-indexed lift
+of `QueryProblem` / `InClass`.
+
+`UniformFamily.Uniform` is the cost-bounded analog; `SatisfiesSpec` is
+the correctness analog. A complexity class like `BQP` is an existential
+over `UniformFamily` bundles whose members satisfy both.
+-/
+
+/-- A family of programs indexed by input size. -/
+structure UniformFamily (Q : Type u → Type u) (α : ℕ → Type u) where
+  /-- The program for input size `n`. -/
+  prog : (n : ℕ) → Prog Q (α n)
+
+/-- The family runs within the given per-size cost bound under a model. -/
+def UniformFamily.Uniform [AddZero Cost] [Preorder Cost]
+    (fam : UniformFamily Q α) (M : Model Q Cost) (bound : ℕ → Cost) : Prop :=
+  ∀ n, (fam.prog n).time M ≤ bound n
+
+/-- The family's evaluation satisfies the given per-size correctness spec. -/
+def UniformFamily.SatisfiesSpec
+    (fam : UniformFamily Q α) (M : Model Q Cost)
+    (spec : (n : ℕ) → α n → Prop) : Prop :=
+  ∀ n, spec n ((fam.prog n).eval M)
+
 end Algorithms
 end Algolean
