@@ -234,25 +234,21 @@ private lemma merge_filter_eq_append_filter
   fun_induction List.merge l r (le · ·) with
   | case1 => simp
   | case2 => simp
-  | case3 x xs y ys hxy ih =>
-    simp only [List.filter_cons]
-    rw [ih (hl.tail) hr]
-    split <;> simp [List.filter_cons, *]
+  | case3 x xs y ys hxy ih => grind
   | case4 x xs y ys hxy ih =>
     rw [List.filter_cons, ih hl (hr.tail), List.filter_cons, List.filter_cons]
     by_cases hyk : (le y k && le k y) = true
-    · have hyk' : le y k = true ∧ le k y = true := by simpa [Bool.and_eq_true] using hyk
+    · have hky : le k y = true := by grind
       have hxk : le x k = false := by
         cases h : le x k
         · rfl
-        · exact absurd (IsTrans.trans (r := fun x y => le x y = true) x k y h hyk'.2) hxy
-      have hxkk : (le x k && le k x) = false := by simp [hxk]
+        · exact absurd (IsTrans.trans (r := fun x y => le x y = true) x k y h hky) hxy
       have hfilter : xs.filter (fun x => le x k && le k x) = [] := by
         simp only [List.filter_eq_nil_iff, Bool.and_eq_true]
         intro a ha ⟨hak, _⟩
         exact absurd (IsTrans.trans (r := fun x y => le x y = true) x a k
           ((List.pairwise_cons.mp hl).1 a ha) hak) (by simp [hxk])
-      simp [hyk, hxkk, hfilter]
+      simp [hyk, hxk, hfilter]
     · simp [hyk]
 
 theorem mergeSort_stable
