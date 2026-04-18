@@ -222,35 +222,6 @@ end TimeComplexity
 
 section Stability
 
-private lemma merge_filter_eq_append_filter
-    (l r : List α) (le : α → α → Bool)
-    [Std.Total (fun x y => le x y = true)]
-    [IsTrans _ (fun x y => le x y = true)]
-    (k : α)
-    (hl : l.Pairwise (fun a b => le a b = true))
-    (hr : r.Pairwise (fun a b => le a b = true)) :
-    (List.merge l r (le · ·)).filter (fun x => le x k && le k x) =
-    l.filter (fun x => le x k && le k x) ++ r.filter (fun x => le x k && le k x) := by
-  fun_induction List.merge l r (le · ·) with
-  | case1 => simp
-  | case2 => simp
-  | case3 x xs y ys hxy ih => grind
-  | case4 x xs y ys hxy ih =>
-    rw [List.filter_cons, ih hl (hr.tail), List.filter_cons, List.filter_cons]
-    by_cases hyk : (le y k && le k y) = true
-    · have hky : le k y = true := by grind
-      have hxk : le x k = false := by
-        cases h : le x k
-        · rfl
-        · exact absurd (IsTrans.trans (r := fun x y => le x y = true) x k y h hky) hxy
-      have hfilter : xs.filter (fun x => le x k && le k x) = [] := by
-        simp only [List.filter_eq_nil_iff, Bool.and_eq_true]
-        intro a ha ⟨hak, _⟩
-        exact absurd (IsTrans.trans (r := fun x y => le x y = true) x a k
-          ((List.pairwise_cons.mp hl).1 a ha) hak) (by simp [hxk])
-      simp [hyk, hxk, hfilter]
-    · simp [hyk]
-
 theorem mergeSort_stable
     (xs : List α)
     (le : α → α → Bool)
@@ -262,9 +233,38 @@ theorem mergeSort_stable
   rw [mergeSort_eval]
   fun_induction mergeSortNaive with
   | case1 => simp
-  | case2 xs _ _ _ ihl ihr =>
-    rw [merge_filter_eq_append_filter _ _ le k (mergeSortNaive_sorted _ _)
-      (mergeSortNaive_sorted _ _), ihl, ihr, ← List.filter_append, List.take_append_drop]
+  | case2 xs _ left right ihl ihr =>
+    have hmergeFilter :
+        (List.merge left right (le · ·)).filter (fun x => le x k && le k x) =
+        left.filter (fun x => le x k && le k x) ++ right.filter (fun x => le x k && le k x) := by
+      have hgeneric :
+          ∀ l r : List α,
+            l.Pairwise (fun a b => le a b = true) →
+            r.Pairwise (fun a b => le a b = true) →
+            (List.merge l r (le · ·)).filter (fun x => le x k && le k x) =
+            l.filter (fun x => le x k && le k x) ++ r.filter (fun x => le x k && le k x) := by
+        intro l r hl hr
+        fun_induction List.merge l r (le · ·) with
+        | case1 => simp
+        | case2 => simp
+        | case3 x xs y ys hxy ih => grind
+        | case4 x xs y ys hxy ih =>
+          rw [List.filter_cons, ih hl (hr.tail), List.filter_cons, List.filter_cons]
+          by_cases hyk : (le y k && le k y) = true
+          · have hky : le k y = true := by grind
+            have hxk : le x k = false := by
+              cases h : le x k
+              · rfl
+              · exact absurd (IsTrans.trans (r := fun x y => le x y = true) x k y h hky) hxy
+            have hfilter : xs.filter (fun x => le x k && le k x) = [] := by
+              simp only [List.filter_eq_nil_iff, Bool.and_eq_true]
+              intro a ha ⟨hak, _⟩
+              exact absurd (IsTrans.trans (r := fun x y => le x y = true) x a k
+                ((List.pairwise_cons.mp hl).1 a ha) hak) (by simp [hxk])
+            simp [hyk, hxk, hfilter]
+          · simp [hyk]
+      exact hgeneric left right (mergeSortNaive_sorted _ _) (mergeSortNaive_sorted _ _)
+    rw [hmergeFilter, ihl, ihr, ← List.filter_append, List.take_append_drop]
 
 end Stability
 
