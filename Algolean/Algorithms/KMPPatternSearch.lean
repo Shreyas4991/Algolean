@@ -17,8 +17,9 @@ public import Mathlib.Data.List.Range
 /-!
 # Knuth-Morris-Pratt pattern search
 
-In this file we define the longest-proper-prefix / suffix table used by KMP, together
-with the KMP search procedure itself, in the `Comparison` query model.
+In this file we define the KMP search algorithm for finding all exact occurrences of a pattern
+in a text, along with the longest-proper-prefix / suffix table used by KMP. We also prove
+correctness and an upper bound for equality comparisons in the `Comparison` query model.
 --
 
 ## Main definitions
@@ -41,6 +42,14 @@ namespace Algorithms
 
 open Cslib Prog Comparison
 
+/--
+`innerLPSWhile fuel pos cnd pat table` follows KMP failure links from the current
+candidate position `cnd` while checking whether `pat[pos]` matches `pat[cnd]`.
+
+If the comparison succeeds, it returns `cnd`. If the candidate falls below zero,
+it returns that negative sentinel unchanged. The `fuel` argument provides a
+structural bound for the recursive fallback chain.
+-/
 def innerLPSWhile (fuel pos : Nat) (cnd : Int) (pat : List α) (table : List Int)
     (hpos : pos < pat.length) (hcndPat : Int.toNat cnd < pat.length)
     (hcndTable : Int.toNat cnd < table.length) (htableLen : table.length = pat.length + 1)
@@ -62,6 +71,18 @@ def innerLPSWhile (fuel pos : Nat) (cnd : Int) (pat : List α) (table : List Int
         have hnextTable : Int.toNat nextCnd < table.length := by omega
         innerLPSWhile fuel pos nextCnd pat table hpos hnextPat hnextTable htableLen htableBound
 
+/--
+`LPSWhile fuel pos cnd pat table` computes one step of the KMP LPS table update at
+position `pos`, starting from candidate border length `cnd`.
+
+It compares `pat[pos]` against the current candidate, follows failure links through
+`innerLPSWhile` when the comparison fails, writes the resulting entry into the table,
+and either continues to the next position or returns the updated table and border length
+when the pattern suffix has been fully processed.
+
+The `fuel` parameter bounds the outer recursion so the definition remains structurally
+recursive.
+-/
 def LPSWhile (fuel pos : Nat) (cnd : Int) (pat : List α) (table : List Int)
     (hpos : pos < pat.length) (hcndPat : Int.toNat cnd < pat.length)
     (hcndTable : Int.toNat cnd < table.length) (htableLen : table.length = pat.length + 1)
@@ -104,6 +125,14 @@ def LPSWhile (fuel pos : Nat) (cnd : Int) (pat : List α) (table : List Int)
       else
         return (table', nextCnd)
 
+/--
+`buildLPS pat` constructs the KMP longest-proper-prefix / suffix table for `pat`.
+
+The result is a table of length `pat.length + 1` whose entries record, for each pattern
+prefix, the length of the longest border used by the fallback logic. The implementation
+handles the empty and singleton cases directly, and otherwise initializes the table and
+iterates `LPSWhile` to fill in the remaining entries.
+-/
 def buildLPS (pat : List α) : Prog (Comparison α) (List Int) := do
   match pat with
   | [] =>
@@ -170,6 +199,15 @@ def tableReset (table : List Int) (patLen : Nat) : Nat :=
   | some suffixLen => Int.toNat suffixLen
   | none => 0
 
+/--
+`kmpSearchPositionsAux txt j k pat table accRev` scans the remaining text `txt` from
+absolute position `j`, using the current pattern position `k` and the already-built
+LPS table to continue a KMP search.
+
+Matches are accumulated in reverse order in `accRev`. When a character mismatch occurs,
+the helper falls back through `kmpSearchFallback`; when a full match is found, it records
+the start index and resets the current pattern position using `tableReset`.
+-/
 def kmpSearchPositionsAux
     (txt : List α) (j k : Nat) (pat : List α) (table : List Int)
     (accRev : List Nat) :
