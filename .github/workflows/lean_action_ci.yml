@@ -35,11 +35,26 @@ jobs:
         run: |
           set -e
           bash .github/scripts/build_docs.sh
-    
-
-
+      - name: Prepare documentation Pages artifact
+        if: github.event_name == 'push' && github.ref == 'main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/index.html
+          test -d docbuild/.lake/build/doc
+          rm -rf _site
+          mkdir -p _site/docs
+          cp -a docs/. _site/
+          cp -a docbuild/.lake/build/doc/. _site/docs/
+      - name: Upload documentation Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          name: documentation-pages
+          path: _site
 
   deploy-webpage:
+    needs: ci-checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -50,25 +65,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Prepare webpage artifact from docs/
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f docs/index.html
-          rm -rf _site
-          mkdir -p _site
-          cp -a docs/* _site/
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          name: webpage-pages
-          path: _site
-
-      - name: Deploy webpage to GitHub Pages
+      - name: Deploy documentation to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
         with:
-          artifact_name: webpage-pages
+          artifact_name: documentation-pages
