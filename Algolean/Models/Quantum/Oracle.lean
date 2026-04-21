@@ -4,10 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Tanner Duve
 -/
 
-import Algolean.QueryModel
-import Algolean.Models.Quantum.Embed
-import QuantumInfo.Finite.MState
-import QuantumInfo.Finite.POVM
+module
+
+public import Algolean.QueryModel
+public import Algolean.Models.Quantum.Embed
+public import QuantumInfo.Finite.MState
+public import QuantumInfo.Finite.POVM
+
+@[expose] public section
 
 /-!
 # Quantum Oracle Query Model
@@ -183,7 +187,7 @@ theorem applyGate_time [AddZeroClass Cost] {n : ℕ}
 /-! ### Measurement -/
 
 /-- Indicator function on bitstrings: `1` if qubit `q` is in state `v`, else `0`. -/
-private def qubitIndicator {n : ℕ} (q : Fin n) (v : Fin 2) :
+def qubitIndicator {n : ℕ} (q : Fin n) (v : Fin 2) :
     (Fin n → Fin 2) → ℝ :=
   fun x => if x q = v then 1 else 0
 

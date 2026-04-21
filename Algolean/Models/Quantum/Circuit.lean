@@ -4,10 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Tanner Duve
 -/
 
-import Algolean.Models.Quantum.Oracle
-import Algolean.Models.Quantum.Indexing
-import QuantumInfo.Finite.CPTPMap
-import Mathlib.Algebra.Polynomial.Basic
+module
+
+public import Algolean.Models.Quantum.Oracle
+public import Algolean.Models.Quantum.Indexing
+public import QuantumInfo.Finite.CPTPMap
+public import Mathlib.Algebra.Polynomial.Basic
+
+@[expose] public section
 
 /-!
 # Quantum Circuits

@@ -4,9 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Tanner Duve
 -/
 
-import Algolean.Models.Quantum.Indexing
-import QuantumInfo.Finite.Qubit.Basic
-import Mathlib.Data.Fin.Tuple.Basic
+module
+
+public import Algolean.Models.Quantum.Indexing
+public import QuantumInfo.Finite.Qubit.Basic
+public import Mathlib.Data.Fin.Tuple.Basic
+
+@[expose] public section
 
 /-!
 # Gate unitaries on `Fin n → Fin 2`
@@ -90,15 +94,15 @@ noncomputable def embedQubitGate :
 /-! ### CNOT unitary -/
 
 /-- In `Fin 2`, subtracting twice from `1` is the identity. -/
-private lemma fin2_sub_sub_self (b : Fin 2) : (1 : Fin 2) - (1 - b) = b := by
+lemma fin2_sub_sub_self (b : Fin 2) : (1 : Fin 2) - (1 - b) = b := by
   fin_cases b <;> rfl
 
 /-- Action of the CNOT gate on bitstrings: flip the target bit iff control is 1. -/
-private def cnotAction {n : ℕ} (c t : Fin n) : (Fin n → Fin 2) → (Fin n → Fin 2) :=
+def cnotAction {n : ℕ} (c t : Fin n) : (Fin n → Fin 2) → (Fin n → Fin 2) :=
   fun x => if x c = 1 then Function.update x t (1 - x t) else x
 
 /-- `cnotAction c t` is an involution when control and target differ. -/
-private lemma cnotAction_involutive {n : ℕ} {c t : Fin n} (h : c ≠ t) :
+lemma cnotAction_involutive {n : ℕ} {c t : Fin n} (h : c ≠ t) :
     Function.Involutive (cnotAction c t) := by
   intro x
   unfold cnotAction
