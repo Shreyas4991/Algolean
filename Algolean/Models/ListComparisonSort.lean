@@ -1,7 +1,7 @@
 /-
 Copyright (c) 2026 Shreyas Srinivas. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Shreyas Srinivas, Eric WIeser
+Authors: Shreyas Srinivas, Eric WIeser, Ethan Ermovick
 -/
 
 module
@@ -18,9 +18,10 @@ public import Mathlib.Tactic.FastInstance
 # Query Type for Comparison Search in Lists
 
 In this file we define two query types `SortOps` which is suitable for insertion sort, and
-`SortOps`for comparison based searching in Lists. We define a model `sortModel` for `SortOps`
-which uses a custom cost structure `SortOpsCost`. We define a model `sortModelCmp` for `SortOpsCmp`
-which defines a `ℕ` based cost structure.
+`SortOpsInsertHead`for comparison based searching in Lists. We define a model `sortModel` for
+`SortOps` which uses a custom cost structure `SortOpsCost`. We define a model `sortModelCmp`
+for `SortOpsCmp` which defines a `ℕ` based cost structure. We also define a notion of stability for
+sorting algorithms in lists.
 --
 ## Definitions
 
@@ -30,6 +31,7 @@ which defines a `ℕ` based cost structure.
 - `SortOpsCmp`:  A query type for comparison based sorting that only includes a comparison query.
    This is more suitable for comparison based sorts for which it is only desirable to count
    comparisons
+- `IsStableSort`: A definition of stability for sorting algorithms in lists.
 
 -/
 namespace Algolean
@@ -101,7 +103,7 @@ instance : AddCommMonoid SortOpsCost :=
 end SortOpsCost
 
 /--
-A model of `SortOps` that uses `SortOpsCost` as the cost type for operations.
+A model of `SortOpsInsertHead` that uses `SortOpsCost` as the cost type for operations.
 
 While this accepts any decidable relation `le`, most sorting algorithms are only well-behaved in the
 presence of `[Std.Total le] [IsTrans _ le]`.
@@ -122,7 +124,8 @@ section NatModel
 
 /--
 A model for comparison sorting on lists with only the comparison operation. This
-is used in mergeSort.
+is used in mergeSort. Note that this query can be re-used for other
+purely comparison based algorithms on any data structure.
 -/
 inductive SortOps.{u} (α : Type u) : Type → Type _ where
   /-- `cmpLE x y` is intended to return `true` if `x ≤ y` and `false` otherwise.
@@ -144,6 +147,21 @@ def sortModelNat {α : Type*}
   cost _ := 1
 
 end NatModel
+
+section SortStability
+
+/--
+Definition of a stable list sorting algorithm.
+TODO: relocate or upstream definition
+-/
+def IsStableSort
+    (sortAlg : List α → List α)
+    (xs : List α)
+    (le : α → α → Bool) : Prop :=
+  let ys := sortAlg xs
+  ∀ k : α, ys.filter (fun x => le x k && le k x) = xs.filter (fun x => le x k && le k x)
+
+end SortStability
 
 end Algorithms
 
