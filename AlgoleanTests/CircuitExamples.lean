@@ -154,12 +154,8 @@ private lemma tail_max_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircui
   have h_mono := Finset.max_mono (tail_image_subset m x)
   cases h_s : (Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max <;>
   cases h_t : (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max <;>
-<<<<<<< HEAD
     simp_all only [Std.le_refl, bot_le, ge_iff_le, le_bot_iff,
       WithBot.coe_ne_bot, WithBot.coe_le_coe] <;>
-=======
-    simp_all [Std.le_refl,bot_le,ge_iff_le,le_bot_iff,WithBot.coe_ne_bot, WithBot.coe_le_coe] <;>
->>>>>>> 3a9a339 (depth proof update & build)
     first | exact Nat.zero_le _ | exact h_mono
 
 private lemma head_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bool Bool) :
