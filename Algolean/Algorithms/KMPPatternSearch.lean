@@ -29,6 +29,7 @@ correctness and an upper bound for equality comparisons in the `Comparison` quer
 
 ## Main results
 
+- `buildLPS_eval`: `buildLPS` evaluates identically to the standard LPS table definition.
 - `kmpPatternSearch_eval`: `kmpSearchPositions` evaluates identically to `PatternSearchAll`.
 - `buildLPS_time_complexity_upper_bound`: `buildLPS` takes at most
   `2 * (pat.length - 1)` comparisons.
@@ -36,7 +37,8 @@ correctness and an upper bound for equality comparisons in the `Comparison` quer
   `2 * (txt.length + pat.length - 1)` comparisons.
 
 
-REFERENCE: https://www.geeksforgeeks.org/dsa/kmp-algorithm-for-pattern-searching/
+## References
+1. [KMP Algorithm](https://www.geeksforgeeks.org/dsa/kmp-algorithm-for-pattern-searching/)
 -/
 
 namespace Algolean
@@ -383,7 +385,7 @@ private lemma buildLPSLoop_correct
 Correctness of `buildLPS`: every entry of the produced LPS table is the longest proper
 prefix/suffix length for the corresponding prefix of the pattern.
 -/
-theorem buildLPS_correct [BEq α] [LawfulBEq α] (pat : List α) :
+theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
     let lps := (buildLPS pat).eval Comparison.natCost
     ∃ hlen : lps.length = pat.length,
       ∀ i (hi : i < pat.length),
@@ -820,7 +822,7 @@ theorem kmpPatternSearch_eval [BEq α] [LawfulBEq α] (pat txt : List α) :
   | nil =>
       simp [kmpSearchPositions, PatternSearchAll]
   | cons x xs =>
-      rcases buildLPS_correct (x :: xs) with ⟨hlen, hlps⟩
+      rcases buildLPS_eval (x :: xs) with ⟨hlen, hlps⟩
       have hrec := kmpSearchLoop_correct
         (2 * txt.length) 0 0 (x :: xs) txt ((buildLPS (x :: xs)).eval Comparison.natCost) []
         (by omega)
