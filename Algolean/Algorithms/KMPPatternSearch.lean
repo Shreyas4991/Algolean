@@ -714,8 +714,8 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                 (by
                   intro t ht1 ht2
                   have ht2' : t < (i - j) + (pat.length - l) := by omega
-                  exact no_occurrence_between_full_match_and_fallback pat txt (i - j) l hfullMatch hlong
-                    t ht1 ht2')
+                  exact no_occurrence_between_full_match_and_fallback pat txt (i - j)
+                    l hfullMatch hlong t ht1 ht2')
               simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hrecacc
             have hpot' : 2 * (txt.length - (i + 1)) + l ≤ fuel := by omega
             have hrec := ih (i + 1) l (((i + 1) - (j + 1)) :: acc)
@@ -732,8 +732,8 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
             have hcmpLast : (txt[i]'hit == pat[pat.length - 1]'(by omega)) = true := by
               simp [hjEq, hcmp]
             simpa [kmpSearchLoop, hit, List.getElem?_eq_getElem hit,
-              List.getElem?_eq_getElem hj, hpatLast, hcmp', hcmpLast, hfull, hfull', hjEq, hsj, hsLast,
-              Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hrec
+              List.getElem?_eq_getElem hj, hpatLast, hcmp', hcmpLast, hfull, hfull',
+                hjEq, hsj, hsLast, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hrec
           · have hj' : j + 1 < pat.length := by omega
             have hacc'' :
                 acc.reverse =
@@ -803,8 +803,8 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                 hacc hsu (by
                   intro t ht1 ht2
                   have ht2' : t < (i - j) + (j - l) := by omega
-                  exact no_occurrence_between_partial_and_fallback pat txt (i - j) j l hj hmatch hlong
-                    hmis' t ht1 ht2')
+                  exact no_occurrence_between_partial_and_fallback pat txt (i - j) j l
+                    hj hmatch hlong hmis' t ht1 ht2')
             have hpot' : 2 * (txt.length - i) + l ≤ fuel := by
               have hlj' : l + 1 ≤ j := Nat.succ_le_of_lt hlong.1.1
               omega
