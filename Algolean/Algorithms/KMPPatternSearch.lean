@@ -654,10 +654,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
       (List.Ico 0 txt.length).filter fun s => pat.isPrefixOf (txt.drop s) := by
   induction fuel generalizing i j acc with
   | zero =>
-      have hni : i = txt.length := by
-        by_contra hne
-        have hit : i < txt.length := by omega
-        omega
+      have hni : i = txt.length := by omega
       subst hni
       have hdone := acc_shift_no_matches
         (P := fun s => pat.isPrefixOf (txt.drop s)) acc (txt.length - j) txt.length
@@ -672,8 +669,8 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
       · by_cases hcmp : txt[i]'hit = pat[j]'hj
         · have hcmp' : (txt[i]'hit == pat[j]'hj) = true := by simp [hcmp]
           have hlast : txt[(i - j) + j]? = pat[j]? := by
-            have hEq : (i - j) + j = i := by omega
-            simp [hEq, List.getElem?_eq_getElem hit, List.getElem?_eq_getElem hj, hcmp]
+            simp [show (i - j) + j = i by omega, List.getElem?_eq_getElem hit,
+              List.getElem?_eq_getElem hj, hcmp]
           have hmatch' : MatchAt pat txt (i - j) (j + 1) :=
             matchAt_succ pat txt (i - j) j hmatch hlast
           by_cases hfull : j + 1 = pat.length
@@ -684,26 +681,17 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
             have hfullMatch : MatchAt pat txt (i - j) pat.length := by
               simpa [hfull] using hmatch'
             have hmatch'' : MatchAt pat txt ((i + 1) - l) l := by
-              have htmp := matchAt_of_prefixSuffix pat txt (i - j) pat.length l hfullMatch hlong.1
-              have hEq : (i - j) + (pat.length - l) = (i + 1) - l := by omega
-              simpa [hEq] using htmp
+              simpa [show (i - j) + (pat.length - l) = (i + 1) - l by omega] using
+                matchAt_of_prefixSuffix pat txt (i - j) pat.length l hfullMatch hlong.1
             have hacc' :
                 (((i + 1) - (j + 1)) :: acc).reverse =
                   (List.Ico 0 ((i + 1) - l)).filter fun s => pat.isPrefixOf (txt.drop s) := by
-              have htrue : pat.isPrefixOf (txt.drop (i - j)) = true :=
-                occurrence_of_matchAt pat txt (i - j) hfullMatch
-              have hrecacc := acc_record_match
+              simpa [Nat.add_left_comm, Nat.add_comm, Nat.add_assoc] using acc_record_match
                 (P := fun s => pat.isPrefixOf (txt.drop s))
-                acc (i - j) ((i + 1) - l)
-                hacc
-                (by omega)
-                (by simpa using htrue)
-                (by
-                  intro t ht1 ht2
-                  have ht2' : t < (i - j) + (pat.length - l) := by omega
-                  exact no_occurrence_between_full_match_and_fallback pat txt (i - j)
-                    l hfullMatch hlong t ht1 ht2')
-              simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hrecacc
+                acc (i - j) ((i + 1) - l) hacc (by omega)
+                (occurrence_of_matchAt pat txt (i - j) hfullMatch)
+                (fun t ht1 _ => no_occurrence_between_full_match_and_fallback pat txt (i - j)
+                  l hfullMatch hlong t ht1 (by omega))
             have hpot' : 2 * (txt.length - (i + 1)) + l ≤ fuel := by omega
             have hrec := ih (i + 1) l (((i + 1) - (j + 1)) :: acc)
               hpot' (by omega) hl (by omega) hmatch'' hacc'
@@ -748,14 +736,9 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
             have hacc' :
                 acc.reverse =
                   (List.Ico 0 (i + 1)).filter fun s => pat.isPrefixOf (txt.drop s) := by
-              exact acc_shift_no_matches
-                (P := fun s => pat.isPrefixOf (txt.drop s))
-                acc i (i + 1)
-                hacc (by omega) (by
-                  intro t ht1 ht2
-                  have : t = i := by omega
-                  subst this
-                  exact hfalse)
+              exact acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
+                acc i (i + 1) hacc (by omega)
+                (fun t _ _ => by simpa [show t = i by omega] using hfalse)
             have hrec := ih (i + 1) 0 acc
               (by omega) (by omega) (by
                 cases pat with
@@ -773,25 +756,19 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
               simpa [Nat.sub_add_cancel (Nat.succ_le_of_lt hjpos)] using htmp
             have hl : l < pat.length := lt_trans hlong.1.1 hj
             have hmatch'' : MatchAt pat txt (i - l) l := by
-              have htmp := matchAt_of_prefixSuffix pat txt (i - j) j l hmatch hlong.1
-              have hlj : l ≤ j := Nat.le_of_lt hlong.1.1
-              have hEq : (i - j) + (j - l) = i - l := by omega
-              simpa [hEq] using htmp
+              simpa [show (i - j) + (j - l) = i - l by have := hlong.1.1; omega] using
+                matchAt_of_prefixSuffix pat txt (i - j) j l hmatch hlong.1
             have hacc' :
                 acc.reverse = (List.Ico 0 (i - l)).filter fun s => pat.isPrefixOf (txt.drop s) := by
               have hmis' : pat[j]? ≠ txt[(i - j) + j]? := by
-                have hEqIdx : (i - j) + j = i := by omega
-                simpa [hEqIdx] using hmis
-              have hsu : i - j ≤ i - l := by
-                exact Nat.sub_le_sub_left (Nat.le_of_lt hlong.1.1) i
+                simpa [show (i - j) + j = i by omega] using hmis
               exact acc_shift_no_matches
                 (P := fun s => pat.isPrefixOf (txt.drop s))
                 acc (i - j) (i - l)
-                hacc hsu (by
+                hacc (Nat.sub_le_sub_left (Nat.le_of_lt hlong.1.1) i) (by
                   intro t ht1 ht2
-                  have ht2' : t < (i - j) + (j - l) := by omega
                   exact no_occurrence_between_partial_and_fallback pat txt (i - j) j l
-                    hj hmatch hlong hmis' t ht1 ht2')
+                    hj hmatch hlong hmis' t ht1 (by omega))
             have hpot' : 2 * (txt.length - i) + l ≤ fuel := by
               have hlj' : l + 1 ≤ j := Nat.succ_le_of_lt hlong.1.1
               omega
