@@ -497,7 +497,8 @@ private lemma isPrefixOf_eq_true_iff_prefix [BEq α] [LawfulBEq α]
     have hopt : xs.isPrefixOf? (xs ++ zs) = some zs :=
       (List.isPrefixOf?_eq_some_iff_append_eq).2 rfl
     have hs : (xs.isPrefixOf? (xs ++ zs)).isSome = true := by simp [hopt]
-    simpa [List.isSome_isPrefixOf?_eq_isPrefixOf] using hs
+    rw [List.isSome_isPrefixOf?_eq_isPrefixOf] at hs
+    exact hs
 
 private lemma isPrefixOf_drop_eq_true_iff_matchAt [BEq α] [LawfulBEq α]
     (pat txt : List α) (start : Nat) :
@@ -721,7 +722,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
               hpot' (by omega) hl (by omega) hmatch'' hacc'
             have hjlps : j < lps.length := by simpa [hlen] using hj
             have hsj : lps[j]? = some l := by
-              simpa [l] using (List.getElem?_eq_getElem (l := lps) (i := j) hjlps)
+              rw [List.getElem?_eq_getElem hjlps]
             have hjEq : j = pat.length - 1 := by omega
             have hpatLast : pat[pat.length - 1]? = some (pat[pat.length - 1]'(by omega)) := by
               exact List.getElem?_eq_getElem (l := pat) (i := pat.length - 1) (by omega)
