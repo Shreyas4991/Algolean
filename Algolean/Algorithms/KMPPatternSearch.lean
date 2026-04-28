@@ -92,6 +92,8 @@ def buildLPS [BEq α] (pat : List α) : Prog (Comparison α) (List Nat) := do
   | _ =>
       buildLPSLoop (2 * (pat.length - 1)) 1 0 pat (List.replicate pat.length 0)
 
+section Correctness
+
 /--
 `PrefixSuffixOf pat n l` says that `l` is a proper prefix-length of `pat.take n`
 whose prefix is also a suffix of that same length.
@@ -386,6 +388,38 @@ theorem buildLPS_correct [BEq α] [LawfulBEq α] (pat : List α) :
         rw [hget]
         exact hlong
       simpa [buildLPS, lps0, hlen] using hgoal
+
+end Correctness
+
+section TimeComplexity
+
+private lemma buildLPSLoop_time_le_fuel [BEq α]
+    (fuel pos len : Nat) (pat : List α) (lps : List Nat) :
+    (buildLPSLoop fuel pos len pat lps).time Comparison.natCost ≤ fuel := by
+  induction fuel generalizing pos len lps with
+  | zero =>
+      simp [buildLPSLoop]
+  | succ fuel ih =>
+      by_cases hpos : pos < pat.length
+      · cases hlen : pat[len]? with
+        | none =>
+            simp [buildLPSLoop, hpos, hlen]
+        | some q =>
+            simp [buildLPSLoop, hpos, hlen]
+            split_ifs with hsame hzero <;> grind
+      · simp [buildLPSLoop, hpos]
+
+theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
+    (buildLPS pat).time Comparison.natCost ≤ 2 * (pat.length - 1) := by
+  cases pat with
+  | nil =>
+      simp [buildLPS]
+  | cons x xs =>
+      let lps0 := List.replicate (List.length (x :: xs)) 0
+      simpa [buildLPS, lps0] using
+        buildLPSLoop_time_le_fuel (2 * ((x :: xs).length - 1)) 1 0 (x :: xs) lps0
+
+end TimeComplexity
 
 end Algorithms
 
