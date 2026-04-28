@@ -208,15 +208,11 @@ private lemma prefixSuffix_trans
     pat[j]? = pat[m - l + j]? := h₁.2 j hj
     _ = pat[n - m + (m - l + j)]? := h₂.2 (m - l + j) hjm
     _ = pat[n - l + j]? := by
-      have hmn : m ≤ n := Nat.le_of_lt h₂.1
-      have hnm : n - m + (m - l) = n - l := by
+      have : n - m + (m - l + j) = n - l + j := by
         have hlm : l ≤ m := Nat.le_of_lt h₁.1
+        have hmn : m ≤ n := Nat.le_of_lt h₂.1
         omega
-      have hnmj : n - m + (m - l + j) = n - l + j := by
-        calc
-          n - m + (m - l + j) = (n - m + (m - l)) + j := by omega
-          _ = n - l + j := by rw [hnm]
-      rw [hnmj]
+      rw [this]
 
 private lemma prefixSuffix_of_lt_of_prefixSuffix
     (h₁ : PrefixSuffixOf pat n l) (h₂ : PrefixSuffixOf pat n m) (hlm : l < m) :
@@ -230,15 +226,11 @@ private lemma prefixSuffix_of_lt_of_prefixSuffix
   calc
     pat[j]? = pat[n - l + j]? := h₁.2 j hj
     _ = pat[n - m + (m - l + j)]? := by
-      have hnm : n - m + (m - l) = n - l := by
+      have : n - m + (m - l + j) = n - l + j := by
         have hlm' : l ≤ m := Nat.le_of_lt hlm
         have hmn : m ≤ n := Nat.le_of_lt h₂.1
         omega
-      have hnmj : n - m + (m - l + j) = n - l + j := by
-        calc
-          n - m + (m - l + j) = (n - m + (m - l)) + j := by omega
-          _ = n - l + j := by rw [hnm]
-      rw [hnmj]
+      rw [this]
     _ = pat[m - l + j]? := h₂.2 (m - l + j) hmj |>.symm
 
 private lemma searchInvariant_match_longest
@@ -519,15 +511,8 @@ private lemma no_occurrence_of_length [BEq α] [LawfulBEq α]
   apply Bool.eq_false_iff.mpr
   intro h
   have hprefix : pat <+: txt.drop start := (isPrefixOf_eq_true_iff_prefix pat (txt.drop start)).1 h
-  have hle := hprefix.length_le
-  rw [List.length_drop] at hle
-  have hs : start ≤ txt.length := by
-    by_contra hs
-    have hlt : txt.length < start := Nat.lt_of_not_ge hs
-    have hzero : txt.length - start = 0 := Nat.sub_eq_zero_of_le (Nat.le_of_lt hlt)
-    rw [hzero] at hle
-    have hpat0 : pat.length = 0 := by omega
-    exact (Nat.ne_of_gt hpat) hpat0
+  have hle : pat.length ≤ txt.length - start := by
+    simpa [List.length_drop] using hprefix.length_le
   have hbound : start + pat.length ≤ txt.length := by
     omega
   omega
@@ -868,6 +853,54 @@ private lemma buildLPSLoop_time_le_fuel [BEq α]
             split_ifs with hsame hzero <;> grind
       · simp [buildLPSLoop, hpos]
 
+private lemma kmpSearchLoop_time_le_fuel [BEq α]
+    (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat) :
+    (kmpSearchLoop fuel i j pat txt lps acc).time Comparison.natCost ≤ fuel := by
+  induction fuel generalizing i j acc with
+  | zero =>
+      by_cases hi : i < txt.length <;> simp [kmpSearchLoop, hi]
+  | succ fuel ih =>
+      by_cases hi : i < txt.length
+      · have htxt : txt[i]? = some txt[i] := by
+          exact List.getElem?_eq_getElem hi
+        cases hpat : pat[j]? with
+        | none =>
+            simp [kmpSearchLoop, hi, hpat]
+        | some p =>
+            have hbranch :
+                (if (txt[i] == p) = true then
+                    if j + 1 = pat.length then
+                      kmpSearchLoop fuel (i + 1) (lps[j]?.getD 0) pat txt lps ((i - j) :: acc)
+                    else
+                      kmpSearchLoop fuel (i + 1) (j + 1) pat txt lps acc
+                  else
+                    if j = 0 then
+                      kmpSearchLoop fuel (i + 1) 0 pat txt lps acc
+                    else
+                      kmpSearchLoop fuel i (lps[j - 1]?.getD 0) pat txt lps acc).time
+                  Comparison.natCost ≤ fuel := by
+              split_ifs with hsame hfull hzero
+              · exact ih (i + 1) (lps[j]?.getD 0) ((i - j) :: acc)
+              · exact ih (i + 1) (j + 1) acc
+              · exact ih (i + 1) 0 acc
+              · exact ih i (lps[j - 1]?.getD 0) acc
+            have hstep :
+                1 +
+                    (if (txt[i] == p) = true then
+                        if j + 1 = pat.length then
+                          kmpSearchLoop fuel (i + 1) (lps[j]?.getD 0) pat txt lps ((i - j) :: acc)
+                        else
+                          kmpSearchLoop fuel (i + 1) (j + 1) pat txt lps acc
+                      else
+                        if j = 0 then
+                          kmpSearchLoop fuel (i + 1) 0 pat txt lps acc
+                        else
+                          kmpSearchLoop fuel i (lps[j - 1]?.getD 0) pat txt lps acc).time
+                      Comparison.natCost ≤ fuel + 1 := by
+              omega
+            simpa [kmpSearchLoop, hi, htxt, hpat, Prog.time_liftBind] using hstep
+      · simp [kmpSearchLoop, hi]
+
 theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
     (buildLPS pat).time Comparison.natCost ≤ 2 * (pat.length - 1) := by
   cases pat with
@@ -877,6 +910,27 @@ theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
       let lps0 := List.replicate (List.length (x :: xs)) 0
       simpa [buildLPS, lps0] using
         buildLPSLoop_time_le_fuel (2 * ((x :: xs).length - 1)) 1 0 (x :: xs) lps0
+
+theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List α) :
+    (kmpSearchPositions pat txt).time Comparison.natCost ≤ 2 * (txt.length + pat.length - 1) := by
+  cases pat with
+  | nil =>
+      simp [kmpSearchPositions]
+  | cons x xs =>
+      simp only [kmpSearchPositions, Cslib.FreeM.bind_eq_bind, time_bind,
+        List.length_cons, Nat.add_succ_sub_one]
+      have hLps :
+          (buildLPS (x :: xs)).time Comparison.natCost ≤ 2 * xs.length := by
+        simpa using buildLPS_time_complexity_upper_bound (x :: xs)
+      have hLoop :
+          (kmpSearchLoop (2 * txt.length) 0 0 (x :: xs) txt
+              ((buildLPS (x :: xs)).eval Comparison.natCost) []).time Comparison.natCost ≤
+            2 * txt.length := by
+        simpa using
+          kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: xs) txt
+            ((buildLPS (x :: xs)).eval Comparison.natCost) []
+      simpa [two_mul, Nat.mul_add, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+        Nat.add_le_add hLps hLoop
 
 end TimeComplexity
 
