@@ -618,12 +618,7 @@ theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List 
         simpa using
           (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: xs)
             txt ((buildLPS (x :: xs)).eval Comparison.natCost) [])
-      calc
-        (buildLPS (x :: xs)).time Comparison.natCost +
-            (kmpSearchLoop (2 * txt.length) 0 0 (x :: xs) txt
-              ((buildLPS (x :: xs)).eval Comparison.natCost) []).time Comparison.natCost
-            ≤ 2 * xs.length + 2 * txt.length := Nat.add_le_add hLps hLoop
-        _ = 2 * (txt.length + xs.length) := by omega
+      omega
 
 end TimeComplexity
 
