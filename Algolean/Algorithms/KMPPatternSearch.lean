@@ -499,9 +499,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
       by_cases hit : i < txt.length
       · by_cases hcmp : txt[i]'hit = pat[j]'hj
         · -- characters match
-          have hlast : txt[(i - j) + j]? = pat[j]? := by
-            simp [show (i - j) + j = i by omega, List.getElem?_eq_getElem hit,
-              List.getElem?_eq_getElem hj, hcmp]
+          have hlast : txt[(i - j) + j]? = pat[j]? := by simp_all
           have hmatch' : MatchAt pat txt (i - j) (j + 1) := by
             intro k hk
             obtain hk' | rfl := lt_or_eq_of_le (Nat.le_of_lt_succ hk)
