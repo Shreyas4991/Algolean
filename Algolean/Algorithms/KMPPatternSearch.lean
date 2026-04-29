@@ -247,7 +247,7 @@ private lemma entriesCorrect_set
     (hlong : LongestPrefixSuffixOf pat (pos + 1) l) :
     EntriesCorrect pat (pos + 1) (lps.set pos l) := fun i hi' => by
   by_cases hEq : i = pos
-  · exact ⟨l, by subst hEq; exact List.getElem?_set_eq_of_lt _ hi, by subst hEq; exact hlong⟩
+  · simp_all
   · obtain ⟨x, hx, hx'⟩ := h i (by omega)
     exact ⟨x, by grind [List.getElem?_set_of_lt], hx'⟩
 
@@ -263,8 +263,7 @@ private lemma buildLPSLoop_correct
     out.length = pat.length ∧ EntriesCorrect pat pat.length out := by
   induction fuel generalizing pos len lps with
   | zero =>
-      have hEq : pos = pat.length := by omega
-      subst hEq
+      obtain rfl : pos = pat.length := by omega
       simpa [buildLPSLoop, hlen, EntriesCorrect] using hentries
   | succ fuel ih =>
       by_cases hpos' : pos < pat.length
@@ -453,8 +452,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
       (List.Ico 0 txt.length).filter fun s => pat.isPrefixOf (txt.drop s) := by
   induction fuel generalizing i j acc with
   | zero =>
-      have : i = txt.length := by omega
-      subst this
+      obtain rfl : i = txt.length := by omega
       simpa [kmpSearchLoop] using kmpSearchLoop_exhausted j pat txt acc hj hacc
   | succ fuel ih =>
       by_cases hit : i < txt.length
