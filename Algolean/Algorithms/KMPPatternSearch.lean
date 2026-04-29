@@ -439,8 +439,7 @@ private lemma ico_filter_eq_nil_of_false
     (P : Nat → Bool) (s u : Nat)
     (hfalse : ∀ t, s ≤ t → t < u → P t = false) :
     (List.Ico s u).filter P = [] := by
-  apply (List.filter_eq_nil_iff).2
-  grind [List.Ico.mem]
+  grind [List.Ico.mem, List.filter_eq_nil_iff]
 
 private lemma acc_shift_no_matches
     (P : Nat → Bool) (acc : List Nat) (s u : Nat)
