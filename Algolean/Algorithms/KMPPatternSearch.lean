@@ -248,7 +248,7 @@ private lemma entriesCorrect_set
     EntriesCorrect pat (pos + 1) (lps.set pos l) := fun i hi' => by
   by_cases hEq : i = pos
   · simp_all
-  · obtain ⟨x, hx, hx'⟩ := h i (by omega)
+  · obtain ⟨x, _, hx'⟩ := h i (by omega)
     exact ⟨x, by grind [List.getElem?_set_of_lt], hx'⟩
 
 private lemma buildLPSLoop_correct
@@ -270,7 +270,8 @@ private lemma buildLPSLoop_correct
       · have hlen' : len < pat.length := lt_trans hs.1.1 hpos'
         by_cases hcmp : pat[pos]'hpos' = pat[len]'hlen'
         · have hcmp' : (pat[pos]'hpos' == pat[len]'hlen') = true := by simp [hcmp]
-          have hmatch : pat[len]? = pat[pos]? := by simp_all
+          have hmatch : pat[len]? = pat[pos]? := by
+            simpa [hlen', hpos'] using congrArg some hcmp.symm
           have hlong := searchInvariant_match_longest hs hmatch
           have hrec := ih (pos + 1) (len + 1) (lps.set pos (len + 1))
             (by omega) (by omega) (by simpa [List.length_set] using hlen)
@@ -326,7 +327,7 @@ theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
           exact ⟨0, by simp [lps0], ⟨by omega, nofun⟩, fun l hl => by have := hl.1; omega⟩)
       ⟨⟨by omega, nofun⟩, fun m hm _ hm' => by grind⟩
     refine ⟨by simpa [buildLPS, lps0] using hlen, fun i hi => ?_⟩
-    obtain ⟨l, hlps, hlong⟩ := hentries i hi
+    obtain ⟨_, hlps, hlong⟩ := hentries i hi
     convert hlong using 1
     have hilen : i < ((buildLPSLoop _ 1 0 _ lps0).eval Comparison.natCost).length := hlen ▸ hi
     have := List.getElem?_eq_getElem hilen
@@ -406,10 +407,7 @@ private lemma acc_shift_no_matches
     (hsu : s ≤ u)
     (hfalse : ∀ t, s ≤ t → t < u → P t = false) :
     acc.reverse = (List.Ico 0 u).filter P := by
-  have htail : (List.Ico s u).filter P = [] := by
-    simpa only [List.filter_eq_nil_iff, List.Ico.mem, Bool.not_eq_true, and_imp] using hfalse
-  simp [hacc, ← List.Ico.append_consecutive (Nat.zero_le s) hsu, List.filter_append,
-    htail]
+  simp_all [← List.Ico.append_consecutive (Nat.zero_le s) hsu]
 
 private lemma acc_record_match
     (P : Nat → Bool) (acc : List Nat) (s u : Nat)
@@ -418,12 +416,7 @@ private lemma acc_record_match
     (htrue : P s = true)
     (hfalse : ∀ t, s < t → t < u → P t = false) :
     (s :: acc).reverse = (List.Ico 0 u).filter P := by
-  have htail : (List.Ico (s + 1) u).filter P = [] := by
-    simpa only [List.filter_eq_nil_iff, List.Ico.mem, Bool.not_eq_true, and_imp] using
-      (fun t ht htu => hfalse t (by omega) htu)
-  simp only [List.reverse_cons, hacc,
-    ← List.Ico.append_consecutive (Nat.zero_le s) (Nat.le_of_lt hsu),
-    List.filter_append, List.Ico.eq_cons hsu, htrue, htail, List.filter_cons, ite_true]
+  simp_all [← List.Ico.append_consecutive (Nat.zero_le s) (Nat.le_of_lt hsu), List.Ico.eq_cons hsu]
 
 private lemma kmpSearchLoop_exhausted [BEq α] [LawfulBEq α]
     (j : Nat) (pat txt : List α) (acc : List Nat)
@@ -588,8 +581,7 @@ private lemma kmpSearchLoop_time_le_fuel [BEq α]
                 ).time Comparison.natCost ≤ fuel := by
               split_ifs <;> apply ih
             simpa [kmpSearchLoop, hi, getElem?_pos txt i hi, hpat, Prog.time_liftBind, Nat.add_comm]
-              using
-              Nat.add_le_add_left hbranch 1
+              using Nat.add_le_add_left hbranch 1
       · simp [kmpSearchLoop, hi]
 
 theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
