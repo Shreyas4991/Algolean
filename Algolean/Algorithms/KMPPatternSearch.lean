@@ -533,7 +533,7 @@ private lemma kmpSearchLoop_correct_mismatch_zero [BEq α] [LawfulBEq α]
   have hmis : pat[j]? ≠ txt[i]? := by aesop
   subst hzero
   have hrec := ih (i + 1) 0 acc (by omega) (by omega)
-    (by cases pat with | nil => cases hj | cons x xs => simp)
+    (by simpa using hj)
     (by omega) nofun
     (acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
       acc i (i + 1) hacc (by omega) (fun t _ _ => by
@@ -575,8 +575,7 @@ private lemma kmpSearchLoop_correct_mismatch_fallback [BEq α] [LawfulBEq α]
       (fun t ht1 ht2 => no_occurrence_between_partial_and_fallback pat txt (i - j) j l
         hj hmatch hlong (by simpa [show (i - j) + j = i by omega] using hmis)
         t ht1 (by omega)))
-  simpa [kmpSearchLoop, hit, getElem?_pos txt i hit, getElem?_pos pat j hj, hcmp, hzero,
-    show lps[j - 1]? = some l by simp [l]] using hrec
+  simp_all [kmpSearchLoop, l]
 
 private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat)
