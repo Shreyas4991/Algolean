@@ -341,10 +341,7 @@ private lemma buildLPSLoop_correct
           by_cases hzero : len = 0
           · subst hzero
             have hmis : pat[0]? ≠ pat[pos]? := by
-              intro hEq
-              apply hcmp
-              simpa [List.getElem?_eq_getElem (by omega), List.getElem?_eq_getElem hpos']
-                using hEq.symm
+              grind [List.getElem?_eq_getElem (by omega), List.getElem?_eq_getElem hpos']
             have hlong : LongestPrefixSuffixOf pat (pos + 1) 0 :=
               searchInvariant_zero_longest hs hmis
             have hentries' :
@@ -368,9 +365,7 @@ private lemma buildLPSLoop_correct
             have hlong' : LongestPrefixSuffixOf pat len len' := by
               simpa [Nat.sub_add_cancel (Nat.succ_le_of_lt hlenpos)] using hlong
             have hmis : pat[len]? ≠ pat[pos]? := by
-              intro hEq
-              apply hcmp
-              simpa [List.getElem?_eq_getElem hlen', List.getElem?_eq_getElem hpos'] using hEq.symm
+              grind [List.getElem?_eq_getElem hlen', List.getElem?_eq_getElem hpos']
             have hrec := ih pos len' lps
               (by have := hlong'.1.1; omega) hpos hlen hentries
               (searchInvariant_fallback hs hlong' hmis)
@@ -427,14 +422,7 @@ theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
       have hget :
           ((buildLPSLoop (2 * ((x :: xs).length - 1)) 1 0 (x :: xs) lps0).eval
             Comparison.natCost)[i]'hilen = l := by
-        have hs :
-            some
-              (((buildLPSLoop (2 * ((x :: xs).length - 1)) 1 0 (x :: xs) lps0).eval
-                Comparison.natCost)[i]'hilen) = some l := by
-          have hs' := hlps
-          rw [List.getElem?_eq_getElem hilen] at hs'
-          exact hs'
-        exact Option.some.inj hs
+        grind [List.getElem?_eq_getElem hilen]
       have hgoal :
           LongestPrefixSuffixOf (x :: xs) (i + 1)
             (((buildLPSLoop (2 * ((x :: xs).length - 1)) 1 0 (x :: xs) lps0).eval
@@ -510,14 +498,7 @@ private lemma no_occurrence_of_length [BEq α] [LawfulBEq α]
     (hpat : 0 < pat.length)
     (hshort : txt.length < start + pat.length) :
     pat.isPrefixOf (txt.drop start) = false := by
-  apply Bool.eq_false_iff.mpr
-  intro h
-  have hprefix : pat <+: txt.drop start := (isPrefixOf_eq_true_iff_prefix pat (txt.drop start)).1 h
-  have hle : pat.length ≤ txt.length - start := by
-    simpa [List.length_drop] using hprefix.length_le
-  have hbound : start + pat.length ≤ txt.length := by
-    omega
-  omega
+  grind
 
 private lemma matchAt_of_prefixSuffix
     (pat txt : List α) (start n l : Nat)
@@ -601,10 +582,7 @@ private lemma ico_filter_eq_nil_of_false
     (hfalse : ∀ t, s ≤ t → t < u → P t = false) :
     (List.Ico s u).filter P = [] := by
   apply (List.filter_eq_nil_iff).2
-  intro t ht htrue
-  have hft := hfalse t (List.Ico.mem.1 ht).1 (List.Ico.mem.1 ht).2
-  rw [htrue] at hft
-  cases hft
+  grind [List.Ico.mem]
 
 private lemma acc_shift_no_matches
     (P : Nat → Bool) (acc : List Nat) (s u : Nat)
@@ -680,13 +658,9 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
             let l := lps[j]'(by simpa [hlen] using hj)
             have hlong : LongestPrefixSuffixOf pat pat.length l := by simpa [hfull] using hlps j hj
             have hfullMatch : MatchAt pat txt (i - j) pat.length := by simpa [hfull] using hmatch'
-            have hlj : l ≤ j := by
-              have := hlong.1.1
-              omega
-            have hstart : (i + 1) - (j + 1) = i - j := by
-              omega
-            have hshift : (i - j) + (pat.length - l) = (i + 1) - l := by
-              omega
+            have hlj : l ≤ j := by grind [hlong.1.1]
+            have hstart : (i + 1) - (j + 1) = i - j := by omega
+            have hshift : (i - j) + (pat.length - l) = (i + 1) - l := by omega
             have hrec := ih (i + 1) l (((i + 1) - (j + 1)) :: acc)
               (by omega) (by omega) hlong.1.1 (by omega)
               (by simpa [hshift] using
@@ -717,9 +691,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
               List.getElem?_eq_getElem hj, hcmp, hfull] using hrec
         · -- characters don't match
           have hmis : pat[j]? ≠ txt[i]? := by
-            simp only [List.getElem?_eq_getElem hj, List.getElem?_eq_getElem hit,
-              ne_eq, Option.some.injEq]
-            exact fun hEq => hcmp hEq.symm
+            grind [List.getElem?_eq_getElem hj, List.getElem?_eq_getElem hit]
           by_cases hzero : j = 0
           · subst hzero
             have hrec := ih (i + 1) 0 acc (by omega) (by omega)
