@@ -317,10 +317,10 @@ theorem CircAndSplitSimple_size_pos (n : ℕ) (hn : 0 < n) (x : Fin n → Bool) 
          Finset.card_union_le, fanInTwocircuitSize_eq_subcircuits_card]
       calc (x_left.mul x_right).circuitSize
           ≤ 1 + x_left.circuitSize + x_right.circuitSize := h_mul_size
-        _ ≤ 1 + (2 * half - 1) + (2 * (n + 2 - half) - 1) := by gcongr
+        _ ≤ 1 + (2 * half - 1) + (2 * (n + 2 - half) - 1) := by grind
         _ = 2 * (n + 2) - 1 := by
-            have : half + (n + 2 - half) = n + 2 := by omega
-            omega
+            have : half + (n + 2 - half) = n + 2 := by grind
+            grind
 
 
 -- /--
