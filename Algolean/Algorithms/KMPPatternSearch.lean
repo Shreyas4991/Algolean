@@ -154,11 +154,6 @@ def kmpSearchPositions [BEq α] (pat txt : List α) : Prog (Comparison α) (List
       let lps ← buildLPS pat
       kmpSearchLoop (2 * txt.length) 0 0 pat txt lps []
 
-@[simp, grind =]
-private lemma get?_eq (l : List α) (i : Nat) (h : i < l.length) :
-  l[i]? = some (l[i]'h) :=
-  List.getElem?_eq_getElem h
-
 section Correctness
 
 /--
@@ -281,7 +276,8 @@ private lemma buildLPSLoop_correct
             (by omega) (by omega) (by simpa [List.length_set] using hlen)
             (entriesCorrect_set hentries (by simpa [hlen] using hpos') hlong)
             ⟨hlong.1, fun m hm _ hm' _ => absurd (hlong.2 m hm') (by omega)⟩
-          simpa [buildLPSLoop, hpos', get?_eq _ _ hpos', get?_eq _ _ hlen', hcmp'] using hrec
+          simpa [buildLPSLoop, hpos', getElem?_pos pat pos hpos', getElem?_pos pat len hlen', hcmp']
+            using hrec
         · have hcmp' : (pat[pos]'hpos' == pat[len]'hlen') = false := by simp [hcmp]
           by_cases hzero : len = 0
           · subst hzero
@@ -292,8 +288,8 @@ private lemma buildLPSLoop_correct
               (by omega) (by omega) (by simpa [List.length_set] using hlen)
               (entriesCorrect_set hentries (by simpa [hlen] using hpos') hlong)
               ⟨hlong.1, fun m hm _ hm' _ => absurd (hlong.2 m hm') (by omega)⟩
-            simpa [buildLPSLoop, hpos', get?_eq _ _ hpos', get?_eq _ _ (by omega : 0 < pat.length),
-              hcmp'] using hrec
+            simpa [buildLPSLoop, hpos', getElem?_pos pat pos hpos',
+              getElem?_pos pat 0 (by omega : 0 < pat.length), hcmp'] using hrec
           · obtain ⟨len', hlen'', hlong⟩ := hentries (len - 1) (by have := hs.1.1; omega)
             have hlong' : LongestPrefixSuffixOf pat len len' := by
               simpa [Nat.sub_add_cancel (by omega : 1 ≤ len)] using hlong
@@ -302,7 +298,8 @@ private lemma buildLPSLoop_correct
             have hrec := ih pos len' lps
               (by have := hlong'.1.1; omega) hpos hlen hentries
               (searchInvariant_fallback hs hlong' hmis)
-            simpa [buildLPSLoop, hpos', get?_eq _ _ hpos', get?_eq _ _ hlen', hcmp', hzero,
+            simpa [buildLPSLoop, hpos', getElem?_pos pat pos hpos', getElem?_pos pat len hlen',
+              hcmp', hzero,
               hlen''] using hrec
       · have hEq : pos = pat.length := by omega
         subst hEq; simp [buildLPSLoop, hlen]; simpa [EntriesCorrect] using hentries
@@ -492,18 +489,19 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                       no_occurrence_between_full_match_and_fallback pat txt (i - j)
                         l hfullMatch hlong t ht1 (by simpa [hshift] using ht2))))
             have hjEq : j = pat.length - 1 := by omega
-            have hlpsj : lps[j]? = some l := get?_eq _ _ (by simpa [hlen] using hj)
+            have hlpsj : lps[j]? = some l := getElem?_pos lps j (by simpa [hlen] using hj)
             simpa [kmpSearchLoop, hit, hcmp, hjEq, hfull,
               show pat.length - 1 + 1 = pat.length by omega,
               show (txt[i]'hit == pat[pat.length - 1]'(by omega)) = true by simp [hjEq, hcmp],
-              get?_eq (l := pat) (i := pat.length - 1) (by omega),
+              getElem?_pos pat (pat.length - 1) (by omega),
               hlpsj, show lps[pat.length - 1]? = some l by simpa [hjEq] using hlpsj,
               Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hrec
           · -- partial match, continue
             have hrec := ih (i + 1) (j + 1) acc
               (by omega) (by omega) (by omega) (by omega)
               (by simpa using hmatch') (by simpa using hacc)
-            simpa [kmpSearchLoop, hit, get?_eq _ _ hit, get?_eq _ _ hj, hcmp, hfull] using hrec
+            simpa [kmpSearchLoop, hit, getElem?_pos txt i hit, getElem?_pos pat j hj, hcmp, hfull]
+              using hrec
         · -- characters don't match
           have hmis : pat[j]? ≠ txt[i]? := by aesop
           by_cases hzero : j = 0
@@ -515,8 +513,8 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                 acc i (i + 1) hacc (by omega) (fun t _ _ => by
                   simpa [show t = i by omega] using Bool.eq_false_iff.mpr fun h =>
                     hmis ((isPrefixOf_drop_eq_true_iff_matchAt pat txt i).1 h 0 (by omega)).symm))
-            simpa [kmpSearchLoop, hit, get?_eq _ _ hit, get?_eq _ _ (by omega : 0 < pat.length),
-              hcmp] using hrec
+            simpa [kmpSearchLoop, hit, getElem?_pos txt i hit,
+              getElem?_pos pat 0 (by omega : 0 < pat.length), hcmp] using hrec
           · -- fallback via LPS table
             have hj1 : j - 1 < pat.length := by omega
             let l := lps[j - 1]'(by simpa [hlen] using hj1)
@@ -531,7 +529,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                 (fun t ht1 ht2 => no_occurrence_between_partial_and_fallback pat txt (i - j) j l
                   hj hmatch hlong (by simpa [show (i - j) + j = i by omega] using hmis)
                   t ht1 (by omega)))
-            simpa [kmpSearchLoop, hit, get?_eq _ _ hit, get?_eq _ _ hj, hcmp, hzero,
+            simpa [kmpSearchLoop, hit, getElem?_pos txt i hit, getElem?_pos pat j hj, hcmp, hzero,
               show lps[j - 1]? = some l by simp [l]] using hrec
       · have : i = txt.length := by omega
         subst this
@@ -592,7 +590,8 @@ private lemma kmpSearchLoop_time_le_fuel [BEq α]
                     else kmpSearchLoop fuel i (lps[j - 1]?.getD 0) pat txt lps acc
                 ).time Comparison.natCost ≤ fuel := by
               split_ifs <;> apply ih
-            simpa [kmpSearchLoop, hi, get?_eq _ _ hi, hpat, Prog.time_liftBind, Nat.add_comm] using
+            simpa [kmpSearchLoop, hi, getElem?_pos txt i hi, hpat, Prog.time_liftBind, Nat.add_comm]
+              using
               Nat.add_le_add_left hbranch 1
       · simp [kmpSearchLoop, hi]
 
