@@ -264,7 +264,8 @@ private lemma buildLPSLoop_correct
   induction fuel generalizing pos len lps with
   | zero =>
       have hEq : pos = pat.length := by omega
-      subst hEq; simp [buildLPSLoop, hlen]; simpa [EntriesCorrect] using hentries
+      subst hEq
+      simpa [buildLPSLoop, hlen, EntriesCorrect] using hentries
   | succ fuel ih =>
       by_cases hpos' : pos < pat.length
       · have hlen' : len < pat.length := lt_trans hs.1.1 hpos'
@@ -400,20 +401,16 @@ private lemma no_occurrence_between_partial_and_fallback [BEq α] [LawfulBEq α]
   · exact absurd (hlong.2 _ (prefixSuffix_of_overlap pat txt s t j
       (Nat.le_of_lt hj) hmatch hocc hst' (by omega))) (by omega)
 
-private lemma ico_filter_eq_nil_of_false
-    (P : Nat → Bool) (s u : Nat)
-    (hfalse : ∀ t, s ≤ t → t < u → P t = false) :
-    (List.Ico s u).filter P = [] := by
-  grind [List.Ico.mem, List.filter_eq_nil_iff]
-
 private lemma acc_shift_no_matches
     (P : Nat → Bool) (acc : List Nat) (s u : Nat)
     (hacc : acc.reverse = (List.Ico 0 s).filter P)
     (hsu : s ≤ u)
     (hfalse : ∀ t, s ≤ t → t < u → P t = false) :
     acc.reverse = (List.Ico 0 u).filter P := by
+  have htail : (List.Ico s u).filter P = [] := by
+    simpa only [List.filter_eq_nil_iff, List.Ico.mem, Bool.not_eq_true, and_imp] using hfalse
   simp [hacc, ← List.Ico.append_consecutive (Nat.zero_le s) hsu, List.filter_append,
-    ico_filter_eq_nil_of_false P s u hfalse]
+    htail]
 
 private lemma acc_record_match
     (P : Nat → Bool) (acc : List Nat) (s u : Nat)
@@ -422,7 +419,9 @@ private lemma acc_record_match
     (htrue : P s = true)
     (hfalse : ∀ t, s < t → t < u → P t = false) :
     (s :: acc).reverse = (List.Ico 0 u).filter P := by
-  have htail := ico_filter_eq_nil_of_false P (s + 1) u (fun t ht htu => hfalse t (by omega) htu)
+  have htail : (List.Ico (s + 1) u).filter P = [] := by
+    simpa only [List.filter_eq_nil_iff, List.Ico.mem, Bool.not_eq_true, and_imp] using
+      (fun t ht htu => hfalse t (by omega) htu)
   simp only [List.reverse_cons, hacc,
     ← List.Ico.append_consecutive (Nat.zero_le s) (Nat.le_of_lt hsu),
     List.filter_append, List.Ico.eq_cons hsu, htrue, htail, List.filter_cons, ite_true]
