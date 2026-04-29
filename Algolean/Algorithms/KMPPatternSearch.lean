@@ -366,9 +366,6 @@ theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
 private def MatchAt (pat txt : List α) (start len : Nat) : Prop :=
   ∀ k, k < len → txt[start + k]? = pat[k]?
 
-private lemma matchAt_zero (pat txt : List α) (start : Nat) : MatchAt pat txt start 0 :=
-  nofun
-
 private lemma matchAt_succ
     (pat txt : List α) (start len : Nat)
     (hmatch : MatchAt pat txt start len)
@@ -573,7 +570,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
           · subst hzero
             have hrec := ih (i + 1) 0 acc (by omega) (by omega)
               (by cases pat with | nil => cases hj | cons x xs => simp)
-              (by omega) (matchAt_zero pat txt (i + 1))
+              (by omega) nofun
               (acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
                 acc i (i + 1) hacc (by omega) (fun t _ _ => by
                   simpa [show t = i by omega] using Bool.eq_false_iff.mpr fun h =>
@@ -620,7 +617,7 @@ theorem kmpPatternSearch_eval [BEq α] [LawfulBEq α] (pat txt : List α) :
         hlps
         (by simp)
         (by omega)
-        (matchAt_zero (x :: xs) txt 0)
+        nofun
         (by simp)
       simpa [kmpSearchPositions, PatternSearchAll, List.Ico.zero_bot] using hrec
 
