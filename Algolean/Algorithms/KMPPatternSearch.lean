@@ -671,7 +671,6 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
       by_cases hit : i < txt.length
       · by_cases hcmp : txt[i]'hit = pat[j]'hj
         · -- characters match
-          have hcmp' : (txt[i]'hit == pat[j]'hj) = true := by simp [hcmp]
           have hmatch' : MatchAt pat txt (i - j) (j + 1) :=
             matchAt_succ pat txt (i - j) j hmatch (by
               simp [show (i - j) + j = i by omega, List.getElem?_eq_getElem hit,
@@ -702,26 +701,21 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                       no_occurrence_between_full_match_and_fallback pat txt (i - j)
                         l hfullMatch hlong t ht1 (by simpa [hshift] using ht2))))
             have hjEq : j = pat.length - 1 := by omega
-            have hfull' : pat.length - 1 + 1 = pat.length := by
-              omega
-            have hlpsj : lps[j]? = some l := by
-              exact List.getElem?_eq_getElem (by simpa [hlen] using hj)
-            have hlpsLast : lps[pat.length - 1]? = some l := by
-              simpa [hjEq] using hlpsj
+            have hlpsj : lps[j]? = some l := List.getElem?_eq_getElem (by simpa [hlen] using hj)
             simpa [kmpSearchLoop, hit, List.getElem?_eq_getElem hit,
-              List.getElem?_eq_getElem hj, hcmp', hjEq, hfull, hfull',
+              List.getElem?_eq_getElem hj, hcmp, hjEq, hfull,
+              show pat.length - 1 + 1 = pat.length by omega,
               show (txt[i]'hit == pat[pat.length - 1]'(by omega)) = true by simp [hjEq, hcmp],
               List.getElem?_eq_getElem (l := pat) (i := pat.length - 1) (by omega),
-              hlpsj, hlpsLast,
+              hlpsj, show lps[pat.length - 1]? = some l by simpa [hjEq] using hlpsj,
               Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hrec
           · -- partial match, continue
             have hrec := ih (i + 1) (j + 1) acc
               (by omega) (by omega) (by omega) (by omega)
               (by simpa using hmatch') (by simpa using hacc)
             simpa [kmpSearchLoop, hit, List.getElem?_eq_getElem hit,
-              List.getElem?_eq_getElem hj, hcmp', hfull] using hrec
+              List.getElem?_eq_getElem hj, hcmp, hfull] using hrec
         · -- characters don't match
-          have hcmp' : (txt[i]'hit == pat[j]'hj) = false := by simp [hcmp]
           have hmis : pat[j]? ≠ txt[i]? := by
             simp only [List.getElem?_eq_getElem hj, List.getElem?_eq_getElem hit,
               ne_eq, Option.some.injEq]
@@ -736,7 +730,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                   simpa [show t = i by omega] using Bool.eq_false_iff.mpr fun h =>
                     hmis ((isPrefixOf_drop_eq_true_iff_matchAt pat txt i).1 h 0 (by omega)).symm))
             simpa [kmpSearchLoop, hit, List.getElem?_eq_getElem hit,
-              List.getElem?_eq_getElem (by omega : 0 < pat.length), hcmp'] using hrec
+              List.getElem?_eq_getElem (by omega : 0 < pat.length), hcmp] using hrec
           · -- fallback via LPS table
             have hj1 : j - 1 < pat.length := by omega
             let l := lps[j - 1]'(by simpa [hlen] using hj1)
@@ -752,7 +746,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                   hj hmatch hlong (by simpa [show (i - j) + j = i by omega] using hmis)
                   t ht1 (by omega)))
             simpa [kmpSearchLoop, hit, List.getElem?_eq_getElem hit,
-              List.getElem?_eq_getElem hj, hcmp', hzero,
+              List.getElem?_eq_getElem hj, hcmp, hzero,
               show lps[j - 1]? = some l by simp [l]] using hrec
       · have : i = txt.length := by omega
         subst this
