@@ -764,11 +764,7 @@ private lemma kmpSearchLoop_time_le_fuel [BEq α]
                     else
                       kmpSearchLoop fuel i (lps[j - 1]?.getD 0) pat txt lps acc).time
                   Comparison.natCost ≤ fuel := by
-              split_ifs with hsame hfull hzero
-              · exact ih (i + 1) (lps[j]?.getD 0) ((i - j) :: acc)
-              · exact ih (i + 1) (j + 1) acc
-              · exact ih (i + 1) 0 acc
-              · exact ih i (lps[j - 1]?.getD 0) acc
+              split_ifs with hsame hfull hzero <;> simp [ih]
             have hstep :
                 1 +
                     (if (txt[i] == p) = true then
@@ -814,8 +810,7 @@ theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List 
         simpa using
           kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: xs) txt
             ((buildLPS (x :: xs)).eval Comparison.natCost) []
-      simpa [two_mul, Nat.mul_add, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-        Nat.add_le_add hLps hLoop
+      have := Nat.add_le_add hLps hLoop; omega
 
 end TimeComplexity
 
