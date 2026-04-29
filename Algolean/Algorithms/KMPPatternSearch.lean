@@ -366,51 +366,25 @@ theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
 private def MatchAt (pat txt : List α) (start len : Nat) : Prop :=
   ∀ k, k < len → txt[start + k]? = pat[k]?
 
-private lemma matchAt_succ
-    (pat txt : List α) (start len : Nat)
-    (hmatch : MatchAt pat txt start len)
-    (hlast : txt[start + len]? = pat[len]?) :
-    MatchAt pat txt start (len + 1) := by
-  intro k hk
-  obtain hk' | rfl := lt_or_eq_of_le (Nat.le_of_lt_succ hk)
-  · exact hmatch k hk'
-  · simpa using hlast
-
-private lemma prefix_iff_matchAt [BEq α] [LawfulBEq α]
+private lemma isPrefixOf_drop_eq_true_iff_matchAt [BEq α] [LawfulBEq α]
     (pat txt : List α) (start : Nat) :
-    pat <+: txt.drop start ↔ MatchAt pat txt start pat.length := by
-  simp only [List.prefix_iff_getElem?, MatchAt]
-  constructor <;> intro h k hk <;>
-    simpa [List.getElem?_drop, List.getElem?_eq_getElem hk] using h k hk
-
-private lemma isPrefixOf_eq_true_iff_prefix [BEq α] [LawfulBEq α]
-    (xs ys : List α) :
-    xs.isPrefixOf ys = true ↔ xs <+: ys := by
+    pat.isPrefixOf (txt.drop start) = true ↔ MatchAt pat txt start pat.length := by
   rw [← List.isSome_isPrefixOf?_eq_isPrefixOf]
   constructor
   · intro h
     obtain ⟨zs, hopt⟩ := Option.isSome_iff_exists.mp h
-    exact ⟨zs, (List.isPrefixOf?_eq_some_iff_append_eq).1 hopt⟩
-  · rintro ⟨zs, rfl⟩
-    simp
-
-private lemma isPrefixOf_drop_eq_true_iff_matchAt [BEq α] [LawfulBEq α]
-    (pat txt : List α) (start : Nat) :
-    pat.isPrefixOf (txt.drop start) = true ↔ MatchAt pat txt start pat.length := by
-  rw [isPrefixOf_eq_true_iff_prefix pat (txt.drop start), prefix_iff_matchAt pat txt start]
-
-private lemma occurrence_of_matchAt [BEq α] [LawfulBEq α]
-    (pat txt : List α) (start : Nat)
-    (hmatch : MatchAt pat txt start pat.length) :
-    pat.isPrefixOf (txt.drop start) = true :=
-  (isPrefixOf_drop_eq_true_iff_matchAt pat txt start).2 hmatch
-
-private lemma no_occurrence_of_length [BEq α] [LawfulBEq α]
-    (pat txt : List α) (start : Nat)
-    (hpat : 0 < pat.length)
-    (hshort : txt.length < start + pat.length) :
-    pat.isPrefixOf (txt.drop start) = false := by
-  grind
+    have hprefix : pat <+: txt.drop start :=
+      ⟨zs, (List.isPrefixOf?_eq_some_iff_append_eq).1 hopt⟩
+    intro k hk
+    simpa [List.getElem?_drop, List.getElem?_eq_getElem hk] using
+      (List.prefix_iff_getElem?).1 hprefix k hk
+  · intro hmatch
+    have hprefix : pat <+: txt.drop start := by
+      rw [List.prefix_iff_getElem?]
+      intro k hk
+      simpa [List.getElem?_drop, List.getElem?_eq_getElem hk] using hmatch k hk
+    rcases hprefix with ⟨zs, hz⟩
+    exact Option.isSome_iff_exists.mpr ⟨zs, (List.isPrefixOf?_eq_some_iff_append_eq).2 hz⟩
 
 private lemma matchAt_of_prefixSuffix
     (pat txt : List α) (start n l : Nat)
@@ -497,7 +471,10 @@ private lemma kmpSearchLoop_exhausted [BEq α] [LawfulBEq α]
     acc.reverse = (List.Ico 0 txt.length).filter fun s => pat.isPrefixOf (txt.drop s) :=
   acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
     acc (txt.length - j) txt.length hacc (by omega)
-    (fun t ht1 ht2 => no_occurrence_of_length pat txt t (by omega) (by omega))
+    (fun t ht1 ht2 => by
+      have hpat : 0 < pat.length := by omega
+      have hshort : txt.length < t + pat.length := by omega
+      grind)
 
 private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat)
@@ -523,10 +500,14 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
       by_cases hit : i < txt.length
       · by_cases hcmp : txt[i]'hit = pat[j]'hj
         · -- characters match
-          have hmatch' : MatchAt pat txt (i - j) (j + 1) :=
-            matchAt_succ pat txt (i - j) j hmatch (by
-              simp [show (i - j) + j = i by omega, List.getElem?_eq_getElem hit,
-                List.getElem?_eq_getElem hj, hcmp])
+          have hlast : txt[(i - j) + j]? = pat[j]? := by
+            simp [show (i - j) + j = i by omega, List.getElem?_eq_getElem hit,
+              List.getElem?_eq_getElem hj, hcmp]
+          have hmatch' : MatchAt pat txt (i - j) (j + 1) := by
+            intro k hk
+            obtain hk' | rfl := lt_or_eq_of_le (Nat.le_of_lt_succ hk)
+            · exact hmatch k hk'
+            · exact hlast
           by_cases hfull : j + 1 = pat.length
           · -- full match
             let l := lps[j]'(by simpa [hlen] using hj)
@@ -544,7 +525,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                   (acc_record_match
                     (P := fun s => pat.isPrefixOf (txt.drop s))
                     acc (i - j) ((i + 1) - l) hacc (by omega)
-                    (occurrence_of_matchAt pat txt (i - j) hfullMatch)
+                    ((isPrefixOf_drop_eq_true_iff_matchAt pat txt (i - j)).2 hfullMatch)
                     (fun t ht1 ht2 =>
                       no_occurrence_between_full_match_and_fallback pat txt (i - j)
                         l hfullMatch hlong t ht1 (by simpa [hshift] using ht2))))
