@@ -568,8 +568,7 @@ private lemma kmpSearchLoop_correct_mismatch_fallback [BEq α] [LawfulBEq α]
     simpa [Nat.sub_add_cancel (by omega : 1 ≤ j)] using hlps (j - 1) hj1
   have hrec := ih i l acc (by have := hlong.1.1; omega) hi
     (lt_trans hlong.1.1 hj) (Nat.le_trans (Nat.le_of_lt hlong.1.1) hji)
-    (by simpa [show (i - j) + (j - l) = i - l by have := hlong.1.1; omega] using
-      matchAt_of_prefixSuffix pat txt (i - j) j l hmatch hlong.1)
+    (by grind [matchAt_of_prefixSuffix pat txt (i - j) j l hmatch hlong.1, hlong.1.1])
     (acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
       acc (i - j) (i - l) hacc (Nat.sub_le_sub_left (Nat.le_of_lt hlong.1.1) i)
       (fun t ht1 ht2 => no_occurrence_between_partial_and_fallback pat txt (i - j) j l
