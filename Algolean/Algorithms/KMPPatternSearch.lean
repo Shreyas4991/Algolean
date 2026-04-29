@@ -59,7 +59,7 @@ The extra `fuel` parameter bounds the recursion. Each recursive step consumes on
 of fuel exactly when the loop performs a comparison, and `buildLPS` initializes it with
 the standard `2 * (pat.length - 1)` KMP budget.
 -/
-def buildLPSLoop [BEq α]
+def buildLPSLoop
     (fuel pos len : Nat) (pat : List α) (lps : List Nat) :
     Prog (Comparison α) (List Nat) := do
   if pos < pat.length then
@@ -89,7 +89,7 @@ def buildLPSLoop [BEq α]
 The returned list has the same length as `pat`, and the entry at index `i` is the length
 of the longest proper prefix of `pat.take (i + 1)` that is also a suffix of it.
 -/
-def buildLPS [BEq α] (pat : List α) : Prog (Comparison α) (List Nat) := do
+def buildLPS (pat : List α) : Prog (Comparison α) (List Nat) := do
   match pat with
   | [] =>
       return []
@@ -109,7 +109,7 @@ It mirrors the usual imperative search loop:
 As with `buildLPSLoop`, the `fuel` parameter bounds recursion by the number of
 comparisons available to the search phase.
 -/
-def kmpSearchLoop [BEq α]
+def kmpSearchLoop
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat) :
     Prog (Comparison α) (List Nat) := do
   if i < txt.length then
@@ -146,7 +146,7 @@ inside `txt`, in increasing order.
 For the empty pattern, this matches `PatternSearchAll` and returns every position inside
 the text, namely `0, 1, ..., txt.length - 1`.
 -/
-def kmpSearchPositions [BEq α] (pat txt : List α) : Prog (Comparison α) (List Nat) := do
+def kmpSearchPositions (pat txt : List α) : Prog (Comparison α) (List Nat) := do
   match pat with
   | [] =>
       return List.range txt.length
