@@ -625,14 +625,14 @@ private lemma buildLPSLoop_time_le_fuel [BEq α]
   | zero =>
       simp [buildLPSLoop]
   | succ fuel ih =>
-      by_cases hpos : pos < pat.length <;> cases hlen : pat[len]? <;>
-      simp_all [buildLPSLoop]; split_ifs <;> grind
+      by_cases pos < pat.length <;> cases hlen : pat[len]? <;>
+      simp_all [buildLPSLoop]; grind
 
 private lemma kmpSearchLoop_time_le_fuel [BEq α]
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat) :
     (kmpSearchLoop fuel i j pat txt lps acc).time Comparison.natCost ≤ fuel := by
   induction fuel generalizing i j acc with
-  | zero => by_cases hi : i < txt.length <;> simp [kmpSearchLoop, hi]
+  | zero => simp [kmpSearchLoop]
   | succ fuel ih =>
       by_cases hi : i < txt.length
       · cases hpat : pat[j]? with
