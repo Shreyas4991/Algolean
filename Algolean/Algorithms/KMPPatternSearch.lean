@@ -211,9 +211,7 @@ private lemma prefixSuffix_trans
     _ = pat[n - m + (m - l + j)]? := h₂.2 (m - l + j) hjm
     _ = pat[n - l + j]? := by
       have : n - m + (m - l + j) = n - l + j := by
-        have hlm : l ≤ m := Nat.le_of_lt h₁.1
-        have hmn : m ≤ n := Nat.le_of_lt h₂.1
-        omega
+        have := h₁.1.le; have := h₂.1.le; omega
       rw [this]
 
 private lemma prefixSuffix_of_lt_of_prefixSuffix
@@ -229,9 +227,7 @@ private lemma prefixSuffix_of_lt_of_prefixSuffix
     pat[j]? = pat[n - l + j]? := h₁.2 j hj
     _ = pat[n - m + (m - l + j)]? := by
       have : n - m + (m - l + j) = n - l + j := by
-        have hlm' : l ≤ m := Nat.le_of_lt hlm
-        have hmn : m ≤ n := Nat.le_of_lt h₂.1
-        omega
+        have := h₁.1.le; have := h₂.1.le; omega
       rw [this]
     _ = pat[m - l + j]? := h₂.2 (m - l + j) hmj |>.symm
 
@@ -463,29 +459,10 @@ private lemma prefix_iff_matchAt [BEq α] [LawfulBEq α]
     simpa [List.getElem?_drop, List.getElem?_eq_getElem hk, Nat.add_assoc,
       Nat.add_left_comm, Nat.add_comm] using hk'
 
-private lemma isPrefixOf_eq_true_iff_prefix [BEq α] [LawfulBEq α]
-    (xs ys : List α) :
-    xs.isPrefixOf ys = true ↔ xs <+: ys := by
-  constructor
-  · intro h
-    have hs : (xs.isPrefixOf? ys).isSome = true := by
-      simpa [List.isSome_isPrefixOf?_eq_isPrefixOf] using h
-    cases hopt : xs.isPrefixOf? ys with
-    | none =>
-        simp [hopt] at hs
-    | some zs =>
-        exact ⟨zs, (List.isPrefixOf?_eq_some_iff_append_eq).1 hopt⟩
-  · rintro ⟨zs, rfl⟩
-    have hopt : xs.isPrefixOf? (xs ++ zs) = some zs :=
-      (List.isPrefixOf?_eq_some_iff_append_eq).2 rfl
-    have hs : (xs.isPrefixOf? (xs ++ zs)).isSome = true := by simp [hopt]
-    rw [List.isSome_isPrefixOf?_eq_isPrefixOf] at hs
-    exact hs
-
 private lemma isPrefixOf_drop_eq_true_iff_matchAt [BEq α] [LawfulBEq α]
     (pat txt : List α) (start : Nat) :
     pat.isPrefixOf (txt.drop start) = true ↔ MatchAt pat txt start pat.length := by
-  rw [isPrefixOf_eq_true_iff_prefix pat (txt.drop start), prefix_iff_matchAt pat txt start]
+  simp [prefix_iff_matchAt]
 
 private lemma occurrence_of_matchAt [BEq α] [LawfulBEq α]
     (pat txt : List α) (start : Nat)
