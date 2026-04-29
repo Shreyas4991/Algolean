@@ -464,12 +464,6 @@ private lemma isPrefixOf_drop_eq_true_iff_matchAt [BEq α] [LawfulBEq α]
     pat.isPrefixOf (txt.drop start) = true ↔ MatchAt pat txt start pat.length := by
   simp [prefix_iff_matchAt]
 
-private lemma occurrence_of_matchAt [BEq α] [LawfulBEq α]
-    (pat txt : List α) (start : Nat)
-    (hmatch : MatchAt pat txt start pat.length) :
-    pat.isPrefixOf (txt.drop start) = true :=
-  (isPrefixOf_drop_eq_true_iff_matchAt pat txt start).2 hmatch
-
 private lemma no_occurrence_of_length [BEq α] [LawfulBEq α]
     (pat txt : List α) (start : Nat)
     (hpat : 0 < pat.length)
@@ -647,7 +641,7 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
                   (acc_record_match
                     (P := fun s => pat.isPrefixOf (txt.drop s))
                     acc (i - j) ((i + 1) - l) hacc (by omega)
-                    (occurrence_of_matchAt pat txt (i - j) hfullMatch)
+                    (by simp [prefix_iff_matchAt, hfullMatch])
                     (fun t ht1 ht2 =>
                       no_occurrence_between_full_match_and_fallback pat txt (i - j)
                         l hfullMatch hlong t ht1 (by simpa [hshift] using ht2))))
