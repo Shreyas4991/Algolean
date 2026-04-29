@@ -282,8 +282,7 @@ private lemma buildLPSLoop_correct
         · have hcmp' : (pat[pos]'hpos' == pat[len]'hlen') = false := by simp [hcmp]
           by_cases hzero : len = 0
           · subst hzero
-            have hmis : pat[0]? ≠ pat[pos]? := by
-              grind
+            have hmis : pat[0]? ≠ pat[pos]? := by grind
             have hlong := searchInvariant_zero_longest hs hmis
             have hrec := ih (pos + 1) 0 (lps.set pos 0)
               (by omega) (by omega) (by simpa [List.length_set] using hlen)
@@ -294,8 +293,7 @@ private lemma buildLPSLoop_correct
           · obtain ⟨len', hlen'', hlong⟩ := hentries (len - 1) (by have := hs.1.1; omega)
             have hlong' : LongestPrefixSuffixOf pat len len' := by
               simpa [Nat.sub_add_cancel (by omega : 1 ≤ len)] using hlong
-            have hmis : pat[len]? ≠ pat[pos]? := by
-              grind
+            have hmis : pat[len]? ≠ pat[pos]? := by grind
             have hrec := ih pos len' lps
               (by have := hlong'.1.1; omega) hpos hlen hentries
               (searchInvariant_fallback hs hlong' hmis)
@@ -409,15 +407,6 @@ private lemma acc_shift_no_matches
     acc.reverse = (List.Ico 0 u).filter P := by
   simp_all [← List.Ico.append_consecutive (Nat.zero_le s) hsu]
 
-private lemma acc_record_match
-    (P : Nat → Bool) (acc : List Nat) (s u : Nat)
-    (hacc : acc.reverse = (List.Ico 0 s).filter P)
-    (hsu : s < u)
-    (htrue : P s = true)
-    (hfalse : ∀ t, s < t → t < u → P t = false) :
-    (s :: acc).reverse = (List.Ico 0 u).filter P := by
-  simp_all [← List.Ico.append_consecutive (Nat.zero_le s) (Nat.le_of_lt hsu), List.Ico.eq_cons hsu]
-
 private lemma kmpSearchLoop_exhausted [BEq α] [LawfulBEq α]
     (j : Nat) (pat txt : List α) (acc : List Nat)
     (hj : j < pat.length)
@@ -470,18 +459,17 @@ private lemma kmpSearchLoop_correct_match_full [BEq α] [LawfulBEq α]
   have hlj : l ≤ j := by grind [hlong.1.1]
   have hstart : (i + 1) - (j + 1) = i - j := by omega
   have hshift : (i - j) + (pat.length - l) = (i + 1) - l := by omega
+  have hsu : i - j < (i + 1) - l := by omega
   have htrue : pat.isPrefixOf (txt.drop (i - j)) = true :=
     (isPrefixOf_drop_eq_true_iff_matchAt pat txt (i - j)).2 hfullMatch
+  have hfalse : ∀ t, i - j < t → t < (i + 1) - l → pat.isPrefixOf (txt.drop t) = false := by
+    intro t ht1 ht2
+    exact no_occurrence_between_full_match_and_fallback pat txt (i - j)
+      l hfullMatch hlong t ht1 (by simpa [hshift] using ht2)
   have hacc' : (((i + 1) - (j + 1)) :: acc).reverse =
         (List.Ico 0 ((i + 1) - l)).filter fun s => pat.isPrefixOf (txt.drop s) := by
-    simpa [hstart, Nat.add_left_comm, Nat.add_comm, Nat.add_assoc] using
-      (acc_record_match
-        (P := fun s => pat.isPrefixOf (txt.drop s))
-        acc (i - j) ((i + 1) - l) hacc (by omega)
-        htrue
-        (fun t ht1 ht2 =>
-          no_occurrence_between_full_match_and_fallback pat txt (i - j)
-            l hfullMatch hlong t ht1 (by simpa [hshift] using ht2)))
+    simp_all [← List.Ico.append_consecutive (Nat.zero_le (i - j)) (Nat.le_of_lt hsu),
+      List.Ico.eq_cons hsu, Nat.add_comm]
   have hrec := ih (i + 1) l (((i + 1) - (j + 1)) :: acc)
     (by omega) (by omega) hlong.1.1 (by omega)
     (by simpa [hshift] using
@@ -536,8 +524,7 @@ private lemma kmpSearchLoop_correct_mismatch_zero [BEq α] [LawfulBEq α]
       (List.Ico 0 txt.length).filter fun s => pat.isPrefixOf (txt.drop s) := by
   have hmis : pat[j]? ≠ txt[i]? := by aesop
   subst hzero
-  have hiFalse : pat.isPrefixOf (txt.drop i) = false := by
-    exact Bool.eq_false_iff.mpr fun h =>
+  have hiFalse : pat.isPrefixOf (txt.drop i) = false := Bool.eq_false_iff.mpr fun h =>
       hmis ((isPrefixOf_drop_eq_true_iff_matchAt pat txt i).1 h 0 (by omega)).symm
   have hacc' : acc.reverse = (List.Ico 0 (i + 1)).filter fun s => pat.isPrefixOf (txt.drop s) :=
     acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
@@ -575,8 +562,7 @@ private lemma kmpSearchLoop_correct_mismatch_fallback [BEq α] [LawfulBEq α]
   let l := lps[j - 1]'(by simpa [hlen] using hj1)
   have hlong : LongestPrefixSuffixOf pat j l := by
     simpa [Nat.sub_add_cancel (by omega : 1 ≤ j)] using hlps (j - 1) hj1
-  have hmis' : pat[j]? ≠ txt[(i - j) + j]? := by
-    simpa [show (i - j) + j = i by omega] using hmis
+  have hmis' : pat[j]? ≠ txt[(i - j) + j]? := by simpa [show (i - j) + j = i by omega] using hmis
   have hacc' : acc.reverse = (List.Ico 0 (i - l)).filter fun s => pat.isPrefixOf (txt.drop s) :=
     acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
       acc (i - j) (i - l) hacc
