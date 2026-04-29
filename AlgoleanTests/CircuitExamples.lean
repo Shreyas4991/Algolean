@@ -301,16 +301,9 @@ theorem CircAndSplitSimple_size_pos (n : ℕ) (hn : 0 < n) (x : Fin n → Bool) 
       let x_left := CircAndSplitSimple half (Fin.take half h_le x)
       let x_right := CircAndSplitSimple (n + 2 - half) (fun i => x ⟨i.val + half, by omega⟩)
       change (x_left.mul x_right).circuitSize ≤ 2 * (n + 2) - 1
-      have h_left : x_left.circuitSize ≤ 2 * (half) - 1 := by
-        apply ih
-        · grind
-        · unfold half
-          grind
-      have h_right : x_right.circuitSize ≤ 2 * (n + 2 - half) - 1 := by
-        apply ih
-        · grind
-        · unfold half
-          grind
+      have ⟨h_left, h_right⟩ : x_left.circuitSize ≤ 2 * half - 1 ∧
+                          x_right.circuitSize ≤ 2 * (n + 2 - half) - 1 := by
+        constructor <;> (apply ih <;> grind)
       have h_mul_size : (x_left.mul x_right).circuitSize ≤
       1 + x_left.circuitSize + x_right.circuitSize := by
          grind [circuitSize, subcircuits, Finset.card_insert_le,
