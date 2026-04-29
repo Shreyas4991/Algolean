@@ -219,8 +219,7 @@ private lemma buildLPSLoop_correct
       · have hlen' : len < pat.length := lt_trans hs.1.1 hpos'
         by_cases hcmp : pat[pos]'hpos' = pat[len]'hlen'
         · have hcmp' : (pat[pos]'hpos' == pat[len]'hlen') = true := by simp [hcmp]
-          have hmatch : pat[len]? = pat[pos]? := by
-            simpa [hlen', hpos'] using congrArg some hcmp.symm
+          have hmatch : pat[len]? = pat[pos]? := by simpa [hlen', hpos'] using hcmp.symm
           have hlong : LongestPrefixSuffixOf pat (pos + 1) (len + 1) := by
             refine ⟨prefixSuffix_succ_iff.2 ⟨hs.1, hmatch⟩, fun l' hl' => ?_⟩
             cases l' with
@@ -263,23 +262,16 @@ private lemma buildLPSLoop_correct
               have hprefix : PrefixSuffixOf pat pos len' := by
                 refine ⟨lt_trans hlong'.1.1 hs.1.1, fun j hj => ?_⟩
                 calc pat[j]? = pat[len - len' + j]? := hlong'.1.2 j hj
-                  _ = pat[pos - len + (len - len' + j)]? := hs.1.2 _ (by
-                      have := hlong'.1.1
-                      omega)
+                  _ = pat[pos - len + (len - len' + j)]? :=
+                      hs.1.2 _ (by have := hlong'.1.1; omega)
                   _ = pat[pos - len' + j]? := by
-                      congr 1
-                      have := hlong'.1.1
-                      have := hs.1.1
-                      omega
+                      congr 1; have := hlong'.1.1; have := hs.1.1; omega
               refine ⟨hprefix, fun m hm hmpos hm' => ?_⟩
               rcases lt_trichotomy m len with hml | rfl | hml
               · exact fun _ => absurd (hlong'.2 m (by
                     refine ⟨hml, fun j hj => ?_⟩
                     calc pat[j]? = pat[pos - m + j]? := hm'.2 j hj
-                      _ = pat[pos - len + (len - m + j)]? := by
-                          congr 1
-                          have := hs.1.1
-                          omega
+                      _ = pat[pos - len + (len - m + j)]? := by congr 1; have := hs.1.1; omega
                       _ = pat[len - m + j]? := (hs.1.2 _ (by omega)).symm)) (by omega)
               · exact hmis
               · exact hs.2 m (by omega) hmpos hm'
@@ -289,8 +281,8 @@ private lemma buildLPSLoop_correct
             simpa [buildLPSLoop, hpos', getElem?_pos pat pos hpos', getElem?_pos pat len hlen',
               hcmp', hzero,
               hlen''] using hrec
-      · have hEq : pos = pat.length := by omega
-        subst hEq; simp [buildLPSLoop, hlen]; simpa [EntriesCorrect] using hentries
+      · obtain rfl : pos = pat.length := by omega
+        simpa [buildLPSLoop, hlen, EntriesCorrect] using hentries
 
 /--
 Correctness of `buildLPS`: every entry of the produced LPS table is the longest proper
@@ -588,17 +580,15 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
       by_cases hit : i < txt.length
       · by_cases hcmp : txt[i]'hit = pat[j]'hj
         · by_cases hfull : j + 1 = pat.length
-          · exact kmpSearchLoop_correct_match_full fuel i j pat txt lps acc hpot hit hlen hlps
+          · exact kmpSearchLoop_correct_match_full _ _ _ _ _ _ _ hpot hit hlen hlps
               ih hj hcmp hfull hji hmatch hacc
-          · exact kmpSearchLoop_correct_match_partial fuel i j pat txt lps acc hpot hit ih hj hcmp
+          · exact kmpSearchLoop_correct_match_partial _ _ _ _ _ _ _ hpot hit ih hj hcmp
               hfull hji hmatch hacc
         · by_cases hzero : j = 0
-          · exact kmpSearchLoop_correct_mismatch_zero fuel i j pat txt lps acc hpot hit ih hj hcmp
-              hzero hacc
-          · exact kmpSearchLoop_correct_mismatch_fallback fuel i j pat txt lps acc hpot hi hit
+          · exact kmpSearchLoop_correct_mismatch_zero _ _ _ _ _ _ _ hpot hit ih hj hcmp hzero hacc
+          · exact kmpSearchLoop_correct_mismatch_fallback _ _ _ _ _ _ _ hpot hi hit
               hlen hlps ih hj hcmp hzero hji hmatch hacc
-      · have : i = txt.length := by omega
-        subst this
+      · obtain rfl : i = txt.length := by omega
         simpa [kmpSearchLoop] using kmpSearchLoop_exhausted j pat txt acc hj hacc
 
 /--
@@ -654,8 +644,7 @@ private lemma kmpSearchLoop_time_le_fuel [BEq α]
                     else kmpSearchLoop fuel (i + 1) (j + 1) pat txt lps acc
                   else if j = 0 then kmpSearchLoop fuel (i + 1) 0 pat txt lps acc
                     else kmpSearchLoop fuel i (lps[j - 1]?.getD 0) pat txt lps acc
-                ).time Comparison.natCost ≤ fuel := by
-              split_ifs <;> apply ih
+                ).time Comparison.natCost ≤ fuel := by split_ifs <;> apply ih
             simpa [kmpSearchLoop, hi, getElem?_pos txt i hi, hpat, Prog.time_liftBind, Nat.add_comm]
               using Nat.add_le_add_left hbranch 1
       · simp [kmpSearchLoop, hi]
@@ -666,9 +655,7 @@ theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
   | nil =>
       simp [buildLPS]
   | cons x xs =>
-      let lps0 := List.replicate (List.length (x :: xs)) 0
-      simpa [buildLPS, lps0] using
-        buildLPSLoop_time_le_fuel (2 * ((x :: xs).length - 1)) 1 0 (x :: xs) lps0
+      simpa [buildLPS] using buildLPSLoop_time_le_fuel _ 1 0 (x :: xs) _
 
 theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (kmpSearchPositions pat txt).time Comparison.natCost ≤ 2 * (txt.length + pat.length - 1) := by
@@ -678,10 +665,8 @@ theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List 
   | cons x xs =>
       simp only [kmpSearchPositions, Cslib.FreeM.bind_eq_bind, time_bind,
         List.length_cons, Nat.add_succ_sub_one]
-      have hLps := by simpa using buildLPS_time_complexity_upper_bound (x :: xs)
-      have hLoop := by
-        simpa using
-          (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: xs)
+      have := by simpa using buildLPS_time_complexity_upper_bound (x :: xs)
+      have := by simpa using (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: xs)
             txt ((buildLPS (x :: xs)).eval Comparison.natCost) [])
       omega
 
