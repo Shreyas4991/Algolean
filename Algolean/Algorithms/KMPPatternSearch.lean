@@ -190,57 +190,6 @@ private lemma prefixSuffix_succ_iff :
       · convert hlast using 2; omega
       · convert h j hj' using 2; omega⟩
 
-private lemma prefixSuffix_trans
-    (h₁ : PrefixSuffixOf pat m l) (h₂ : PrefixSuffixOf pat n m) :
-    PrefixSuffixOf pat n l :=
-  ⟨lt_trans h₁.1 h₂.1, fun j hj =>
-    calc pat[j]? = pat[m - l + j]? := h₁.2 j hj
-      _ = pat[n - m + (m - l + j)]? := h₂.2 _ (by have := h₁.1; omega)
-      _ = pat[n - l + j]? := by congr 1; have := h₁.1; have := h₂.1; omega⟩
-
-private lemma prefixSuffix_of_lt_of_prefixSuffix
-    (h₁ : PrefixSuffixOf pat n l) (h₂ : PrefixSuffixOf pat n m) (hlm : l < m) :
-    PrefixSuffixOf pat m l := by
-  refine ⟨hlm, fun j hj => ?_⟩
-  calc pat[j]? = pat[n - l + j]? := h₁.2 j hj
-    _ = pat[n - m + (m - l + j)]? := by congr 1; have := h₂.1; omega
-    _ = pat[m - l + j]? := (h₂.2 _ (by omega)).symm
-
-private lemma searchInvariant_match_longest
-    (hs : SearchInvariant pat pos len) (hmatch : pat[len]? = pat[pos]?) :
-    LongestPrefixSuffixOf pat (pos + 1) (len + 1) :=
-  ⟨prefixSuffix_succ_iff.2 ⟨hs.1, hmatch⟩, fun l' hl' => by
-    cases l' with
-    | zero => omega
-    | succ m =>
-      rcases prefixSuffix_succ_iff.1 hl' with ⟨hm, hm'⟩
-      by_cases hml : len < m
-      · exact (hs.2 m hml hm.1 hm hm').elim
-      · omega⟩
-
-private lemma searchInvariant_zero_longest
-    (hs : SearchInvariant pat pos 0) (hmis : pat[0]? ≠ pat[pos]?) :
-    LongestPrefixSuffixOf pat (pos + 1) 0 :=
-  ⟨⟨by omega, nofun⟩, fun l' hl' => by
-    cases l' with
-    | zero => omega
-    | succ m =>
-      rcases prefixSuffix_succ_iff.1 hl' with ⟨hm, hm'⟩
-      cases m with
-      | zero => exact (hmis hm').elim
-      | succ m => exact (hs.2 (m + 1) (by omega) hm.1 hm hm').elim⟩
-
-private lemma searchInvariant_fallback
-    (hs : SearchInvariant pat pos len)
-    (hlong : LongestPrefixSuffixOf pat len len')
-    (hmis : pat[len]? ≠ pat[pos]?) :
-    SearchInvariant pat pos len' := by
-  refine ⟨prefixSuffix_trans hlong.1 hs.1, fun m hm hmpos hm' => ?_⟩
-  rcases lt_trichotomy m len with hml | rfl | hml
-  · exact fun _ => absurd (hlong.2 m (prefixSuffix_of_lt_of_prefixSuffix hm' hs.1 hml)) (by omega)
-  · exact hmis
-  · exact hs.2 m (by omega) hmpos hm'
-
 private lemma entriesCorrect_set
     (h : EntriesCorrect pat pos lps)
     (hi : pos < lps.length)
@@ -272,7 +221,15 @@ private lemma buildLPSLoop_correct
         · have hcmp' : (pat[pos]'hpos' == pat[len]'hlen') = true := by simp [hcmp]
           have hmatch : pat[len]? = pat[pos]? := by
             simpa [hlen', hpos'] using congrArg some hcmp.symm
-          have hlong := searchInvariant_match_longest hs hmatch
+          have hlong : LongestPrefixSuffixOf pat (pos + 1) (len + 1) := by
+            refine ⟨prefixSuffix_succ_iff.2 ⟨hs.1, hmatch⟩, fun l' hl' => ?_⟩
+            cases l' with
+            | zero => omega
+            | succ m =>
+              rcases prefixSuffix_succ_iff.1 hl' with ⟨hm, hm'⟩
+              by_cases hml : len < m
+              · exact (hs.2 m hml hm.1 hm hm').elim
+              · omega
           have hrec := ih (pos + 1) (len + 1) (lps.set pos (len + 1))
             (by omega) (by omega) (by simpa [List.length_set] using hlen)
             (entriesCorrect_set hentries (by simpa [hlen] using hpos') hlong)
@@ -283,7 +240,15 @@ private lemma buildLPSLoop_correct
           by_cases hzero : len = 0
           · subst hzero
             have hmis : pat[0]? ≠ pat[pos]? := by grind
-            have hlong := searchInvariant_zero_longest hs hmis
+            have hlong : LongestPrefixSuffixOf pat (pos + 1) 0 := by
+              refine ⟨⟨by omega, nofun⟩, fun l' hl' => ?_⟩
+              cases l' with
+              | zero => omega
+              | succ m =>
+                rcases prefixSuffix_succ_iff.1 hl' with ⟨hm, hm'⟩
+                cases m with
+                | zero => exact (hmis hm').elim
+                | succ m => exact (hs.2 (m + 1) (by omega) hm.1 hm hm').elim
             have hrec := ih (pos + 1) 0 (lps.set pos 0)
               (by omega) (by omega) (by simpa [List.length_set] using hlen)
               (entriesCorrect_set hentries (by simpa [hlen] using hpos') hlong)
@@ -294,9 +259,33 @@ private lemma buildLPSLoop_correct
             have hlong' : LongestPrefixSuffixOf pat len len' := by
               simpa [Nat.sub_add_cancel (by omega : 1 ≤ len)] using hlong
             have hmis : pat[len]? ≠ pat[pos]? := by grind
+            have hs' : SearchInvariant pat pos len' := by
+              have hprefix : PrefixSuffixOf pat pos len' := by
+                refine ⟨lt_trans hlong'.1.1 hs.1.1, fun j hj => ?_⟩
+                calc pat[j]? = pat[len - len' + j]? := hlong'.1.2 j hj
+                  _ = pat[pos - len + (len - len' + j)]? := hs.1.2 _ (by
+                      have := hlong'.1.1
+                      omega)
+                  _ = pat[pos - len' + j]? := by
+                      congr 1
+                      have := hlong'.1.1
+                      have := hs.1.1
+                      omega
+              refine ⟨hprefix, fun m hm hmpos hm' => ?_⟩
+              rcases lt_trichotomy m len with hml | rfl | hml
+              · exact fun _ => absurd (hlong'.2 m (by
+                    refine ⟨hml, fun j hj => ?_⟩
+                    calc pat[j]? = pat[pos - m + j]? := hm'.2 j hj
+                      _ = pat[pos - len + (len - m + j)]? := by
+                          congr 1
+                          have := hs.1.1
+                          omega
+                      _ = pat[len - m + j]? := (hs.1.2 _ (by omega)).symm)) (by omega)
+              · exact hmis
+              · exact hs.2 m (by omega) hmpos hm'
             have hrec := ih pos len' lps
               (by have := hlong'.1.1; omega) hpos hlen hentries
-              (searchInvariant_fallback hs hlong' hmis)
+              hs'
             simpa [buildLPSLoop, hpos', getElem?_pos pat pos hpos', getElem?_pos pat len hlen',
               hcmp', hzero,
               hlen''] using hrec
