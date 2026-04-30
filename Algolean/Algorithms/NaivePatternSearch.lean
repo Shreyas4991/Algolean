@@ -137,14 +137,11 @@ private lemma patternSearchAll_cons [BEq α] (pat : List α) (t : α) (ts : List
       else
         (PatternSearchAll pat ts).map Nat.succ := by
   simp only [PatternSearchAll, List.length_cons, List.range_succ_eq_map, List.filter_cons]
-  rw [show List.filter (fun i => pat.isPrefixOf (List.drop i (t :: ts)))
-          (List.map Nat.succ (List.range ts.length)) =
-        List.map Nat.succ
-          (List.filter (fun i => pat.isPrefixOf (List.drop i ts)) (List.range ts.length)) from by
-        induction List.range ts.length with
-        | nil => simp
-        | cons a l ih => by_cases h : pat.isPrefixOf (List.drop a ts) = true <;> simp [ih, h]]
-  by_cases h : pat.isPrefixOf (t :: ts) = true <;> simp [List.drop, h]
+  have : List.filter (fun i => pat.isPrefixOf (List.drop i (t :: ts)))
+        (List.map Nat.succ (List.range ts.length)) = List.map Nat.succ
+        (List.filter (fun i => pat.isPrefixOf (List.drop i ts)) (List.range ts.length)) := by
+    induction List.range ts.length <;> grind
+  grind
 
 private lemma patternSearchAll_eq_nil_of_length_lt [BEq α] :
     ∀ {pat txt : List α}, txt.length < pat.length → PatternSearchAll pat txt = []
