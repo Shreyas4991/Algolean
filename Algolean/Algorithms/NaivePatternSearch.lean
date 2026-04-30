@@ -117,11 +117,9 @@ theorem prefixMatch_eval [BEq α] (pat txt : List α) :
   induction pat generalizing txt with
   | nil => simp [prefixMatch]
   | cons p ps ih =>
-    cases txt with
-    | nil => simp [prefixMatch]
-    | cons t ts =>
-        simp [prefixMatch]
-        grind
+      cases txt <;>
+      simp [prefixMatch]
+      grind
 
 private lemma isPrefixOf_eq_false_of_length_lt [BEq α] :
     ∀ {pat txt : List α}, txt.length < pat.length → pat.isPrefixOf txt = false
