@@ -310,8 +310,7 @@ theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
     convert hlong using 1
     have hilen : i < ((buildLPSLoop _ 1 0 _ lps0).eval Comparison.natCost).length := hlen ▸ hi
     have := List.getElem?_eq_getElem hilen
-    rw [this] at hlps
-    simpa [buildLPS, lps0] using Option.some.inj hlps
+    simp_all [buildLPS, lps0]
 
 private def MatchAt (pat txt : List α) (start len : Nat) : Prop :=
   ∀ k, k < len → txt[start + k]? = pat[k]?
@@ -511,10 +510,7 @@ private lemma kmpSearchLoop_correct_mismatch_zero [BEq α] [LawfulBEq α]
     acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
       acc i (i + 1) hacc (by lia)
       (fun t _ _ => by grind)
-  have hrec := ih (i + 1) 0 acc (by lia) (by lia)
-    (by simpa using hj)
-    (by lia) nofun
-    hacc'
+  have hrec := ih (i + 1) 0 acc (by lia) (by lia) (by simpa using hj) (by lia) nofun hacc'
   simpa [kmpSearchLoop, hit, getElem?_pos txt i hit,
     getElem?_pos pat 0 (by lia : 0 < pat.length), hcmp] using hrec
 
