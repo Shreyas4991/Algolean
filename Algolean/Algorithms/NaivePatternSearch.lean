@@ -178,15 +178,17 @@ section TimeComplexity
 
 theorem prefixMatch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (prefixMatch pat txt).time Comparison.natCost ≤ Nat.min pat.length txt.length := by
-  induction pat generalizing txt with
-  | nil => simp [prefixMatch]
-  | cons p ps ih =>
-    cases txt with
-    | nil => simp [prefixMatch]
-    | cons t ts =>
-      by_cases h : p == t
-      · have hih := ih ts; simp [prefixMatch, h] at hih ⊢; omega
-      · simp [prefixMatch, h]
+  induction txt generalizing pat with
+  | nil =>
+      cases pat <;> simp [prefixMatch]
+  | cons t ts ih =>
+      cases pat with
+      | nil => simp [prefixMatch]
+      | cons p ps =>
+          by_cases h : p == t <;>
+            simp [prefixMatch, h]
+          grind
+
 
 theorem naivePatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (naivePatternSearch pat txt).time Comparison.natCost ≤
