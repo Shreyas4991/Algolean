@@ -143,8 +143,8 @@ private lemma patternSearchAll_cons [BEq α] (pat : List α) (t : α) (ts : List
 
 private lemma patternSearchAll_eq_nil_of_length_lt [BEq α] :
     ∀ {pat txt : List α}, txt.length < pat.length → PatternSearchAll pat txt = []
-  | [], _, h => by simp at h
-  | _ :: _, [], _ => by simp [PatternSearchAll]
+  | [], _, h
+  | _ :: _, [], _ => by simp_all [PatternSearchAll]
   | p :: ps, t :: ts, h => by simp [patternSearchAll_cons, isPrefixOf_eq_false_of_length_lt h,
       patternSearchAll_eq_nil_of_length_lt (lt_trans (Nat.lt_succ_self _) h)]
 
