@@ -125,11 +125,10 @@ theorem prefixMatch_eval [BEq α] (pat txt : List α) :
 
 private lemma isPrefixOf_eq_false_of_length_lt [BEq α] :
     ∀ {pat txt : List α}, txt.length < pat.length → pat.isPrefixOf txt = false
-  | [], _, h => by simp at h
-  | _ :: _, [], _ => by simp [List.isPrefixOf]
-  | p :: ps, t :: ts, h => by
-      by_cases heq : p == t <;>
-        simp [List.isPrefixOf, heq, isPrefixOf_eq_false_of_length_lt (by simpa using h)]
+  | [], _, _
+  | _ :: _, [], _ => by simp_all
+  | _ :: ps, _ :: ts, h => by
+      simp_all [List.isPrefixOf, isPrefixOf_eq_false_of_length_lt (Nat.lt_of_succ_lt_succ h)]
 
 private lemma patternSearchAll_cons [BEq α] (pat : List α) (t : α) (ts : List α) :
     PatternSearchAll pat (t :: ts) =
