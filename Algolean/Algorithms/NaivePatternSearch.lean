@@ -120,8 +120,8 @@ theorem prefixMatch_eval [BEq α] (pat txt : List α) :
     cases txt with
     | nil => simp [prefixMatch]
     | cons t ts =>
-        simp [prefixMatch, List.isPrefixOf]
-        split_ifs with h <;> simp [h, ih]
+        simp [prefixMatch]
+        grind
 
 private lemma isPrefixOf_eq_false_of_length_lt [BEq α] :
     ∀ {pat txt : List α}, txt.length < pat.length → pat.isPrefixOf txt = false
