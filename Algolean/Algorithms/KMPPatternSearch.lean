@@ -38,7 +38,7 @@ correctness and an upper bound for equality comparisons in the `Comparison` quer
 
 
 ## References
-1. [KMP Algorithm](https://www.geeksforgeeks.org/dsa/kmp-algorithm-for-pattern-searching/)
+1. [Knuth–Morris–Pratt algorithm](https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm)
 -/
 
 namespace Algolean
