@@ -643,11 +643,8 @@ private lemma kmpSearchLoop_time_le_fuel [BEq α]
 
 theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
     (buildLPS pat).time Comparison.natCost ≤ 2 * (pat.length - 1) := by
-  cases pat with
-  | nil =>
-      simp [buildLPS]
-  | cons x xs =>
-      simpa [buildLPS] using buildLPSLoop_time_le_fuel _ 1 0 (x :: xs) _
+  cases pat <;>
+    simp [buildLPS, buildLPSLoop_time_le_fuel]
 
 theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (kmpSearchPositions pat txt).time Comparison.natCost ≤ 2 * (txt.length + pat.length - 1) := by
