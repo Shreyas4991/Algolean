@@ -32,6 +32,8 @@ upper bound for comparisons in the `Comparison` query model.
 - `naivePatternSearch_eval`: `naivePatternSearch` evaluates identically to `PatternSearchAll`.
 - `prefixMatch_time_complexity_upper_bound`: `prefixMatch` takes at most
   `min pat.length txt.length` comparisons.
+- `prefixMatch_time_complexity_lower_bound`: for any pattern and text lengths, there are inputs
+  on which `prefixMatch` takes exactly `min pat.length txt.length` comparisons.
 - `naivePatternSearch_time_complexity_upper_bound`: `naivePatternSearch` takes at most
   `pat.length * (txt.length + 1 - pat.length)` comparisons.
 -/
@@ -186,6 +188,19 @@ theorem prefixMatch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
           by_cases h : p == t <;>
             simp [prefixMatch, h]
           grind
+
+theorem prefixMatch_time_complexity_lower_bound [BEq α] [LawfulBEq α] [Nonempty α]
+    (m n : ℕ) : ∃ pat txt : List α, pat.length = m ∧ txt.length = n ∧
+    (prefixMatch pat txt).time Comparison.natCost = Nat.min pat.length txt.length := by
+  obtain ⟨x⟩ := ‹Nonempty α›
+  have hrep : (prefixMatch (List.replicate m x) (List.replicate n x)).time Comparison.natCost =
+      Nat.min m n := by
+    induction n generalizing m <;>
+      cases m <;>
+        simp_all [List.replicate, prefixMatch, Nat.add_comm]
+  use List.replicate m x, List.replicate n x
+  split_ands <;>
+    simp_all
 
 theorem naivePatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (naivePatternSearch pat txt).time Comparison.natCost ≤
