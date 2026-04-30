@@ -150,31 +150,27 @@ private lemma patternSearchAll_eq_nil_of_length_lt [BEq α] :
 
 theorem naivePatternSearch_eval [BEq α] (pat txt : List α) :
     (naivePatternSearch pat txt).eval Comparison.natCost = PatternSearchAll pat txt := by
-  simpa [naivePatternSearch] using
-    ((show ∀ i,
-        (naivePatternSearchFrom pat txt i).eval Comparison.natCost =
-          (PatternSearchAll pat txt).map (fun j => i + j) from by
-      intro i
-      cases pat with
-      | nil =>
-          induction txt generalizing i with
-          | nil => simp [naivePatternSearchFrom, PatternSearchAll]
-          | cons t ts ih =>
-              simp [naivePatternSearchFrom, Prog.eval_bind, patternSearchAll_cons, ih,
-                Nat.add_left_comm, Nat.add_comm]
-      | cons p ps =>
-          induction txt generalizing i with
-          | nil => simp [naivePatternSearchFrom, PatternSearchAll]
-          | cons t ts ih =>
-              by_cases hlen : (p :: ps).length ≤ (t :: ts).length
-              · by_cases h : (p :: ps).isPrefixOf (t :: ts) = true <;>
-                  simp [naivePatternSearchFrom, prefixMatch_eval, patternSearchAll_cons,
-                    ih, (show ps.length ≤ ts.length from by simpa using hlen),
-                    h, Nat.add_left_comm, Nat.add_comm]
-              · simp [naivePatternSearchFrom,
-                (show ¬ ps.length ≤ ts.length from by simpa using hlen),
-                  patternSearchAll_eq_nil_of_length_lt (Nat.not_le.mp hlen)]
-    ) 0)
+  have hfrom : ∀ i, (naivePatternSearchFrom pat txt i).eval Comparison.natCost =
+      (PatternSearchAll pat txt).map (fun j => i + j) := by
+    intro i
+    induction txt generalizing i with
+    | nil =>
+        cases pat <;> simp [naivePatternSearchFrom, PatternSearchAll]
+    | cons t ts ih =>
+        cases pat with
+        | nil =>
+            simp [naivePatternSearchFrom, patternSearchAll_cons,
+              ih, Nat.add_left_comm, Nat.add_comm]
+        | cons p ps =>
+            by_cases hlen : (p :: ps).length ≤ (t :: ts).length
+            · have hlen' : ps.length ≤ ts.length := by simpa using hlen
+              by_cases h : (p :: ps).isPrefixOf (t :: ts) = true <;>
+                simp [naivePatternSearchFrom, prefixMatch_eval, patternSearchAll_cons,
+                  ih, hlen', h, Nat.add_left_comm, Nat.add_comm]
+            · have hlen' : ¬ ps.length ≤ ts.length := by simpa using hlen
+              simp [naivePatternSearchFrom, hlen',
+                patternSearchAll_eq_nil_of_length_lt (Nat.not_le.mp hlen)]
+  simpa [naivePatternSearch] using hfrom 0
 
 end Correctness
 
