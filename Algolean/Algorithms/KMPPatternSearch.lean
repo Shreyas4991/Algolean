@@ -636,7 +636,7 @@ private lemma kmpSearchLoop_time_le_fuel [BEq α]
                     else kmpSearchLoop fuel (i + 1) (j + 1) pat txt lps acc
                   else if j = 0 then kmpSearchLoop fuel (i + 1) 0 pat txt lps acc
                     else kmpSearchLoop fuel i (lps[j - 1]?.getD 0) pat txt lps acc
-                ).time Comparison.natCost ≤ fuel := by split_ifs <;> apply ih
+                ).time Comparison.natCost ≤ fuel := by grind
             simpa [kmpSearchLoop, hi, getElem?_pos txt i hi, hpat, Prog.time_liftBind, Nat.add_comm]
               using Nat.add_le_add_left hbranch 1
       · simp [kmpSearchLoop, hi]
