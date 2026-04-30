@@ -603,14 +603,7 @@ theorem kmpPatternSearch_eval [BEq α] [LawfulBEq α] (pat txt : List α) :
       rcases buildLPS_eval (x :: xs) with ⟨hlen, hlps⟩
       have hrec := kmpSearchLoop_correct
         (2 * txt.length) 0 0 (x :: xs) txt ((buildLPS (x :: xs)).eval Comparison.natCost) []
-        (by lia)
-        (by lia)
-        hlen
-        hlps
-        (by simp)
-        (by lia)
-        nofun
-        (by simp)
+        (by lia) (by lia) hlen hlps (by simp) (by lia) nofun (by simp)
       simpa [kmpSearchPositions, PatternSearchAll, List.Ico.zero_bot] using hrec
 
 end Correctness
