@@ -16,8 +16,8 @@ public import Mathlib.Data.List.Range
 /-!
 # Naive pattern search
 
-In this file we define naive pattern search on lists. We further prove the correctness as well as an
-upper bound for comparisons in the `Comparison` query model.
+In this file we define naive pattern search on lists. We further prove correctness as well as
+upper/lower bounds for comparisons in the `Comparison` query model.
 --
 
 ## Main definitions
