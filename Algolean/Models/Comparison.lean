@@ -21,7 +21,6 @@ In this file we define a query type `Comparison` for comparison based algorithms
 
 - `Comparison`: A query type for comparison based algorithms.
 - `Comparison.natCost`:  A model for this query with costs in `ℕ`.
-- `PatternSearchAll`: Pattern searching definition for finding all matches.
 
 -/
 
@@ -46,18 +45,6 @@ def Comparison.natCost [BEq α] : Model (Comparison α) ℕ where
   evalQuery
     | .compare x y => x == y
   cost _ := 1
-
-/--
-`PatternSearchAll pat txt` returns all starting positions in `txt` such that
-`pat` is a prefix of `txt` starting there, in increasing order.
-
-For the empty pattern, this returns every position inside the text
-`0, 1, ..., txt.length - 1`.
-
-TODO: move definition
--/
-def PatternSearchAll [BEq α] (pat txt : List α) : List Nat :=
-  (List.range txt.length).filter fun i => pat.isPrefixOf (txt.drop i)
 
 end Algorithms
 

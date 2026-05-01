@@ -6,6 +6,7 @@ public import Algolean.Algorithms.ListInsertionSort
 public import Algolean.Algorithms.ListLinearSearch
 public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
+public import Algolean.Algorithms.NaivePatternSearch
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses

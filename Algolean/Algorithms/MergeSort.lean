@@ -237,18 +237,17 @@ theorem mergeSort_stable
     have hmergeFilter :
         (List.merge left right (le · ·)).filter (fun x => le x k && le k x) =
         left.filter (fun x => le x k && le k x) ++ right.filter (fun x => le x k && le k x) := by
-      have hgeneric :
-          ∀ l r : List α,
-            l.Pairwise (fun a b => le a b = true) →
-            r.Pairwise (fun a b => le a b = true) →
-            (List.merge l r (le · ·)).filter (fun x => le x k && le k x) =
-            l.filter (fun x => le x k && le k x) ++ r.filter (fun x => le x k && le k x) := by
-        intro l r hl hr
-        fun_induction List.merge l r (le · ·) with
-        | case1 => simp
-        | case2 => simp
-        | case3 x xs y ys hxy ih => grind
-        | case4 x xs y ys hxy ih =>
+      have hl : left.Pairwise (fun a b => le a b = true) := mergeSortNaive_sorted _ _
+      have hr : right.Pairwise (fun a b => le a b = true) := mergeSortNaive_sorted _ _
+      revert hl hr
+      fun_induction List.merge left right (le · ·) with
+      | case1
+      | case2 =>
+          simp
+      | case3 x xs y ys hxy ih =>
+          grind
+      | case4 x xs y ys hxy ih =>
+          intro hl hr
           rw [List.filter_cons, ih hl (hr.tail), List.filter_cons, List.filter_cons]
           by_cases hyk : (le y k && le k y) = true
           · have hky : le k y = true := by grind
@@ -263,7 +262,6 @@ theorem mergeSort_stable
                 ((List.pairwise_cons.mp hl).1 a ha) hak) (by simp [hxk])
             simp [hyk, hxk, hfilter]
           · simp [hyk]
-      exact hgeneric left right (mergeSortNaive_sorted _ _) (mergeSortNaive_sorted _ _)
     rw [hmergeFilter, ihl, ihr, ← List.filter_append, List.take_append_drop]
 
 end Stability
