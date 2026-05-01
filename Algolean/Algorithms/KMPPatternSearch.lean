@@ -12,6 +12,8 @@ public import Mathlib.Algebra.Order.Group.Nat
 public import Mathlib.Data.List.Intervals
 public import Mathlib.Data.List.Infix
 public import Mathlib.Data.List.Range
+-- Imported for PatternSearchAll, TODO: remove import after moving PatternSearchAll
+public import Algolean.Algorithms.NaivePatternSearch
 
 @[expose] public section
 
