@@ -32,11 +32,11 @@ correctness and an upper bound for equality comparisons in the `Comparison` quer
 - `buildLPS_eval`: `buildLPS` evaluates identically to the standard LPS table definition.
 - `kmpPatternSearch_eval`: `kmpSearchPositions` evaluates identically to `PatternSearchAll`.
 - `buildLPS_time_complexity_upper_bound`: `buildLPS` takes at most
-  `2 * (pat.length - 1)` comparisons.
+  `2 * pat.length - 3` comparisons.
 - `buildLPS_time_complexity_lower_bound`: for every pattern length `n`, there exists a pattern
-  on which `buildLPS` takes exactly `2 * (n - 1) - 1` comparisons.
+  on which `buildLPS` takes exactly `2 * n - 3` comparisons.
 - `kmpSearchPositions_time_complexity_upper_bound`: `kmpSearchPositions` takes at most
-  `2 * (txt.length + pat.length - 1)` comparisons.
+  `2 * (txt.length + pat.length) - 3` comparisons.
 
 
 ## References
@@ -608,15 +608,28 @@ end Correctness
 
 section TimeComplexity
 
-private lemma buildLPSLoop_time_le_fuel [BEq α]
-    (fuel pos len : Nat) (pat : List α) (lps : List Nat) :
-    (buildLPSLoop fuel pos len pat lps).time Comparison.natCost ≤ fuel := by
+private lemma buildLPSLoop_time_le_bound [BEq α]
+    (fuel pos len : Nat) (pat : List α) (lps : List Nat)
+    (hlength : lps.length = pat.length)
+    (hpos : pos ≤ pat.length)
+    (hlen : len < pos)
+    (hlps : ∀ i, i < pos → (lps[i]?).getD 0 < i + 1) :
+    (buildLPSLoop fuel pos len pat lps).time Comparison.natCost ≤
+      if pos < pat.length then 2 * (pat.length - pos) + len - 1 else 0 := by
   induction fuel generalizing pos len lps with
   | zero =>
-      simp [buildLPSLoop]
+      by_cases pos < pat.length <;> simp [buildLPSLoop]
   | succ fuel ih =>
-      by_cases pos < pat.length <;> cases hlen : pat[len]? <;>
-      simp_all [buildLPSLoop]; grind
+      by_cases hlt : pos < pat.length
+      · have hlenPat : len < pat.length := lt_of_lt_of_le hlen hpos
+        rw [buildLPSLoop, if_pos hlt, getElem?_pos pat pos hlt, getElem?_pos pat len hlenPat]
+        simp
+        by_cases hcmp : (pat[pos]'hlt == pat[len]'hlenPat) = true
+        · have hlps' : ∀ i, i < pos + 1 → ((lps.set pos (len + 1))[i]?).getD 0 < i + 1 := by grind
+          grind
+        · have hlps' : ∀ i, i < pos + 1 → ((lps.set pos 0)[i]?).getD 0 < i + 1 := by grind
+          grind
+      · simp [buildLPSLoop, hlt]
 
 private lemma kmpSearchLoop_time_le_fuel [BEq α]
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat) :
@@ -639,10 +652,39 @@ private lemma kmpSearchLoop_time_le_fuel [BEq α]
               using Nat.add_le_add_left hbranch 1
       · simp [kmpSearchLoop, hi]
 
+private lemma kmpSearchLoop_singleton_time [BEq α]
+    (fuel i : Nat) (x : α) (txt : List α) (acc : List Nat)
+    (hfuel : txt.length - i ≤ fuel) :
+    (kmpSearchLoop fuel i 0 [x] txt [0] acc).time Comparison.natCost = txt.length - i := by
+  induction fuel generalizing i acc with
+  | zero =>
+      have hi : ¬ i < txt.length := by lia
+      have hdone : txt.length - i = 0 := by lia
+      simp [kmpSearchLoop, hi, hdone]
+  | succ fuel ih =>
+      by_cases hi : i < txt.length
+      · simp [kmpSearchLoop, if_pos hi, getElem?_pos txt i hi, Prog.time_liftBind]
+        grind
+      · have hdone : txt.length - i = 0 := by lia
+        simp [kmpSearchLoop, hi, hdone]
+
 theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
-    (buildLPS pat).time Comparison.natCost ≤ 2 * (pat.length - 1) := by
-  cases pat <;>
-    simp [buildLPS, buildLPSLoop_time_le_fuel]
+    (buildLPS pat).time Comparison.natCost ≤ 2 * pat.length - 3 := by
+  cases pat with
+  | nil =>
+      simp [buildLPS]
+  | cons x xs =>
+      cases xs with
+      | nil =>
+          simp [buildLPS, buildLPSLoop]
+      | cons y ys =>
+          have hlps0 :
+              ∀ i, i < 1 →
+                ((List.replicate (x :: y :: ys).length 0)[i]?).getD 0 < i + 1 := by simp
+          simpa [buildLPS] using
+            buildLPSLoop_time_le_bound (fuel := 2 * ((x :: y :: ys).length - 1)) (pos := 1)
+              (len := 0) (pat := x :: y :: ys)
+              (lps := List.replicate (x :: y :: ys).length 0) (by simp) (by simp) (by simp) hlps0
 
 private lemma buildLPSLoop_final_fallback_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
     ∀ extra {r k}, k < r →
@@ -699,7 +741,7 @@ private lemma buildLPS_replicate_append_singleton_time [DecidableEq α] {x y : �
 
 theorem buildLPS_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n : ℕ) :
     ∃ pat : List α, pat.length = n ∧
-      (buildLPS pat).time Comparison.natCost = 2 * (n - 1) - 1 := by
+      (buildLPS pat).time Comparison.natCost = 2 * n - 3 := by
   obtain ⟨x, y, hxy⟩ := exists_pair_ne α
   cases n with
   | zero =>
@@ -710,17 +752,27 @@ theorem buildLPS_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n
         buildLPS_replicate_append_singleton_time (x := x) (y := y) hxy n
 
 theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List α) :
-    (kmpSearchPositions pat txt).time Comparison.natCost ≤ 2 * (txt.length + pat.length - 1) := by
+    (kmpSearchPositions pat txt).time Comparison.natCost ≤
+      2 * (txt.length + pat.length) - 3 := by
   cases pat with
   | nil =>
       simp [kmpSearchPositions]
   | cons x xs =>
-      simp only [kmpSearchPositions, Cslib.FreeM.bind_eq_bind, time_bind,
-        List.length_cons, Nat.add_succ_sub_one]
-      have := by simpa using buildLPS_time_complexity_upper_bound (x :: xs)
-      have := by simpa using (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: xs)
-            txt ((buildLPS (x :: xs)).eval Comparison.natCost) [])
-      lia
+      cases xs with
+      | nil =>
+          have hsingle :
+              (kmpSearchLoop (2 * txt.length) 0 0 [x] txt [0] []).time Comparison.natCost ≤
+                txt.length := by
+            simpa using le_of_eq <|
+              kmpSearchLoop_singleton_time (fuel := 2 * txt.length) (i := 0) x txt [] (by lia)
+          simp [kmpSearchPositions, buildLPS, buildLPSLoop, Cslib.FreeM.bind_eq_bind]
+          grind
+      | cons y ys =>
+          simp only [kmpSearchPositions, Cslib.FreeM.bind_eq_bind, time_bind, List.length_cons]
+          have := by simpa using buildLPS_time_complexity_upper_bound (x :: y :: ys)
+          have := by simpa using (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: y :: ys)
+                txt ((buildLPS (x :: y :: ys)).eval Comparison.natCost) [])
+          lia
 
 end TimeComplexity
 
