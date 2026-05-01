@@ -33,6 +33,8 @@ correctness and an upper bound for equality comparisons in the `Comparison` quer
 - `kmpPatternSearch_eval`: `kmpSearchPositions` evaluates identically to `PatternSearchAll`.
 - `buildLPS_time_complexity_upper_bound`: `buildLPS` takes at most
   `2 * (pat.length - 1)` comparisons.
+- `buildLPS_time_complexity_lower_bound`: for every pattern length `n`, there exists a pattern
+  on which `buildLPS` takes exactly `2 * (n - 1) - 1` comparisons.
 - `kmpSearchPositions_time_complexity_upper_bound`: `kmpSearchPositions` takes at most
   `2 * (txt.length + pat.length - 1)` comparisons.
 
@@ -641,6 +643,71 @@ theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
     (buildLPS pat).time Comparison.natCost ≤ 2 * (pat.length - 1) := by
   cases pat <;>
     simp [buildLPS, buildLPSLoop_time_le_fuel]
+
+private lemma buildLPSLoop_final_fallback_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
+    ∀ extra {r k}, k < r →
+      (buildLPSLoop (extra + k + 1) r k
+          (List.replicate r y ++ [x])
+          (List.range r ++ [0])).time Comparison.natCost = k + 1 := by
+  intro _ _ k hk
+  induction k with
+  | zero =>
+      simp_all [buildLPSLoop, buildLPSLoop.eq_def]
+  | succ k ih =>
+      simp_all [lt_trans (Nat.lt_succ_self k) hk, List.getElem?_append_left,
+        buildLPSLoop, Nat.add_left_comm, Nat.add_comm]
+
+private lemma buildLPSLoop_replicate_append_singleton_time
+    [DecidableEq α] {x y : α} (hxy : x ≠ y) :
+    ∀ extra k m,
+      (buildLPSLoop (extra + k + 2 * m + 1) (k + 1) k
+          (List.replicate (k + m + 1) y ++ [x])
+          (List.range (k + 1) ++ List.replicate (m + 1) 0)).time Comparison.natCost
+        = k + 2 * m + 1 := by
+  intro extra k m
+  induction m generalizing extra k with
+  | zero =>
+      simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+        buildLPSLoop_final_fallback_time (x := x) (y := y) hxy extra (r := k + 1) (k := k)
+          (by simp)
+  | succ m ih =>
+      have htail :
+          (List.replicate (m + 2) 0).set 0 (k + 1) = (k + 1) :: List.replicate (m + 1) 0 := by
+        simp [List.replicate]
+      have hstate :
+          List.range (k + 1) ++ (k + 1) :: List.replicate (m + 1) 0 =
+            List.range (k + 2) ++ List.replicate (m + 1) 0 := by
+        simp [List.range_succ, List.append_assoc]
+      have hpatPos : (List.replicate (k + (m + 1) + 1) y ++ [x])[k + 1]? = some y := by
+        grind
+      have hpatLen : (List.replicate (k + (m + 1) + 1) y ++ [x])[k]? = some y := by
+        grind
+      rw [buildLPSLoop, if_pos (by simp), hpatPos, hpatLen]
+      simpa [htail, hstate, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm, two_mul] using
+        congrArg Nat.succ (ih extra (k + 1))
+
+private lemma buildLPS_replicate_append_singleton_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
+    ∀ n,
+      (buildLPS (List.replicate n y ++ [x])).time Comparison.natCost = 2 * n - 1 := by
+  intro n
+  cases n with
+  | zero =>
+      simp [buildLPS, buildLPSLoop]
+  | succ n =>
+      simpa [buildLPS, List.range, two_mul, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+        buildLPSLoop_replicate_append_singleton_time (x := x) (y := y) hxy 1 0 n
+
+theorem buildLPS_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n : ℕ) :
+    ∃ pat : List α, pat.length = n ∧
+      (buildLPS pat).time Comparison.natCost = 2 * (n - 1) - 1 := by
+  obtain ⟨x, y, hxy⟩ := exists_pair_ne α
+  cases n with
+  | zero =>
+      simp [buildLPS]
+  | succ n =>
+      refine ⟨List.replicate n y ++ [x], by simp, ?_⟩
+      simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+        buildLPS_replicate_append_singleton_time (x := x) (y := y) hxy n
 
 theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (kmpSearchPositions pat txt).time Comparison.natCost ≤ 2 * (txt.length + pat.length - 1) := by
