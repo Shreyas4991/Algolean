@@ -656,17 +656,10 @@ private lemma kmpSearchLoop_singleton_time [BEq α]
     (fuel i : Nat) (x : α) (txt : List α) (acc : List Nat)
     (hfuel : txt.length - i ≤ fuel) :
     (kmpSearchLoop fuel i 0 [x] txt [0] acc).time Comparison.natCost = txt.length - i := by
-  induction fuel generalizing i acc with
-  | zero =>
-      have hi : ¬ i < txt.length := by lia
-      have hdone : txt.length - i = 0 := by lia
-      simp [kmpSearchLoop, hi, hdone]
-  | succ fuel ih =>
-      by_cases hi : i < txt.length
-      · simp [kmpSearchLoop, if_pos hi, getElem?_pos txt i hi, Prog.time_liftBind]
-        grind
-      · have hdone : txt.length - i = 0 := by lia
-        simp [kmpSearchLoop, hi, hdone]
+  induction fuel generalizing i acc <;>
+    by_cases hi : i < txt.length <;>
+      simp [kmpSearchLoop, hi] <;>
+      grind
 
 theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
     (buildLPS pat).time Comparison.natCost ≤ 2 * pat.length - 3 := by
