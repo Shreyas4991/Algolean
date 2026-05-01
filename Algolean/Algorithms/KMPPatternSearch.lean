@@ -311,7 +311,6 @@ theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
     obtain ⟨_, hlps, hlong⟩ := hentries i hi
     convert hlong using 1
     have hilen : i < ((buildLPSLoop _ 1 0 _ lps0).eval Comparison.natCost).length := hlen ▸ hi
-    have := List.getElem?_eq_getElem hilen
     simp_all [buildLPS, lps0]
 
 private def MatchAt (pat txt : List α) (start len : Nat) : Prop :=
