@@ -22,7 +22,7 @@ public import Algolean.Algorithms.NaivePatternSearch
 
 In this file we define the KMP search algorithm for finding all exact occurrences of a pattern
 in a text, along with the longest-proper-prefix / suffix table used by KMP. We also prove
-correctness and an upper bound for equality comparisons in the `Comparison` query model.
+correctness and upper/lower bounds for equality comparisons in the `Comparison` query model.
 --
 
 ## Main definitions
