@@ -478,17 +478,10 @@ private lemma kmpSearchLoop_correct_match_partial [BEq α] [LawfulBEq α]
       acc.reverse = (List.Ico 0 (i - j)).filter fun s => pat.isPrefixOf (txt.drop s)) :
     (kmpSearchLoop (fuel + 1) i j pat txt lps acc).eval Comparison.natCost =
       (List.Ico 0 txt.length).filter fun s => pat.isPrefixOf (txt.drop s) := by
-  have hlast : txt[(i - j) + j]? = pat[j]? := by simp_all
-  have hmatch' : MatchAt pat txt (i - j) (j + 1) := by
-    intro k hk
-    obtain hk' | rfl := lt_or_eq_of_le (Nat.le_of_lt_succ hk)
-    · exact hmatch k hk'
-    · exact hlast
-  have hrec := ih (i + 1) (j + 1) acc
-    (by lia) (by lia) (by lia) (by lia)
-    (by simpa using hmatch') (by simpa using hacc)
-  simpa [kmpSearchLoop, hit, getElem?_pos txt i hit, getElem?_pos pat j hj, hcmp, hfull]
-    using hrec
+  have hrec := ih (i + 1) (j + 1) acc (by lia) (by lia) (by lia) (by lia)
+      (by simpa using extendMatch hmatch (by simp_all)) (by simpa using hacc)
+  simpa [kmpSearchLoop, hit, getElem?_pos txt i hit, getElem?_pos pat j hj, hcmp, hfull] using
+    hrec
 
 private lemma kmpSearchLoop_correct_mismatch_zero [BEq α] [LawfulBEq α]
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat)
