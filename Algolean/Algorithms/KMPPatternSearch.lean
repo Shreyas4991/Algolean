@@ -25,20 +25,20 @@ correctness and an upper bound for equality comparisons in the `Comparison` quer
 
 ## Main definitions
 - `buildLPS`: builds the longest-proper-prefix / suffix table for a pattern.
-- `kmpSearchPositions`: returns all starting positions where a pattern occurs in a text.
+- `kmpPatternSearch`: returns all starting positions where a pattern occurs in a text.
 
 ## Main results
 
 - `buildLPS_eval`: `buildLPS` evaluates identically to the standard LPS table definition.
-- `kmpPatternSearch_eval`: `kmpSearchPositions` evaluates identically to `PatternSearchAll`.
+- `kmpPatternSearch_eval`: `kmpPatternSearch` evaluates identically to `PatternSearchAll`.
 - `buildLPS_time_complexity_upper_bound`: `buildLPS` takes at most
   `2 * pat.length - 3` comparisons.
 - `buildLPS_time_complexity_lower_bound`: for every pattern length `n`, there exists a pattern
   on which `buildLPS` takes exactly `2 * n - 3` comparisons.
-- `kmpSearchPositions_time_complexity_upper_bound`: `kmpSearchPositions` takes at most
+- `kmpPatternSearch_time_complexity_upper_bound`: `kmpPatternSearch` takes at most
   `2 * (txt.length + pat.length) - 3` comparisons.
-- `kmpSearchPositions_time_complexity_lower_bound`: for every `m, n`, there exist a pattern of
-  length `m + 3` and a text of length `n` on which `kmpSearchPositions` takes at least
+- `kmpPatternSearch_time_complexity_lower_bound`: for every `m, n`, there exist a pattern of
+  length `m + 3` and a text of length `n` on which `kmpPatternSearch` takes at least
   `2 * (txt.length + pat.length) - 5` comparisons.
 
 
@@ -145,13 +145,13 @@ def kmpSearchLoop
     return acc.reverse
 
 /--
-`kmpSearchPositions pat txt` returns the starting positions of all occurrences of `pat`
+`kmpPatternSearch pat txt` returns the starting positions of all occurrences of `pat`
 inside `txt`, in increasing order.
 
 For the empty pattern, this matches `PatternSearchAll` and returns every position inside
 the text, namely `0, 1, ..., txt.length - 1`.
 -/
-def kmpSearchPositions (pat txt : List α) : Prog (Comparison α) (List Nat) := do
+def kmpPatternSearch (pat txt : List α) : Prog (Comparison α) (List Nat) := do
   match pat with
   | [] =>
       return List.range txt.length
@@ -577,20 +577,20 @@ private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
         simpa [kmpSearchLoop] using kmpSearchLoop_exhausted j pat txt acc hj hacc
 
 /--
-Correctness of KMP search: `kmpSearchPositions` finds exactly the occurrences returned by
+Correctness of KMP search: `kmpPatternSearch` finds exactly the occurrences returned by
 `PatternSearchAll`.
 -/
 theorem kmpPatternSearch_eval [BEq α] [LawfulBEq α] (pat txt : List α) :
-    (kmpSearchPositions pat txt).eval Comparison.natCost = PatternSearchAll pat txt := by
+    (kmpPatternSearch pat txt).eval Comparison.natCost = PatternSearchAll pat txt := by
   cases pat with
   | nil =>
-      simp [kmpSearchPositions, PatternSearchAll]
+      simp [kmpPatternSearch, PatternSearchAll]
   | cons x xs =>
       rcases buildLPS_eval (x :: xs) with ⟨hlen, hlps⟩
       have hrec := kmpSearchLoop_correct
         (2 * txt.length) 0 0 (x :: xs) txt ((buildLPS (x :: xs)).eval Comparison.natCost) []
         (by lia) (by lia) hlen hlps (by simp) (by lia) nofun (by simp)
-      simpa [kmpSearchPositions, PatternSearchAll, List.Ico.zero_bot] using hrec
+      simpa [kmpPatternSearch, PatternSearchAll, List.Ico.zero_bot] using hrec
 
 end Correctness
 
@@ -725,21 +725,21 @@ theorem buildLPS_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n
       simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
         buildLPS_replicate_append_singleton_time (x := x) (y := y) hxy n
 
-theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List α) :
-    (kmpSearchPositions pat txt).time Comparison.natCost ≤
+theorem kmpPatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
+    (kmpPatternSearch pat txt).time Comparison.natCost ≤
       2 * (txt.length + pat.length) - 3 := by
   cases pat with
   | nil =>
-      simp [kmpSearchPositions]
+      simp [kmpPatternSearch]
   | cons x xs =>
       cases xs with
       | nil =>
           have hsingle :=
             kmpSearchLoop_singleton_time (fuel := 2 * txt.length) (i := 0) x txt [] (by lia)
-          simp [kmpSearchPositions, buildLPS, buildLPSLoop, Cslib.FreeM.bind_eq_bind]
+          simp [kmpPatternSearch, buildLPS, buildLPSLoop, Cslib.FreeM.bind_eq_bind]
           grind
       | cons y ys =>
-          simp only [kmpSearchPositions, Cslib.FreeM.bind_eq_bind, time_bind, List.length_cons]
+          simp only [kmpPatternSearch, Cslib.FreeM.bind_eq_bind, time_bind, List.length_cons]
           have := by simpa using buildLPS_time_complexity_upper_bound (x :: y :: ys)
           have := by simpa using (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: y :: ys)
                 txt ((buildLPS (x :: y :: ys)).eval Comparison.natCost) [])
@@ -818,11 +818,11 @@ private lemma kmpSearchLoop_yx_prefix_replicate_time [DecidableEq α] {x y : α}
         simp [hit] <;>
         grind
 
-theorem kmpSearchPositions_time_complexity_lower_bound [DecidableEq α] [Nontrivial α]
+theorem kmpPatternSearch_time_complexity_lower_bound [DecidableEq α] [Nontrivial α]
     (m n : ℕ) :
     ∃ (pat txt : List α), pat.length = m + 3 ∧ txt.length = n ∧
       2 * (txt.length + pat.length) - 5 ≤
-        (kmpSearchPositions pat txt).time Comparison.natCost := by
+        (kmpPatternSearch pat txt).time Comparison.natCost := by
   obtain ⟨x, y, hxy⟩ := exists_pair_ne α
   let pat := y :: x :: List.replicate (m + 1) y
   have hbuild : (buildLPS pat).time Comparison.natCost = 2 * (m + 1) := by
@@ -830,7 +830,7 @@ theorem kmpSearchPositions_time_complexity_lower_bound [DecidableEq α] [Nontriv
   cases n with
   | zero =>
       refine ⟨pat, [], by simp [pat], by simp, ?_⟩
-      simp [kmpSearchPositions]
+      simp [kmpPatternSearch]
       grind
   | succ n =>
       let txt := List.replicate (n + 1) y
@@ -844,7 +844,7 @@ theorem kmpSearchPositions_time_complexity_lower_bound [DecidableEq α] [Nontriv
           (kmpSearchLoop_yx_prefix_replicate_time (x := x) (y := y) hxy n 0
             (List.replicate (m + 1) y)
             (n + 1) ((buildLPS pat).eval Comparison.natCost) [] (by simp) hlps0).1
-      simp [kmpSearchPositions]
+      simp [kmpPatternSearch]
       grind
 
 end TimeComplexity
