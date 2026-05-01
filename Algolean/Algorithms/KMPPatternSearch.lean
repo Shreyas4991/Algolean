@@ -37,6 +37,9 @@ correctness and an upper bound for equality comparisons in the `Comparison` quer
   on which `buildLPS` takes exactly `2 * n - 3` comparisons.
 - `kmpSearchPositions_time_complexity_upper_bound`: `kmpSearchPositions` takes at most
   `2 * (txt.length + pat.length) - 3` comparisons.
+- `kmpSearchPositions_time_complexity_lower_bound`: for every `m, n`, there exist a pattern of
+  length `m + 1` and a text of length `n` on which `kmpSearchPositions` takes exactly
+  `txt.length + (2 * pat.length - 3)` comparisons.
 
 
 ## References
@@ -660,6 +663,28 @@ private lemma kmpSearchLoop_singleton_time [BEq α]
       simp [kmpSearchLoop, hi] <;>
       grind
 
+private lemma kmpSearchLoop_head_mismatch_replicate_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
+    ∀ fuel i (patTail : List α) (txtLen : Nat) (lps acc : List Nat),
+      txtLen - i ≤ fuel →
+      (kmpSearchLoop fuel i 0 (y :: patTail) (List.replicate txtLen x) lps acc).time
+        Comparison.natCost = txtLen - i := by
+  intro fuel i patTail txtLen lps acc hfuel
+  induction fuel generalizing i patTail txtLen lps acc with
+  | zero =>
+      have hi : txtLen ≤ i := by lia
+      simp [kmpSearchLoop, hi]
+  | succ fuel ih =>
+      by_cases hi : i < txtLen
+      · have hrec := ih (i + 1) patTail txtLen lps acc (by lia)
+        have hstep :
+            (kmpSearchLoop (fuel + 1) i 0 (y :: patTail) (List.replicate txtLen x) lps acc).time
+              Comparison.natCost = 1 + (txtLen - (i + 1)) := by
+          simp [kmpSearchLoop, hi, hxy, hrec]
+        rw [hstep]
+        lia
+      · have hi' : txtLen ≤ i := by lia
+        simp [kmpSearchLoop, hi']
+
 theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
     (buildLPS pat).time Comparison.natCost ≤ 2 * pat.length - 3 := by
   cases pat with
@@ -765,6 +790,35 @@ theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List 
           have := by simpa using (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: y :: ys)
                 txt ((buildLPS (x :: y :: ys)).eval Comparison.natCost) [])
           lia
+
+theorem kmpSearchPositions_time_complexity_lower_bound [DecidableEq α] [Nontrivial α]
+    (m n : ℕ) :
+    ∃ (pat : List α) (txt : List α), pat.length = m + 1 ∧ txt.length = n ∧
+      (kmpSearchPositions pat txt).time Comparison.natCost = txt.length + (2 * pat.length - 3) := by
+  obtain ⟨x, y, hxy⟩ := exists_pair_ne α
+  cases m with
+  | zero =>
+      refine ⟨[x], List.replicate n y, by simp, by simp, ?_⟩
+      have hsearch :
+          (kmpSearchLoop (2 * n) 0 0 [x] (List.replicate n y) [0] []).time
+          Comparison.natCost = n := by
+        simpa using
+          kmpSearchLoop_head_mismatch_replicate_time (x := y) (y := x) hxy.symm
+            (fuel := 2 * n) (i := 0) (patTail := []) (txtLen := n) (lps := [0]) (acc := []) (by lia)
+      simp [kmpSearchPositions, buildLPS, buildLPSLoop, Cslib.FreeM.bind_eq_bind, hsearch]
+  | succ m =>
+      refine ⟨List.replicate (m + 1) y ++ [x], List.replicate n x, by simp, by simp, ?_⟩
+      have hbuild :
+          (buildLPS (List.replicate (m + 1) y ++ [x])).time Comparison.natCost =
+          2 * (m + 1) - 1 := by
+        simpa using buildLPS_replicate_append_singleton_time (x := x) (y := y) hxy (m + 1)
+      have hsearch :=
+        kmpSearchLoop_head_mismatch_replicate_time (x := x) (y := y) hxy
+          (fuel := 2 * n) (i := 0) (patTail := List.replicate m y ++ [x]) (txtLen := n)
+          (lps := (buildLPS (List.replicate (m + 1) y ++ [x])).eval Comparison.natCost)
+          (acc := []) (by lia)
+      simp [kmpSearchPositions, Cslib.FreeM.bind_eq_bind, time_bind]
+      grind
 
 end TimeComplexity
 
