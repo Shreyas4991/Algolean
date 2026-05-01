@@ -84,12 +84,7 @@ The indices are returned in increasing order.
 def naivePatternSearchFrom (pat txt : List α) (i : Nat) : Prog (Comparison α) (List Nat) := do
   match pat with
   | [] =>
-      match txt with
-      | [] =>
-          return []
-      | _ :: ts =>
-          let rest ← naivePatternSearchFrom pat ts (i + 1)
-          return i :: rest
+      return (List.range txt.length).map (i + ·)
   | _ :: _ =>
       if pat.length ≤ txt.length then
         match txt with
@@ -160,8 +155,7 @@ theorem naivePatternSearch_eval [BEq α] (pat txt : List α) :
     | cons t ts ih =>
         cases pat with
         | nil =>
-            simp [naivePatternSearchFrom, patternSearchAll_cons,
-              ih, Nat.add_left_comm, Nat.add_comm]
+            simp [naivePatternSearchFrom, PatternSearchAll]
         | cons p ps =>
             by_cases hlen : (p :: ps).length ≤ (t :: ts).length
             · have hlen' : ps.length ≤ ts.length := by simpa using hlen
@@ -205,7 +199,7 @@ theorem naivePatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List 
     | cons t ts ih =>
         cases pat with
         | nil =>
-            simpa [naivePatternSearchFrom, Prog.time_bind] using ih (i + 1)
+            simp [naivePatternSearchFrom]
         | cons p ps =>
             by_cases hlen : (p :: ps).length ≤ (t :: ts).length
             · have hlen' : ps.length ≤ ts.length := by simpa using hlen
@@ -240,7 +234,7 @@ theorem naivePatternSearch_time_complexity_lower_bound [BEq α] [LawfulBEq α] [
     | zero => cases m <;> simp [naivePatternSearchFrom, List.replicate]
     | succ n ih =>
         cases m with
-        | zero => simpa [naivePatternSearchFrom, List.replicate, Prog.time_bind] using ih (i+1) 0
+        | zero => simp [naivePatternSearchFrom, List.replicate]
         | succ m =>
             by_cases hlen : m ≤ n
             · let pat' := List.replicate (m + 1) x
