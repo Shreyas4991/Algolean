@@ -117,11 +117,9 @@ section Correctness
 
 theorem prefixMatch_eval [BEq α] (pat txt : List α) :
     (prefixMatch pat txt).eval Comparison.natCost = pat.isPrefixOf txt := by
-  induction pat generalizing txt with
-  | nil => simp [prefixMatch]
-  | cons p ps ih =>
-      cases txt <;>
-      simp [prefixMatch]
+  induction pat generalizing txt <;>
+    cases txt <;>
+      simp_all [prefixMatch];
       grind
 
 private lemma isPrefixOf_eq_false_of_length_lt [BEq α] :
@@ -190,14 +188,10 @@ theorem prefixMatch_time_complexity_lower_bound [BEq α] [LawfulBEq α] [Nonempt
     (m n : ℕ) : ∃ pat txt : List α, pat.length = m ∧ txt.length = n ∧
     (prefixMatch pat txt).time Comparison.natCost = Nat.min pat.length txt.length := by
   obtain ⟨x⟩ := ‹Nonempty α›
-  have hrep : (prefixMatch (List.replicate m x) (List.replicate n x)).time Comparison.natCost =
-      Nat.min m n := by
-    induction n generalizing m <;>
-      cases m <;>
-        simp_all [List.replicate, prefixMatch, Nat.add_comm]
-  use List.replicate m x, List.replicate n x
-  split_ands <;>
-    simp_all
+  refine ⟨.replicate m x, .replicate n x, by simp, by simp, ?_⟩
+  induction n generalizing m <;>
+    cases m <;>
+      simp_all [List.replicate, prefixMatch, Nat.add_comm]
 
 theorem naivePatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (naivePatternSearch pat txt).time Comparison.natCost ≤
@@ -218,19 +212,16 @@ theorem naivePatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List 
               have htime : (naivePatternSearchFrom (p :: ps) (t :: ts) i).time Comparison.natCost =
                   (prefixMatch (p :: ps) (t :: ts)).time Comparison.natCost +
                   (naivePatternSearchFrom (p :: ps) ts (i + 1)).time Comparison.natCost := by
-                simp [naivePatternSearchFrom, Prog.time_bind, hlen']
-                split_ifs <;> simp
-              have hsucc : (t :: ts).length + 1 - (p :: ps).length =
+                simp [naivePatternSearchFrom, Prog.time_bind, hlen']; split_ifs <;> simp
+              have hlens : (t :: ts).length + 1 - (p :: ps).length =
                   (ts.length + 1 - (p :: ps).length) + 1 := by
                 simpa using Nat.succ_sub hlen
-              rw [htime]
+              rw [htime, hlens]
               convert Nat.add_le_add
                   ((prefixMatch_time_complexity_upper_bound (p :: ps) (t :: ts)).trans
                   (Nat.min_le_left _ _)) (ih (i + 1)) using 1
-              rw [hsucc, Nat.mul_succ, Nat.add_comm]
-            · have hlen' : ¬ ps.length ≤ ts.length := by
-                simpa using hlen
-              simp [naivePatternSearchFrom, hlen']
+              rw [Nat.mul_succ, Nat.add_comm]
+            · simp [naivePatternSearchFrom, (by simpa using hlen : ¬ ps.length ≤ ts.length)]
   simpa [naivePatternSearch] using hfrom 0
 
 theorem naivePatternSearch_time_complexity_lower_bound [BEq α] [LawfulBEq α] [Nonempty α]
@@ -238,35 +229,21 @@ theorem naivePatternSearch_time_complexity_lower_bound [BEq α] [LawfulBEq α] [
     (naivePatternSearch pat txt).time Comparison.natCost =
     pat.length * (txt.length + 1 - pat.length) := by
   obtain ⟨x⟩ := ‹Nonempty α›
-  have hprefix :
-      ∀ m n,
-        let pat := List.replicate m x
-        let txt := List.replicate n x
-        (prefixMatch pat txt).time Comparison.natCost = Nat.min m n := by
-    intro m n
-    simp only
-    induction n generalizing m <;>
-      cases m <;>
-        simp_all [List.replicate, prefixMatch, Nat.add_comm]
-  have hfrom :
-      ∀ i m n,
-        let pat := List.replicate m x
-        let txt := List.replicate n x
-        (naivePatternSearchFrom pat txt i).time Comparison.natCost = m * (n + 1 - m) := by
+  have hprefix : ∀ m n, (prefixMatch (List.replicate m x) (List.replicate n x)).time
+      Comparison.natCost = Nat.min m n := by
+    intro m n; induction n generalizing m <;> cases m <;>
+      simp_all [List.replicate, prefixMatch, Nat.add_comm]
+  have hfrom : ∀ i m n, (naivePatternSearchFrom (List.replicate m x) (List.replicate n x) i).time
+      Comparison.natCost = m * (n + 1 - m) := by
     intro i m n
-    simp only
     induction n generalizing i m with
-    | zero =>
-        cases m <;>
-          simp [naivePatternSearchFrom, List.replicate]
+    | zero => cases m <;> simp [naivePatternSearchFrom, List.replicate]
     | succ n ih =>
         cases m with
-        | zero =>
-            simpa [naivePatternSearchFrom, List.replicate, Prog.time_bind] using ih (i + 1) 0
+        | zero => simpa [naivePatternSearchFrom, List.replicate, Prog.time_bind] using ih (i+1) 0
         | succ m =>
             by_cases hlen : m ≤ n
-            · have hlen' : (m + 1) ≤ (n + 1) := by simpa using Nat.succ_le_succ hlen
-              let pat' := List.replicate (m + 1) x
+            · let pat' := List.replicate (m + 1) x
               let txt'' := List.replicate n x
               let txt' := x :: txt''
               have htime :
@@ -275,28 +252,16 @@ theorem naivePatternSearch_time_complexity_lower_bound [BEq α] [LawfulBEq α] [
                   (naivePatternSearchFrom pat' txt'' (i + 1)).time Comparison.natCost := by
                 simp [pat', txt', txt'', naivePatternSearchFrom, List.replicate, hlen]
                 split_ifs <;> simp
-              have hsucc : (n + 1) + 1 - (m + 1) = (n + 1 - (m + 1)) + 1 := by
-                simpa using Nat.succ_sub hlen'
-              have hprefix' :
-                  (prefixMatch pat' txt').time Comparison.natCost = Nat.min (m + 1) (n + 1) := by
-                simpa [pat', txt', txt''] using hprefix (m + 1) (n + 1)
-              have hih' :
-                  (naivePatternSearchFrom pat' txt'' (i + 1)).time Comparison.natCost =
-                    (m + 1) * (n + 1 - (m + 1)) := by
-                simpa [pat', txt''] using ih (i + 1) (m + 1)
-              have htime' :
-                  (naivePatternSearchFrom pat' txt' i).time Comparison.natCost =
-                    (prefixMatch pat' txt').time Comparison.natCost +
-                    (naivePatternSearchFrom pat' txt'' (i + 1)).time Comparison.natCost := by
-                simpa using htime
+              have := Nat.succ_sub (Nat.succ_le_succ hlen)
+              have := (by simpa [pat', txt', txt''] using hprefix (m+1) (n+1) :
+                (prefixMatch pat' txt').time Comparison.natCost = Nat.min (m+1) (n+1))
+              have := (by simpa [pat', txt''] using ih (i+1) (m+1) :
+                (naivePatternSearchFrom pat' txt'' (i+1)).time Comparison.natCost =
+                  (m+1) * (n+1 - (m+1)))
               simp_all [pat', txt', txt'', List.replicate, Nat.mul_succ, Nat.add_comm]
             · simp [naivePatternSearchFrom, List.replicate, hlen,
                 Nat.sub_eq_zero_of_le (Nat.succ_le_of_lt (Nat.not_le.mp hlen))]
-  let pat := List.replicate m x
-  let txt := List.replicate n x
-  use pat, txt
-  split_ands <;>
-    simp_all [pat, txt, naivePatternSearch]
+  exact ⟨.replicate m x, .replicate n x, by simp, by simp, by simp [naivePatternSearch, hfrom]⟩
 
 end TimeComplexity
 
