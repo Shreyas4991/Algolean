@@ -618,7 +618,7 @@ private lemma buildLPSLoop_time_le_bound [BEq α]
       if pos < pat.length then 2 * (pat.length - pos) + len - 1 else 0 := by
   induction fuel generalizing pos len lps with
   | zero =>
-      by_cases pos < pat.length <;> simp [buildLPSLoop]
+      simp [buildLPSLoop]
   | succ fuel ih =>
       by_cases hlt : pos < pat.length
       · have hlenPat : len < pat.length := lt_of_lt_of_le hlen hpos
