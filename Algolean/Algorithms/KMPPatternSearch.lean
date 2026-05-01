@@ -305,10 +305,8 @@ theorem buildLPS_eval [BEq α] [LawfulBEq α] (pat : List α) :
     obtain ⟨hlen, hentries⟩ := buildLPSLoop_correct
       (2 * ((x :: xs).length - 1)) 1 0 (x :: xs) lps0
       (by simp) (by simp) (by simp [lps0])
-      (by intro i hi
-          have hi0 : i = 0 := by lia
-          subst hi0
-          exact ⟨0, by simp [lps0], ⟨by lia, nofun⟩, fun l hl => by have := hl.1; lia⟩)
+      (by intro _ _
+          exact ⟨0, by simp_all [lps0], ⟨by lia, nofun⟩, fun l hl => by have := hl.1; lia⟩)
       ⟨⟨by lia, nofun⟩, fun m hm _ hm' => by grind⟩
     refine ⟨by simpa [buildLPS, lps0] using hlen, fun i hi => ?_⟩
     obtain ⟨_, hlps, hlong⟩ := hentries i hi
@@ -338,11 +336,10 @@ private lemma matchAt_of_prefixSuffix
     (pat txt : List α) (start n l : Nat)
     (hmatch : MatchAt pat txt start n)
     (hps : PrefixSuffixOf pat n l) :
-    MatchAt pat txt (start + (n - l)) l := by
-  intro k hk
-  calc txt[start + (n - l) + k]? = txt[start + (n - l + k)]? := by rw [Nat.add_assoc]
-    _ = pat[n - l + k]? := by simpa using hmatch (n - l + k) (by have := hps.1; lia)
-    _ = pat[k]? := (hps.2 k hk).symm
+    MatchAt pat txt (start + (n - l)) l := fun k hk => by
+  have : start + (n - l) + k = start + (n - l + k) := by grind
+  simp only [this]
+  exact (hmatch _ (by grind [hps.1])).trans (hps.2 k hk).symm
 
 private lemma prefixSuffix_of_overlap
     (pat txt : List α) (s t n : Nat)
@@ -362,9 +359,8 @@ private lemma no_occurrence_between_full_match_and_fallback [BEq α] [LawfulBEq 
     (pat txt : List α) (s l : Nat)
     (hfull : MatchAt pat txt s pat.length)
     (hlong : LongestPrefixSuffixOf pat pat.length l) :
-    ∀ t, s < t → t < s + (pat.length - l) → pat.isPrefixOf (txt.drop t) = false := by
-  intro t hst htl
-  exact Bool.eq_false_iff.mpr fun ht =>
+    ∀ t, s < t → t < s + (pat.length - l) → pat.isPrefixOf (txt.drop t) = false :=
+  fun t hst htl => Bool.eq_false_iff.mpr fun ht =>
     absurd (hlong.2 _ (prefixSuffix_of_overlap pat txt s t _ le_rfl hfull
       ((isPrefixOf_drop_eq_true_iff_matchAt pat txt t).1 ht) hst (by lia))) (by lia)
 
@@ -374,14 +370,13 @@ private lemma no_occurrence_between_partial_and_fallback [BEq α] [LawfulBEq α]
     (hmatch : MatchAt pat txt s j)
     (hlong : LongestPrefixSuffixOf pat j l)
     (hmis : pat[j]? ≠ txt[s + j]?) :
-    ∀ t, s ≤ t → t < s + (j - l) → pat.isPrefixOf (txt.drop t) = false := by
-  intro t hst htl
-  apply Bool.eq_false_iff.mpr; intro ht
-  have hocc := (isPrefixOf_drop_eq_true_iff_matchAt pat txt t).1 ht
-  rcases eq_or_lt_of_le hst with rfl | hst'
-  · exact hmis (hocc j hj).symm
-  · exact absurd (hlong.2 _ (prefixSuffix_of_overlap pat txt s t j
-      (Nat.le_of_lt hj) hmatch hocc hst' (by lia))) (by lia)
+    ∀ t, s ≤ t → t < s + (j - l) → pat.isPrefixOf (txt.drop t) = false :=
+  fun t hst htl => Bool.eq_false_iff.mpr fun ht => by
+    have hocc := (isPrefixOf_drop_eq_true_iff_matchAt pat txt t).1 ht
+    rcases eq_or_lt_of_le hst with rfl | hst'
+    · exact hmis (hocc j hj).symm
+    · exact absurd (hlong.2 _ (prefixSuffix_of_overlap pat txt s t j
+        (Nat.le_of_lt hj) hmatch hocc hst' (by lia))) (by lia)
 
 private lemma acc_shift_no_matches
     (P : Nat → Bool) (acc : List Nat) (s u : Nat)
@@ -413,6 +408,13 @@ private abbrev KmpSearchLoopIH [BEq α] [LawfulBEq α]
     (kmpSearchLoop fuel i j pat txt lps acc).eval Comparison.natCost =
       (List.Ico 0 txt.length).filter fun s => pat.isPrefixOf (txt.drop s)
 
+private lemma extendMatch {pat txt : List α} {s j : Nat}
+    (hmatch : MatchAt pat txt s j) (hlast : txt[s + j]? = pat[j]?) :
+    MatchAt pat txt s (j + 1) := fun k hk => by
+  obtain hk' | rfl := lt_or_eq_of_le (Nat.le_of_lt_succ hk)
+  · exact hmatch k hk'
+  · exact hlast
+
 private lemma kmpSearchLoop_correct_match_full [BEq α] [LawfulBEq α]
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat)
     (hpot : 2 * (txt.length - i) + j ≤ fuel + 1)
@@ -431,42 +433,36 @@ private lemma kmpSearchLoop_correct_match_full [BEq α] [LawfulBEq α]
       acc.reverse = (List.Ico 0 (i - j)).filter fun s => pat.isPrefixOf (txt.drop s)) :
     (kmpSearchLoop (fuel + 1) i j pat txt lps acc).eval Comparison.natCost =
       (List.Ico 0 txt.length).filter fun s => pat.isPrefixOf (txt.drop s) := by
-  have hlast : txt[(i - j) + j]? = pat[j]? := by simp_all
-  have hmatch' : MatchAt pat txt (i - j) (j + 1) := by
-    intro k hk
-    obtain hk' | rfl := lt_or_eq_of_le (Nat.le_of_lt_succ hk)
-    · exact hmatch k hk'
-    · exact hlast
   let l := lps[j]'(by simpa [hlen] using hj)
   have hlong : LongestPrefixSuffixOf pat pat.length l := by simpa [hfull] using hlps j hj
-  have hfullMatch : MatchAt pat txt (i - j) pat.length := by simpa [hfull] using hmatch'
+  have hfullMatch : MatchAt pat txt (i - j) pat.length := by
+    simpa [hfull] using extendMatch hmatch (by simp_all)
   have hlj : l ≤ j := by grind [hlong.1.1]
-  have hstart : (i + 1) - (j + 1) = i - j := by lia
   have hshift : (i - j) + (pat.length - l) = (i + 1) - l := by lia
   have hsu : i - j < (i + 1) - l := by lia
   have htrue : pat.isPrefixOf (txt.drop (i - j)) = true :=
     (isPrefixOf_drop_eq_true_iff_matchAt pat txt (i - j)).2 hfullMatch
-  have hfalse : ∀ t, i - j < t → t < (i + 1) - l → pat.isPrefixOf (txt.drop t) = false := by
-    intro t ht1 ht2
-    exact no_occurrence_between_full_match_and_fallback pat txt (i - j)
+  have hfalse : ∀ t, i - j < t → t < (i + 1) - l → pat.isPrefixOf (txt.drop t) = false :=
+    fun t ht1 ht2 => no_occurrence_between_full_match_and_fallback pat txt (i - j)
       l hfullMatch hlong t ht1 (by simpa [hshift] using ht2)
   have hacc' : (((i + 1) - (j + 1)) :: acc).reverse =
         (List.Ico 0 ((i + 1) - l)).filter fun s => pat.isPrefixOf (txt.drop s) := by
     simp_all [← List.Ico.append_consecutive (Nat.zero_le (i - j)) (Nat.le_of_lt hsu),
       List.Ico.eq_cons hsu, Nat.add_comm]
+    grind
   have hrec := ih (i + 1) l (((i + 1) - (j + 1)) :: acc)
     (by lia) (by lia) hlong.1.1 (by lia)
     (by simpa [hshift] using
       matchAt_of_prefixSuffix pat txt (i - j) pat.length l hfullMatch hlong.1)
     hacc'
   have hjEq : j = pat.length - 1 := by lia
-  have hfull' : pat.length - 1 + 1 = pat.length := by lia
   have hcmp' : (txt[i]'hit == pat[pat.length - 1]'(by lia)) = true := by simp [hjEq, hcmp]
-  have hpat' : pat[pat.length - 1]? = some (pat[pat.length - 1]'(by lia)) :=
-    getElem?_pos pat (pat.length - 1) (by lia)
   have hlpsj : lps[j]? = some l := getElem?_pos lps j (by simpa [hlen] using hj)
   have hlpsj' : lps[pat.length - 1]? = some l := by simpa [hjEq] using hlpsj
-  simpa [kmpSearchLoop, hit, hjEq, hfull', hcmp', hpat', hlpsj'] using hrec
+  have hpatlen : pat.length - 1 + 1 = pat.length := by grind
+  have hpat' : pat[pat.length - 1]? = some (pat[pat.length - 1]'(by lia)) :=
+    getElem?_pos pat (pat.length - 1) (by lia)
+  simpa [kmpSearchLoop, hit, hjEq, hpatlen, hcmp', hpat', hlpsj'] using hrec
 
 private lemma kmpSearchLoop_correct_match_partial [BEq α] [LawfulBEq α]
     (fuel i j : Nat) (pat txt : List α) (lps acc : List Nat)
@@ -542,18 +538,15 @@ private lemma kmpSearchLoop_correct_mismatch_fallback [BEq α] [LawfulBEq α]
   let l := lps[j - 1]'(by simpa [hlen] using hj1)
   have hlong : LongestPrefixSuffixOf pat j l := by
     simpa [Nat.sub_add_cancel (by lia : 1 ≤ j)] using hlps (j - 1) hj1
-  have hmis' : pat[j]? ≠ txt[(i - j) + j]? := by grind
-  have hacc' : acc.reverse = (List.Ico 0 (i - l)).filter fun s => pat.isPrefixOf (txt.drop s) :=
-    acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
+  have hrec := ih i l acc (by grind [hlong.1.1]) hi
+    (lt_trans hlong.1.1 hj) (Nat.le_trans (Nat.le_of_lt hlong.1.1) hji)
+    (by grind [matchAt_of_prefixSuffix pat txt (i - j) j l hmatch hlong.1, hlong.1.1])
+    (acc_shift_no_matches (P := fun s => pat.isPrefixOf (txt.drop s))
       acc (i - j) (i - l) hacc
       (Nat.sub_le_sub_left (Nat.le_of_lt hlong.1.1) i)
       (fun t ht1 ht2 =>
         no_occurrence_between_partial_and_fallback pat txt (i - j) j l
-          hj hmatch hlong hmis' t ht1 (by lia))
-  have hrec := ih i l acc (by grind [hlong.1.1]) hi
-    (lt_trans hlong.1.1 hj) (Nat.le_trans (Nat.le_of_lt hlong.1.1) hji)
-    (by grind [matchAt_of_prefixSuffix pat txt (i - j) j l hmatch hlong.1, hlong.1.1])
-    hacc'
+          hj hmatch hlong (by grind) t ht1 (by lia)))
   simp_all [kmpSearchLoop, l]
 
 private lemma kmpSearchLoop_correct [BEq α] [LawfulBEq α]
@@ -663,28 +656,6 @@ private lemma kmpSearchLoop_singleton_time [BEq α]
       simp [kmpSearchLoop, hi] <;>
       grind
 
-private lemma kmpSearchLoop_head_mismatch_replicate_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
-    ∀ fuel i (patTail : List α) (txtLen : Nat) (lps acc : List Nat),
-      txtLen - i ≤ fuel →
-      (kmpSearchLoop fuel i 0 (y :: patTail) (List.replicate txtLen x) lps acc).time
-        Comparison.natCost = txtLen - i := by
-  intro fuel i patTail txtLen lps acc hfuel
-  induction fuel generalizing i patTail txtLen lps acc with
-  | zero =>
-      have hi : txtLen ≤ i := by lia
-      simp [kmpSearchLoop, hi]
-  | succ fuel ih =>
-      by_cases hi : i < txtLen
-      · have hrec := ih (i + 1) patTail txtLen lps acc (by lia)
-        have hstep :
-            (kmpSearchLoop (fuel + 1) i 0 (y :: patTail) (List.replicate txtLen x) lps acc).time
-              Comparison.natCost = 1 + (txtLen - (i + 1)) := by
-          simp [kmpSearchLoop, hi, hxy, hrec]
-        rw [hstep]
-        lia
-      · have hi' : txtLen ≤ i := by lia
-        simp [kmpSearchLoop, hi']
-
 theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
     (buildLPS pat).time Comparison.natCost ≤ 2 * pat.length - 3 := by
   cases pat with
@@ -695,13 +666,11 @@ theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
       | nil =>
           simp [buildLPS, buildLPSLoop]
       | cons y ys =>
-          have hlps0 :
-              ∀ i, i < 1 →
-                ((List.replicate (x :: y :: ys).length 0)[i]?).getD 0 < i + 1 := by simp
           simpa [buildLPS] using
             buildLPSLoop_time_le_bound (fuel := 2 * ((x :: y :: ys).length - 1)) (pos := 1)
               (len := 0) (pat := x :: y :: ys)
-              (lps := List.replicate (x :: y :: ys).length 0) (by simp) (by simp) (by simp) hlps0
+              (lps := List.replicate (x :: y :: ys).length 0) (by simp) (by simp) (by simp)
+              (by simp)
 
 private lemma buildLPSLoop_final_fallback_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
     ∀ extra {r k}, k < r →
@@ -730,24 +699,19 @@ private lemma buildLPSLoop_replicate_append_singleton_time
         buildLPSLoop_final_fallback_time (x := x) (y := y) hxy extra (r := k + 1) (k := k)
           (by simp)
   | succ m ih =>
-      have htail :
-          (List.replicate (m + 2) 0).set 0 (k + 1) = (k + 1) :: List.replicate (m + 1) 0 := by
-        simp [List.replicate]
-      have hstate :
-          List.range (k + 1) ++ (k + 1) :: List.replicate (m + 1) 0 =
-            List.range (k + 2) ++ List.replicate (m + 1) 0 := by
-        simp [List.range_succ, List.append_assoc]
-      have hpatPos : (List.replicate (k + (m + 1) + 1) y ++ [x])[k + 1]? = some y := by
-        grind
-      have hpatLen : (List.replicate (k + (m + 1) + 1) y ++ [x])[k]? = some y := by
-        grind
+      have hpatPos : (List.replicate (k + (m + 1) + 1) y ++ [x])[k + 1]? = some y := by grind
+      have hpatLen : (List.replicate (k + (m + 1) + 1) y ++ [x])[k]? = some y := by grind
       rw [buildLPSLoop, if_pos (by simp), hpatPos, hpatLen]
-      simpa [htail, hstate, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm, two_mul] using
+      have hreplicate: (List.replicate (m + 2) 0).set 0 (k + 1) =
+              (k + 1) :: List.replicate (m + 1) 0 := by simp [List.replicate]
+      have hreplicate' : List.range (k + 1) ++ (k + 1) :: List.replicate (m + 1) 0 =
+              List.range (k + 2) ++ List.replicate (m + 1) 0 := by
+            simp [List.range_succ, List.append_assoc]
+      simpa [hreplicate, hreplicate', Nat.add_assoc, Nat.add_left_comm, Nat.add_comm, two_mul] using
         congrArg Nat.succ (ih extra (k + 1))
 
 private lemma buildLPS_replicate_append_singleton_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
-    ∀ n,
-      (buildLPS (List.replicate n y ++ [x])).time Comparison.natCost = 2 * n - 1 := by
+    ∀ n, (buildLPS (List.replicate n y ++ [x])).time Comparison.natCost = 2 * n - 1 := by
   intro n
   cases n with
   | zero =>
@@ -758,7 +722,7 @@ private lemma buildLPS_replicate_append_singleton_time [DecidableEq α] {x y : �
 
 theorem buildLPS_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n : ℕ) :
     ∃ pat : List α, pat.length = n ∧
-      (buildLPS pat).time Comparison.natCost = 2 * n - 3 := by
+      (buildLPS pat).time Comparison.natCost = 2 * pat.length - 3 := by
   obtain ⟨x, y, hxy⟩ := exists_pair_ne α
   cases n with
   | zero =>
@@ -777,11 +741,8 @@ theorem kmpSearchPositions_time_complexity_upper_bound [BEq α] (pat txt : List 
   | cons x xs =>
       cases xs with
       | nil =>
-          have hsingle :
-              (kmpSearchLoop (2 * txt.length) 0 0 [x] txt [0] []).time Comparison.natCost ≤
-                txt.length := by
-            simpa using le_of_eq <|
-              kmpSearchLoop_singleton_time (fuel := 2 * txt.length) (i := 0) x txt [] (by lia)
+          have hsingle :=
+            kmpSearchLoop_singleton_time (fuel := 2 * txt.length) (i := 0) x txt [] (by lia)
           simp [kmpSearchPositions, buildLPS, buildLPSLoop, Cslib.FreeM.bind_eq_bind]
           grind
       | cons y ys =>
@@ -866,7 +827,7 @@ private lemma kmpSearchLoop_yx_prefix_replicate_time [DecidableEq α] {x y : α}
 
 theorem kmpSearchPositions_time_complexity_lower_bound [DecidableEq α] [Nontrivial α]
     (m n : ℕ) :
-    ∃ (pat : List α) (txt : List α), pat.length = m + 3 ∧ txt.length = n ∧
+    ∃ (pat txt : List α), pat.length = m + 3 ∧ txt.length = n ∧
       2 * (txt.length + pat.length) - 5 ≤
         (kmpSearchPositions pat txt).time Comparison.natCost := by
   obtain ⟨x, y, hxy⟩ := exists_pair_ne α
