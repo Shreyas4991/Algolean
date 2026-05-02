@@ -23,9 +23,9 @@ the `SortOps` model.
 
 ## Main results
 
-- `mergeSort_eval`: `mergeSort` evaluates identically to the priva.
+- `mergeSort_eval`: `mergeSort` evaluates identically to the private `mergeSortNaive`.
 - `mergeSort_sorted` :  `mergeSort` outputs a sorted list.
-- `mergeSort_perm` : The output of `mergeSort` is a permutation of the input list
+- `mergeSort_perm` : The output of `mergeSort` is a permutation of the input list.
 - `mergeSort_complexity` : `mergeSort` takes at most n * ⌈log n⌉ comparisons.
 - `mergeSort_stable` : `mergeSort` is a stable sorting algorithm.
 
