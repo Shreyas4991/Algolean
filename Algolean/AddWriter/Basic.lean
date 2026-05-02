@@ -20,12 +20,12 @@ public import Mathlib.Algebra.Group.Defs
 
 ## Notation
 - **`✓`** : A call to tell, see `tell`.
-- **`⟪tm⟫`** : Extract the pure value from a `AddWriter` computation (notation for `tm.ret`)
+- **`⟪tm⟫`** : Extract the pure value from an `AddWriter` computation (notation for `tm.ret`).
 
 ## Notes on Authorship and Terminology
 This file was authored by Sorrachai Yingchareonthawornchai in the CSLib repository.
 It was named the Time monad `TimeM`. The standard name for this concept is the Writer Monad.
-Since Lean/Mathlib make a distinction between additive and multiplicative algebraic structures,
+Since Lean/Mathlib makes a distinction between additive and multiplicative algebraic structures,
 and Mathlib already contains a Writer monad, we call this structure `AddWriter`.
 
 ## References
