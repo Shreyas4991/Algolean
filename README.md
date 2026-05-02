@@ -7,13 +7,10 @@ Algolean is a library of algorithms and complexity theory, defined broadly to in
 * "Algo" + "Lean" : A library of algorithms and complexity theory in lean
 * "Algol" + "ean" (pronounced like "ene") : To pay homage to Algol which motivates a lot of modern algorithmic pseudocode, and whose simplicity this framework hopes to mimic (hence the "ene").
 
-## List of contributors
-(so far)
 
-* Shreyas Srinivas - Maintainer and main author.
-* Tanner Duve
-* Eric Wieser
 
 ## Acknowledgements
-For timing it builds on top of the Writer monad `AddWriter` that was proposed in CSLib as the TimeM model by Sorrachai Yingchareonthawornchai and whose API was perfected by Eric Wieser. 
+For timing we build on top of the Writer monad `AddWriter` that was proposed in CSLib as the TimeM model by Sorrachai Yingchareonthawornchai and whose API was perfected by Eric Wieser. 
+
+Further, Eric Wieser substantially assisted with the improvement of the implementation through extensive and detailed PR reviews. 
 
