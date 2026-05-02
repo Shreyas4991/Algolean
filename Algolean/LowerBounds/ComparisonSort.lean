@@ -289,7 +289,7 @@ lemma hDecisionTreeLower
       (traceCode_injective P hCorrect))
 
 /--
-GPT suggested to pick an abitrary hidden permutation of `Fin n` and generate a list from it
+GPT suggested to pick an arbitrary hidden permutation of `Fin n` and generate a list from it
 and then prove that for this, sorting takes `n /2 * (Nat.log 2 (n / 2))`
 -/
 theorem cmpSort_lower_bound
