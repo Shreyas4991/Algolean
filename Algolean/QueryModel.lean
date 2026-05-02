@@ -36,7 +36,7 @@ and complexity of algorithms in lean. To specify an algorithm, one must:
    So you can't supply instances for the index type there.
 2. Define a record of the  `Model Q C` structure that specifies the evaluation and time (cost) of
    each query.
-3. Write your algorithm as a monadic program in `Prog Q α`. With sufficient type anotations
+3. Write your algorithm as a monadic program in `Prog Q α`. With sufficient type annotations
    each query `q : Q` is automatically lifted into `Prog Q α`.
 
 ## Tags
