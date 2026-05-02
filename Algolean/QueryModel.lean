@@ -34,7 +34,7 @@ and complexity of algorithms in lean. To specify an algorithm, one must:
    on which the index type depends. This way, any instance parameters of `α` can be used easily
    for the output types. The signatures of `Model.evalQuery` and `Model.cost` are fixed.
    So you can't supply instances for the index type there.
-2. Define a record of the  `Model Q C` structure that specifies the evaluation and time (cost) of
+2. Define a record of the `Model Q C` structure that specifies the evaluation and time (cost) of
    each query.
 3. Write your algorithm as a monadic program in `Prog Q α`. With sufficient type annotations
    each query `q : Q` is automatically lifted into `Prog Q α`.
