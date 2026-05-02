@@ -28,9 +28,9 @@ the `ListSearch` model.
 
 - `listLinearSearch_eval`: `insertOrd` evaluates identically to `List.contains`.
 - `listLinearSearchM_time_complexity_upper_bound` : `linearSearch` takes at most `n`
-  comparison operations
+  comparison operations.
 - `listLinearSearchM_time_complexity_lower_bound` : There exist lists on which `linearSearch` needs
-  `n` comparisons
+  `n` comparisons.
 -/
 namespace Algolean
 

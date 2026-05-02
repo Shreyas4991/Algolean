@@ -15,7 +15,7 @@ public import Mathlib.Tactic.NormNum
 
 In this file we state and prove the correctness and complexity of insertion sort in lists under
 the `SortOpsInsertHead` model. This insertionSort evaluates identically to the upstream version of
-`List.insertionSort`
+`List.insertionSort`.
 --
 
 ## Main Definitions
