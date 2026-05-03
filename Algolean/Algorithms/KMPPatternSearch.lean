@@ -36,7 +36,7 @@ correctness and upper/lower bounds for equality comparisons in the `Comparison` 
 - `buildLPS_time_complexity_upper_bound`: `buildLPS` takes at most
   `2 * pat.length - 3` comparisons.
 - `buildLPS_time_complexity_lower_bound`: for every pattern length `n`, there exists a pattern
-  on which `buildLPS` takes exactly `2 * n - 3` comparisons.
+  on which `buildLPS` takes exactly `2 * pat.length - 3` comparisons.
 - `kmpPatternSearch_time_complexity_upper_bound`: `kmpPatternSearch` takes at most
   `2 * (txt.length + pat.length) - 3` comparisons.
 - `kmpPatternSearch_time_complexity_lower_bound`: for every `m, n`, there exist a pattern of
