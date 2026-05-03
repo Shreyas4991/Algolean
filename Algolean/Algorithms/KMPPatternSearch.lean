@@ -268,26 +268,23 @@ private lemma buildLPSLoop_correct
             have hs' : SearchInvariant pat pos len' := by
               have hprefix : PrefixSuffixOf pat pos len' := by
                 refine ⟨lt_trans hlong'.1.1 hs.1.1, fun j hj => ?_⟩
-                calc pat[j]? = pat[len - len' + j]? := hlong'.1.2 j hj
-                  _ = pat[pos - len + (len - len' + j)]? :=
-                      hs.1.2 _ (by have := hlong'.1.1; lia)
-                  _ = pat[pos - len' + j]? := by
-                      congr 1; have := hlong'.1.1; have := hs.1.1; lia
+                have := hlong'.1.2 j hj
+                have := hs.1.2 (len - len' + j) (by have := hlong'.1.1; lia)
+                grind [hlong'.1.1, hs.1.1]
               refine ⟨hprefix, fun m hm hmpos hm' => ?_⟩
               rcases lt_trichotomy m len with hml | rfl | hml
               · exact fun _ => absurd (hlong'.2 m (by
                     refine ⟨hml, fun j hj => ?_⟩
-                    calc pat[j]? = pat[pos - m + j]? := hm'.2 j hj
-                      _ = pat[pos - len + (len - m + j)]? := by congr 1; have := hs.1.1; lia
-                      _ = pat[len - m + j]? := (hs.1.2 _ (by lia)).symm)) (by lia)
+                    have := hm'.2 j hj
+                    have := (hs.1.2 (len - m + j) (by lia)).symm
+                    grind [hs.1.1])) (by lia)
               · exact hmis
               · exact hs.2 m (by lia) hmpos hm'
             have hrec := ih pos len' lps
               (by have := hlong'.1.1; lia) hpos hlen hentries
               hs'
             simpa [buildLPSLoop, hpos', getElem?_pos pat pos hpos', getElem?_pos pat len hlen',
-              hcmp', hzero,
-              hlen''] using hrec
+              hcmp', hzero, hlen''] using hrec
       · obtain rfl : pos = pat.length := by lia
         simpa [buildLPSLoop, hlen, EntriesCorrect] using hentries
 
@@ -338,9 +335,9 @@ private lemma matchAt_of_prefixSuffix
     (hmatch : MatchAt pat txt start n)
     (hps : PrefixSuffixOf pat n l) :
     MatchAt pat txt (start + (n - l)) l := fun k hk => by
-  have : start + (n - l) + k = start + (n - l + k) := by grind
-  simp only [this]
-  exact (hmatch _ (by grind [hps.1])).trans (hps.2 k hk).symm
+  have := hmatch (n - l + k) (by grind [hps.1])
+  have := (hps.2 k hk).symm
+  grind
 
 private lemma prefixSuffix_of_overlap
     (pat txt : List α) (s t n : Nat)
@@ -351,10 +348,9 @@ private lemma prefixSuffix_of_overlap
     (ht : t ≤ s + n) :
     PrefixSuffixOf pat n (n - (t - s)) := by
   refine ⟨by lia, fun k hk => ?_⟩
-  calc pat[k]? = txt[t + k]? := by simpa using (hocc k (by lia)).symm
-    _ = txt[s + (t - s + k)]? := by lia
-    _ = pat[t - s + k]? := by simpa using hmatch (t - s + k) (by lia)
-    _ = pat[n - (n - (t - s)) + k]? := by lia
+  have := (hocc k (by lia)).symm
+  have := hmatch (t - s + k) (by lia)
+  grind
 
 private lemma no_occurrence_between_full_match_and_fallback [BEq α] [LawfulBEq α]
     (pat txt : List α) (s l : Nat)
