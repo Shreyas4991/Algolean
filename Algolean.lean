@@ -13,6 +13,7 @@ public import Algolean.LowerBounds.ComparisonSort
 public import Algolean.Models.Circuits
 public import Algolean.Models.Comparison
 public import Algolean.Models.FanInTwoCircuits
+public import Algolean.Models.GraphModels
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
 public import Algolean.Models.RandomSample
@@ -20,4 +21,5 @@ public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
+public import Algolean.QueryComposition
 public import Algolean.QueryModel
