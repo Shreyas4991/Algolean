@@ -37,8 +37,7 @@ composing their models `m₁ : Model Q₁ c₁` and `m₂ : Model Q₂ c₂`.
 The cost type of the composite model is the product type `c₁ × c₂`
 -/
 def compositeModel [AddZero c₁] [AddZero c₂]
-    (m₁ : Model Q₁ c₁)
-    (m₂ : Model Q₂ c₂) :
+    (m₁ : Model Q₁ c₁) (m₂ : Model Q₂ c₂) :
     Model (compositeQuery Q₁ Q₂) (c₁ × c₂) where
   evalQuery
     | .inl q => m₁.evalQuery q
@@ -46,6 +45,15 @@ def compositeModel [AddZero c₁] [AddZero c₂]
   cost
     | .inl q => (m₁.cost q, 0)
     | .inr q => (0, m₂.cost q)
+
+def composeReductions
+    (r₁ : Reduction Q₁ Q₃)
+    (r₂ : Reduction Q₂ Q₃) :
+    Reduction (compositeQuery Q₁ Q₂) Q₃ where
+    reduce {α} (qcomp : (compositeQuery Q₁ Q₂ α)) :=
+      match qcomp with
+      | .inl q => r₁.reduce q
+      | .inr q => r₂.reduce q
 
 
 end Algorithms
