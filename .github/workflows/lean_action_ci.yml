@@ -35,8 +35,19 @@ jobs:
         run: |
           set -e
           bash .github/scripts/build_docs.sh
-      - name: Prepare documentation Pages artifact
-        if: github.event_name == 'push' && (github.ref == 'refs/head/main' || github.ref == 'refs/head/test-CI')
+      - name: Prepare documentation Pages artifact for test branch
+        if: github.event_name == 'push' && (github.ref == 'refs/head/fix-CI')
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/index.html
+          test -d docbuild/.lake/build/doc
+          rm -rf _site
+          mkdir -p _site/docs
+          cp -a docs/. _site/
+          cp -a docbuild/.lake/build/doc/. _site/docs/
+      - name: Prepare documentation Pages artifact for main branch
+        if: github.event_name == 'push' && (github.ref == 'refs/head/main' || github.ref == 'refs/head/fix-CI')
         shell: bash
         run: |
           set -euo pipefail
@@ -48,7 +59,7 @@ jobs:
           cp -a docbuild/.lake/build/doc/. _site/docs/
       - name: Upload documentation Pages artifact
         if: github.event_name == 'push' && (github.ref == 'refs/head/main' || github.ref == 'refs/head/test-CI')
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           name: documentation-pages
           path: _site
