@@ -31,39 +31,8 @@ jobs:
         run: |
           set -e
           lake exe mk_all --check --module
-      - name: Build project documentation
-        run: |
-          set -e
-          bash .github/scripts/build_docs.sh
-      - name: Prepare documentation Pages artifact for test branch
-        if: github.event_name == 'push' && (github.ref == 'refs/head/fix-CI')
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f docs/index.html
-          test -d docbuild/.lake/build/doc
-          rm -rf _site
-          mkdir -p _site/docs
-          cp -a docs/. _site/test/
-          cp -a docbuild/.lake/build/doc/. _site/test/docs/
-      - name: Prepare documentation Pages artifact for main branch
-        if: github.event_name == 'push' && (github.ref == 'refs/head/main')
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f docs/index.html
-          test -d docbuild/.lake/build/doc
-          rm -rf _site
-          mkdir -p _site/docs
-          cp -a docs/. _site/
-          cp -a docbuild/.lake/build/doc/. _site/docs/
-      - name: Upload documentation Pages artifact
-        if: github.event_name == 'push' && (github.ref == 'refs/head/main' || github.ref == 'refs/head/test-CI')
-        uses: actions/upload-pages-artifact@v4
-        with:
-          name: github-pages
-          path: _site
 
+  
   deploy-webpage:
     needs: ci-checks
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -80,4 +49,4 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
         with:
-          artifact_name: documentation-pages
+          artifact_name: github-pages
