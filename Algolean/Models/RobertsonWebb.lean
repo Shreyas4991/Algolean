@@ -42,7 +42,7 @@ structure Alloc (α Cake : Type) [MeasurableSpace Cake] where
   "subsets" of the cake -/
   alloc : α → Set Cake
   /-- The allocations of `alloc` are measurable sets -/
-  allocMeasurable : ∀ a : α, Measurable (alloc a)
+  allocMeasurable : ∀ a : α, MeasurableSet (alloc a)
 
 /-- An allocation instance combines a valuation function with an allocation -/
 structure AllocInstance (α Cake : Type) [MeasurableSpace Cake] where

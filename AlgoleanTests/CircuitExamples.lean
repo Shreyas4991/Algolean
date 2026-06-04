@@ -1,13 +1,14 @@
 /-
 Copyright (c) 2025 Shreyas Srinivas. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Shreyas Srinivas
+Authors: Shreyas Srinivas , Bashar Hamade
 -/
 
 module
 
 public import Algolean.Models.FanInTwoCircuits
 public import Mathlib
+public import Algolean.Models.Circuits
 
 /-!
 # Examples of Progs for Circuits
@@ -85,60 +86,101 @@ def exCircuit3 (x y : FanInTwoCircuit ℚ ℚ) : Prog (FanInTwoCircuit ℚ) ℚ 
 
 
 /-- An example circuit with `n` input parameters which are arbitrary circuits -/
-def CircAnd (n : ℕ) (x : Fin n → FanInTwoCircuit Bool Bool) : FanInTwoCircuit Bool Bool :=
-  match n with
-  | 0 => const true
-  | m + 1 =>
-      let x_head := x 0
-      let x_cons := CircAnd m (Fin.tail x)
-      mul x_head x_cons
+def CircAnd (n : ℕ) (x : Fin n → FanInTwoCircuit Bool Bool) : Prog (FanInTwoCircuit Bool) Bool :=
+  let rec do_CircAnd : (m : ℕ) → (Fin m → FanInTwoCircuit Bool Bool) → FanInTwoCircuit Bool Bool
+    | 0,     _  => const true
+    | m + 1, x  =>
+        let x_head := x 0
+        let x_cons := do_CircAnd m (Fin.tail x)
+        mul x_head x_cons
+  do_CircAnd n x
 
 /-- An execution of the circuit for a given input circuit vector -/
 def execCircAnd (x : Fin n → FanInTwoCircuit Bool Bool) : Prog (FanInTwoCircuit Bool) Bool := do
   CircAnd n x
 
-theorem CircAnd_size : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool Bool,
-    (CircAnd n x).circuitSize
+
+
+
+private lemma CircAnd_time_circuitSize (n : ℕ) (y : Fin n → FanInTwoCircuit Bool Bool) :
+    ((CircAnd n y).time fanInTwoCircModel).circuitSize =
+    (CircAnd.do_CircAnd n y).circuitSize := by
+  simp only [
+    CircAnd, FreeM.lift_def, Prog.time_liftBind, Prog.time_pure,
+    HAdd.hAdd, Add.add,
+  ]
+  simp only [fanInTwoCircModel_cost_circuitSize, circuitSize, subcircuits.eq_1, insert_empty_eq,
+    Finset.card_singleton, subcircuits.eq_2, subcircuits.eq_3, subcircuits.eq_4, Nat.add_eq,
+    Nat.add_eq_left]
+  rfl
+
+private lemma CircAnd_do_size : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool Bool,
+    (CircAnd.do_CircAnd n x).circuitSize
       ≤ 1 + 2 * n + (Fin.sum (FinVec.map FanInTwoCircuit.circuitSize x)) := by
   intro n x
   induction n with
   | zero =>
-      simp [CircAnd]
+      simp [CircAnd.do_CircAnd, FanInTwoCircuit.circuitSize, FanInTwoCircuit.subcircuits,
+            FinVec.map_eq, Fin.sum_zero]
   | succ m ih =>
       specialize ih (Fin.tail x)
       have hsum : Fin.sum (FinVec.map FanInTwoCircuit.circuitSize x)
           = (x 0).circuitSize + Fin.sum (FinVec.map FanInTwoCircuit.circuitSize (Fin.tail x)) := by
         simpa [FinVec.map] using
           (Fin.sum_univ_succ (f := fun i : Fin (m + 1) => FanInTwoCircuit.circuitSize (x i)))
-      have hmul : (CircAnd (m + 1) x).circuitSize
-          ≤ 1 + (x 0).circuitSize + (CircAnd m (Fin.tail x)).circuitSize := by
-        grind [CircAnd, FanInTwoCircuit.circuitSize, FanInTwoCircuit.subcircuits,
+      have hmul : (CircAnd.do_CircAnd (m + 1) x).circuitSize
+          ≤ 1 + (x 0).circuitSize + (CircAnd.do_CircAnd m (Fin.tail x)).circuitSize := by
+        grind [CircAnd.do_CircAnd, FanInTwoCircuit.circuitSize, FanInTwoCircuit.subcircuits,
           Finset.card_insert_le, Finset.card_union_le, fanInTwocircuitSize_eq_subcircuits_card]
       grind
 
+/-- The size of an "AND" circuit is bounded by  1 + 2 * n + sum_i size(x_i) -/
+theorem CircAnd_size : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool Bool,
+    ((CircAnd n x).time fanInTwoCircModel).circuitSize
+      ≤ 1 + 2 * n + (Fin.sum (FinVec.map FanInTwoCircuit.circuitSize x)) := by
+  intro n x
+  rw [CircAnd_time_circuitSize]
+  exact CircAnd_do_size n x
+
 
 /-- An example circuit with `n` input parameters which are constants -/
-def CircAndSimple (n : ℕ) (x : Fin n → Bool) : FanInTwoCircuit Bool Bool :=
-  match n with
-  | 0 => const true
-  | m + 1 =>
-      let x_head := .const (x 0)
-      let x_cons := CircAndSimple m (Fin.tail x)
-      mul x_head x_cons
+def CircAndSimple (n : ℕ) (x : Fin n → Bool) : Prog (FanInTwoCircuit Bool) Bool :=
+  let rec do_CircAnd : (m : ℕ) → (Fin m → Bool) → FanInTwoCircuit Bool Bool
+    | 0,     _  => const true
+    | m + 1, x  =>
+        let x_head := .const (x 0)
+        let x_cons := do_CircAnd m (Fin.tail x)
+        mul x_head x_cons
+  do_CircAnd n x
 
 /-- An execution of the circuit for a given input boolean vector -/
 def execCircAndSimple (x : Fin n → Bool) : Prog (FanInTwoCircuit Bool) Bool := do
   CircAndSimple n x
 
+private lemma CircAndSimple_time_circuitSize (n : ℕ) (y : Fin n → Bool) :
+    ((CircAndSimple n y).time fanInTwoCircModel).circuitSize =
+    (CircAndSimple.do_CircAnd n y).circuitSize := by
+  simp only [
+    CircAndSimple, FreeM.lift_def, Prog.time_liftBind, Prog.time_pure,
+    HAdd.hAdd, Add.add,
+  ]
+  simp only [fanInTwoCircModel_cost_circuitSize, circuitSize, subcircuits.eq_1, insert_empty_eq,
+    Finset.card_singleton, subcircuits.eq_2, subcircuits.eq_3, subcircuits.eq_4, Nat.add_eq,
+    Nat.add_eq_left]
+  rfl
+
+
+/-- The size of a simple "AND" circuit is bounded by  1 + 2 * n + 2 , which is in O(n) -/
 theorem CircAndSimple_size : ∀ n : ℕ, ∀ x : Fin n → Bool,
-    (CircAndSimple n x).circuitSize ≤ 1 + 2 * n + 2 := by
+    (CircAndSimple.do_CircAnd n x).circuitSize ≤ 1 + 2 * n + 2 := by
   intro n x
   induction n with
   | zero =>
-      simp [CircAndSimple]
+      simp [CircAndSimple.do_CircAnd]
   | succ m ih =>
       specialize ih (Fin.tail x)
-      simp only [FanInTwoCircuit.circuitSize, CircAndSimple, FanInTwoCircuit.subcircuits.eq_3,
+      simp only [FanInTwoCircuit.circuitSize, CircAndSimple.do_CircAnd,
+        FanInTwoCircuit.subcircuits.eq_3,
         FanInTwoCircuit.subcircuits.eq_1, insert_empty_eq, Finset.singleton_union]
       grind[Finset.card_insert_le, fanInTwocircuitSize_eq_subcircuits_card]
 
@@ -168,18 +210,21 @@ private lemma head_le_full_max (m : ℕ) (x : Fin (m + 1) → FanInTwoCircuit Bo
   simp only [hl]
   exact Finset.le_max_of_eq hmem hl
 
+
+/-- The depth of an "AND" circuit is bounded by
+    n + max_i depth(x_i) -/
 theorem AndDepthAtMostOne (n : ℕ) (x : Fin n → FanInTwoCircuit Bool Bool) :
-    (CircAnd n x).depthOf ≤ n +
+    (CircAnd.do_CircAnd n x).depthOf ≤ n +
       (Finset.univ.image (fun i : Fin n => (x i).depthOf)).max.getD 0 := by
   induction n with
   | zero =>
-      simp [CircAnd, FanInTwoCircuit.depthOf]
+      simp [CircAnd.do_CircAnd]
   | succ m ih =>
       specialize ih (Fin.tail x)
-      simp only [CircAnd, FanInTwoCircuit.depthOf]
+      simp only [CircAnd.do_CircAnd]
       calc
-        (mul (x 0) (CircAnd m (Fin.tail x))).depthOf
-        _ = 1 + max (x 0).depthOf (CircAnd m (Fin.tail x)).depthOf := rfl
+        (mul (x 0) (CircAnd.do_CircAnd m (Fin.tail x))).depthOf
+        _ = 1 + max (x 0).depthOf (CircAnd.do_CircAnd m (Fin.tail x)).depthOf := rfl
         _ ≤ 1 + (m + max (x 0).depthOf
               ((Finset.univ.image (fun i : Fin m => (Fin.tail x i).depthOf)).max.getD 0)) :=
             by gcongr; grind
@@ -192,111 +237,21 @@ theorem AndDepthAtMostOne (n : ℕ) (x : Fin n → FanInTwoCircuit Bool Bool) :
         _ = (m + 1) + (Finset.univ.image (fun i : Fin (m + 1) => (x i).depthOf)).max.getD 0 :=
             by rw [max_eq_right (head_le_full_max m x)]
 
+/-- The depth of a simple "AND" circuit is bounded by  n + 1  , which is in O(n) -/
 theorem CircAndSimple_depth (n : ℕ) (x : Fin n → Bool) :
-    (CircAndSimple n x).depthOf ≤ n + 1 := by
+    (CircAndSimple.do_CircAnd n x).depthOf ≤ n + 1 := by
   induction n with
   | zero =>
-      simp [CircAndSimple, FanInTwoCircuit.depthOf]
+      simp [CircAndSimple.do_CircAnd]
   | succ m ih =>
       specialize ih (Fin.tail x)
-      simp only [CircAndSimple, FanInTwoCircuit.depthOf]
+      simp only [CircAndSimple.do_CircAnd]
       calc
-        1 + (CircAndSimple m (Fin.tail x)).depthOf
+        1 + (CircAndSimple.do_CircAnd m (Fin.tail x)).depthOf
         _ ≤ 1 + (m + 1) := by gcongr
         _ = m + 1 + 1 := by ring
 
 
-
-
-/-- An example "And" circuit with `n` input parameters which are arbitrary circuits,
-splitting the circuit into two halves -/
-def CircAndSplit : (n : ℕ) → (Fin n → FanInTwoCircuit Bool Bool) → FanInTwoCircuit Bool Bool
-  | 0,     _  => const true
-  | 1,     x  => x ⟨0, by grind⟩
-  | n + 2, x  =>
-      let half := (n + 2) / 2
-      let x_left  := CircAndSplit half (Fin.take half (by grind) x)
-      let x_right := CircAndSplit ((n + 2) - half)
-        (fun i => x ⟨i.val + half, by grind⟩)
-      mul x_left x_right
-
-/-- An example "And" circuit with `n` input parameters which are constants,
- splitting the circuit into two halves -/
-def CircAndSplitSimple : (n : ℕ) → (Fin n → Bool) → FanInTwoCircuit Bool Bool
-  | 0,     _  => const true
-  | 1,     x  =>  const (x 0)
-  | n + 2, x  =>
-      let half := (n + 2) / 2
-      let x_left  := CircAndSplitSimple half (Fin.take half (by grind) x)
-      let x_right := CircAndSplitSimple ((n + 2) - half)
-        (fun i => x ⟨i.val + half, by grind⟩)
-      mul x_left x_right
-
-/-- The depth of the equally split "And" circuit with `n` input constant parameters
-    has O(log(n)) bound -/
-theorem CircAndSplitSimple_depth (n : ℕ) (x : Fin n → Bool) :
-    (CircAndSplitSimple n x).depthOf ≤ Nat.clog 2 n + 1 := by
-  induction n using Nat.strong_induction_on with
-  | _ n ih =>
-    match n with
-    | 0
-    | 1
-    | 2 => simp [CircAndSplitSimple, FanInTwoCircuit.depthOf]
-    | n + 2 =>
-      let half := (n + 2) / 2
-      let N    := n + 2
-      unfold CircAndSplitSimple
-      simp only [FanInTwoCircuit.depthOf]
-      have h_left : (CircAndSplitSimple half
-            (Fin.take half (by grind) x)).depthOf
-          ≤ Nat.clog 2 half + 1 :=
-        ih half (by grind) _
-      have h_right : (CircAndSplitSimple (N - half)
-            (fun i : Fin (N - half) => x ⟨i.val + half, by grind⟩)).depthOf
-          ≤ Nat.clog 2 (N - half) + 1 :=
-        ih (N - half) (by grind) _
-      rw [Nat.add_comm (Nat.clog 2 (n + 2)) 1]
-      apply Nat.add_le_add_left
-      apply max_le <;>
-        apply Nat.le_trans (by assumption) (by
-          conv_rhs => rw [Nat.clog_of_two_le (by decide) (by grind)]
-          apply Nat.add_le_add_right
-          apply Nat.clog_mono_right
-          grind)
-
-/-- The size of the equally split "And" circuit with 0 constant parameters
-    is less than or equal 1 -/
-theorem CircAndSplitSimple_size_zero (x : Fin 0 → Bool) :
-    (CircAndSplitSimple 0 x).circuitSize ≤ 1 := by
-      simp only [CircAndSplitSimple,circuitSize, subcircuits.eq_1,
-      insert_empty_eq, Finset.card_singleton, Std.le_refl]
-
-/-- The size of the equally split "And" circuit with n > 0 input constant parameters
-    has O(n) bound -/
-theorem CircAndSplitSimple_size_pos (n : ℕ) (hn : 0 < n) (x : Fin n → Bool) :
-    (CircAndSplitSimple n x).circuitSize ≤ 2 * n - 1 := by
-  induction n using Nat.strong_induction_on with
-  | _ n ih =>
-    match n with
-    | 1 =>
-      simp only [CircAndSplitSimple,circuitSize, subcircuits.eq_1,
-                 insert_empty_eq, Finset.card_singleton,
-                 Std.le_refl]
-    | n + 2 =>
-      unfold CircAndSplitSimple
-      let half := (n + 2) / 2
-      let x_left := CircAndSplitSimple half (Fin.take half (by grind) x)
-      let x_right := CircAndSplitSimple (n + 2 - half)
-        (fun i => x ⟨i.val + half, by grind⟩)
-      change (x_left.mul x_right).circuitSize ≤ 2 * (n + 2) - 1
-      have ⟨h_left, h_right⟩ : x_left.circuitSize ≤ 2 * half - 1 ∧
-                          x_right.circuitSize ≤ 2 * (n + 2 - half) - 1 := by
-        constructor <;> (apply ih <;> grind)
-      have h_mul_size : (x_left.mul x_right).circuitSize ≤
-      1 + x_left.circuitSize + x_right.circuitSize := by
-         grind [circuitSize, subcircuits, Finset.card_insert_le,
-         Finset.card_union_le, fanInTwocircuitSize_eq_subcircuits_card]
-      grind
 
 
 -- /--
