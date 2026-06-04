@@ -9,8 +9,6 @@ module
 public import Algolean.Complexity.Basic
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
 
-@[expose] public section
-
 /-!
 # Query Type for Single Tape Turing Machines
 
@@ -23,6 +21,8 @@ and integrate with the `Prog` framework.
 
 - `Dir` : A type for directions in which a TM can move.
 -/
+
+@[expose] public section
 
 namespace Algolean
 
@@ -123,8 +123,8 @@ def TMModel (tm : SingleTapeTM Symbol) :
     | .write cfg s => {BiTape := cfg.BiTape.write s, state := cfg.state}
     | .move cfg dir =>
         match dir with
-        | .Left => {BiTape := cfg.BiTape.move_left, state := cfg.state}
-        | .Right => {BiTape := cfg.BiTape.move_right, state := cfg.state}
+        | .Left => {BiTape := cfg.BiTape.moveLeft, state := cfg.state}
+        | .Right => {BiTape := cfg.BiTape.moveRight, state := cfg.state}
         | .Stop => cfg
     | .update cfg st => {BiTape := cfg.BiTape, state := st}
   cost

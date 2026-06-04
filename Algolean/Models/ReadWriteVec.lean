@@ -8,8 +8,6 @@ module
 
 public import Algolean.QueryModel
 
-@[expose] public section
-
 /-!
 # Query Type for Read Only Vectors
 
@@ -26,6 +24,8 @@ We have two cost models:
 - `ReadOnlyVec.natCost`:  A model for this query with costs in `ℕ`.
 - `ReadOnly
 -/
+
+@[expose] public section
 
 namespace Algolean
 

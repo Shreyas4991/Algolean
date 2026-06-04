@@ -8,13 +8,14 @@ module
 
 public import Algolean.Algorithms.NaivePatternSearch
 
-@[expose] public section
-
 /-!
 # Examples for Naive Pattern Search
 
 This file contains some examples of `naivePatternSearch`.
 -/
+
+@[expose] public section
+
 namespace AlgoleanTests
 
 open Algolean Algorithms

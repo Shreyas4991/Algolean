@@ -9,8 +9,6 @@ module
 public import Mathlib.Logic.Equiv.Fin.Basic
 public import Mathlib.Logic.Equiv.Prod
 
-@[expose] public section
-
 /-!
 # Indexing equivalences for the QuantumInfo bridge
 
@@ -31,6 +29,8 @@ QuantumInfo's `CPTPMap.ofEquiv` and `MState.relabel` consume `Equiv`s.
 Propositional equalities of indexing types would require casting through
 `Eq.mpr`, which the QuantumInfo API does not provide for.
 -/
+
+@[expose] public section
 
 namespace Algolean
 

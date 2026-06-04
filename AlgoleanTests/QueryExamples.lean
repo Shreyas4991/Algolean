@@ -10,8 +10,6 @@ public import Algolean.QueryModel
 public import Mathlib.Algebra.Ring.ULift
 public import Mathlib.Data.Nat.Log
 
-@[expose] public section
-
 /-!
 # Additional examples of Query Types
 
@@ -22,6 +20,9 @@ which respectively provide query types for List and Array operations
 equipped with a searching algorithm, and different models for them.
 They are meant to be additional examples to guide authors of query types
 -/
+
+@[expose] public section
+
 namespace AlgoleanTests
 
 open Cslib Algolean Algorithms Prog

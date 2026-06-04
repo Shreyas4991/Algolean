@@ -9,14 +9,14 @@ module
 public import Cslib.Computability.Machines.SingleTapeTuring.Basic
 public import Mathlib.Algebra.Polynomial.Eval.Defs
 
-@[expose] public section
-
 /-!
 # Basic Complexity Classes on Single Tape Turing Machines
 
 We define basic complexity classes `P` and `NP` on single tape Turing
 machines represented by `SingleTapeTM`.
 -/
+
+@[expose] public section
 
 namespace Algolean
 

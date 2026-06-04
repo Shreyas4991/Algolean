@@ -9,6 +9,12 @@ module
 public import Algolean.QueryModel
 public import Mathlib.MeasureTheory.Measure.FiniteMeasure
 
+/-!
+# The Robertson-Webb model
+
+The Robertson-Webb model is the standard query model
+for cake cutting problems in the domain of continuous fair division.
+-/
 @[expose] public section
 
 

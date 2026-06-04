@@ -14,8 +14,6 @@ public import Mathlib.Data.List.Infix
 public import Mathlib.Data.List.Range
 public import Algolean.Algorithms.NaivePatternSearch
 
-@[expose] public section
-
 /-!
 # Knuth-Morris-Pratt pattern search
 
@@ -48,6 +46,8 @@ Remove `NaivePatternSearch` import after moving the `PatternSearchAll` definitio
 ## References
 1. [Knuth–Morris–Pratt algorithm](https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm)
 -/
+
+@[expose] public section
 
 namespace Algolean
 

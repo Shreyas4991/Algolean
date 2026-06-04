@@ -8,7 +8,7 @@ module
 
 public import Algolean.Models.ListComparisonSort
 import all Init.Data.List.Sort.Basic
-@[expose] public section
+
 
 /-!
 # Merge sort in a list
@@ -38,6 +38,9 @@ the time complexity function `T`, the lemma `some_algebra`, and its two
 dependencies `clog2_floor_half_le` and `clog2_half_le` are theirs. The rest of
 the code is written and refined by Shreyas Srinivas and Eric Wieser.
 -/
+
+@[expose] public section
+
 namespace Algolean.Algorithms
 
 open SortOps

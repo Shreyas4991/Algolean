@@ -15,6 +15,13 @@ public import Mathlib.Data.Nat.Lattice
 public import Mathlib.Data.Nat.Log
 import all Init.Data.List.Sort.Basic
 
+/-!
+# Comparison Sort Lower Bound
+
+This file contains two variants of the proof of
+the comparison sort lower bound.
+-/
+
 @[expose] public section
 
 namespace Algolean

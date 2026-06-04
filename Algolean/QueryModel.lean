@@ -10,9 +10,7 @@ public import Cslib
 public import Cslib.Foundations.Control.Monad.Free
 public import Algolean.AddWriter.Basic
 
-@[expose] public section
-
-/-
+/-!
 # Query model
 
 This file defines a simple query language modeled as a free monad over a
@@ -43,8 +41,9 @@ and complexity of algorithms in lean. To specify an algorithm, one must:
 query model, free monad, time complexity, Prog
 -/
 
-namespace Algolean
-namespace Algorithms
+@[expose] public section
+
+namespace Algolean.Algorithms
 
 open Cslib
 /--

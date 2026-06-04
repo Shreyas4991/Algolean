@@ -9,11 +9,15 @@ module
 public import Algolean.QueryModel
 public import Mathlib.Probability.ProbabilityMassFunction.Monad
 
-@[expose] public section
-
 /-!
 # Query Type for Random Sampling
+
+A query type for random sampling along with API
+to randomise any query model by composing it with
+`RandomSample`.
 -/
+
+@[expose] public section
 
 namespace Algolean
 

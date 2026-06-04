@@ -11,8 +11,6 @@ public import Batteries.Data.List
 public import Mathlib.Algebra.Order.Group.Nat
 public import Mathlib.Tactic.Set
 
-@[expose] public section
-
 /-!
 # Linear search and Binary Search in Fin vectors
 
@@ -33,6 +31,9 @@ the `ReadOnlyVec` model.
 - `listLinearSearchM_time_complexity_lower_bound` : There exist lists on which `linearSearch` needs
   `n` comparisons.
 -/
+
+@[expose] public section
+
 namespace Algolean
 
 namespace Algorithms

@@ -8,8 +8,6 @@ module
 public import Algolean.Algorithms.ListOrderedInsert
 public import Mathlib.Tactic.NormNum
 
-@[expose] public section
-
 /-!
 # Insertion sort in a list
 
@@ -31,6 +29,8 @@ the `SortOpsInsertHead` model. This insertionSort evaluates identically to the u
   (n + 1) * (n + 2) list head-insertions.
 - `insertionSort_stable` : `insertionSort` is a stable sorting algorithm.
 -/
+
+@[expose] public section
 
 namespace Algolean
 

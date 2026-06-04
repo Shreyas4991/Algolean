@@ -8,8 +8,6 @@ module
 
 public import Algolean.QueryModel
 
-@[expose] public section
-
 /-!
 # Query Complexity Classes
 
@@ -33,6 +31,8 @@ on the oracle (model). For sorting, "correct" means "the output is the
 sorted version of the input determined by the comparison oracle." This
 dependence is captured by `QueryProblem.spec : Model Q Cost → α → Prop`.
 -/
+
+@[expose] public section
 
 namespace Algolean
 namespace Algorithms

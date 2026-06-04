@@ -8,8 +8,6 @@ module
 
 public import Algolean.QueryModel
 
-@[expose] public section
-
 /-!
 # Query Type for Comparisons
 
@@ -23,6 +21,8 @@ In this file we define a query type `Comparison` for comparison based algorithms
 - `Comparison.natCost`:  A model for this query with costs in `ℕ`.
 
 -/
+
+@[expose] public section
 
 namespace Algolean
 

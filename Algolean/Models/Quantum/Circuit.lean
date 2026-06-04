@@ -11,8 +11,6 @@ public import Algolean.Models.Quantum.Indexing
 public import QuantumInfo.Finite.CPTPMap
 public import Mathlib.Algebra.Polynomial.Basic
 
-@[expose] public section
-
 /-!
 # Quantum Circuits
 
@@ -42,6 +40,8 @@ The denotational interpretation `toCPTP` is what the `Model`'s `evalQuery`
 produces. There is no separate operational `eval` — `CPTPMap d d` *is* the
 semantic object.
 -/
+
+@[expose] public section
 
 namespace Algolean
 

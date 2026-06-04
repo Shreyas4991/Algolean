@@ -12,7 +12,6 @@ public import Mathlib.Algebra.Group.Prod
 public import Mathlib.Data.Nat.Basic
 public import Mathlib.Order.Basic
 public import Mathlib.Tactic.FastInstance
-@[expose] public section
 
 /-!
 # Query Type for Comparison Search in Lists
@@ -34,6 +33,9 @@ sorting algorithms in lists.
 - `IsStableSort`: A definition of stability for sorting algorithms in lists.
 
 -/
+
+@[expose] public section
+
 namespace Algolean
 
 namespace Algorithms

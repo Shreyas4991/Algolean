@@ -10,8 +10,6 @@ public import Algolean.Models.Quantum.Indexing
 public import QuantumInfo.Finite.Qubit.Basic
 public import Mathlib.Data.Fin.Tuple.Basic
 
-@[expose] public section
-
 /-!
 # Gate unitaries on `Fin n → Fin 2`
 
@@ -37,6 +35,8 @@ each gate of the `QuantumQuery` syntax. Three strategies appear:
 - `embedQubitGate q U : 𝐔[Fin n → Fin 2]` : single-qubit gate on position `q`.
 - `cnotUnitary c t h : 𝐔[Fin n → Fin 2]` : CNOT with `control ≠ target`.
 -/
+
+@[expose] public section
 
 namespace Algolean
 

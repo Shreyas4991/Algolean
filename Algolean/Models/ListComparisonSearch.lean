@@ -8,8 +8,6 @@ module
 
 public import Algolean.QueryModel
 
-@[expose] public section
-
 /-!
 # Query Type for Comparison Search in Lists
 
@@ -24,6 +22,8 @@ further defines a model `ListSearch.natCost` for this query.
 - `ListSearch.natCost`:  A model for this query with costs in `ℕ`.
 
 -/
+
+@[expose] public section
 
 namespace Algolean
 

@@ -8,6 +8,13 @@ module
 
 public import Algolean.QueryModel
 
+/-!
+# Query Composition
+
+This module defines the composition of queries
+and their models
+-/
+
 @[expose] public section
 
 namespace Algolean.Algorithms

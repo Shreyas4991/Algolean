@@ -8,9 +8,6 @@ module
 
 public import Mathlib.Algebra.Group.Defs
 
-
-@[expose] public section
-
 /-!
 
 # AddWriter: Additive Writer Monad
@@ -32,6 +29,10 @@ and Mathlib already contains a Writer monad, we call this structure `AddWriter`.
 1. [Elementary explanation of writer monads](https://williamyaoh.com/posts/2020-07-26-deriving-writer-monad.html)
 2. [Danielsson2008] on lightweight monadic verification of time complexity.
 -/
+
+
+@[expose] public section
+
 namespace Algolean
 
 /-- A monad for tracking log complexity of computations.
