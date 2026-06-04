@@ -8,8 +8,6 @@ module
 
 public import Algolean.QueryModel
 
-@[expose] public section
-
 /-!
 # Query Type for Read Only Vectors
 
@@ -27,9 +25,9 @@ We have two cost models:
 - `ReadOnly
 -/
 
-namespace Algolean
+@[expose] public section
 
-namespace Algorithms
+namespace Algolean.Algorithms
 
 open Prog
 

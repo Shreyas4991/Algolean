@@ -9,6 +9,18 @@ module
 public import Algolean.QueryModel
 public import Mathlib.MeasureTheory.Measure.FiniteMeasure
 
+/-!
+# The Robertson-Webb Query model
+
+This query model is a standard cake cutting model in the field of
+continuous fair division. It consists of two standard queries,
+`mark` and `eval`.
+
+## References
+- https://en.wikipedia.org/wiki/Robertson–Webb_query_model
+
+-/
+
 @[expose] public section
 
 

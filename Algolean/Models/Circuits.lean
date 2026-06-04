@@ -9,11 +9,13 @@ module
 public import Algolean.QueryModel
 public import Mathlib.Algebra.Lie.OfAssociative
 
+/-!
+# A model of unbounded fan-in circuits
+-/
+
 @[expose] public section
 
-namespace Algolean
-
-namespace Algorithms
+namespace Algolean.Algorithms
 
 namespace Prog
 

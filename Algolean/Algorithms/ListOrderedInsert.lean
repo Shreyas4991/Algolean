@@ -12,8 +12,6 @@ public import Mathlib.Data.Int.ConditionallyCompleteOrder
 public import Mathlib.Data.List.Sort
 public import Mathlib.Order.ConditionallyCompleteLattice.Basic
 
-@[expose] public section
-
 /-!
 # Ordered insertion in a list
 
@@ -35,8 +33,9 @@ in upstream libraries for the pure lean code versions of these declarations.
 - `insertOrd_sorted` : Applying `insertOrd` to a sorted list yields a sorted list.
 -/
 
-namespace Algolean
-namespace Algorithms
+@[expose] public section
+
+namespace Algolean.Algorithms
 
 open Prog
 

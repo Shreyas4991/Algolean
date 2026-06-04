@@ -9,6 +9,12 @@ module
 public import Algolean.QueryModel
 public import Mathlib.Algebra.Lie.OfAssociative
 
+/-!
+# Fan-in two circuits
+
+We provide a model for fanin 2 circuits.
+-/
+
 @[expose] public section
 
 namespace Algolean

@@ -8,8 +8,6 @@ module
 
 public import Algolean.QueryModel
 
-@[expose] public section
-
 /-!
 # Query Type for Comparisons
 
@@ -24,9 +22,9 @@ In this file we define a query type `Comparison` for comparison based algorithms
 
 -/
 
-namespace Algolean
+@[expose] public section
 
-namespace Algorithms
+namespace Algolean.Algorithms
 
 open Prog
 

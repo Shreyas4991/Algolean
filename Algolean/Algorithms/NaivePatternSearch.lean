@@ -11,8 +11,6 @@ public import Mathlib.Algebra.Order.Group.Nat
 public import Mathlib.Data.List.Infix
 public import Mathlib.Data.List.Range
 
-@[expose] public section
-
 /-!
 # Naive pattern search
 
@@ -40,6 +38,8 @@ upper/lower bounds for comparisons in the `Comparison` query model.
   inputs on which `naivePatternSearch` takes exactly
   `pat.length * (txt.length + 1 - pat.length)` comparisons.
 -/
+
+@[expose] public section
 
 namespace Algolean
 

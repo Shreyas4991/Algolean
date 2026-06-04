@@ -8,13 +8,14 @@ module
 
 public import Algolean.Algorithms.KMPPatternSearch
 
-@[expose] public section
-
 /-!
 # Examples for LPS and KMP
 
 This file contains some examples of KMP, including examples for `buildLPS` and `kmpPatternSearch`.
 -/
+
+@[expose] public section
+
 namespace AlgoleanTests
 
 open Algolean Algorithms

@@ -9,13 +9,14 @@ module
 public import Algolean.Models.FanInTwoCircuits
 public import Mathlib
 
-@[expose] public section
-
 /-!
 # Examples of Progs for Circuits
 
 This file contains examples and tests of fan-in 2 circuits written in the Prog Model
 -/
+
+@[expose] public section
+
 namespace AlgoleanTests
 
 open Cslib Algolean Algorithms Prog
