@@ -8,8 +8,8 @@ module
 
 public import Algolean.QueryModel
 public import Algolean.Models.Quantum.Embed
-public import QuantumInfo.Finite.MState
-public import QuantumInfo.Finite.POVM
+public import QuantumInfo.States.Mixed.MState
+public import QuantumInfo.Measurements.POVM
 
 /-!
 # Quantum Oracle Query Model

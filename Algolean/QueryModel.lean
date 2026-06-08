@@ -195,7 +195,7 @@ section FreeMExtras
 
 This section contain extras needed for this repo to work until FreeM is fixed upstream
 -/
-instance {Q α} : CoeOut (Q α) (FreeM Q α) where
+instance instCoeOutFreeM {Q α} : CoeOut (Q α) (FreeM Q α) where
   coe := FreeM.lift
 
 @[simp, grind =]

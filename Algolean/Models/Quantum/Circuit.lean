@@ -8,7 +8,7 @@ module
 
 public import Algolean.Models.Quantum.Oracle
 public import Algolean.Models.Quantum.Indexing
-public import QuantumInfo.Finite.CPTPMap
+public import QuantumInfo.Channels.CPTP
 public import Mathlib.Algebra.Polynomial.Basic
 
 /-!

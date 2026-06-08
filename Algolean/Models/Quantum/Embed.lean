@@ -7,7 +7,7 @@ Authors: Tanner Duve
 module
 
 public import Algolean.Models.Quantum.Indexing
-public import QuantumInfo.Finite.Qubit.Basic
+public import QuantumInfo.States.Pure.Qubit
 public import Mathlib.Data.Fin.Tuple.Basic
 
 /-!
