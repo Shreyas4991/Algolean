@@ -7,7 +7,8 @@ Authors: Bashar Hamade
 module
 
 public import Algolean.Models.FanInTwoCircuits
-public import Mathlib
+public import Mathlib.AlgebraicTopology.SimplexCategory.Basic
+public import Mathlib.Data.Fin.Tuple.Take
 
 /-!
 # Log-depth fan-in two AND circuits
