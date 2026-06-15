@@ -51,7 +51,6 @@ def IsBalanced {n : ℕ} (f : (Fin n → Fin 2) → Bool) : Prop :=
 theorem oracleSign_sum_eq_zero_of_balanced {n : ℕ}
     {f : (Fin n → Fin 2) → Bool} (hf : IsBalanced f) :
     (∑ x, oracleSign f x) = 0 := by
-  classical
   calc
     (∑ x, oracleSign f x)
         = (∑ x ∈ (Finset.univ.filter (fun x : Fin n → Fin 2 => f x)), (-1 : ℂ)) +
@@ -77,7 +76,6 @@ theorem oracleSign_sum_of_constant {n : ℕ}
     {f : (Fin n → Fin 2) → Bool} (hf : IsConstant f) :
     ∃ s : ℂ, (s = 1 ∨ s = -1) ∧ (∑ x, oracleSign f x) =
       (Fintype.card (Fin n → Fin 2) : ℂ) * s := by
-  classical
   rcases hf with ⟨b, hb⟩
   refine ⟨if b then (-1 : ℂ) else 1, ?_, ?_⟩
   · cases b <;> simp
@@ -243,7 +241,6 @@ theorem deutschJozsaUnitary_zero_zero (n : ℕ)
     (f : (Fin n → Fin 2) → Bool) :
     deutschJozsaUnitary n f 0 0 =
       hadamardScale n * hadamardScale n * ∑ x, oracleSign f x := by
-  classical
   simp [deutschJozsaUnitary, Matrix.mul_apply, gateOracle_apply, hadamardScale,
     oracleSign, Finset.mul_sum, mul_assoc, mul_comm]
 
