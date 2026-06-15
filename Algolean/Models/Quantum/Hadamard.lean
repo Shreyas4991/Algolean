@@ -44,6 +44,61 @@ def zeroBefore {n : ℕ} (k : ℕ) (x : Fin n → Fin 2) : Prop :=
 def agreeFrom {n : ℕ} (k : ℕ) (x y : Fin n → Fin 2) : Prop :=
   ∀ i : Fin n, k ≤ i.val → x i = y i
 
+/-- Updating a zero-prefix tuple at a position `q` at or beyond the prefix
+leaves it zero on the prefix. -/
+theorem zeroBefore_update {n k : ℕ} {x : Fin n → Fin 2} {q : Fin n}
+    (hq : k ≤ q.val) (hx : zeroBefore k x) (b : Fin 2) :
+    zeroBefore k (Function.update x q b) := fun i hi => by
+  have hiq : i ≠ q := Fin.ne_of_val_ne (by omega)
+  rw [Function.update_of_ne hiq]; exact hx i hi
+
+/-- Overwriting position `q` (at index `k`) with `y q` turns "agree from `k`"
+into "agree from `k + 1`": position `k` then matches by construction. -/
+theorem agreeFrom_update_self {n k : ℕ} {x y : Fin n → Fin 2} {q : Fin n}
+    (hq : q.val = k) :
+    agreeFrom k (Function.update x q (y q)) y ↔ agreeFrom (k + 1) x y := by
+  constructor
+  · intro h i hi
+    have hiq : i ≠ q := Fin.ne_of_val_ne (by omega)
+    rw [← Function.update_of_ne hiq (y q) x]; exact h i (by omega)
+  · intro h i hi
+    rcases eq_or_ne i q with rfl | hiq
+    · rw [Function.update_self]
+    · have := Fin.val_ne_of_ne hiq
+      rw [Function.update_of_ne hiq]; exact h i (by omega)
+
+/-- Overwriting position `q` (at index `k`) with a value other than `y q`
+makes the tuples disagree at `k`, so they cannot "agree from `k`". -/
+theorem not_agreeFrom_update {n k : ℕ} {x y : Fin n → Fin 2} {q : Fin n}
+    {b : Fin 2} (hq : q.val = k) (hb : b ≠ y q) :
+    ¬ agreeFrom k (Function.update x q b) y := fun h => by
+  have hbq := h q hq.ge; rw [Function.update_self] at hbq; exact hb hbq
+
+/-- Entry of a product of unitaries, as a sum over the shared index. -/
+theorem unitaryGroup_mul_apply {d : Type*} [Fintype d] [DecidableEq d]
+    (P Q : 𝐔[d]) (i j : d) :
+    (P * Q) i j = ∑ k, P i k * Q k j := by
+  rw [Submonoid.coe_mul, Matrix.mul_apply]
+
+/-- Reading the `(x, y)` entry of `embedQubitGate q U * A` sums the gate over
+the two possible values of qubit `q`, with the rest of the row fixed by `x`.
+This is the workhorse for matrix entries of a Hadamard layer. -/
+theorem embedQubitGate_mul_apply {n : ℕ} (q : Fin (n + 1)) (U : 𝐔[Qubit])
+    (A : 𝐔[Fin (n + 1) → Fin 2]) (x y : Fin (n + 1) → Fin 2) :
+    (embedQubitGate q U * A) x y =
+      ∑ b : Fin 2, U (x q) b * A (Function.update x q b) y := by
+  rw [unitaryGroup_mul_apply,
+    ← (Fin.insertNthEquiv (fun _ => Fin 2) q).sum_comp
+      (fun z => embedQubitGate q U x z * A z y),
+    Fintype.sum_prod_type]
+  apply Finset.sum_congr rfl
+  intro b _
+  rw [Finset.sum_eq_single (Fin.removeNth q x)]
+  · simp [Fin.insertNthEquiv, embedQubitGate_apply, Fin.insertNth_removeNth]
+  · intro w _ hw
+    simp [Fin.insertNthEquiv, embedQubitGate_apply, Ne.symm hw]
+  · exact fun h => absurd (Finset.mem_univ _) h
+
 /-- The positive scalar contributed by `k` Hadamard gates along a zero row
 or column. -/
 noncomputable def hadamardScale (k : ℕ) : ℂ :=
@@ -170,140 +225,27 @@ theorem hadamardsUpToUnitary_zeroBefore_left {n k : ℕ} (hk : k ≤ n)
     {x y : Fin n → Fin 2} (hx : zeroBefore k x) :
     hadamardsUpToUnitary k hk x y =
       if agreeFrom k x y then hadamardScale k else 0 := by
-  classical
   induction k generalizing n x y with
   | zero =>
-      by_cases hxy : x = y
-      · subst y
-        simp [hadamardsUpToUnitary]
-        intro i _
-        rfl
-      · have hnot : ¬ agreeFrom 0 x y := by
-          intro h
-          apply hxy
-          ext i
-          exact congrArg Fin.val (h i (Nat.zero_le i.val))
-        simp [hadamardsUpToUnitary, hxy]
-        exact hnot
+    have h0 : agreeFrom 0 x y ↔ x = y :=
+      ⟨fun h => funext fun i => h i (Nat.zero_le _), fun h _ _ => h ▸ rfl⟩
+    simp [hadamardsUpToUnitary, Matrix.one_apply, h0]
   | succ k ih =>
-      cases n with
-      | zero => omega
-      | succ n =>
-          let q : Fin (n + 1) := ⟨k, Nat.lt_of_succ_le hk⟩
-          let z₀ : Fin (n + 1) → Fin 2 := Function.update x q (y q)
-          have hrem_z₀ :
-              Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
-                Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q z₀ := by
-            ext i
-            simp [z₀, Fin.removeNth]
-          have hz₀_before : zeroBefore k z₀ := by
-            intro i hi
-            have hiq : i ≠ q := by
-              intro h
-              have hval : i.val = k := by
-                simpa [q] using congrArg Fin.val h
-              omega
-            dsimp [z₀]
-            rw [Function.update_of_ne hiq]
-            exact hx i (Nat.lt_trans hi (Nat.lt_succ_self k))
-          have hagree_z₀ :
-              agreeFrom k z₀ y ↔ agreeFrom (k + 1) x y := by
-            constructor
-            · intro h i hi
-              have hiq : i ≠ q := by
-                intro hiq
-                have hval : i.val = k := by
-                  simpa [q] using congrArg Fin.val hiq
-                omega
-              have hz₀i : z₀ i = x i := by
-                dsimp [z₀]
-                rw [Function.update_of_ne hiq]
-              rw [← hz₀i]
-              exact h i (Nat.le_trans (Nat.le_succ k) hi)
-            · intro h i hi
-              by_cases hiq : i = q
-              · subst i
-                simp [z₀]
-              · have hz₀i : z₀ i = x i := by
-                  dsimp [z₀]
-                  rw [Function.update_of_ne hiq]
-                rw [hz₀i]
-                have hsucc : k + 1 ≤ i.val := by
-                  have hne : i.val ≠ k := by
-                    intro hval
-                    apply hiq
-                    ext
-                    simp [q, hval]
-                  omega
-                exact h i hsucc
-          have hz_eq_z₀ {z : Fin (n + 1) → Fin 2}
-              (hrem :
-                Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
-                  Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q z)
-              (hzagree : agreeFrom k z y) :
-              z = z₀ := by
-            ext i
-            by_cases hiq : i = q
-            · subst i
-              have hzq : z q = y q := hzagree q (by simp [q])
-              simp [z₀, hzq]
-            · rcases Fin.exists_succAbove_eq hiq with ⟨j, hj⟩
-              have hremj := congr_fun hrem j
-              have hzx : z i = x i := by
-                simpa [Fin.removeNth, hj] using hremj.symm
-              have hxz₀ : x i = z₀ i := by
-                dsimp [z₀]
-                rw [Function.update_of_ne hiq]
-              exact congrArg Fin.val (hzx.trans hxz₀)
-          have hxq : x q = 0 := hx q (by simp [q])
-          simp only [hadamardsUpToUnitary]
-          change ((embedQubitGate q Qubit.H).val *
-              (hadamardsUpToUnitary k (Nat.le_of_succ_le hk)).val) x y =
-            if agreeFrom (k + 1) x y then hadamardScale (k + 1) else 0
-          rw [Matrix.mul_apply]
-          rw [Finset.sum_eq_single z₀]
-          · have hgate :
-                embedQubitGate q Qubit.H x z₀ = Qubit.H (x q) (z₀ q) := by
-              rw [embedQubitGate_apply]
-              simp [hrem_z₀]
-            calc
-              embedQubitGate q Qubit.H x z₀ *
-                  hadamardsUpToUnitary k (Nat.le_of_succ_le hk) z₀ y
-                  = Qubit.H (x q) (z₀ q) *
-                      (if agreeFrom k z₀ y then hadamardScale k else 0) := by
-                    rw [hgate, ih (Nat.le_of_succ_le hk) hz₀_before]
-              _ = if agreeFrom (k + 1) x y then hadamardScale (k + 1) else 0 := by
-                    by_cases h : agreeFrom (k + 1) x y
-                    · have hz : agreeFrom k z₀ y := hagree_z₀.mpr h
-                      simp [h, hz, hxq, z₀, hadamardScale_succ]
-                    · have hz : ¬ agreeFrom k z₀ y := fun hz => h (hagree_z₀.mp hz)
-                      simp [h, hz]
-          · intro z _ hz_ne
-            by_cases hrem :
-                Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
-                  Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q z
-            · have hz_before : zeroBefore k z := by
-                intro i hi
-                have hiq : i ≠ q := by
-                  intro h
-                  have hval : i.val = k := by
-                    simpa [q] using congrArg Fin.val h
-                  omega
-                rcases Fin.exists_succAbove_eq hiq with ⟨j, hj⟩
-                have hremj := congr_fun hrem j
-                have hzx : z i = x i := by
-                  simpa [Fin.removeNth, hj] using hremj.symm
-                rw [hzx]
-                exact hx i (Nat.lt_trans hi (Nat.lt_succ_self k))
-              have hnotagree : ¬ agreeFrom k z y := by
-                intro hzagree
-                exact hz_ne (hz_eq_z₀ hrem hzagree)
-              rw [embedQubitGate_apply]
-              simp [hrem, ih (Nat.le_of_succ_le hk) hz_before, hnotagree]
-            · rw [embedQubitGate_apply]
-              simp [hrem]
-          · intro h
-            exact absurd (Finset.mem_univ z₀) h
+    obtain _ | n := n
+    · omega
+    have hxk : zeroBefore k x := fun i hi => hx i (by omega)
+    simp only [hadamardsUpToUnitary]
+    set q : Fin (n + 1) := ⟨k, Nat.lt_of_succ_le hk⟩ with hq
+    have hqk : (q : ℕ) = k := by rw [hq]
+    rw [embedQubitGate_mul_apply, Finset.sum_eq_single (y q)]
+    · rw [hx q (by omega), qubit_H_zero_left,
+        ih (Nat.le_of_succ_le hk) (zeroBefore_update hqk.ge hxk (y q)),
+        agreeFrom_update_self hqk]
+      by_cases h : agreeFrom (k + 1) x y <;> simp [h, hadamardScale_succ]
+    · intro b _ hb
+      rw [ih (Nat.le_of_succ_le hk) (zeroBefore_update hqk.ge hxk b),
+        if_neg (not_agreeFrom_update hqk hb), mul_zero]
+    · exact fun h => absurd (Finset.mem_univ _) h
 
 @[simp]
 theorem hadamardsUnitary_zero_left (n : ℕ)
@@ -325,122 +267,26 @@ theorem hadamardsUpToUnitary_zeroBefore_right {n k : ℕ} (hk : k ≤ n)
     {x y : Fin n → Fin 2} (hy : zeroBefore k y) :
     hadamardsUpToUnitary k hk x y =
       if agreeFrom k x y then hadamardScale k else 0 := by
-  classical
   induction k generalizing n x y with
   | zero =>
-      by_cases hxy : x = y
-      · subst y
-        simp [hadamardsUpToUnitary]
-        intro i _
-        rfl
-      · have hnot : ¬ agreeFrom 0 x y := by
-          intro h
-          apply hxy
-          ext i
-          exact congrArg Fin.val (h i (Nat.zero_le i.val))
-        simp [hadamardsUpToUnitary, hxy]
-        exact hnot
+    have h0 : agreeFrom 0 x y ↔ x = y :=
+      ⟨fun h => funext fun i => h i (Nat.zero_le _), fun h _ _ => h ▸ rfl⟩
+    simp [hadamardsUpToUnitary, Matrix.one_apply, h0]
   | succ k ih =>
-      cases n with
-      | zero => omega
-      | succ n =>
-          let q : Fin (n + 1) := ⟨k, Nat.lt_of_succ_le hk⟩
-          let z₀ : Fin (n + 1) → Fin 2 := Function.update x q (y q)
-          have hrem_z₀ :
-              Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
-                Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q z₀ := by
-            ext i
-            simp [z₀, Fin.removeNth]
-          have hy_before : zeroBefore k y := by
-            intro i hi
-            exact hy i (Nat.lt_trans hi (Nat.lt_succ_self k))
-          have hagree_z₀ :
-              agreeFrom k z₀ y ↔ agreeFrom (k + 1) x y := by
-            constructor
-            · intro h i hi
-              have hiq : i ≠ q := by
-                intro hiq
-                have hval : i.val = k := by
-                  simpa [q] using congrArg Fin.val hiq
-                omega
-              have hz₀i : z₀ i = x i := by
-                dsimp [z₀]
-                rw [Function.update_of_ne hiq]
-              rw [← hz₀i]
-              exact h i (Nat.le_trans (Nat.le_succ k) hi)
-            · intro h i hi
-              by_cases hiq : i = q
-              · subst i
-                simp [z₀]
-              · have hz₀i : z₀ i = x i := by
-                  dsimp [z₀]
-                  rw [Function.update_of_ne hiq]
-                rw [hz₀i]
-                have hsucc : k + 1 ≤ i.val := by
-                  have hne : i.val ≠ k := by
-                    intro hval
-                    apply hiq
-                    ext
-                    simp [q, hval]
-                  omega
-                exact h i hsucc
-          have hz_eq_z₀ {z : Fin (n + 1) → Fin 2}
-              (hrem :
-                Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
-                  Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q z)
-              (hzagree : agreeFrom k z y) :
-              z = z₀ := by
-            ext i
-            by_cases hiq : i = q
-            · subst i
-              have hzq : z q = y q := hzagree q (by simp [q])
-              simp [z₀, hzq]
-            · rcases Fin.exists_succAbove_eq hiq with ⟨j, hj⟩
-              have hremj := congr_fun hrem j
-              have hzx : z i = x i := by
-                simpa [Fin.removeNth, hj] using hremj.symm
-              have hxz₀ : x i = z₀ i := by
-                dsimp [z₀]
-                rw [Function.update_of_ne hiq]
-              exact congrArg Fin.val (hzx.trans hxz₀)
-          have hyq : y q = 0 := hy q (by simp [q])
-          simp only [hadamardsUpToUnitary]
-          change ((embedQubitGate q Qubit.H).val *
-              (hadamardsUpToUnitary k (Nat.le_of_succ_le hk)).val) x y =
-            if agreeFrom (k + 1) x y then hadamardScale (k + 1) else 0
-          rw [Matrix.mul_apply]
-          rw [Finset.sum_eq_single z₀]
-          · have hgate :
-                embedQubitGate q Qubit.H x z₀ = Qubit.H (x q) (z₀ q) := by
-              rw [embedQubitGate_apply]
-              simp [hrem_z₀]
-            calc
-              embedQubitGate q Qubit.H x z₀ *
-                  hadamardsUpToUnitary k (Nat.le_of_succ_le hk) z₀ y
-                  = Qubit.H (x q) (z₀ q) *
-                      (if agreeFrom k z₀ y then hadamardScale k else 0) := by
-                    rw [hgate, ih (Nat.le_of_succ_le hk) hy_before]
-              _ = if agreeFrom (k + 1) x y then hadamardScale (k + 1) else 0 := by
-                    by_cases h : agreeFrom (k + 1) x y
-                    · have hz : agreeFrom k z₀ y := hagree_z₀.mpr h
-                      have hz' : agreeFrom k (Function.update x q 0) y := by
-                        simpa [z₀, hyq] using hz
-                      simp [h, hz', hyq, z₀, hadamardScale_succ]
-                    · have hz : ¬ agreeFrom k z₀ y := fun hz => h (hagree_z₀.mp hz)
-                      simp [h, hz]
-          · intro z _ hz_ne
-            by_cases hrem :
-                Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
-                  Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q z
-            · have hnotagree : ¬ agreeFrom k z y := by
-                intro hzagree
-                exact hz_ne (hz_eq_z₀ hrem hzagree)
-              rw [embedQubitGate_apply]
-              simp [hrem, ih (Nat.le_of_succ_le hk) hy_before, hnotagree]
-            · rw [embedQubitGate_apply]
-              simp [hrem]
-          · intro h
-            exact absurd (Finset.mem_univ z₀) h
+    obtain _ | n := n
+    · omega
+    have hyk : zeroBefore k y := fun i hi => hy i (by omega)
+    simp only [hadamardsUpToUnitary]
+    set q : Fin (n + 1) := ⟨k, Nat.lt_of_succ_le hk⟩ with hq
+    have hqk : (q : ℕ) = k := by rw [hq]
+    rw [embedQubitGate_mul_apply, Finset.sum_eq_single (y q)]
+    · rw [ih (Nat.le_of_succ_le hk) hyk, agreeFrom_update_self hqk,
+        hy q (by omega), qubit_H_zero_right]
+      by_cases h : agreeFrom (k + 1) x y <;> simp [h, hadamardScale_succ]
+    · intro b _ hb
+      rw [ih (Nat.le_of_succ_le hk) hyk, if_neg (not_agreeFrom_update hqk hb),
+        mul_zero]
+    · exact fun h => absurd (Finset.mem_univ _) h
 
 @[simp]
 theorem hadamardsUnitary_zero_right (n : ℕ)

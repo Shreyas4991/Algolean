@@ -100,13 +100,10 @@ theorem embedQubitGate_apply {n : ℕ} (q : Fin (n + 1)) (U : 𝐔[Qubit])
         U (x q) (y q)
       else
         0 := by
-  simp [embedQubitGate, unitaryReindex]
   by_cases h :
         Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
-        Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q y
-  · rw [h]
-    simp
-  · simp [h]
+        Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q y <;>
+    simp [embedQubitGate, unitaryReindex, h]
 
 /-- Full-register Hadamard layer, recursively tensoring one `H` gate per
 qubit. This is a free non-oracle unitary in the query model. -/
@@ -133,17 +130,14 @@ theorem fullHadamardUnitary_zero_left (n : ℕ)
       have hinit0 : Fin.init (0 : Fin (n + 1) → Fin 2) = (0 : Fin n → Fin 2) := by
         ext i
         rfl
-      simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
-        mul_comm]
-      have hbit : (x (Fin.last n)).val = 0 ∨ (x (Fin.last n)).val = 1 := by
-        omega
-      rcases hbit with hbit | hbit
+      rcases (show (x (Fin.last n)).val = 0 ∨ (x (Fin.last n)).val = 1 by omega)
+        with hbit | hbit
       · have hxlast : x (Fin.last n) = 0 := Fin.ext hbit
-        simp [hxlast]
-        ring
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast]
       · have hxlast : x (Fin.last n) = 1 := Fin.ext hbit
-        simp [hxlast]
-        ring
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast]
 
 @[simp]
 theorem fullHadamardUnitary_zero_right (n : ℕ)
@@ -161,17 +155,14 @@ theorem fullHadamardUnitary_zero_right (n : ℕ)
       have hinit0 : Fin.init (0 : Fin (n + 1) → Fin 2) = (0 : Fin n → Fin 2) := by
         ext i
         rfl
-      simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
-        mul_comm]
-      have hbit : (x (Fin.last n)).val = 0 ∨ (x (Fin.last n)).val = 1 := by
-        omega
-      rcases hbit with hbit | hbit
+      rcases (show (x (Fin.last n)).val = 0 ∨ (x (Fin.last n)).val = 1 by omega)
+        with hbit | hbit
       · have hxlast : x (Fin.last n) = 0 := Fin.ext hbit
-        simp [hxlast]
-        ring
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast]
       · have hxlast : x (Fin.last n) = 1 := Fin.ext hbit
-        simp [hxlast]
-        ring
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast]
 
 /-! ### CNOT unitary -/
 
