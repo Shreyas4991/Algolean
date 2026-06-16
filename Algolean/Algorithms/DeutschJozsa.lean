@@ -123,7 +123,6 @@ theorem deutschJozsa_liftM (n : ℕ) (M : Model (QuantumQuery n) Cost) :
   simp only [FreeM.bind_eq_bind, FreeM.liftM_bind_id]
   simp
 
-@[simp]
 theorem deutschJozsa_liftM_quantumModel (n : ℕ)
     (f : (Fin n → Fin 2) → Bool) :
     (deutschJozsa n).liftM
@@ -132,7 +131,6 @@ theorem deutschJozsa_liftM_quantumModel (n : ℕ)
   rw [deutschJozsa_liftM]
   simp [deutschJozsaResult]
 
-@[simp]
 theorem deutschJozsa_liftM_quantumModel_run (n : ℕ)
     (f : (Fin n → Fin 2) → Bool) :
     Id.run ((deutschJozsa n).liftM
