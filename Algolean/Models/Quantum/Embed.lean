@@ -130,11 +130,12 @@ theorem fullHadamardUnitary_zero_left (n : ℕ)
       have hinit0 : Fin.init (0 : Fin (n + 1) → Fin 2) = (0 : Fin n → Fin 2) := by
         ext i
         rfl
-      rcases fin2_eq_zero_or_one (x (Fin.last n)) with hxlast | hxlast
+      by_cases hxlast : x (Fin.last n) = 0
       · simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
           mul_comm, hxlast]
-      · simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
-          mul_comm, hxlast]
+      · have hxlast' := Fin.eq_one_of_ne_zero (x (Fin.last n)) hxlast
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast']
 
 @[simp]
 theorem fullHadamardUnitary_zero_right (n : ℕ)
@@ -152,11 +153,12 @@ theorem fullHadamardUnitary_zero_right (n : ℕ)
       have hinit0 : Fin.init (0 : Fin (n + 1) → Fin 2) = (0 : Fin n → Fin 2) := by
         ext i
         rfl
-      rcases fin2_eq_zero_or_one (x (Fin.last n)) with hxlast | hxlast
+      by_cases hxlast : x (Fin.last n) = 0
       · simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
           mul_comm, hxlast]
-      · simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
-          mul_comm, hxlast]
+      · have hxlast' := Fin.eq_one_of_ne_zero (x (Fin.last n)) hxlast
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast']
 
 /-! ### CNOT unitary -/
 
