@@ -209,30 +209,6 @@ theorem deutschJozsaResult_eq_unitary (n : ℕ)
       deutschJozsaUnitary n f ◃ zeroRegisterState n := by
   simp [deutschJozsaResult, deutschJozsaUnitary, U_conj_mul]
 
-/-- Conjugating a computational-basis pure state by `U` produces the outer
-product of the `b`-th column of `U`: the `(i,j)` entry is
-`U i b * star (U j b)`. -/
-theorem U_conj_pure_basis_apply {d : Type*} [Fintype d] [DecidableEq d]
-    (U : 𝐔[d]) (b i j : d) :
-    (U ◃ MState.pure (Ket.basis b)).m i j =
-      U i b * star (U j b) := by
-  change ((MState.pure (Ket.basis b)).M.conj U.val).mat i j =
-    U i b * star (U j b)
-  rw [HermitianMat.conj_apply_mat]
-  simp only [Matrix.mul_apply, Matrix.conjTranspose_apply, MState.pure,
-    HermitianMat.mat_mk, Matrix.vecMulVec_apply, Ket.basis, Bra.eq_conj]
-  rw [Finset.sum_eq_single b]
-  · rw [Finset.sum_eq_single b]
-    · simp [Ket.apply]
-    · intro x _ hx
-      simp [Ket.apply, Ne.symm hx]
-    · intro h
-      exact absurd (Finset.mem_univ b) h
-  · intro x _ hx
-    simp [Ket.apply, Ne.symm hx]
-  · intro h
-    exact absurd (Finset.mem_univ b) h
-
 /-- The all-zero amplitude of the Deutsch-Jozsa unitary is the normalized
 signed sum of oracle phases. The two `hadamardScale n` factors are the first
 and last Hadamard layers; `oracleSign f x` is the phase contributed by the
@@ -255,8 +231,7 @@ theorem deutschJozsaZeroProbability_eq_normSq_signedSum (n : ℕ)
   rw [deutschJozsaZeroProbability_coe, deutschJozsaResult_eq_unitary]
   rw [zeroRegisterState, U_conj_pure_basis_apply, deutschJozsaUnitary_zero_zero]
   set z : ℂ := hadamardScale n * hadamardScale n * ∑ x, oracleSign f x
-  rw [show z * star z = (Complex.normSq z : ℂ) by
-    simpa [RCLike.star_def] using Complex.mul_conj z]
+  rw [complex_mul_star_eq_normSq]
   simp
 
 /-- The two zero-row Hadamard scale factors normalize the full register:
