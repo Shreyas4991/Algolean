@@ -102,7 +102,7 @@ noncomputable def deutschJozsaDistribution (n : ℕ)
   (measureRegisterPOVM n).measure (deutschJozsaState n f)
 
 /-- Probability that the full-register measurement returns the all-zero
-bitstring, the textbook Deutsch-Jozsa acceptance condition for "constant". -/
+bitstring, the Deutsch-Jozsa acceptance condition for "constant". -/
 noncomputable def deutschJozsaZeroProbability (n : ℕ)
     (f : (Fin n → Fin 2) → Bool) : Prob :=
   deutschJozsaDistribution n f 0
