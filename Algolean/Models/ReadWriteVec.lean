@@ -49,6 +49,17 @@ def Vec.natCost : Model (Vec α) ℕ where
     | .write a i x => a.set i x
   cost _ := 1
 
+/-- Register `natCost` as the default model for `Vec`, so the global
+`WP (Prog (Vec α)) .pure` / `HasHandler` instances fire and `Triple`/`mvcgen` reasoning works on
+read/write-vector programs out of the box. Both `Vec` cost models share the same `evalQuery`, so
+this choice fixes only the functional semantics used by the weakest-precondition handler. -/
+instance : HasModel (Vec α) ℕ where
+  model := Vec.natCost
+
+/-- The default `Vec` model unfolds to `natCost`; lets `mvcgen` reduce `evalQuery` on `Vec`
+programs to concrete `read`/`write` semantics. -/
+@[simp] theorem Vec.hasModel_model : (HasModel.model : Model (Vec α) ℕ) = Vec.natCost := rfl
+
 
 section VecModel
 

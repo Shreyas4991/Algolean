@@ -7,8 +7,8 @@ Authors: Shreyas Srinivas , Bashar Hamade
 module
 
 public import Algolean.Models.FanInTwoCircuits
-public import Mathlib
-public import Algolean.Models.Circuits
+public import Mathlib.Algebra.Ring.BooleanRing
+public import Mathlib.AlgebraicTopology.SimplexCategory.Basic
 
 /-!
 # Examples of Progs for Circuits

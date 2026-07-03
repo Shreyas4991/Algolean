@@ -8,9 +8,12 @@ public import Algolean.Algorithms.ListLinearSearch
 public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
+public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.FreeWP.Effects
+public import Algolean.FreeWP.WP
 public import Algolean.LowerBounds.ComparisonSort
 public import Algolean.Models.Circuits
 public import Algolean.Models.Comparison
