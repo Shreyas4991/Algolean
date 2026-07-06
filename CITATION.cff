@@ -1,0 +1,35 @@
+name=CITATION.cff url=https://github.com/Shreyas4991/Algolean
+cff-version: 1.2.0
+type: software
+title: Algolean
+subtitle: "Algorithms and Complexity Library using the lightweight query combinator framework called Prog"
+description: "Algolean is a library of algorithms and complexity theory, defined broadly to include much of the Algorithms and Complexity theory literature. It is written in the lightweight free monad version of the Prog combinator framework."
+authors:
+  - family-names: "Srinivas"
+    given-names: "Shreyas"
+    affiliation: "CISPA Helmholtz Center for Informtion Security"
+contributors:
+  - family-names: "Ermovick"
+    given-names: "Ethan"
+  - family-names: "Duve"
+    given-names: "Tanner"
+  - family-names: "Hamade"
+    given-names: "Bashar"
+  - family-names: "Tantow"
+    given-names: "Johannes"
+  - family-names: "Schlesinger"
+    given-names: "Samuel"
+date-released: 2026-03-17
+version: "1.0.0"
+license: Apache-2.0
+repository-code: "https://github.com/Shreyas4991/Algolean"
+homepage: "https://shreyas4991.github.io/Algolean/"
+keywords:
+  - algorithms
+  - complexity
+  - formalization
+  - lean4
+references:
+  - type: software
+    title: "Lean 4"
+    url: "https://lean-lang.org/"
