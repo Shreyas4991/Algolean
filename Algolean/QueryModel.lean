@@ -260,8 +260,9 @@ theorem FreeM.liftM_bind_id {F : Type u → Type v} {α β : Type u}
     (FreeM.bind x f).liftM (fun {_} q => (interp q : Id _)) =
       (f (x.liftM (fun {_} q => (interp q : Id _)))).liftM
         (fun {_} q => (interp q : Id _)) := by
-  erw [FreeM.liftM_bind]
-  rfl
+  induction x with
+  | pure a => rfl
+  | liftBind op cont ih => exact ih (interp op)
 
 /-- The single-query Hoare spec, generic over any registered model: to establish postcondition `Q'`
 after running a query `q`, it suffices that `Q'` holds of the value `HasModel.model.evalQuery q`

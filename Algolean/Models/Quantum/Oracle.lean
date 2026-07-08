@@ -192,7 +192,6 @@ theorem applyGate_liftM {n : ℕ}
     (applyGate q ρ).liftM (fun {_} q => (M.evalQuery q : Id _)) =
       M.evalQuery q ◃ ρ := by
   unfold applyGate
-  erw [FreeM.liftM_liftBind]
   rfl
 
 @[simp]
@@ -364,8 +363,7 @@ theorem measureRegisterPOVM_measure_pure_apply_coe {n : ℕ}
   simp only [computationalBasisProjector_mat_apply, MState.mat_M, Matrix.trace,
     Matrix.diag_apply, Matrix.mul_apply, MState.pure_apply]
   rw [Finset.sum_eq_single x]
-  · simp [basisIndicator]
-    rfl
+  · simp [basisIndicator, Complex.normSq]
   · intro y _ hy
     simp [basisIndicator_eq_zero_of_ne hy]
   · intro h
