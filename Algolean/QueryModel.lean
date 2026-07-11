@@ -286,12 +286,12 @@ theorem Model.wp_eq_wp_interp (M : Model Q Cost) (P : Prog Q α) :
 theorem FreeM.liftM_bind_id {F : Type u → Type v} {α β : Type u}
     (interp : {ι : Type u} → F ι → ι) (x : FreeM F α)
     (f : α → FreeM F β) :
-    (FreeM.bind x f).liftM (fun {_} q => (interp q : Id _)) =
+    (x >>= f).liftM (fun {_} q => (interp q : Id _)) =
       (f (x.liftM (fun {_} q => (interp q : Id _)))).liftM
         (fun {_} q => (interp q : Id _)) := by
   induction x with
   | pure a => rfl
-  | liftBind op cont ih => exact ih (interp op)
+  | lift_bind op cont ih => exact ih (interp op)
 
 /-- The single-query Hoare spec, generic over any registered model: to establish postcondition `Q'`
 after running a query `q`, it suffices that `Q'` holds of the value `HasModel.model.evalQuery q`
