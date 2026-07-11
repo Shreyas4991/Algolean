@@ -35,6 +35,8 @@ measurement are supplied by `QuantumInfo.MState` / `POVM`.
   returning the transformed `MState`.
 - `measureQubitPOVM`: computational-basis projective measurement on a
   single qubit, as a `POVM (Fin 2) (Fin n → Fin 2)`.
+- `measureRegisterPOVM`: computational-basis projective measurement on
+  the full register, as a `POVM (Fin n → Fin 2) (Fin n → Fin 2)`.
 
 ## Design notes
 
@@ -107,6 +109,12 @@ noncomputable def gateOracle {n : ℕ} (f : (Fin n → Fin 2) → Bool) :
       · simp only [RCLike.star_def, ite_mul, neg_mul, one_mul, zero_mul, ite_eq_right_iff]
         aesop⟩
 
+@[simp]
+theorem gateOracle_apply {n : ℕ} (f : (Fin n → Fin 2) → Bool)
+    (x y : Fin n → Fin 2) :
+    gateOracle f x y = if x = y then (if f x then (-1 : ℂ) else 1) else 0 := by
+  by_cases hxy : x = y <;> simp [gateOracle, Matrix.diagonal, hxy]
+
 /-! ### Semantic interpretation -/
 
 /-- Interpret a syntactic query as its semantic unitary on the full `n`-qubit
@@ -177,12 +185,55 @@ theorem applyGate_eval {n : ℕ}
   simp [applyGate]
 
 @[simp]
+theorem applyGate_liftM {n : ℕ}
+    (q : QuantumQuery n (𝐔[Fin n → Fin 2]))
+    (ρ : MState (Fin n → Fin 2))
+    (M : Model (QuantumQuery n) Cost) :
+    (applyGate q ρ).liftM (fun {_} q => (M.evalQuery q : Id _)) =
+      M.evalQuery q ◃ ρ := by
+  unfold applyGate
+  rfl
+
+@[simp]
 theorem applyGate_time [AddZeroClass Cost] {n : ℕ}
     (q : QuantumQuery n (𝐔[Fin n → Fin 2]))
     (ρ : MState (Fin n → Fin 2))
     (M : Model (QuantumQuery n) Cost) :
     (applyGate q ρ).time M = M.cost q := by
   simp [applyGate]
+
+/-! ### State-entry lemmas -/
+
+theorem complex_mul_star_eq_normSq (z : ℂ) :
+    z * star z = (Complex.normSq z : ℂ) := by
+  rw [RCLike.star_def, Complex.mul_conj]
+
+theorem complex_mul_star_re_eq_normSq (z : ℂ) :
+    (z * star z).re = Complex.normSq z := by
+  rw [complex_mul_star_eq_normSq]
+  simp
+
+/-- Conjugating a computational-basis pure state by `U` produces the outer
+product of the `b`-th column of `U`: the `(i,j)` entry is
+`U i b * star (U j b)`. -/
+theorem U_conj_pure_basis_apply {d : Type*} [Fintype d] [DecidableEq d]
+    (U : 𝐔[d]) (b i j : d) :
+    (U ◃ MState.pure (Ket.basis b)).m i j =
+      U i b * star (U j b) := by
+  simp only [MState.U_conj, MState.m, HermitianMat.conj_apply_mat]
+  simp only [Matrix.mul_apply, Matrix.conjTranspose_apply, MState.pure,
+    HermitianMat.mat_mk, Matrix.vecMulVec_apply, Ket.basis, Bra.eq_conj]
+  rw [Finset.sum_eq_single b]
+  · rw [Finset.sum_eq_single b]
+    · simp [Ket.apply]
+    · intro x _ hx
+      simp [Ket.apply, Ne.symm hx]
+    · intro h
+      exact absurd (Finset.mem_univ b) h
+  · intro x _ hx
+    simp [Ket.apply, Ne.symm hx]
+  · intro h
+    exact absurd (Finset.mem_univ b) h
 
 /-! ### Measurement -/
 
@@ -226,6 +277,113 @@ noncomputable def measureQubitPOVM {n : ℕ} (q : Fin n) :
       rcases hq with hq | hq <;> simp [hq]
     rw [heq]
     exact HermitianMat.diagonal_one
+
+/-- Indicator function on bitstrings: `1` at `x`, else `0`. -/
+def basisIndicator {n : ℕ} (x : Fin n → Fin 2) :
+    (Fin n → Fin 2) → ℝ :=
+  fun y => if y = x then 1 else 0
+
+@[simp]
+theorem basisIndicator_self {n : ℕ} (x : Fin n → Fin 2) :
+    basisIndicator x x = 1 := by
+  simp [basisIndicator]
+
+theorem basisIndicator_eq_zero_of_ne {n : ℕ} {x y : Fin n → Fin 2}
+    (h : y ≠ x) : basisIndicator x y = 0 := by
+  simp [basisIndicator, h]
+
+/-- Computational-basis projector for the full-register basis state `|x⟩`:
+`|x⟩⟨x|` as a diagonal real-valued `HermitianMat`. -/
+noncomputable def computationalBasisProjector {n : ℕ} (x : Fin n → Fin 2) :
+    HermitianMat (Fin n → Fin 2) ℂ :=
+  HermitianMat.diagonal ℂ (basisIndicator x)
+
+theorem computationalBasisProjector_mat_apply {n : ℕ}
+    (x y z : Fin n → Fin 2) :
+    (computationalBasisProjector x).mat y z =
+      if y = z then (basisIndicator x y : ℂ) else 0 := by
+  unfold computationalBasisProjector
+  rw [HermitianMat.diagonal_mat]
+  by_cases hyz : y = z <;> simp [Matrix.diagonal, hyz]
+
+@[simp]
+theorem computationalBasisProjector_apply {n : ℕ}
+    (x y z : Fin n → Fin 2) :
+    computationalBasisProjector x y z =
+      if y = z then (basisIndicator x y : ℂ) else 0 := by
+  rw [← HermitianMat.mat_apply]
+  exact computationalBasisProjector_mat_apply x y z
+
+/-- The full-register computational-basis projectors resolve the identity. -/
+theorem computationalBasisProjector_sum_mat {n : ℕ} :
+    (∑ x : Fin n → Fin 2, (computationalBasisProjector x).mat) =
+      (1 : Matrix (Fin n → Fin 2) (Fin n → Fin 2) ℂ) := by
+  ext y z
+  rw [Matrix.sum_apply]
+  by_cases hyz : y = z
+  · subst z
+    rw [Finset.sum_eq_single y]
+    · simp
+    · intro x _ hx
+      simp [basisIndicator_eq_zero_of_ne (Ne.symm hx)]
+    · intro h
+      exact absurd (Finset.mem_univ y) h
+  · simp [hyz]
+
+/-- The full-register computational-basis projectors resolve the identity. -/
+theorem computationalBasisProjector_sum {n : ℕ} :
+    (∑ x : Fin n → Fin 2, computationalBasisProjector x) =
+      (1 : HermitianMat (Fin n → Fin 2) ℂ) := by
+  apply HermitianMat.ext
+  rw [HermitianMat.mat_finset_sum, computationalBasisProjector_sum_mat]
+  rfl
+
+/-- Computational-basis measurement of the whole register. Outcomes are
+indexed by bitstrings, and the projector for outcome `x` is `|x⟩⟨x|`. -/
+noncomputable def measureRegisterPOVM (n : ℕ) :
+    POVM (Fin n → Fin 2) (Fin n → Fin 2) where
+  mats x := computationalBasisProjector x
+  nonneg x := by
+    simp only [computationalBasisProjector, HermitianMat.zero_le_iff,
+      HermitianMat.diagonal_mat]
+    apply Matrix.posSemidef_diagonal_iff.mpr
+    intro y
+    rw [RCLike.nonneg_iff]
+    simp only [basisIndicator]
+    split_ifs <;> simp
+  normalized := computationalBasisProjector_sum
+
+theorem measureRegisterPOVM_measure_pure_apply_coe {n : ℕ}
+    (ψ : Ket (Fin n → Fin 2)) (x : Fin n → Fin 2) :
+    (((measureRegisterPOVM n).measure (MState.pure ψ)) x : ℝ) =
+      Complex.normSq (ψ x) := by
+  simp only [measureRegisterPOVM, POVM.measure, ProbDistribution.mk',
+    ProbDistribution.funlike_apply]
+  rw [HermitianMat.inner_eq_re_trace]
+  simp only [computationalBasisProjector_mat_apply, MState.mat_M, Matrix.trace,
+    Matrix.diag_apply, Matrix.mul_apply, MState.pure_apply]
+  rw [Finset.sum_eq_single x]
+  · simp [basisIndicator, Complex.normSq]
+  · intro y _ hy
+    simp [basisIndicator_eq_zero_of_ne hy]
+  · intro h
+    exact absurd (Finset.mem_univ x) h
+
+@[simp]
+theorem measureRegisterPOVM_measure_apply_coe {n : ℕ}
+    (ρ : MState (Fin n → Fin 2)) (x : Fin n → Fin 2) :
+    (((measureRegisterPOVM n).measure ρ) x : ℝ) = (ρ.m x x).re := by
+  simp only [measureRegisterPOVM, POVM.measure, ProbDistribution.mk',
+    ProbDistribution.funlike_apply]
+  rw [HermitianMat.inner_eq_re_trace]
+  simp only [computationalBasisProjector_mat_apply, MState.mat_M, Matrix.trace,
+    Matrix.diag_apply, Matrix.mul_apply]
+  rw [Finset.sum_eq_single x]
+  · simp [basisIndicator]
+  · intro y _ hy
+    simp [basisIndicator_eq_zero_of_ne hy]
+  · intro h
+    exact absurd (Finset.mem_univ x) h
 
 end Algorithms
 

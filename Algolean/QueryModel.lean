@@ -282,6 +282,17 @@ theorem Model.wp_eq_wp_interp (M : Model Q Cost) (P : Prog Q α) :
     wpH M.handler P = wp (P.liftM (fun {_} q => (M.evalQuery q : Id _))) :=
   wpH_ofInterp_eq_wp_liftM (m := Id) (fun _ q => M.evalQuery q) P
 
+@[simp]
+theorem FreeM.liftM_bind_id {F : Type u → Type v} {α β : Type u}
+    (interp : {ι : Type u} → F ι → ι) (x : FreeM F α)
+    (f : α → FreeM F β) :
+    (FreeM.bind x f).liftM (fun {_} q => (interp q : Id _)) =
+      (f (x.liftM (fun {_} q => (interp q : Id _)))).liftM
+        (fun {_} q => (interp q : Id _)) := by
+  induction x with
+  | pure a => rfl
+  | liftBind op cont ih => exact ih (interp op)
+
 /-- The single-query Hoare spec, generic over any registered model: to establish postcondition `Q'`
 after running a query `q`, it suffices that `Q'` holds of the value `HasModel.model.evalQuery q`
 that the model returns. Tagged `@[spec]` so `mvcgen` discharges every lifted query automatically. -/
@@ -289,6 +300,11 @@ that the model returns. Tagged `@[spec]` so `mvcgen` discharges every lifted que
 theorem Spec.query [HasModel Q Cost] (q : Q ι) {Q' : PostCond ι .pure} :
     Triple (FreeM.lift q : Prog Q ι)
       (Q'.1 ((HasModel.model : Model Q Cost).evalQuery q)) Q' :=
+  Triple.iff.mpr SPred.entails.rfl
+
+theorem Spec.pure_FreeM {F : Type u → Type v} {α : Type u} [HasHandler F .pure]
+    (a : α) {Q' : PostCond α .pure} :
+    Triple (FreeM.pure a : FreeM F α) (Q'.1 a) Q' :=
   Triple.iff.mpr SPred.entails.rfl
 
 /-- Adequacy bridge: a pure-shape Hoare triple with trivial precondition yields a fact about the
