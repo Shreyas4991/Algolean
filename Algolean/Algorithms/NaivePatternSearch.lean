@@ -247,9 +247,9 @@ theorem naivePatternSearch_time_complexity_lower_bound [BEq α] [LawfulBEq α] [
                 simp [pat', txt', txt'', naivePatternSearchFrom, List.replicate, hlen]
                 split_ifs <;> simp
               have := Nat.succ_sub (Nat.succ_le_succ hlen)
-              have := (by simpa [pat', txt', txt''] using hprefix (m+1) (n+1) :
+              have := (by simpa [pat', txt', txt'', List.replicate_succ] using hprefix (m+1) (n+1) :
                 (prefixMatch pat' txt').time Comparison.natCost = Nat.min (m+1) (n+1))
-              have := (by simpa [pat', txt''] using ih (i+1) (m+1) :
+              have := (by simpa [pat', txt'', List.replicate_succ] using ih (i+1) (m+1) :
                 (naivePatternSearchFrom pat' txt'' (i+1)).time Comparison.natCost =
                   (m+1) * (n+1 - (m+1)))
               simp_all [pat', txt', txt'', List.replicate, Nat.mul_succ, Nat.add_comm]

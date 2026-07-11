@@ -81,19 +81,31 @@ def Prog.eval
 
 @[simp, grind =]
 theorem Prog.eval_pure (a : α) (M : Model Q Cost) :
-    Prog.eval (FreeM.pure a) M = a :=
+    Prog.eval (pure a : Prog Q α) M = a :=
   rfl
 
 @[simp, grind =]
 theorem Prog.eval_bind
     (x : Prog Q α) (f : α → Prog Q β) (M : Model Q Cost) :
-    Prog.eval (FreeM.bind x f) M = Prog.eval (f (x.eval M)) M := by
+    Prog.eval (x >>= f) M = Prog.eval (f (x.eval M)) M := by
   simp [Prog.eval]
 
-@[simp, grind =]
+@[grind =]
 theorem Prog.eval_liftBind
     (x : Q α) (f : α → Prog Q β) (M : Model Q Cost) :
     Prog.eval (FreeM.liftBind x f) M = Prog.eval (f <| M.evalQuery x) M := by
+  simp [Prog.eval]
+
+@[simp, grind =]
+theorem Prog.eval_lift
+    (x : Q α) (M : Model Q Cost) :
+    Prog.eval (FreeM.lift x) M = M.evalQuery x := by
+  rfl
+
+@[simp, grind =]
+theorem Prog.eval_map
+    (f : α → β) (P : Prog Q α) (M : Model Q Cost) :
+    Prog.eval (f <$> P) M = f (P.eval M) := by
   simp [Prog.eval]
 
 /--
@@ -108,19 +120,40 @@ def Prog.time [AddZero Cost]
 
 @[simp, grind =]
 lemma Prog.time_pure [AddZero Cost] (a : α) (M : Model Q Cost) :
-    Prog.time (FreeM.pure a) M = 0 := by
+    Prog.time (pure a : Prog Q α) M = 0 := by
   simp [time]
 
-@[simp, grind =]
+@[grind =]
 theorem Prog.time_liftBind [AddZero Cost]
     (x : Q α) (f : α → Prog Q β) (M : Model Q Cost) :
     Prog.time (FreeM.liftBind x f) M = M.cost x + Prog.time (f <| M.evalQuery x) M := by
   simp [Prog.time]
 
 @[simp, grind =]
+theorem Prog.time_lift [AddZeroClass Cost]
+    (x : Q α) (M : Model Q Cost) :
+    Prog.time (FreeM.lift x) M = M.cost x := by
+  change Prog.time (FreeM.liftBind x (fun a => pure a)) M = M.cost x
+  rw [Prog.time_liftBind]
+  change M.cost x + Prog.time (pure (M.evalQuery x) : Prog Q α) M = M.cost x
+  rw [Prog.time_pure, add_zero]
+
+@[simp, grind =]
+theorem Prog.time_map [AddZero Cost]
+    (f : α → β) (P : Prog Q α) (M : Model Q Cost) :
+    Prog.time (f <$> P) M = P.time M := by
+  induction P with
+  | pure a =>
+    simp
+  | liftBind op cont ih =>
+    change Prog.time (FreeM.liftBind op (fun a => f <$> cont a)) M =
+      Prog.time (FreeM.liftBind op cont) M
+    rw [Prog.time_liftBind, Prog.time_liftBind, ih]
+
+@[simp, grind =]
 lemma Prog.time_bind [AddCommMonoid Cost] (M : Model Q Cost)
     (op : Prog Q ι) (cont : ι → Prog Q α) :
-    Prog.time (op.bind cont) M =
+    Prog.time (op >>= cont) M =
       Prog.time op M + Prog.time (cont (Prog.eval op M)) M := by
   simp only [eval, time]
   induction op with
@@ -138,7 +171,7 @@ private lemma Prog.eval_eq_liftM_timeQuery_ret [AddZero Cost]
   induction P with
   | pure a => rfl
   | liftBind op cont ih =>
-    simp only [eval, FreeM.liftM_liftBind]
+    simp only [eval]
     exact ih (M.evalQuery op)
 
 section Reduction
@@ -166,8 +199,8 @@ theorem Prog.reduceProg_eval
   induction P with
   | pure a => rfl
   | liftBind op cont ih =>
-    simp_all only [FreeM.liftM_liftBind, FreeM.liftM_bind, FreeM.bind_eq_bind,
-      Prog.eval, Id.run_bind, pure_bind]
+    simp_all only [eval, FreeM.liftBind_eq, FreeM.bind_eq_bind, FreeM.liftM_bind, FreeM.liftM_lift,
+      Id.run_bind, pure_bind]
 
 /-- The cost of a reduced program decomposes as the sum of per-query reduction costs. -/
 theorem Prog.reduceProg_time [AddCommMonoid Cost]
@@ -181,7 +214,8 @@ theorem Prog.reduceProg_time [AddCommMonoid Cost]
   induction P with
   | pure a => rfl
   | liftBind op cont ih =>
-    simp only [FreeM.liftM_liftBind, FreeM.liftM_bind, FreeM.bind_eq_bind]
+    simp only [FreeM.liftBind_eq, FreeM.bind_eq_bind,
+      FreeM.liftM_bind, FreeM.liftM_lift]
     change (FreeM.liftM M₂.timeQuery (red.reduce op)).tell +
       (FreeM.liftM M₂.timeQuery (FreeM.liftM red.reduce
         (cont (FreeM.liftM M₂.timeQuery (red.reduce op)).ret))).tell = _
@@ -198,11 +232,6 @@ This section contain extras needed for this repo to work until FreeM is fixed up
 -/
 instance instCoeOutFreeM {Q α} : CoeOut (Q α) (FreeM Q α) where
   coe := FreeM.lift
-
-@[simp, grind =]
-theorem FreeM.bind_eq_bind {α β : Type w}
-    : Bind.bind = (FreeM.bind : FreeM F α → _ → FreeM F β) :=
-  rfl
 
 end FreeMExtras
 

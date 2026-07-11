@@ -173,7 +173,7 @@ mutual
 end
 
 /-- Compute circuit size, that is size of the circuit without double counting identical nodes -/
-@[simp, grind]
+@[grind]
 def Circuit.circuitSize [DecidableEq α] (c : Circuit α β) :=
   match c with
   | .const x => (subcircuits (.const x)).card

@@ -658,7 +658,10 @@ theorem buildLPS_time_complexity_upper_bound [BEq α] (pat : List α) :
               (pos := 1) (len := 0) (pat := x :: y :: ys)
               (lps := List.replicate (x :: y :: ys).length 0)
               (by simp) (by simp) (by simp) (by simp)
-          simpa [buildLPS] using hbound
+          exact (by
+            simpa [buildLPS] using
+              hbound.trans (by omega :
+                2 * (ys.length + 1) - 1 ≤ 2 * (ys.length + 1 + 1) - 3))
 
 private lemma buildLPSLoop_final_fallback_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
     ∀ extra {r k}, k < r →
@@ -705,7 +708,8 @@ private lemma buildLPS_replicate_append_singleton_time [DecidableEq α] {x y : �
   | zero =>
       simp [buildLPS, buildLPSLoop]
   | succ n =>
-      simpa [buildLPS, List.range, two_mul, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
+      simpa [buildLPS, List.range_succ, List.replicate_succ, two_mul,
+        Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
         buildLPSLoop_replicate_append_singleton_time (x := x) (y := y) hxy 1 0 n
 
 theorem buildLPS_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n : ℕ) :
@@ -717,8 +721,9 @@ theorem buildLPS_time_complexity_lower_bound [DecidableEq α] [Nontrivial α] (n
       simp [buildLPS]
   | succ n =>
       refine ⟨List.replicate n y ++ [x], by simp, ?_⟩
-      simpa [Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using
-        buildLPS_replicate_append_singleton_time (x := x) (y := y) hxy n
+      rw [buildLPS_replicate_append_singleton_time (x := x) (y := y) hxy n]
+      simp
+      omega
 
 theorem kmpPatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List α) :
     (kmpPatternSearch pat txt).time Comparison.natCost ≤
@@ -730,10 +735,10 @@ theorem kmpPatternSearch_time_complexity_upper_bound [BEq α] (pat txt : List α
       cases xs with
       | nil =>
           have := kmpSearchLoop_singleton_time (fuel := 2 * txt.length) (i := 0) x txt [] (by lia)
-          simp [kmpPatternSearch, buildLPS, buildLPSLoop, Cslib.FreeM.bind_eq_bind]
+          simp [kmpPatternSearch, buildLPS, buildLPSLoop]
           grind
       | cons y ys =>
-          simp only [kmpPatternSearch, Cslib.FreeM.bind_eq_bind, time_bind, List.length_cons]
+          simp only [kmpPatternSearch, time_bind, List.length_cons]
           have := by simpa using buildLPS_time_complexity_upper_bound (x :: y :: ys)
           have := by simpa using (kmpSearchLoop_time_le_fuel (2 * txt.length) 0 0 (x :: y :: ys)
                 txt ((buildLPS (x :: y :: ys)).eval Comparison.natCost) [])
@@ -767,20 +772,33 @@ private lemma buildLPSLoop_yx_replicate_time [DecidableEq α] {x y : α} (hxy : 
           Comparison.natCost = 2 * (r + 2) - 1 := by
         rw [buildLPSLoop.eq_def]
         simp [hi]
-        grind
+        grind [Comparison.natCost_cost, Comparison.natCost_evalQuery]
       constructor <;>
         rw [buildLPSLoop.eq_def] <;>
-        simp [hi] <;>
-        grind
+        simp [hi, Prog.time_bind, Prog.time_lift, Prog.eval_lift,
+          Comparison.natCost_cost, Comparison.natCost_evalQuery] <;>
+        grind [Comparison.natCost_cost, Comparison.natCost_evalQuery]
 
 private lemma buildLPS_yx_replicate_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
     ∀ m,
       (buildLPS (y :: x :: List.replicate (m + 1) y)).time Comparison.natCost = 2 * (m + 1) := by
-  intro _
+  intro m
   simp only [buildLPS, List.length_cons, List.length_replicate, add_tsub_cancel_right]
+  have hfuel : 2 * (m + 1 + 1) = (2 * m + 3).succ := by omega
+  rw [hfuel]
   rw [buildLPSLoop.eq_def]
-  simp [hxy, Nat.add_left_comm, Nat.add_comm, buildLPSLoop_yx_replicate_time]
-  grind
+  have hloop :
+      (buildLPSLoop (2 * m + 3) 2 0
+          (y :: x :: List.replicate (m + 1) y) (List.replicate (m + 3) 0)).time
+        Comparison.natCost = 2 * (m + 1) - 1 := by
+    have hloop' := (buildLPSLoop_yx_replicate_time (x := x) (y := y) hxy m 1 0 (m + 1)
+      (List.replicate (m + 3) 0) (by simp) (by simp)).1
+    have hfuelLoop : 1 + 2 * (m + 1) = 2 * m + 3 := by omega
+    rw [hfuelLoop] at hloop'
+    simpa using hloop'
+  simp [hxy, Prog.time_bind, Prog.time_lift, Prog.eval_lift,
+    Comparison.natCost_cost, Comparison.natCost_evalQuery, hloop]
+  omega
 
 private lemma kmpSearchLoop_yx_prefix_replicate_time [DecidableEq α] {x y : α} (hxy : x ≠ y) :
     ∀ r, ∀ i (patTail : List α) (txtLen : Nat) (lps acc : List Nat),
@@ -804,11 +822,12 @@ private lemma kmpSearchLoop_yx_prefix_replicate_time [DecidableEq α] {x y : α}
           Comparison.natCost = 2 * (r + 2) - 1 := by
         rw [kmpSearchLoop.eq_def]
         simp [hit]
-        grind
+        grind [Comparison.natCost_cost, Comparison.natCost_evalQuery]
       constructor <;>
         rw [kmpSearchLoop.eq_def] <;>
-        simp [hit] <;>
-        grind
+        simp [hit, Prog.time_bind, Prog.time_lift, Prog.eval_lift,
+          Comparison.natCost_cost, Comparison.natCost_evalQuery] <;>
+        grind [Comparison.natCost_cost, Comparison.natCost_evalQuery]
 
 theorem kmpPatternSearch_time_complexity_lower_bound [DecidableEq α] [Nontrivial α]
     (m n : ℕ) :

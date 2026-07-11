@@ -102,8 +102,10 @@ private theorem fin_cur_eq {pref suff : List (Fin n)} {cur : Fin n}
 /-- Swapping two entries permutes the underlying list. -/
 private lemma set_set_toList_perm (w : Vector α n) (i j : Nat) (hi : i < n) (hj : j < n) :
     ((w.set i (w[j]'hj) hi).set j (w[i]'hi) hj).toList.Perm w.toList := by
-  simpa [Vector.toList_set, Vector.getElem_toList] using
-    List.set_set_perm (as := w.toList) (by simpa using hi) (by simpa using hj)
+  have hi' : i < w.toList.length := by simpa using hi
+  have hj' : j < w.toList.length := by simpa using hj
+  simpa [Vector.toList_set, Fin.cast_mk, Vector.getElem_toList hi', Vector.getElem_toList hj'] using
+    List.set_set_perm (as := w.toList) hi' hj'
 
 /-- After swapping out-of-order `w[m], w[m+1]`, the prefix maximum moves to `m+1`. -/
 private lemma maxAt_swap (le : α → α → Bool) (htot : ∀ a b : α, le a b = true ∨ le b a = true)
