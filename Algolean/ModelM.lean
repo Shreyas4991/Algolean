@@ -206,6 +206,11 @@ theorem runM_value [Monad m] [LawfulMonad m] [AddMonoid Cost]
       (M.evalQuery q >>= fun a => (M.cost q + ·) <$> costM (f a) M) := by
   simp [costM, runM, ModelM.runQuery, AddWriterT.cost, AddWriterT.run_bind]
 
+@[simp] theorem costM_map [Monad m] [LawfulMonad m] [AddMonoid Cost]
+    (f : α → β) (P : Prog Q α) (M : ModelM Q m Cost) :
+    costM (f <$> P) M = costM P M := by
+  simp [costM]
+
 section OfModel
 
 variable {Q : Type u → Type u} {Cost : Type u}
