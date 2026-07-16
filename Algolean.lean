@@ -1,6 +1,7 @@
 module  -- shake: keep-all --deprecated_module: ignore
 
 public import Algolean.AddWriter.Basic
+public import Algolean.AddWriter.Transformer
 public import Algolean.Algorithms.BoyerMooreMajorityVote
 public import Algolean.Algorithms.Circuits.FanInTwo.LogAnd
 public import Algolean.Algorithms.KMPPatternSearch
@@ -32,3 +33,4 @@ public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
 public import Algolean.QueryComposition
 public import Algolean.QueryModel
+public import Algolean.ModelM
