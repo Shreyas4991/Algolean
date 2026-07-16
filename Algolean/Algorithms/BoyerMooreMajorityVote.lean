@@ -147,13 +147,7 @@ private theorem VoteState.stepM_eval [BEq α] (state : VoteState α) (x : α) :
   cases state with
   | empty => simp [VoteState.stepM, VoteState.step]
   | candidate c n =>
-      cases n with
-      | zero =>
-          simp [VoteState.stepM, VoteState.step]
-          split <;> simp_all
-      | succ n =>
-          simp [VoteState.stepM, VoteState.step]
-          split <;> simp_all
+      cases n <;> simp [VoteState.stepM, VoteState.step] <;> split <;> simp_all
 
 private lemma VoteState.balance_append_singleton [BEq α] [LawfulBEq α]
     (a x : α) (xs : List α) :
@@ -167,21 +161,7 @@ private lemma VoteState.score_step [BEq α] [LawfulBEq α]
     score a state + (if x == a then 1 else -1) ≤ score a (state.step x) := by
   cases state with
   | empty => simp [score, step]
-  | candidate c n =>
-      by_cases hca : c = a
-      · subst c
-        by_cases hax : a = x
-        · subst x; simp [score, step]
-        · have hxa : x ≠ a := fun h => hax h.symm
-          cases n <;> simp [score, step, hax, hxa]
-      · by_cases hxa : x = a
-        · subst x
-          cases n <;> simp [score, step, hca]
-        · by_cases hcx : c = x
-          · subst x; simp [score, step, hca]
-          · cases n with
-            | zero => simp [score, step, hca, hxa, hcx]
-            | succ n => simp [score, step, hca, hxa, hcx]; omega
+  | candidate c n => cases n <;> simp [score, step] <;> grind
 
 private lemma VoteState.balance_pos_of_majority [BEq α] [LawfulBEq α]
     (a : α) (xs : List α) (h : IsMajority a xs) : 0 < balance a xs := by
@@ -191,14 +171,7 @@ private lemma VoteState.balance_pos_of_majority [BEq α] [LawfulBEq α]
 private lemma VoteState.candidate_eq_of_score_pos [BEq α] [LawfulBEq α]
     (a : α) (state : VoteState α) (h : 0 < score a state) :
     state.candidate? = some a := by
-  cases state with
-  | empty => simp [score] at h
-  | candidate c n =>
-      by_cases hca : c = a
-      · subst c; simp [candidate?]
-      · have hn : (0 : Int) ≤ n := by omega
-        simp [score, hca] at h
-        omega
+  cases state <;> grind [score, candidate?]
 
 set_option mvcgen.warning false in
 /-- A monadic cancellation step evaluates to the corresponding pure state transition. -/
@@ -250,12 +223,7 @@ theorem countLoop_spec [BEq α] [LawfulBEq α] (candidate : α) (xs : List α) :
       ⦃⇓count => ⌜count.value = xs.count candidate⌝⦄ := by
   mvcgen [countLoop, countStep_spec] invariants
     · ⇓⟨it, count⟩ => ⌜count.value = it.prefix.count candidate⌝
-  case vc1.step.success pref cur suff hsplit current hcurrent result hresult =>
-    subst result
-    by_cases h : candidate = cur
-    · subst_vars; simp_all [List.count_append]
-    · have h' : cur ≠ candidate := Ne.symm h
-      simp_all [List.count_append]
+  all_goals grind
 
 set_option mvcgen.warning false in
 /-- The verification pass counts exactly the occurrences of its candidate. -/
@@ -288,14 +256,7 @@ private lemma VoteState.stepM_time [BEq α] (state : VoteState α) (x : α) :
     (state.stepM x).time Comparison.natCost ≤ 1 := by
   cases state with
   | empty => simp [stepM]
-  | candidate c n =>
-      cases n with
-      | zero =>
-          simp [stepM]
-          split <;> simp_all
-      | succ n =>
-          simp [stepM]
-          split <;> simp_all
+  | candidate c n => cases n <;> simp [stepM] <;> split <;> simp_all
 
 private lemma countStep_time [BEq α] (candidate x : α) (count : OccurrenceCount α) :
     (countStep candidate x count).time Comparison.natCost = 1 := by
@@ -320,8 +281,7 @@ private lemma countFoldlM_time [BEq α] (candidate : α) (count : OccurrenceCoun
   induction xs generalizing count with
   | nil => simp
   | cons x xs ih =>
-      simp only [List.foldlM_cons, Prog.time_bind, List.length_cons]
-      rw [countStep_time, ih]
+      simp [List.foldlM_cons, Prog.time_bind, countStep_time, ih]
       omega
 
 private lemma majorityCandidate_time [BEq α] (xs : List α) :
