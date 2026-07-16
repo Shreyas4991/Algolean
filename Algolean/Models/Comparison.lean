@@ -46,6 +46,14 @@ def Comparison.natCost [BEq α] : Model (Comparison α) ℕ where
     | .compare x y => x == y
   cost _ := 1
 
+/-- Register `natCost` as the default comparison model for weakest-precondition proofs. -/
+instance [BEq α] : HasModel (Comparison α) ℕ where
+  model := Comparison.natCost
+
+/-- The default comparison model unfolds to `natCost`. -/
+@[simp] theorem Comparison.hasModel_model [BEq α] :
+    (HasModel.model : Model (Comparison α) ℕ) = Comparison.natCost := rfl
+
 end Algorithms
 
 end Algolean
