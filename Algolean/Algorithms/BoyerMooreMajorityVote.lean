@@ -14,8 +14,24 @@ public import Std.Tactic.Do
 # Boyer--Moore majority vote
 
 This file implements the Boyer--Moore majority-vote algorithm in the `Comparison` query model.
-Both passes use Lean's `for` syntax: the first cancels unequal pairs to select a candidate, and the
-second verifies that the candidate is a strict majority.
+
+## Algorithm
+
+An element is a strict majority of a list when it occurs in strictly more than half of the
+positions. The algorithm finds it, if it exists, in two passes that use only equality comparisons.
+
+The first pass selects a candidate by cancellation. It maintains a current candidate together with a
+weight. Starting from no candidate, it processes each element `x` as follows. If there is no current
+candidate, `x` becomes the candidate with weight one. If `x` equals the current candidate, the
+weight increases by one. If `x` differs from the current candidate, the weight decreases by one, and
+the candidate is discarded once the weight reaches zero. Each differing element thus cancels one
+unit of the candidate's weight. A strict majority element occurs more often than all other elements
+combined, so it survives every cancellation and is the candidate retained at the end.
+
+Cancellation only guarantees that if a strict majority exists it is the retained candidate. The
+retained candidate need not itself be a majority when no majority exists. The second pass therefore
+counts the actual occurrences of the candidate and returns it only when that count exceeds half the
+length, and returns `none` otherwise.
 
 ## Main definitions
 
@@ -202,19 +218,15 @@ theorem majorityCandidate_spec [BEq α] [LawfulBEq α] (xs : List α) :
     subst_vars
     intro a
     rw [VoteState.balance_append_singleton]
-    calc
-      _ ≤ VoteState.score a _ + (if _ == a then 1 else -1) := by
-        simpa only [add_comm] using add_le_add_right
-          (‹∀ a, VoteState.balance a _ ≤ VoteState.score a _› a)
-          (if _ == a then 1 else -1)
-      _ ≤ _ := VoteState.score_step a _ _
+    refine le_trans ?_ (VoteState.score_step a _ ‹VoteState α›)
+    have := ‹∀ a, VoteState.balance a _ ≤ VoteState.score a _› a
+    omega
   case vc2.pre => intro a; rfl
   case vc3.post.success =>
     rename_i result hresult
     intro a ha
-    apply VoteState.candidate_eq_of_score_pos a
-    have hle : VoteState.balance a xs ≤ VoteState.score a result := hresult a
-    exact (VoteState.balance_pos_of_majority a xs ha).trans_le hle
+    exact VoteState.candidate_eq_of_score_pos a _
+      ((VoteState.balance_pos_of_majority a xs ha).trans_le (hresult a))
 
 set_option mvcgen.warning false in
 /-- The verification loop counts exactly the occurrences of its candidate. -/
