@@ -83,19 +83,21 @@ def wpH (H : LHandler F ps) (x : FreeM F α) : PredTrans ps α :=
   x.liftM H
 
 @[simp] theorem wpH_pure (H : LHandler F ps) (a : α) :
-    wpH H (.pure a : FreeM F α) = Pure.pure a := rfl
+    wpH H (pure a : FreeM F α) = Pure.pure a := rfl
 
-@[simp] theorem wpH_liftBind (H : LHandler F ps) {ι : Type u}
+theorem wpH_liftBind (H : LHandler F ps) {ι : Type u}
     (op : F ι) (k : ι → FreeM F α) :
-    wpH H (liftBind op k) = H op >>= fun x => wpH H (k x) := rfl
+    wpH H ((lift op : FreeM F ι) >>= k) = H op >>= fun x => wpH H (k x) := by
+  change wpH H (liftBind op k) = _
+  rfl
 
 theorem wpH_lift (H : LHandler F ps) {ι : Type u} (op : F ι) :
     wpH H (lift op : FreeM F ι) = H op :=
   liftM_lift _ op
 
 @[simp] theorem wpH_bind (H : LHandler F ps) (x : FreeM F α) (f : α → FreeM F β) :
-    wpH H (x.bind f) = wpH H x >>= fun a => wpH H (f a) :=
-  liftM_bind _ x f
+    wpH H (x >>= f) = wpH H x >>= fun a => wpH H (f a) := by
+  simpa only [wpH, bind_eq_bind] using liftM_bind _ x f
 
 /-- Adequacy theorem: WP via `FreeM` against an `ofInterp`-derived handler agrees with
 `Std.Do`'s WP of the `liftM` interpretation. Equivalently, two monad morphisms
@@ -105,10 +107,10 @@ theorem wpH_ofInterp_eq_wp_liftM
     (interp : ∀ ι : Type u, F ι → m ι) (x : FreeM F α) :
     wpH (LHandler.ofInterp interp) x = wp (x.liftM (fun {_} => interp _)) := by
   induction x with
-  | pure a => simp [wpH, FreeM.liftM, WPMonad.wp_pure]
-  | liftBind op k ih =>
+  | pure a => simp [wpH, WPMonad.wp_pure]
+  | lift_bind op k ih =>
     simp only [wpH] at ih ⊢
-    simp [liftM_liftBind, WPMonad.wp_bind, ih]
+    simp [WPMonad.wp_bind, ih]
 
 /-- Records a default logical handler for `F` at shape `ps`, enabling the global
 `WP (FreeM F) ps` instance and any `Triple`/`mvcgen` reasoning over `FreeM F`. -/

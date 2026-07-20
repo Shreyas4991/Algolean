@@ -95,7 +95,7 @@ theorem SolvesWithinModel.bind [AddCommMonoid Cost] [Preorder Cost]
     (hop : SolvesWithinModel op prob_op M bound₁)
     (hcont : ∀ a, prob_op.spec M a →
       SolvesWithinModel (cont a) (prob_cont a) M bound₂) :
-    SolvesWithinModel (op.bind cont) (prob_cont (op.eval M)) M (bound₁ + bound₂) := by
+    SolvesWithinModel (op >>= cont) (prob_cont (op.eval M)) M (bound₁ + bound₂) := by
   obtain ⟨hspec, htime⟩ := hop
   obtain ⟨hspec', htime'⟩ := hcont _ hspec
   refine ⟨?_, ?_⟩
@@ -112,7 +112,7 @@ theorem SolvesWithin.bind [AddCommMonoid Cost] [Preorder Cost]
     (hop : SolvesWithin op prob_op bound₁)
     (hcont : ∀ M a, prob_op.spec M a →
       SolvesWithinModel (cont a) (prob_cont a) M bound₂) :
-    ∀ M, SolvesWithinModel (op.bind cont)
+    ∀ M, SolvesWithinModel (op >>= cont)
       (prob_cont (op.eval M)) M (bound₁ + bound₂) :=
   fun M => SolvesWithinModel.bind (hop M) (hcont M)
 

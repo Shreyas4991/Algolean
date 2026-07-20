@@ -101,7 +101,7 @@ def FanInTwoCircuit.subcircuits {α} [DecidableEq α] (c : FanInTwoCircuit α α
 )
 
 /-- Compute circuit size, that is size of the circuit without double counting identical nodes -/
-@[simp, grind]
+@[grind]
 def FanInTwoCircuit.circuitSize [DecidableEq α] (c : FanInTwoCircuit α β) :=
   match c with
   | .const x => (subcircuits (.const x)).card

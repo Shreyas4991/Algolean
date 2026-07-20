@@ -11,7 +11,7 @@ public import Mathlib.Algebra.Order.Group.Nat
 public import Mathlib.Algebra.Ring.Nat
 public import Mathlib.Data.Fintype.BigOperators
 public import Mathlib.Data.Fintype.Perm
-public import Mathlib.Data.Nat.Lattice
+public import Mathlib.Order.Lattice.Nat
 public import Mathlib.Data.Nat.Log
 import all Init.Data.List.Sort.Basic
 
@@ -123,11 +123,13 @@ def traceSort : Prog (SortOps α) β → (α → α → Bool) → List Bool
           b :: traceSort (cont b) le
 
 @[simp] lemma traceSort_pure (x : β) (le : α → α → Bool) :
-    traceSort (.pure x : Prog (SortOps α) β) le = [] := rfl
+    traceSort (pure x : Prog (SortOps α) β) le = [] := rfl
 
 @[simp] lemma traceSort_liftBind (x y : α) (cont : Bool → Prog (SortOps α) β) (le : α → α → Bool) :
-    traceSort (.liftBind (SortOps.cmpLE x y) cont) le =
+    traceSort ((FreeM.lift (SortOps.cmpLE x y) : Prog (SortOps α) Bool) >>= cont) le =
       (le x y) :: traceSort (cont (le x y)) le := by
+  change traceSort (.liftBind (SortOps.cmpLE x y) cont) le =
+    (le x y) :: traceSort (cont (le x y)) le
   simp [traceSort]
 
 lemma traceSort_length_eq_time (P : Prog (SortOps α) β) (le : α → α → Bool) :

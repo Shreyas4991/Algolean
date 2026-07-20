@@ -17,6 +17,13 @@ This file demonstrates a log-depth fan-in two
 AND circuits on `n` inputs.
 -/
 
+/-!
+# Log-depth fan-in two AND circuits
+
+This file demonstrates a log-depth fan-in two
+AND circuits on `n` inputs.
+-/
+
 @[expose] public section
 
 open Algolean.Algorithms.Prog

@@ -105,14 +105,9 @@ def execCircAnd (x : Fin n → FanInTwoCircuit Bool Bool) : Prog (FanInTwoCircui
 private lemma CircAnd_time_circuitSize (n : ℕ) (y : Fin n → FanInTwoCircuit Bool Bool) :
     ((CircAnd n y).time fanInTwoCircModel).circuitSize =
     (CircAnd.do_CircAnd n y).circuitSize := by
-  simp only [
-    CircAnd, FreeM.lift_def, Prog.time_liftBind, Prog.time_pure,
-    HAdd.hAdd, Add.add,
-  ]
-  simp only [fanInTwoCircModel_cost_circuitSize, circuitSize, subcircuits.eq_1, insert_empty_eq,
-    Finset.card_singleton, subcircuits.eq_2, subcircuits.eq_3, subcircuits.eq_4, Nat.add_eq,
-    Nat.add_eq_left]
-  rfl
+  change (fanInTwoCircModel.cost (CircAnd.do_CircAnd n y)).circuitSize + 0 =
+    (CircAnd.do_CircAnd n y).circuitSize
+  simp [fanInTwoCircModel_cost_circuitSize]
 
 private lemma CircAnd_do_size : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit Bool Bool,
     (CircAnd.do_CircAnd n x).circuitSize
@@ -126,8 +121,8 @@ private lemma CircAnd_do_size : ∀ n : ℕ, ∀ x : Fin n → FanInTwoCircuit B
       specialize ih (Fin.tail x)
       have hsum : Fin.sum (FinVec.map FanInTwoCircuit.circuitSize x)
           = (x 0).circuitSize + Fin.sum (FinVec.map FanInTwoCircuit.circuitSize (Fin.tail x)) := by
-        simpa [FinVec.map] using
-          (Fin.sum_univ_succ (f := fun i : Fin (m + 1) => FanInTwoCircuit.circuitSize (x i)))
+        simpa [FinVec.map, Fin.tail] using
+          (Fin.sum_succ (x := fun i : Fin (m + 1) => FanInTwoCircuit.circuitSize (x i)))
       have hmul : (CircAnd.do_CircAnd (m + 1) x).circuitSize
           ≤ 1 + (x 0).circuitSize + (CircAnd.do_CircAnd m (Fin.tail x)).circuitSize := by
         grind [CircAnd.do_CircAnd, FanInTwoCircuit.circuitSize, FanInTwoCircuit.subcircuits,
@@ -160,14 +155,9 @@ def execCircAndSimple (x : Fin n → Bool) : Prog (FanInTwoCircuit Bool) Bool :=
 private lemma CircAndSimple_time_circuitSize (n : ℕ) (y : Fin n → Bool) :
     ((CircAndSimple n y).time fanInTwoCircModel).circuitSize =
     (CircAndSimple.do_CircAnd n y).circuitSize := by
-  simp only [
-    CircAndSimple, FreeM.lift_def, Prog.time_liftBind, Prog.time_pure,
-    HAdd.hAdd, Add.add,
-  ]
-  simp only [fanInTwoCircModel_cost_circuitSize, circuitSize, subcircuits.eq_1, insert_empty_eq,
-    Finset.card_singleton, subcircuits.eq_2, subcircuits.eq_3, subcircuits.eq_4, Nat.add_eq,
-    Nat.add_eq_left]
-  rfl
+  change (fanInTwoCircModel.cost (CircAndSimple.do_CircAnd n y)).circuitSize + 0 =
+    (CircAndSimple.do_CircAnd n y).circuitSize
+  simp [fanInTwoCircModel_cost_circuitSize]
 
 
 /-- The size of a simple "AND" circuit is bounded by  1 + 2 * n + 2 , which is in O(n) -/
@@ -176,7 +166,7 @@ theorem CircAndSimple_size : ∀ n : ℕ, ∀ x : Fin n → Bool,
   intro n x
   induction n with
   | zero =>
-      simp [CircAndSimple.do_CircAnd]
+      simp [CircAndSimple.do_CircAnd, FanInTwoCircuit.circuitSize]
   | succ m ih =>
       specialize ih (Fin.tail x)
       simp only [FanInTwoCircuit.circuitSize, CircAndSimple.do_CircAnd,

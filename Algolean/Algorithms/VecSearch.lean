@@ -44,7 +44,7 @@ section LinearSearch
 
 open ReadOnlyVec in
 /-- Linear Search in Lists on top of the `ListSearch` query model. -/
-@[simp, grind]
+@[grind]
 def vecLinearSearch [BEq α] (v : Vector α n) (x : α) : Prog (ReadOnlyVec α) Bool := do
   match n with
   | 0 => return false
@@ -63,9 +63,11 @@ lemma Vector.extract_mem (v : Vector α n) (start stop : Nat)
         by simpa [Vector.toList_extract] using (Vector.mem_toList_iff).2 h
 
 lemma Vector.extract_begin (v : Vector α n) (hn_pos : n > 0)
-    (x : α) (h : x ∈ v) (hnorfirst : v[0] ≠ x) : x ∈ v.extract 1 := by
+  (x : α) (h : x ∈ v) (hnorfirst : v[0] ≠ x) : x ∈ v.extract 1 := by
   have hcons : v.toList = v[0] :: v.toList.tail := by
-    simpa using (List.drop_eq_getElem_cons (l := v.toList) (i := 0) (by simpa using hn_pos))
+    have h0 : 0 < v.toList.length := by simpa using hn_pos
+    have hcons' := List.drop_eq_getElem_cons (l := v.toList) (i := 0) h0
+    simpa [Vector.getElem_toList (xs := v) h0] using hcons'
   have htake : (v.toList.tail).take (n - 1) = v.toList.tail := by
     apply List.take_of_length_le
     simp
@@ -82,12 +84,14 @@ lemma vecLinearSearch_eval [BEq α] [LawfulBEq α] (v : Vector α n) (x : α) :
   | case1 v =>
       simp_all [Vector.eq_empty (xs := v)]
   | case2 n v ih =>
-    simp_all only [Vector.tail_eq_cast_extract, Nat.add_one_sub_one, Vector.mem_cast, eq_iff_iff,
-      FreeM.lift_def, FreeM.pure_eq_pure, Cslib.FreeM.bind_eq_bind, FreeM.liftBind_bind,
-      FreeM.pure_bind, eval_liftBind, ReadOnlyVec.natCost_evalQuery, Fin.getElem_fin,
-      Fin.coe_ofNat_eq_mod, Nat.zero_mod, beq_iff_eq, Nat.succ_eq_add_one]
+    simp_all only [beq_iff_eq, Nat.add_one_sub_one, Vector.tail_eq_cast_extract,
+      Prog.eval_bind, Prog.eval_lift, ReadOnlyVec.natCost_evalQuery, Fin.getElem_fin,
+      Fin.coe_ofNat_eq_mod, Nat.zero_mod, Nat.succ_eq_add_one, Vector.mem_cast, eq_iff_iff]
     split_ifs with h₀
-    · grind
+    · simp only [Prog.eval_pure, true_iff]
+      have hx0 : v[0] = x := by
+        simpa [ReadOnlyVec.natCost_evalQuery] using (LawfulBEq.eq_of_beq h₀)
+      exact hx0 ▸ Vector.getElem_mem (xs := v) (i := 0) (by simp)
     · simp_all only [beq_iff_eq]
       constructor
       · intro hx
@@ -121,13 +125,11 @@ lemma vecLinearSearchM_time_complexity_lower_bound [DecidableEq α] [Nontrivial 
   use Vector.replicate n y, x
   induction n with
   | zero =>
-      simp
+      simp [vecLinearSearch]
   | succ n ih =>
-      simp only [vecLinearSearch, FreeM.lift_def, FreeM.pure_eq_pure, Nat.add_one_sub_one,
-        Vector.tail_eq_cast_extract, Vector.extract_replicate, Cslib.FreeM.bind_eq_bind,
-        FreeM.liftBind_bind, FreeM.pure_bind, time_liftBind, ReadOnlyVec.natCost_cost,
-        ReadOnlyVec.natCost_evalQuery, Fin.getElem_fin, Fin.coe_ofNat_eq_mod, Nat.zero_mod,
-        Vector.getElem_replicate, beq_iff_eq]
+      simp only [vecLinearSearch, Nat.add_one_sub_one, Vector.tail_eq_cast_extract,
+        Vector.extract_replicate, Prog.time_bind, Prog.time_lift, ReadOnlyVec.natCost_cost,
+        beq_iff_eq]
       split_ifs with heq
       · exfalso
         exact hneq heq.symm
@@ -224,18 +226,16 @@ lemma vecBinarySearch_eval [BEq α] [LawfulBEq α] (le : α → α → Bool)
       simp_all [Vector.eq_empty (xs := v₀)]
   | case2 n v hneq0 mid ih2 ih1 =>
       have hmid_lt : (mid : Nat) < v.toList.length := by simp [mid.isLt]
-      simp only [FreeM.bind_eq_bind, FreeM.lift_def, FreeM.liftBind_bind, FreeM.pure_bind,
-        eval_liftBind, ReadOnlyVec.natCost_evalQuery]
+      simp only [beq_iff_eq, Nat.sub_zero, Prog.eval_bind, Prog.eval_lift,
+        ReadOnlyVec.natCost_evalQuery, Fin.getElem_fin, eq_iff_iff]
       split_ifs with hEq hLe
-      · apply propext
-        constructor <;> intro
+      · constructor <;> intro
         · exact (by simpa [Fin.getElem_fin] using (LawfulBEq.eq_of_beq hEq).symm) ▸
             Vector.getElem_mem mid.isLt
         · trivial
       · rw [ih2 (vector_pairwise_extract (fun a b => le a b) hSorted (mid + 1) n)]
         have hmid_ne : v[mid] ≠ x := by
           simpa [beq_iff_eq] using hEq
-        apply propext
         constructor
         · exact Vector.extract_mem v (mid + 1) n x
         · intro hx
@@ -253,7 +253,6 @@ lemma vecBinarySearch_eval [BEq α] [LawfulBEq α] (le : α → α → Bool)
       · rw [ih1 (vector_pairwise_extract (fun a b => le a b) hSorted 0 (mid : Nat))]
         have hmid_ne : v[mid] ≠ x := by
           simpa [beq_iff_eq] using hEq
-        apply propext
         constructor
         · exact Vector.extract_mem v 0 mid x
         · intro hx
@@ -286,10 +285,10 @@ private lemma listBinarySearch_time_complexity_upper_bound_aux
   | case1 v =>
       simp
   | case2 n v hneq0 mid ih2 ih1 =>
-      simp_all only [vector_pairwise_extract, min_self, forall_const, Nat.sub_zero, Fin.is_le',
-        inf_of_le_left, tsub_zero, FreeM.lift_def, FreeM.pure_eq_pure,
-        Cslib.FreeM.bind_eq_bind, FreeM.liftBind_bind, FreeM.pure_bind, time_liftBind,
-        ReadOnlyVec.natCost_cost, ReadOnlyVec.natCost_evalQuery, Fin.getElem_fin]
+      simp_all only [beq_iff_eq, Nat.sub_zero, Prog.time_bind, Prog.time_lift,
+        ReadOnlyVec.natCost_cost, Prog.eval_lift, ReadOnlyVec.natCost_evalQuery,
+        Fin.getElem_fin, vector_pairwise_extract, min_self, forall_const, Fin.is_le',
+        inf_of_le_left, tsub_zero]
       split_ifs with heq hle <;> try contradiction
       · simp
       · have hrec : (vecBinarySearch le (v.extract (↑mid + 1)) x).time ReadOnlyVec.natCost ≤

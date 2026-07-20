@@ -218,8 +218,8 @@ theorem mergeSort_complexity (xs : List α) (le : α → α → Bool) :
   fun_induction mergeSort with
   | case1 => simp [T]
   | case2 x =>
-  simp only [FreeM.bind_eq_bind, Prog.time_bind]
-  grind [some_algebra (x.length - 2), mergeSort_eval, merge_timeComplexity, mergeSortNaive_length]
+    simp only [Prog.time_bind]
+    grind [some_algebra (x.length - 2), mergeSort_eval, merge_timeComplexity, mergeSortNaive_length]
 
 end TimeComplexity
 
