@@ -11,9 +11,9 @@ public import Mathlib.Data.List.Count
 public import Std.Tactic.Do
 
 /-!
-# Boyer--Moore majority vote
+# Boyer-Moore majority vote
 
-This file implements the Boyer--Moore majority-vote algorithm in the `Comparison` query model.
+This file implements the Boyer-Moore majority-vote algorithm in the `Comparison` query model.
 
 ## Algorithm
 
@@ -57,34 +57,30 @@ open Cslib Prog Comparison Std.Do
 def IsMajority [BEq α] (a : α) (xs : List α) : Prop :=
   xs.length < 2 * xs.count a
 
-/-- The cancellation state. `candidate c n` represents a candidate with weight `n + 1`. -/
-inductive VoteState (α : Type*) where
-  | empty
-  | candidate (value : α) (extra : Nat)
+/--
+The cancellation state. `none` means no current candidate; `some (c, n)` represents candidate `c`
+with weight `n + 1`.
+-/
+abbrev VoteState (α : Type*) := Option (α × Nat)
 
 namespace VoteState
 
-/-- The candidate retained by a cancellation state. -/
-def candidate? : VoteState α → Option α
-  | .empty => none
-  | .candidate c _ => some c
-
-/-- One pure Boyer--Moore cancellation step. -/
+/-- One pure Boyer-Moore cancellation step. -/
 def step [BEq α] (state : VoteState α) (x : α) : VoteState α :=
   match state with
-  | .empty => .candidate x 0
-  | .candidate c n =>
+  | none => some (x, 0)
+  | some (c, n) =>
       if c == x then
-        .candidate c (n + 1)
+        some (c, n + 1)
       else
         match n with
-        | 0 => .empty
-        | n + 1 => .candidate c n
+        | 0 => none
+        | n + 1 => some (c, n)
 
 /-- Signed surplus retained for `a`: positive exactly when the retained candidate is `a`. -/
 def score [BEq α] (a : α) : VoteState α → Int
-  | .empty => 0
-  | .candidate c n =>
+  | none => 0
+  | some (c, n) =>
       if c == a then
         n + 1
       else
@@ -94,34 +90,36 @@ def score [BEq α] (a : α) : VoteState α → Int
 def balance [BEq α] (a : α) (xs : List α) : Int :=
   2 * (xs.count a : Int) - xs.length
 
-/-- One monadic Boyer--Moore cancellation step, charging for equality comparisons. -/
+/-- One monadic Boyer-Moore cancellation step, charging for equality comparisons. -/
 def stepM (state : VoteState α) (x : α) : Prog (Comparison α) (VoteState α) := do
   match state with
-  | .empty =>
-      return .candidate x 0
-  | .candidate c n =>
+  | none =>
+      return some (x, 0)
+  | some (c, n) =>
       let same : Bool ← compare c x
       if same then
-        return .candidate c (n + 1)
+        return some (c, n + 1)
       else
         match n with
-        | 0 => return .empty
-        | n + 1 => return .candidate c n
+        | 0 => return none
+        | n + 1 => return some (c, n)
 
 end VoteState
 
 /-- Select a majority candidate by cancelling pairs of unequal elements. -/
 def majorityCandidate (xs : List α) : Prog (Comparison α) (Option α) := do
-  let mut state : VoteState α := .empty
+  let mut state : VoteState α := none
   for x in xs do
-    state ← (state.stepM x : Prog (Comparison α) (VoteState α))
-  return state.candidate?
+    state ← (VoteState.stepM state x : Prog (Comparison α) (VoteState α))
+  return state.map Prod.fst
 
 /--
 Mutable state for the verification pass. The parameter keeps loop invariants universe-polymorphic.
 -/
 structure OccurrenceCount (α : Type*) where
+  /-- Occurrences of the candidate counted so far. -/
   value : Nat
+  /-- Unused; its type mentions `α` to keep the loop invariant universe-polymorphic. -/
   phantom : Option α
 
 /-- Update an occurrence counter after one comparison. -/
@@ -142,7 +140,7 @@ def countOccurrences (candidate : α) (xs : List α) : Prog (Comparison α) Nat 
   return (← countLoop candidate xs).value
 
 /--
-Return the strict majority element of `xs`, if it exists, using Boyer--Moore cancellation followed
+Return the strict majority element of `xs`, if it exists, using Boyer-Moore cancellation followed
 by a verification pass.
 -/
 def boyerMooreMajorityVote (xs : List α) : Prog (Comparison α) (Option α) := do
@@ -159,11 +157,10 @@ def boyerMooreMajorityVote (xs : List α) : Prog (Comparison α) (Option α) := 
 section Correctness
 
 private theorem VoteState.stepM_eval [BEq α] (state : VoteState α) (x : α) :
-    (state.stepM x).eval Comparison.natCost = state.step x := by
-  cases state with
-  | empty => simp [VoteState.stepM, VoteState.step]
-  | candidate c n =>
-      cases n <;> simp [VoteState.stepM, VoteState.step] <;> split <;> simp_all
+    (VoteState.stepM state x).eval Comparison.natCost = VoteState.step state x := by
+  rcases state with _ | ⟨c, n⟩
+  · simp [VoteState.stepM, VoteState.step]
+  · cases n <;> simp [VoteState.stepM, VoteState.step] <;> split <;> simp_all
 
 private lemma VoteState.balance_append_singleton [BEq α] [LawfulBEq α]
     (a x : α) (xs : List α) :
@@ -174,10 +171,10 @@ private lemma VoteState.balance_append_singleton [BEq α] [LawfulBEq α]
 
 private lemma VoteState.score_step [BEq α] [LawfulBEq α]
     (a x : α) (state : VoteState α) :
-    score a state + (if x == a then 1 else -1) ≤ score a (state.step x) := by
-  cases state with
-  | empty => simp [score, step]
-  | candidate c n => cases n <;> simp [score, step] <;> grind
+    score a state + (if x == a then 1 else -1) ≤ score a (VoteState.step state x) := by
+  rcases state with _ | ⟨c, n⟩
+  · simp [score, step]
+  · cases n <;> simp [score, step] <;> grind
 
 private lemma VoteState.balance_pos_of_majority [BEq α] [LawfulBEq α]
     (a : α) (xs : List α) (h : IsMajority a xs) : 0 < balance a xs := by
@@ -186,14 +183,14 @@ private lemma VoteState.balance_pos_of_majority [BEq α] [LawfulBEq α]
 
 private lemma VoteState.candidate_eq_of_score_pos [BEq α] [LawfulBEq α]
     (a : α) (state : VoteState α) (h : 0 < score a state) :
-    state.candidate? = some a := by
-  cases state <;> grind [score, candidate?]
+    state.map Prod.fst = some a := by
+  rcases state with _ | ⟨c, n⟩ <;> grind [score]
 
 set_option mvcgen.warning false in
 /-- A monadic cancellation step evaluates to the corresponding pure state transition. -/
 theorem VoteState.stepM_spec [BEq α] [LawfulBEq α]
     (state : VoteState α) (x : α) :
-    ⦃⌜True⌝⦄ state.stepM x ⦃⇓result => ⌜result = state.step x⌝⦄ := by
+    ⦃⌜True⌝⦄ VoteState.stepM state x ⦃⇓result => ⌜result = VoteState.step state x⌝⦄ := by
   mvcgen [stepM]
   all_goals simp_all [Comparison.hasModel_model, step]
 
@@ -255,7 +252,7 @@ theorem boyerMooreMajorityVote_spec [BEq α] [LawfulBEq α] (xs : List α) :
   mvcgen [boyerMooreMajorityVote, majorityCandidate_spec, countOccurrences_spec]
   all_goals grind [IsMajority]
 
-/-- Boyer--Moore returns `some a` exactly when `a` is a strict majority of the input. -/
+/-- Boyer-Moore returns `some a` exactly when `a` is a strict majority of the input. -/
 theorem boyerMooreMajorityVote_correct [BEq α] [LawfulBEq α] (a : α) (xs : List α) :
     (boyerMooreMajorityVote xs).eval Comparison.natCost = some a ↔ IsMajority a xs := by
   exact (eval_of_triple (boyerMooreMajorityVote_spec xs) a)
@@ -265,24 +262,24 @@ end Correctness
 section TimeComplexity
 
 private lemma VoteState.stepM_time [BEq α] (state : VoteState α) (x : α) :
-    (state.stepM x).time Comparison.natCost ≤ 1 := by
-  cases state with
-  | empty => simp [stepM]
-  | candidate c n => cases n <;> simp [stepM] <;> split <;> simp_all
+    (VoteState.stepM state x).time Comparison.natCost ≤ 1 := by
+  rcases state with _ | ⟨c, n⟩
+  · simp [stepM]
+  · cases n <;> simp [stepM] <;> split <;> simp_all
 
 private lemma countStep_time [BEq α] (candidate x : α) (count : OccurrenceCount α) :
     (countStep candidate x count).time Comparison.natCost = 1 := by
   simp [countStep]
 
 private lemma voteFoldlM_time [BEq α] (state : VoteState α) (xs : List α) :
-    (List.foldlM (m := Prog (Comparison α)) (fun state x => state.stepM x) state xs).time
+    (List.foldlM (m := Prog (Comparison α)) (fun state x => VoteState.stepM state x) state xs).time
       Comparison.natCost ≤ xs.length := by
   induction xs generalizing state with
   | nil => simp
   | cons x xs ih =>
       simp only [List.foldlM_cons, Prog.time_bind, List.length_cons]
       have hstep := VoteState.stepM_time state x
-      have htail := ih ((state.stepM x).eval Comparison.natCost)
+      have htail := ih ((VoteState.stepM state x).eval Comparison.natCost)
       omega
 
 private lemma countFoldlM_time [BEq α] (candidate : α) (count : OccurrenceCount α)
@@ -298,14 +295,14 @@ private lemma countFoldlM_time [BEq α] (candidate : α) (count : OccurrenceCoun
 
 private lemma majorityCandidate_time [BEq α] (xs : List α) :
     (majorityCandidate xs).time Comparison.natCost ≤ xs.length := by
-  simpa [majorityCandidate] using voteFoldlM_time (.empty : VoteState α) xs
+  simpa [majorityCandidate] using voteFoldlM_time (none : VoteState α) xs
 
 private lemma countOccurrences_time [BEq α] (candidate : α) (xs : List α) :
     (countOccurrences candidate xs).time Comparison.natCost = xs.length := by
   simpa [countOccurrences, countLoop] using
     countFoldlM_time candidate (⟨0, none⟩ : OccurrenceCount α) xs
 
-/-- The two Boyer--Moore passes use at most two equality comparisons per input element. -/
+/-- The two Boyer-Moore passes use at most two equality comparisons per input element. -/
 theorem boyerMooreMajorityVote_time_complexity [BEq α] (xs : List α) :
     (boyerMooreMajorityVote xs).time Comparison.natCost ≤ 2 * xs.length := by
   simp only [boyerMooreMajorityVote, Prog.time_bind]
