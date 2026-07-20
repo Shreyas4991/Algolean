@@ -167,7 +167,7 @@ private lemma VoteState.balance_append_singleton [BEq α] [LawfulBEq α]
     balance a (xs ++ [x]) = balance a xs + if x == a then 1 else -1 := by
   simp only [balance, List.count_append, List.count_cons, List.count_nil,
     List.length_append, List.length_cons, List.length_nil]
-  split <;> omega
+  split <;> lia
 
 private lemma VoteState.score_step [BEq α] [LawfulBEq α]
     (a x : α) (state : VoteState α) :
@@ -179,7 +179,7 @@ private lemma VoteState.score_step [BEq α] [LawfulBEq α]
 private lemma VoteState.balance_pos_of_majority [BEq α] [LawfulBEq α]
     (a : α) (xs : List α) (h : IsMajority a xs) : 0 < balance a xs := by
   simp only [IsMajority, balance] at h ⊢
-  omega
+  lia
 
 private lemma VoteState.candidate_eq_of_score_pos [BEq α] [LawfulBEq α]
     (a : α) (state : VoteState α) (h : 0 < score a state) :
@@ -217,7 +217,7 @@ theorem majorityCandidate_spec [BEq α] [LawfulBEq α] (xs : List α) :
     rw [VoteState.balance_append_singleton]
     refine le_trans ?_ (VoteState.score_step a _ ‹VoteState α›)
     have := ‹∀ a, VoteState.balance a _ ≤ VoteState.score a _› a
-    omega
+    lia
   case vc2.pre => intro a; rfl
   case vc3.post.success =>
     rename_i result hresult
@@ -280,7 +280,7 @@ private lemma voteFoldlM_time [BEq α] (state : VoteState α) (xs : List α) :
       simp only [List.foldlM_cons, Prog.time_bind, List.length_cons]
       have hstep := VoteState.stepM_time state x
       have htail := ih ((VoteState.stepM state x).eval Comparison.natCost)
-      omega
+      lia
 
 private lemma countFoldlM_time [BEq α] (candidate : α) (count : OccurrenceCount α)
     (xs : List α) :
@@ -291,7 +291,7 @@ private lemma countFoldlM_time [BEq α] (candidate : α) (count : OccurrenceCoun
   | nil => simp
   | cons x xs ih =>
       simp [List.foldlM_cons, Prog.time_bind, countStep_time, ih]
-      omega
+      lia
 
 private lemma majorityCandidate_time [BEq α] (xs : List α) :
     (majorityCandidate xs).time Comparison.natCost ≤ xs.length := by
@@ -309,12 +309,12 @@ theorem boyerMooreMajorityVote_time_complexity [BEq α] (xs : List α) :
   split
   · have h := majorityCandidate_time xs
     simp only [Prog.time_pure, add_zero]
-    omega
+    lia
   · rename_i candidate hc
     rw [Prog.time_bind]
     rw [countOccurrences_time]
     have h := majorityCandidate_time xs
-    split <;> simp only [Prog.time_pure, add_zero] <;> omega
+    split <;> simp only [Prog.time_pure, add_zero] <;> lia
 
 end TimeComplexity
 
