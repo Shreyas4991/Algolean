@@ -12,19 +12,12 @@ public import Algolean.QueryModel
 /-!
 # Monadic query models
 
-`ModelM` is a parallel, effectful counterpart to `Model`. It leaves the existing deterministic API
-unchanged and interprets the same `Prog Q α` syntax in an arbitrary monad `m`.
+`ModelM` generalizes `Model` by allowing queries to be evaluated in any monad `m`.
+`Prog.evalM` evaluates a program, `Prog.runM` records its result and accumulated query cost, and
+`Prog.costM` returns the accumulated cost.
 
-`Prog.evalM` is the primary semantics. Evaluation and per-query cost remain separate in `ModelM`.
-`Prog.runM` records enough operational information to derive the runtime views used for randomized
-algorithms: expected runtime, worst-case runtime over random choices, high-probability runtime, and
-expected runtime conditioned on success. The joint result-cost value is supporting data rather than
-itself a complexity measure; conditioning on success is the reason the correlation must be retained.
-
-Value-correctness reasoning is independent of cost. A model whose semantic monad has a
-`Std.Do.WPMonad` supplies the same `mvcgen` infrastructure as the existing pure `Model` API through
-`ModelM.handler` and `ModelM.hasHandler`. Quantitative PMF reasoning remains a separate future
-layer.
+For a monad with a `Std.Do.WPMonad` instance, `ModelM.handler` and `ModelM.hasHandler` provide
+weakest-precondition semantics for `mvcgen`.
 -/
 
 @[expose] public section
@@ -41,7 +34,7 @@ namespace ModelM
 
 variable {Q : Type u → Type v} {m : Type u → Type w} {Cost : Type u}
 
-/-- Interpret one query jointly, pairing every semantic branch with the query's fixed cost. -/
+/-- Evaluate one query and record its cost. -/
 def runQuery [Functor m] (M : ModelM Q m Cost) (q : Q α) : AddWriterT Cost m α :=
   AddWriterT.mk ((fun result => ⟨result, M.cost q⟩) <$> M.evalQuery q)
 
@@ -55,12 +48,12 @@ def runQuery [Functor m] (M : ModelM Q m Cost) (q : Q α) : AddWriterT Cost m α
     (M.runQuery q).cost = (fun _ => M.cost q) <$> M.evalQuery q := by
   simp [runQuery, AddWriterT.cost]
 
-/-- Construct an effectful model from its separate evaluator and cost functions. -/
+/-- Construct a model from an evaluator and a cost function. -/
 def ofEvalCost (evalQuery : {α : Type u} → Q α → m α)
     (cost : {α : Type u} → Q α → Cost) : ModelM Q m Cost :=
   ⟨evalQuery, cost⟩
 
-/-- Lift an existing deterministic model into `Id` without changing its semantics. -/
+/-- Regard a `Model` as a `ModelM` over `Id`. -/
 def ofModel (M : Algolean.Algorithms.Model Q Cost) : ModelM Q Id Cost where
   evalQuery q := M.evalQuery q
   cost q := M.cost q
@@ -71,7 +64,7 @@ def ofModel (M : Algolean.Algorithms.Model Q Cost) : ModelM Q Id Cost where
 @[simp] theorem ofModel_cost (M : Algolean.Algorithms.Model Q Cost) (q : Q α) :
     (ofModel M).cost q = M.cost q := rfl
 
-/-- Change the semantic monad through a polymorphic natural transformation. -/
+/-- Change the semantic monad through a natural transformation. -/
 def mapK {n : Type u → Type y} (lift : {α : Type u} → m α → n α)
     (M : ModelM Q m Cost) : ModelM Q n Cost where
   evalQuery q := lift (M.evalQuery q)
@@ -121,21 +114,12 @@ variable {Q : Type u → Type v} {m : Type u → Type w} {Cost : Type u}
 def evalM [Monad m] (P : Prog Q α) (M : ModelM Q m Cost) : m α :=
   P.liftM M.evalQuery
 
-/-- Record results and accumulated costs in the same semantic branch.
-
-This is foundational data for runtime analyses, not a chosen notion of randomized complexity.
-Keeping the correlation is necessary for analyses such as expected runtime conditioned on success.
--/
+/-- Evaluate a query program while recording the accumulated query cost with each result. -/
 def runM [Monad m] [AddZero Cost]
     (P : Prog Q α) (M : ModelM Q m Cost) : AddWriterT Cost m α :=
   P.liftM M.runQuery
 
-/-- The total-runtime marginal of `runM`.
-
-For probabilistic semantics this is the runtime distribution used to derive expected, worst-case,
-and high-probability bounds. Analyses conditioned on the returned result must use `runM` so that
-the result-cost correlation is not discarded.
--/
+/-- The accumulated query cost of each execution of a program. -/
 def costM [Monad m] [AddZero Cost]
     (P : Prog Q α) (M : ModelM Q m Cost) : m Cost :=
   (P.runM M).cost
@@ -215,14 +199,14 @@ section OfModel
 
 variable {Q : Type u → Type u} {Cost : Type u}
 
-/-- `evalM` under `ofModel` agrees with the existing evaluator. -/
+/-- Evaluating with `ofModel M` is the same as evaluating with `M`. -/
 theorem evalM_ofModel (P : Prog Q α) (M : Algolean.Algorithms.Model Q Cost) :
     Id.run (P.evalM (ModelM.ofModel M)) = P.eval M := by
   induction P with
   | pure a => rfl
   | liftBind q f ih => exact ih (M.evalQuery q)
 
-/-- Under `ofModel`, one query contributes its cost and continues with its evaluated result. -/
+/-- The cost of a query followed by a program under `ofModel`. -/
 @[simp] theorem costM_ofModel_liftBind [AddMonoid Cost]
     (q : Q α) (f : α → Prog Q β) (M : Algolean.Algorithms.Model Q Cost) :
     Id.run (Prog.costM (FreeM.liftBind q f) (ModelM.ofModel M)) =
@@ -230,7 +214,7 @@ theorem evalM_ofModel (P : Prog Q α) (M : Algolean.Algorithms.Model Q Cost) :
   rw [costM_liftBind]
   rfl
 
-/-- `costM` under `ofModel` agrees with existing `Prog.time`. -/
+/-- Computing cost with `ofModel M` gives `Prog.time M`. -/
 theorem costM_ofModel [AddMonoid Cost]
     (P : Prog Q α) (M : Algolean.Algorithms.Model Q Cost) :
     Id.run (P.costM (ModelM.ofModel M)) = P.time M := by
@@ -246,9 +230,7 @@ section Reduction
 variable {Q₁ Q₂ : Type u → Type u}
 
 
-/-- A reduction preserves effectful evaluation when it implements every source query
-in the target model. The existing `Reduction` structure is sufficient; only its correctness
-criterion changes for effectful models. -/
+/-- Reducing a program does not change its evaluation if the reduction preserves each query. -/
 theorem reduceProg_evalM [Monad m] [LawfulMonad m]
     (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
     (M₁ : ModelM Q₁ m Cost) (M₂ : ModelM Q₂ m Cost)
@@ -266,7 +248,7 @@ theorem reduceProg_evalM [Monad m] [LawfulMonad m]
       funext a
       apply ih
 
-/-- The stronger joint criterion preserves results and branch-correlated accumulated costs. -/
+/-- A query reduction preserving `runM` also preserves `runM` for every program. -/
 theorem reduceProg_runM [Monad m] [LawfulMonad m] [AddMonoid Cost]
     (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
     (M₁ : ModelM Q₁ m Cost) (M₂ : ModelM Q₂ m Cost)
@@ -296,24 +278,15 @@ variable {ps : PostShape.{u}}
 
 namespace ModelM
 
-/-- The logical handler induced by the effectful evaluation semantics of `M`.
-
-The cost field is intentionally absent: ordinary Hoare triples specify value correctness under
-`evalM`. Cost-aware and quantitative probabilistic logics are separate analyses.
--/
+/-- The logical handler induced by `M.evalQuery`. -/
 def handler [WP m ps] (M : ModelM Q m Cost) : LHandler Q ps :=
   LHandler.ofInterp (m := m) (fun _ q => M.evalQuery q)
 
-/-- Select `M` as the logical interpretation of `Prog Q` in a local or scoped context.
-
-This is a value rather than a global instance because the same query syntax may have both a pure
-`Model` and one or more effectful `ModelM` interpretations.
--/
+/-- Use `M.handler` as the logical handler for `Prog Q`. -/
 @[reducible] def hasHandler [WP m ps] (M : ModelM Q m Cost) : HasHandler Q ps where
   handler := M.handler
 
-/-- Weakest-precondition reasoning through `M.handler` agrees with executing the program using
-`Prog.evalM M` whenever the semantic monad has a lawful weakest-precondition interpretation. -/
+/-- The weakest precondition given by `M.handler` agrees with that of `Prog.evalM M`. -/
 theorem wp_eq_wp_evalM [Monad m] [WPMonad m ps]
     (M : ModelM Q m Cost) (P : Prog Q α) :
     wpH M.handler P = wp (P.evalM M) := by
@@ -322,12 +295,7 @@ theorem wp_eq_wp_evalM [Monad m] [WPMonad m ps]
 
 end ModelM
 
-/-- Generic single-query rule for the currently selected logical handler.
-
-When the selected handler is `M.hasHandler`, this precondition reduces to
-`wp⟦M.evalQuery q⟧ Q'`. The rule lets `mvcgen` decompose effectful query programs without choosing a
-global `ModelM` for the query language.
--/
+/-- The weakest-precondition rule for a query under the selected logical handler. -/
 @[spec]
 theorem Spec.queryM [HasHandler Q ps] (q : Q α) {Q' : PostCond α ps} :
     Triple (FreeM.lift q : Prog Q α) ((HasHandler.handler q).apply Q') Q' := by
