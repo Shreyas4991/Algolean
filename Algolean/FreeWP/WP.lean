@@ -26,8 +26,16 @@ The WP's structural rules (`wpH_pure`, `wpH_bind`, …) are immediate from `lift
 morphism; the adequacy theorem `wpH_ofInterp_eq_wp_liftM` — that WP-via-handler agrees with
 `Std.Do`'s WP of the `liftM` interpretation — is the same statement of uniqueness.
 
+For pure specifications, an `OperationSpec F` assigns an arbitrary precondition and relational
+postcondition to every operation in `F`. Its `toHandler` method compiles these contracts into
+logical handlers. This is the free-monad construction from Maillard et al.,
+[*Dijkstra Monads for All*][Maillard2019]: because `FreeM F` imposes no equations on operation
+trees, the primitive contracts extend freely to a compositional weakest-precondition semantics.
+
 The design follows [Vistrup, Sammler, Jung. *Program Logics à la Carte.* POPL 2025], adapted
 from coinductive ITrees to inductive `FreeM` and from Iris to `Std.Do`.
+
+[Maillard2019]: https://arxiv.org/abs/1903.01237
 -/
 
 @[expose] public section
@@ -48,6 +56,42 @@ variable {F G : Type u → Type v} {ps : PostShape.{u}} {α β : Type u}
 `PredTrans ps`. -/
 abbrev LHandler (F : Type u → Type v) (ps : PostShape.{u}) : Type (max (u + 1) v) :=
   ∀ {ι : Type u}, F ι → PredTrans ps ι
+
+/-- A relational specification for every operation in an indexed signature `F`.
+
+An operation `op : F ι` packages its operation name and input and returns a value of type `ι`.
+`pre op` must hold before invoking it, while `post op out` characterizes the outputs that the
+operation is allowed to return. Because `FreeM F` is free of equations, these contracts may be
+chosen independently for each operation. -/
+structure OperationSpec (F : Type u → Type v) : Type (max (u + 1) v) where
+  /-- Preconditions for primitive operations. -/
+  pre {ι : Type u} (op : F ι) : Prop
+  /-- Relational postconditions for primitive operations and their outputs. -/
+  post {ι : Type u} (op : F ι) (out : ι) : Prop
+
+namespace OperationSpec
+
+/-- Compile relational operation contracts into a pure logical handler.
+
+For `op : F ι` and a continuation postcondition `Q`, the resulting weakest precondition is
+`S.pre op ∧ ∀ out, S.post op out → Q out`: the operation must be enabled, and every output
+permitted by its relational postcondition must make the continuation safe. -/
+def toHandler (S : OperationSpec F) : LHandler F .pure :=
+  fun op =>
+    { trans := fun Q =>
+        spred(⌜S.pre op ∧ ∀ out, S.post op out → (Q.1 out).down⌝)
+      conjunctiveRaw := by
+        intro Q₁ Q₂
+        aesop }
+
+@[simp]
+theorem apply_toHandler (S : OperationSpec F) {ι : Type u} (op : F ι)
+    (Q : PostCond ι .pure) :
+    (S.toHandler op).apply Q =
+      spred(⌜S.pre op ∧ ∀ out, S.post op out → (Q.1 out).down⌝) :=
+  rfl
+
+end OperationSpec
 
 namespace LHandler
 
@@ -124,6 +168,14 @@ instance instWPFreeM [HasHandler F ps] : WP (FreeM F) ps where
 instance instWPMonadFreeM [HasHandler F ps] : WPMonad (FreeM F) ps where
   wp_pure _ := rfl
   wp_bind x f := wpH_bind _ x f
+
+/-- The generic Hoare rule for a primitive `FreeM` operation. Its precondition is exactly the
+predicate transformer assigned by the selected logical handler. Its low `mvcgen` priority lets
+effect-specific rules expose more useful preconditions when available. -/
+@[spec low]
+theorem Spec.lift_FreeM [HasHandler F ps] (op : F α) {Q : PostCond α ps} :
+    Triple (lift op : FreeM F α) ((HasHandler.handler op).apply Q) Q :=
+  Triple.iff.mpr SPred.entails.rfl
 
 end FreeM
 

@@ -13,9 +13,10 @@ public import Std.Tactic.Do
 /-!
 Examples for WP in `Algolean.FreeWP.WP`: instance resolution,
 a `Triple` on a `FreeState` program discharged by `mvcgen`, a custom `CounterF` effect with
-its own logical handler, sum/failure/demonic effects, and — connecting the WP framework to this
-repository's query model — Hoare triples about query-model programs `Prog Q α` against a handler
-derived from a `Model Q Cost` (illustrated on `ReadOnlyVec`).
+its own logical handler, sum/failure/demonic effects, arbitrary relational operation specifications,
+and — connecting the WP framework to this repository's query model — Hoare triples about
+query-model programs `Prog Q α` against a handler derived from a `Model Q Cost` (illustrated on
+`ReadOnlyVec`).
 -/
 
 @[expose] public section
@@ -190,29 +191,16 @@ inductive DemonicF : Type → Type 1 where
   /-- Choose an element of `α`. -/
   | choice (α : Type) : DemonicF α
 
-/-- Logical handler for `DemonicF`: the predicate transformer for `choice α` is universal
-quantification over `α`. Conjunctivity of `∀` (i.e. `∀ a, P a ∧ Q a ⊣⊢ (∀ a, P a) ∧ (∀ a, Q a)`)
-is what makes this admissible in `PredTrans`. -/
-def DemonicF.handler {ps : PostShape} : LHandler DemonicF ps :=
-  fun op => match op with
-    | .choice _ =>
-      { trans := fun Q => SPred.forall (fun a => Q.1 a)
-        conjunctiveRaw := by
-          intro Q₁ Q₂
-          apply SPred.bientails.iff.mpr
-          refine ⟨?_, ?_⟩
-          · apply SPred.and_intro
-            · apply SPred.forall_intro
-              intro a
-              exact (SPred.forall_elim a).trans SPred.and_elim_l
-            · apply SPred.forall_intro
-              intro a
-              exact (SPred.forall_elim a).trans SPred.and_elim_r
-          · apply SPred.forall_intro
-            intro a
-            apply SPred.and_intro
-            · exact SPred.and_elim_l.trans (SPred.forall_elim a)
-            · exact SPred.and_elim_r.trans (SPred.forall_elim a) }
+/-- Relational specification for demonic choice: it is always enabled and every output is
+permitted. The generated weakest precondition must therefore establish the continuation
+postcondition for every possible output. -/
+def DemonicF.spec : OperationSpec DemonicF where
+  pre _ := True
+  post _ _ := True
+
+/-- Logical handler for demonic choice, generated from its relational operation specification. -/
+def DemonicF.handler : LHandler DemonicF .pure :=
+  DemonicF.spec.toHandler
 
 instance : HasHandler DemonicF .pure where
   handler := DemonicF.handler
@@ -224,15 +212,50 @@ abbrev demonic (α : Type) : FreeM DemonicF α := lift (DemonicF.choice α)
 @[spec]
 theorem Spec.demonic {α : Type} {Q : PostCond α .pure} :
     Triple (demonic α) (SPred.forall (fun a : α => Q.1 a)) Q :=
-  Triple.iff.mpr SPred.entails.rfl
+  fun h => ⟨True.intro, fun a _ => h a⟩
 
 /-- A demonic Bool: the precondition must hold for both `true` and `false`. -/
 example {Q : PostCond Bool .pure} :
     Triple (demonic Bool) (SPred.and (Q.1 true) (Q.1 false)) Q :=
-    fun ⟨ht, hf⟩ b =>
-    match b with
-    | true => ht
-    | false => hf
+  fun ⟨ht, hf⟩ => ⟨True.intro, fun
+    | true, _ => ht
+    | false, _ => hf⟩
+
+/-! ### Arbitrarily specified operations -/
+
+/-- An abstract Boolean operation used to reproduce the `pick` example from
+*Dijkstra Monads for All*. -/
+inductive PickF : Type → Type where
+  /-- Pick a Boolean. -/
+  | pick : PickF Bool
+
+/-- `pick` is always enabled and is specified to return only `true`. -/
+def PickF.spec : OperationSpec PickF where
+  pre _ := True
+  post
+    | .pick, b => b = true
+
+/-- Logical handler generated independently of any executable interpretation of `pick`. -/
+def PickF.handler : LHandler PickF .pure :=
+  PickF.spec.toHandler
+
+instance : HasHandler PickF .pure where
+  handler := PickF.handler
+
+/-- Smart constructor for the abstract `pick` operation. -/
+abbrev pick : FreeM PickF Bool := lift PickF.pick
+
+/-- The generated operation WP simplifies to the `true` case of the continuation postcondition. -/
+example (Q : PostCond Bool .pure) :
+    (wpH PickF.handler pick).apply Q = Q.1 true := by
+  rw [wpH_lift]
+  apply SPred.ext_nil
+  simp [PickF.handler, PickF.spec]
+
+/-- Consequently, `pick` has precisely the paper's Hoare specification. -/
+example {Q : PostCond Bool .pure} :
+    Triple pick (Q.1 true) Q :=
+  fun h => ⟨True.intro, fun _ hEq => hEq ▸ h⟩
 
 /-! ### Query-model programs
 
