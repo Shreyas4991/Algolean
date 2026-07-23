@@ -131,17 +131,15 @@ def wpH (H : LHandler F ps) (x : FreeM F α) : PredTrans ps α :=
 
 theorem wpH_liftBind (H : LHandler F ps) {ι : Type u}
     (op : F ι) (k : ι → FreeM F α) :
-    wpH H ((lift op : FreeM F ι) >>= k) = H op >>= fun x => wpH H (k x) := by
-  change wpH H (liftBind op k) = _
-  rfl
+    wpH H ((lift op : FreeM F ι) >>= k) = H op >>= fun x => wpH H (k x) := rfl
 
 theorem wpH_lift (H : LHandler F ps) {ι : Type u} (op : F ι) :
     wpH H (lift op : FreeM F ι) = H op :=
   liftM_lift _ op
 
 @[simp] theorem wpH_bind (H : LHandler F ps) (x : FreeM F α) (f : α → FreeM F β) :
-    wpH H (x >>= f) = wpH H x >>= fun a => wpH H (f a) := by
-  simpa only [wpH, bind_eq_bind] using liftM_bind _ x f
+    wpH H (x >>= f) = wpH H x >>= fun a => wpH H (f a) :=
+  liftM_bind H x f
 
 /-- Adequacy theorem: WP via `FreeM` against an `ofInterp`-derived handler agrees with
 `Std.Do`'s WP of the `liftM` interpretation. Equivalently, two monad morphisms

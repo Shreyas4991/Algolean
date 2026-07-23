@@ -189,6 +189,24 @@ structure Reduction (Q₁ Q₂ : Type u → Type u) where
 abbrev Prog.reduceProg (P : Prog Q₁ α) (red : Reduction Q₁ Q₂) : Prog Q₂ α :=
   P.liftM red.reduce
 
+/-- Interpreting a reduced program is the same as interpreting each source query through its
+reduction. -/
+theorem Prog.reduceProg_liftM {m : Type u → Type w} [Monad m] [LawfulMonad m]
+    (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
+    (interp₁ : {ι : Type u} → Q₁ ι → m ι)
+    (interp₂ : {ι : Type u} → Q₂ ι → m ι)
+    (hCorrect : ∀ {ι} (q : Q₁ ι), (red.reduce q).liftM interp₂ = interp₁ q) :
+    (P.reduceProg red).liftM interp₂ = P.liftM interp₁ := by
+  induction P with
+  | pure a => rfl
+  | liftBind q f ih =>
+      simp only [reduceProg, FreeM.liftBind_eq, FreeM.bind_eq_bind,
+        FreeM.liftM_bind, FreeM.liftM_lift]
+      rw [hCorrect q]
+      apply congrArg (fun k => interp₁ q >>= k)
+      funext a
+      apply ih
+
 /-- A reduction preserves evaluation when it correctly implements each query. -/
 theorem Prog.reduceProg_eval
     (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)

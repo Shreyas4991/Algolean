@@ -12,9 +12,7 @@ public import Std.Tactic.Do
 /-!
 # Weakest-precondition reasoning for `ModelM`
 
-Regression coverage showing that an effectful query model inherits `mvcgen` support whenever its
-semantic monad has a `WPMonad` instance. The chosen handler is local, so it cannot conflict with a
-pure `Model` or another effectful interpretation of the same query syntax.
+This file exercises weakest-precondition reasoning and `mvcgen` for a `StateM` query model.
 -/
 
 @[expose] public section
@@ -25,10 +23,12 @@ namespace AlgoleanTests.ModelMWP
 
 open Algolean.Algorithms Cslib Cslib.FreeM Std.Do
 
+/-- Queries for incrementing and reading a counter. -/
 inductive CounterQ : Type → Type where
   | tick : CounterQ Unit
   | read : CounterQ Nat
 
+/-- Interpret counter queries in `StateM Nat`, with unit cost for each query. -/
 def counterModel : ModelM CounterQ (StateM Nat) Nat where
   evalQuery
     | .tick => modify (· + 1)
@@ -37,10 +37,13 @@ def counterModel : ModelM CounterQ (StateM Nat) Nat where
 
 local instance : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
 
+/-- Increment the counter. -/
 def tick : Prog CounterQ Unit := FreeM.lift .tick
 
+/-- Read the counter. -/
 def read : Prog CounterQ Nat := FreeM.lift .read
 
+/-- Increment the counter and return its new value. -/
 def tickThenRead : Prog CounterQ Nat := do
   tick
   read
@@ -48,6 +51,12 @@ def tickThenRead : Prog CounterQ Nat := do
 example (P : Prog CounterQ α) :
     wpH counterModel.handler P = wp (P.evalM counterModel) :=
   counterModel.wp_eq_wp_evalM P
+
+example {Q : PostCond Nat (.arg Nat .pure)} :
+    let _ : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
+    Triple (FreeM.lift CounterQ.read : Prog CounterQ Nat)
+      (wp⟦counterModel.evalQuery .read⟧ Q) Q :=
+  counterModel.query_spec .read
 
 example (n : Nat) :
     ⦃fun s => ⌜s = n⌝⦄ tickThenRead

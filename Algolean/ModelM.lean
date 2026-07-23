@@ -26,8 +26,11 @@ namespace Algolean.Algorithms
 
 open Cslib
 
+/-- A query model whose queries are evaluated in the monad `m`. -/
 structure ModelM (Q : Type u → Type v) (m : Type u → Type w) (Cost : Type u) where
+  /-- Evaluate a query in `m`. -/
   evalQuery : Q α → m α
+  /-- The cost assigned to a query. -/
   cost : Q α → Cost
 
 namespace ModelM
@@ -48,11 +51,6 @@ def runQuery [Functor m] (M : ModelM Q m Cost) (q : Q α) : AddWriterT Cost m α
     (M.runQuery q).cost = (fun _ => M.cost q) <$> M.evalQuery q := by
   simp [runQuery, AddWriterT.cost]
 
-/-- Construct a model from an evaluator and a cost function. -/
-def ofEvalCost (evalQuery : {α : Type u} → Q α → m α)
-    (cost : {α : Type u} → Q α → Cost) : ModelM Q m Cost :=
-  ⟨evalQuery, cost⟩
-
 /-- Regard a `Model` as a `ModelM` over `Id`. -/
 def ofModel (M : Algolean.Algorithms.Model Q Cost) : ModelM Q Id Cost where
   evalQuery q := M.evalQuery q
@@ -63,20 +61,6 @@ def ofModel (M : Algolean.Algorithms.Model Q Cost) : ModelM Q Id Cost where
 
 @[simp] theorem ofModel_cost (M : Algolean.Algorithms.Model Q Cost) (q : Q α) :
     (ofModel M).cost q = M.cost q := rfl
-
-/-- Change the semantic monad through a natural transformation. -/
-def mapK {n : Type u → Type y} (lift : {α : Type u} → m α → n α)
-    (M : ModelM Q m Cost) : ModelM Q n Cost where
-  evalQuery q := lift (M.evalQuery q)
-  cost q := M.cost q
-
-@[simp] theorem mapK_evalQuery {n : Type u → Type y}
-    (lift : {α : Type u} → m α → n α) (M : ModelM Q m Cost) (q : Q α) :
-    (M.mapK lift).evalQuery q = lift (M.evalQuery q) := rfl
-
-@[simp] theorem mapK_cost {n : Type u → Type y}
-    (lift : {α : Type u} → m α → n α) (M : ModelM Q m Cost) (q : Q α) :
-    (M.mapK lift).cost q = M.cost q := rfl
 
 /-- Sum two query languages interpreted in the same monad with the same cost type. -/
 def sum {Q₂ : Type u → Type x} (M₁ : ModelM Q m Cost) (M₂ : ModelM Q₂ m Cost) :
@@ -129,7 +113,7 @@ def costM [Monad m] [AddZero Cost]
 
 @[simp] theorem evalM_liftBind [Monad m]
     (q : Q α) (f : α → Prog Q β) (M : ModelM Q m Cost) :
-    evalM (FreeM.liftBind q f) M = (M.evalQuery q >>= fun a => evalM (f a) M) := rfl
+    evalM (FreeM.lift q >>= f) M = (M.evalQuery q >>= fun a => evalM (f a) M) := rfl
 
 @[simp] theorem evalM_lift [Monad m] [LawfulMonad m]
     (q : Q α) (M : ModelM Q m Cost) :
@@ -152,7 +136,7 @@ def costM [Monad m] [AddZero Cost]
 
 @[simp] theorem runM_liftBind [Monad m] [AddZero Cost]
     (q : Q α) (f : α → Prog Q β) (M : ModelM Q m Cost) :
-    runM (FreeM.liftBind q f) M = (M.runQuery q >>= fun a => runM (f a) M) := rfl
+    runM (FreeM.lift q >>= f) M = (M.runQuery q >>= fun a => runM (f a) M) := rfl
 
 @[simp] theorem runM_lift [Monad m] [LawfulMonad m] [AddMonoid Cost]
     (q : Q α) (M : ModelM Q m Cost) :
@@ -170,13 +154,14 @@ def costM [Monad m] [AddZero Cost]
   simp [runM]
 
 /-- Forgetting the cost component of the joint semantics recovers `evalM`. -/
-theorem runM_value [Monad m] [LawfulMonad m] [AddMonoid Cost]
+@[simp] theorem runM_value [Monad m] [LawfulMonad m] [AddZero Cost]
     (P : Prog Q α) (M : ModelM Q m Cost) :
     (P.runM M).value = P.evalM M := by
   induction P with
   | pure a => simp
   | liftBind q f ih =>
-      simp only [runM_liftBind, evalM_liftBind, AddWriterT.value_bind,
+      simp only [runM, evalM] at ih
+      simp only [runM, evalM, FreeM.liftM, AddWriterT.value_bind,
         ModelM.runQuery, AddWriterT.run_mk, ih, bind_map_left]
 
 @[simp] theorem costM_pure [Monad m] [LawfulMonad m] [AddZero Cost]
@@ -184,9 +169,9 @@ theorem runM_value [Monad m] [LawfulMonad m] [AddMonoid Cost]
     costM (pure a : Prog Q α) M = pure 0 := by
   simp [costM]
 
-@[simp] theorem costM_liftBind [Monad m] [LawfulMonad m] [AddMonoid Cost]
+@[simp] theorem costM_liftBind [Monad m] [LawfulMonad m] [AddZero Cost]
     (q : Q α) (f : α → Prog Q β) (M : ModelM Q m Cost) :
-    costM (FreeM.liftBind q f) M =
+    costM (FreeM.lift q >>= f) M =
       (M.evalQuery q >>= fun a => (M.cost q + ·) <$> costM (f a) M) := by
   simp [costM, runM, ModelM.runQuery, AddWriterT.cost, AddWriterT.run_bind]
 
@@ -197,31 +182,23 @@ theorem runM_value [Monad m] [LawfulMonad m] [AddMonoid Cost]
 
 section OfModel
 
-variable {Q : Type u → Type u} {Cost : Type u}
-
 /-- Evaluating with `ofModel M` is the same as evaluating with `M`. -/
-theorem evalM_ofModel (P : Prog Q α) (M : Algolean.Algorithms.Model Q Cost) :
-    Id.run (P.evalM (ModelM.ofModel M)) = P.eval M := by
-  induction P with
-  | pure a => rfl
-  | liftBind q f ih => exact ih (M.evalQuery q)
+@[simp] theorem evalM_ofModel (P : Prog Q α) (M : Algolean.Algorithms.Model Q Cost) :
+    Id.run (P.evalM (ModelM.ofModel M)) = P.eval M := rfl
 
 /-- The cost of a query followed by a program under `ofModel`. -/
-@[simp] theorem costM_ofModel_liftBind [AddMonoid Cost]
+@[simp] theorem costM_ofModel_liftBind [AddZero Cost]
     (q : Q α) (f : α → Prog Q β) (M : Algolean.Algorithms.Model Q Cost) :
-    Id.run (Prog.costM (FreeM.liftBind q f) (ModelM.ofModel M)) =
-      M.cost q + Id.run ((f (M.evalQuery q)).costM (ModelM.ofModel M)) := by
-  rw [costM_liftBind]
-  rfl
+    Id.run (Prog.costM (FreeM.lift q >>= f) (ModelM.ofModel M)) =
+      M.cost q + Id.run ((f (M.evalQuery q)).costM (ModelM.ofModel M)) := rfl
 
 /-- Computing cost with `ofModel M` gives `Prog.time M`. -/
-theorem costM_ofModel [AddMonoid Cost]
+@[simp] theorem costM_ofModel [AddZero Cost]
     (P : Prog Q α) (M : Algolean.Algorithms.Model Q Cost) :
     Id.run (P.costM (ModelM.ofModel M)) = P.time M := by
   induction P with
-  | pure a => simp
-  | liftBind q f ih =>
-      rw [costM_ofModel_liftBind, Prog.time_liftBind, ih]
+  | pure a => rfl
+  | liftBind q f ih => exact congrArg (M.cost q + ·) (ih (M.evalQuery q))
 
 end OfModel
 
@@ -229,42 +206,29 @@ section Reduction
 
 variable {Q₁ Q₂ : Type u → Type u}
 
-
-/-- Reducing a program does not change its evaluation if the reduction preserves each query. -/
+/-- A query reduction preserving each query also preserves program evaluation. -/
 theorem reduceProg_evalM [Monad m] [LawfulMonad m]
     (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
-    (M₁ : ModelM Q₁ m Cost) (M₂ : ModelM Q₂ m Cost)
+    (M₁ : ModelM Q₁ m Cost₁) (M₂ : ModelM Q₂ m Cost₂)
     (hCorrect : ∀ {ι} (q : Q₁ ι), (red.reduce q).evalM M₂ = M₁.evalQuery q) :
-    (P.reduceProg red).evalM M₂ = P.evalM M₁ := by
-  induction P with
-  | pure a => rfl
-  | liftBind q f ih =>
-      simp only [Prog.reduceProg, evalM, FreeM.liftBind_eq, FreeM.bind_eq_bind,
-        FreeM.liftM_bind, FreeM.liftM_lift]
-      have hq : FreeM.liftM M₂.evalQuery (red.reduce q) = M₁.evalQuery q := by
-        apply hCorrect
-      rw [hq]
-      apply congrArg (fun k : _ → m α => M₁.evalQuery q >>= k)
-      funext a
-      apply ih
+    (P.reduceProg red).evalM M₂ = P.evalM M₁ :=
+  reduceProg_liftM P red M₁.evalQuery M₂.evalQuery hCorrect
 
 /-- A query reduction preserving `runM` also preserves `runM` for every program. -/
 theorem reduceProg_runM [Monad m] [LawfulMonad m] [AddMonoid Cost]
     (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
     (M₁ : ModelM Q₁ m Cost) (M₂ : ModelM Q₂ m Cost)
     (hCorrect : ∀ {ι} (q : Q₁ ι), (red.reduce q).runM M₂ = M₁.runQuery q) :
-    (P.reduceProg red).runM M₂ = P.runM M₁ := by
-  induction P with
-  | pure a => rfl
-  | liftBind q f ih =>
-      simp only [Prog.reduceProg, runM, FreeM.liftBind_eq, FreeM.bind_eq_bind,
-        FreeM.liftM_bind, FreeM.liftM_lift]
-      have hq : FreeM.liftM M₂.runQuery (red.reduce q) = M₁.runQuery q := by
-        apply hCorrect
-      rw [hq]
-      apply congrArg (fun k : _ → AddWriterT Cost m α => M₁.runQuery q >>= k)
-      funext a
-      apply ih
+    (P.reduceProg red).runM M₂ = P.runM M₁ :=
+  reduceProg_liftM P red M₁.runQuery M₂.runQuery hCorrect
+
+/-- A query reduction preserving `runM` also preserves accumulated program costs. -/
+theorem reduceProg_costM [Monad m] [LawfulMonad m] [AddMonoid Cost]
+    (P : Prog Q₁ α) (red : Reduction Q₁ Q₂)
+    (M₁ : ModelM Q₁ m Cost) (M₂ : ModelM Q₂ m Cost)
+    (hCorrect : ∀ {ι} (q : Q₁ ι), (red.reduce q).runM M₂ = M₁.runQuery q) :
+    (P.reduceProg red).costM M₂ = P.costM M₁ :=
+  congrArg AddWriterT.cost (reduceProg_runM P red M₁ M₂ hCorrect)
 
 end Reduction
 
@@ -282,6 +246,11 @@ namespace ModelM
 def handler [WP m ps] (M : ModelM Q m Cost) : LHandler Q ps :=
   LHandler.ofInterp (m := m) (fun _ q => M.evalQuery q)
 
+@[simp] theorem handler_sum [WP m ps] {Q₂ : Type u → Type x}
+    (M₁ : ModelM Q m Cost) (M₂ : ModelM Q₂ m Cost) (q : Q α ⊕ Q₂ α) :
+    (M₁.sum M₂).handler q = LHandler.sum M₁.handler M₂.handler q := by
+  cases q <;> rfl
+
 /-- Use `M.handler` as the logical handler for `Prog Q`. -/
 @[reducible] def hasHandler [WP m ps] (M : ModelM Q m Cost) : HasHandler Q ps where
   handler := M.handler
@@ -289,19 +258,10 @@ def handler [WP m ps] (M : ModelM Q m Cost) : LHandler Q ps :=
 /-- The weakest precondition given by `M.handler` agrees with that of `Prog.evalM M`. -/
 theorem wp_eq_wp_evalM [Monad m] [WPMonad m ps]
     (M : ModelM Q m Cost) (P : Prog Q α) :
-    wpH M.handler P = wp (P.evalM M) := by
-  unfold ModelM.handler Prog.evalM
-  exact wpH_ofInterp_eq_wp_liftM (m := m) (fun _ q => M.evalQuery q) P
+    wpH M.handler P = wp (P.evalM M) :=
+  wpH_ofInterp_eq_wp_liftM (m := m) (fun _ q => M.evalQuery q) P
 
 end ModelM
-
-/-- The weakest-precondition rule for a query under the selected logical handler. -/
-@[spec]
-theorem Spec.queryM [HasHandler Q ps] (q : Q α) {Q' : PostCond α ps} :
-    Triple (FreeM.lift q : Prog Q α) ((HasHandler.handler q).apply Q') Q' := by
-  apply Triple.of_entails_wp
-  rw [show wp (FreeM.lift q : Prog Q α) =
-    wpH HasHandler.handler (FreeM.lift q) from rfl, wpH_lift]
 
 /-- The `ModelM` query rule stated directly through the semantic monad's weakest precondition. -/
 theorem ModelM.query_spec [Monad m] [WPMonad m ps]
@@ -309,7 +269,7 @@ theorem ModelM.query_spec [Monad m] [WPMonad m ps]
     let _ : HasHandler Q ps := M.hasHandler
     Triple (FreeM.lift q : Prog Q α) (wp⟦M.evalQuery q⟧ Q') Q' := by
   letI := M.hasHandler
-  exact Spec.queryM q
+  exact Cslib.FreeM.Spec.lift_FreeM q
 
 end WeakestPrecondition
 
