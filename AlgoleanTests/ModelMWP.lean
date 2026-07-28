@@ -55,8 +55,8 @@ example (P : Prog CounterQ α) :
 example {Q : PostCond Nat (.arg Nat .pure)} :
     let _ : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
     Triple (FreeM.lift CounterQ.read : Prog CounterQ Nat)
-      (wp⟦counterModel.evalQuery .read⟧ Q) Q :=
-  counterModel.query_spec .read
+      (wp⟦counterModel.evalQuery .read⟧ Q) Q := by
+  mvcgen [counterModel, ModelM.handler]
 
 example (n : Nat) :
     ⦃fun s => ⌜s = n⌝⦄ tickThenRead
