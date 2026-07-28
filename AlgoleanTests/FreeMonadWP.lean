@@ -239,8 +239,15 @@ def PickF.spec : OperationSpec PickF where
 def PickF.handler : LHandler PickF .pure :=
   PickF.spec.toHandler
 
-instance : HasHandler PickF .pure where
+instance PickF.instHasHandler : HasHandler PickF .pure where
   handler := PickF.handler
+
+/-- The default handler's generated precondition reduces to the `true` branch. -/
+@[simp]
+theorem PickF.apply_defaultHandler (Q : PostCond Bool .pure) :
+    (HasHandler.handler PickF.pick).apply Q = Q.1 true := by
+  apply SPred.ext_nil
+  simp [HasHandler.handler, PickF.handler, PickF.spec]
 
 /-- Smart constructor for the abstract `pick` operation. -/
 abbrev pick : FreeM PickF Bool := lift PickF.pick
@@ -252,10 +259,25 @@ example (Q : PostCond Bool .pure) :
   apply SPred.ext_nil
   simp [PickF.handler, PickF.spec]
 
-/-- Consequently, `pick` has precisely the paper's Hoare specification. -/
-example {Q : PostCond Bool .pure} :
+/-- Consequently, `pick` has precisely the paper's Hoare specification. The rule is derived from
+the generic `FreeM.lift` rule and registered with `mvcgen` for use in larger programs. -/
+@[spec]
+theorem Spec.pick {Q : PostCond Bool .pure} :
     Triple pick (Q.1 true) Q :=
-  fun h => ⟨True.intro, fun _ hEq => hEq ▸ h⟩
+  by
+    simpa only [AlgoleanTests.FreeMonadWP.pick, PickF.apply_defaultHandler] using
+      (Cslib.FreeM.Spec.lift_FreeM PickF.pick (Q := Q))
+
+/-- Two abstract operations compose through the generated handler: `mvcgen` uses the generic
+operation rule derived above and proves that both results satisfy the relational specification. -/
+def pickTwice : FreeM PickF (Bool × Bool) := do
+  let x ← pick
+  let y ← pick
+  pure (x, y)
+
+example :
+    ⦃⌜True⌝⦄ pickTwice ⦃⇓ r => ⌜r = (true, true)⌝⦄ := by
+  mvcgen [pickTwice]
 
 /-! ### Query-model programs
 
