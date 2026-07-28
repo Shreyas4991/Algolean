@@ -350,7 +350,7 @@ theorem applyHadamardsUpTo_liftM {n k : ℕ} (hk : k ≤ n)
   | zero =>
       rfl
   | succ k ih =>
-      simp only [applyHadamardsUpTo, hadamardsUpToModelResult, FreeM.bind_eq_bind]
+      simp only [applyHadamardsUpTo, hadamardsUpToModelResult]
       calc
         (FreeM.bind (applyHadamardsUpTo k (Nat.le_of_succ_le hk) ρ)
             (fun ρ => applyGate (.hadamard ⟨k, Nat.lt_of_succ_le hk⟩) ρ)).liftM
