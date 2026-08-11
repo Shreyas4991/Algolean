@@ -148,6 +148,9 @@ def sortModelNat {α : Type*}
     | .cmpLE x y => le x y
   cost _ := 1
 
+/-- The canonical `SortOps` model, interpreting `cmpLE x y` as `x ≤ y` under `[Ord α]`. -/
+instance [Ord α] : HasModel (SortOps α) ℕ := ⟨sortModelNat (fun a b => (compare a b).isLE)⟩
+
 end NatModel
 
 section SortStability
