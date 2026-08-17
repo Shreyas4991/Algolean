@@ -6,7 +6,9 @@ Authors: Franklin Harding
 
 module
 
-public import Algolean.Models.GenericGroup
+public import Algolean.Algorithms.DiscreteLog
+public meta import Mathlib.Tactic.NormNum.Prime
+public meta import Algolean.Algorithms.DiscreteLog
 public meta import Algolean.Models.GenericGroup
 
 /-!
@@ -38,6 +40,21 @@ example [AddCommGroup G] [DecidableEq G] (x : G) : GroupProg.groupOps (quadruple
 example (a : ZMod 11) : GroupProg.eval (quadruple a) = (4 : ℕ) • a := by
   change a + a + (a + a) = (4 : ℕ) • a
   module
+
+/-- Brute-force search finds the discrete logarithm of `5` to base `1` in `ZMod 11`. -/
+example : GroupProg.eval (bruteForceDLog (ZMod 11) 11 (dlogInputs 1 5)) = 5 := by decide
+
+/-- On the secret `0` the raw search returns the order rather than `0`, since it starts counting
+at `1`. -/
+example : GroupProg.eval (bruteForceDLog (ZMod 11) 11 (dlogInputs 5 0)) = 11 := by decide
+
+/-- Read back in `ZMod p` that answer is the secret again, and `bruteForceDLog_eval_zmod` says so
+for every secret and every base other than `0` in every group of order `p` — here the base `5`,
+and not the base `1` that makes discrete logarithms in `ZMod 11` trivial to begin with. -/
+example (x : ZMod 11) :
+    GroupProg.eval ((fun n : ℕ => (n : ZMod 11)) <$>
+      bruteForceDLog (ZMod 11) 11 (dlogInputs 5 (x.val • (5 : ZMod 11)))) = x :=
+  bruteForceDLog_eval_zmod (by norm_num) (ZMod.card 11) (by decide) x
 
 /-!
 ## Correctness via `mvcgen`
