@@ -19,6 +19,7 @@ public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.LowerBounds.ComparisonSort
+public import Algolean.LowerBounds.DiscreteLog
 public import Algolean.ModelM
 public import Algolean.Models.Circuits
 public import Algolean.Models.Comparison

@@ -8,6 +8,7 @@ module
 
 public import Algolean.Algorithms.BabyStepGiantStep
 public import Algolean.Algorithms.DiscreteLog
+public import Algolean.LowerBounds.DiscreteLog
 public meta import Mathlib.Tactic.NormNum.Prime
 public meta import Algolean.Algorithms.BabyStepGiantStep
 public meta import Algolean.Algorithms.DiscreteLog
@@ -21,7 +22,7 @@ public meta import Algolean.Models.GenericGroup
 
 namespace AlgoleanTests
 
-open Cslib Algolean Algorithms Prog
+open Cslib Algolean Algorithms LowerBounds Prog
 
 section GroupExamples
 
@@ -187,6 +188,30 @@ example (x : ZMod 11) : GroupProg.eval (repeatedDouble x 5) = (32 : ℕ) • x :
   repeatedDouble_eval x 5
 
 end Mvcgen
+
+/-!
+## The lower bound is not vacuous
+
+`Algolean.LowerBounds.exists_group_sqrt_le_groupOps` bounds every algorithm that solves the
+discrete logarithm in all groups at once. Both algorithms here do, so there is something to bound.
+-/
+
+/-- Brute force meets the hypothesis of the lower bound. -/
+example : SolvesDLog bruteForceDLog := solvesDLog_bruteForceDLog
+
+/-- So does baby-step giant-step. -/
+example : SolvesDLog bsgs := fun _ _ _ _ => bsgs_eval_nsmul
+
+/-- So there are groups of order at least a million in which brute force is forced to spend at
+least `√|G| / 10` group operations. -/
+example :
+    ∃ (G : Type) (_ : Fintype G) (_ : AddCommGroup G) (_ : DecidableEq G) (g : G) (x : ℕ),
+      1000000 ≤ Fintype.card G ∧ x < Fintype.card G ∧
+        Nat.sqrt (Fintype.card G) ≤
+          10 * GroupProg.groupOps
+            (bruteForceDLog G (Fintype.card G) (dlogInputs g (x • g))) :=
+  exists_group_sqrt_le_groupOps solvesDLog_bruteForceDLog 1000000
+
 end GroupExamples
 
 end AlgoleanTests
