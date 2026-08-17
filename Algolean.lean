@@ -21,6 +21,7 @@ public import Algolean.ModelM
 public import Algolean.Models.Circuits
 public import Algolean.Models.Comparison
 public import Algolean.Models.FanInTwoCircuits
+public import Algolean.Models.GenericGroup
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
 public import Algolean.Models.Quantum.Circuit
