@@ -2,6 +2,7 @@ module  -- shake: keep-all --deprecated_module: ignore
 
 public import Algolean.AddWriter.Basic
 public import Algolean.AddWriter.Transformer
+public import Algolean.Algorithms.BabyStepGiantStep
 public import Algolean.Algorithms.BoyerMooreMajorityVote
 public import Algolean.Algorithms.Circuits.FanInTwo.LogAnd
 public import Algolean.Algorithms.DiscreteLog

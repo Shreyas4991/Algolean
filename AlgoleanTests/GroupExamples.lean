@@ -6,8 +6,10 @@ Authors: Franklin Harding
 
 module
 
+public import Algolean.Algorithms.BabyStepGiantStep
 public import Algolean.Algorithms.DiscreteLog
 public meta import Mathlib.Tactic.NormNum.Prime
+public meta import Algolean.Algorithms.BabyStepGiantStep
 public meta import Algolean.Algorithms.DiscreteLog
 public meta import Algolean.Models.GenericGroup
 
@@ -55,6 +57,48 @@ example (x : ZMod 11) :
     GroupProg.eval ((fun n : ℕ => (n : ZMod 11)) <$>
       bruteForceDLog (ZMod 11) 11 (dlogInputs 5 (x.val • (5 : ZMod 11)))) = x :=
   bruteForceDLog_eval_zmod (by norm_num) (ZMod.card 11) (by decide) x
+
+-- Baby-step giant-step finds the same discrete logarithm.
+/-- info: 5 -/
+#guard_msgs in
+#eval GroupProg.eval (bsgs (ZMod 11) 11 (dlogInputs 1 5))
+
+-- On its worst secret in `ZMod 101`, baby-step giant-step asks for far fewer group elements than
+-- brute force does, which is the `O(√order)` of `bsgs_groupOps_le` against the `order` of
+-- `bruteForceDLog_cost_le`.
+/-- info: (97, 29, 96) -/
+#guard_msgs in
+#eval (GroupProg.eval (bsgs (ZMod 101) 101 (dlogInputs 1 97)),
+  GroupProg.groupOps (bsgs (ZMod 101) 101 (dlogInputs 1 97)),
+  GroupProg.groupOps (bruteForceDLog (ZMod 101) 101 (dlogInputs 1 97)))
+
+-- Baby-step giant-step pays for its small number of `add` queries with a quadratic number of
+-- comparisons: the model has no unit cost table lookup.
+/-- info: (29, 91) -/
+#guard_msgs in
+#eval ((GroupProg.cost (bsgs (ZMod 101) 101 (dlogInputs 1 97))).adds,
+  (GroupProg.cost (bsgs (ZMod 101) 101 (dlogInputs 1 97))).eqs)
+
+/-- info: (96, 97) -/
+#guard_msgs in
+#eval ((GroupProg.cost (bruteForceDLog (ZMod 101) 101 (dlogInputs 1 97))).adds,
+  (GroupProg.cost (bruteForceDLog (ZMod 101) 101 (dlogInputs 1 97))).eqs)
+
+/-!
+## One program, every group
+
+Nothing in `bsgs` mentions a group: it is a `GroupAlg 2 ℕ`, a program uniformly in the type of
+group elements, which receives the order as a number. The group enters only through the instances
+that `GroupProg.eval` is read against, so the same code runs everywhere.
+-/
+
+/-- Baby-step giant-step in `ZMod 13`. -/
+example : GroupProg.eval (bsgs (ZMod 13) 13 (dlogInputs 2 8)) • (2 : ZMod 13) = 8 :=
+  bsgs_eval 2 8 (x := 4) (by norm_num) (by norm_num) (by decide)
+
+/-- And in the additive group of `Fin 5 → ZMod 3`. -/
+example : GroupProg.eval (bsgs (Fin 5 → ZMod 3) 3 (dlogInputs 1 2)) • (1 : Fin 5 → ZMod 3) = 2 :=
+  bsgs_eval 1 2 (x := 2) (by norm_num) (by norm_num) (by decide)
 
 /-!
 ## Correctness via `mvcgen`
