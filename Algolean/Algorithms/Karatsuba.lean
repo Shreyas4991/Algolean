@@ -1,7 +1,14 @@
-import Mathlib.Data.Nat.Digits.Defs
-import Mathlib.Data.Nat.Log
+module
 
-open Nat
+public import Mathlib.Data.Nat.Digits.Defs
+public import Mathlib.Data.Nat.Log
+public import Algolean.QueryModel
+
+@[expose] public section
+
+namespace Algolean.Algorithms
+
+open Nat Prog
 
 section listAddition
 
@@ -287,3 +294,112 @@ theorem Karatsuba_correct {b x y : ℕ} (hb : 2 ≤ b) :
     | inr hx => grind
   · exact hb
 end correctness
+
+section time
+
+inductive mulQuery (lim : ℕ) : Type → Type
+| mul (x y : ℕ) (h₁ : x < lim) (h₂ : y < lim) : mulQuery lim ℕ
+
+@[simps]
+def mulModel (lim : ℕ) : Model (mulQuery lim) ℕ where
+  evalQuery
+  | .mul x y _ _ => x * y
+  cost _ := 1
+
+theorem boundedMul_helper {b : ℕ} {l : List ℕ} (hb : 2 ≤ b) (h : ∀ x ∈ l, x < b) :
+    ofDigits b (l.take 3) < b^3 := by
+  have := @Nat.ofDigits_lt_base_pow_length b (l.take 3) (by grind) ?_
+  · simp only [List.length_take, min, pow_ite] at this
+    split at this
+    · exact this
+    · rename_i h'
+      simp only [not_le] at h'
+      apply Nat.lt_trans this (Nat.pow_lt_pow_of_lt hb h')
+  · intro x hx
+    apply h x (List.mem_of_mem_take hx)
+
+def KaratsubaHelperProg (b d : ℕ) (l₁ l₂ : List ℕ) (hb : 2 ≤ b)
+  (h₁ : ∀ x ∈ l₁, x < b) (h₂ : ∀ x ∈ l₂, x < b) :
+    Prog (mulQuery (b^3)) ℕ := do
+  match d with
+  | 0 =>
+    let x := l₁.take 3
+    let y := l₂.take 3
+    have h₁ : ofDigits b x < b^3 := boundedMul_helper hb h₁
+    have h₂ : ofDigits b y < b^3 := boundedMul_helper hb h₂
+    return ← mulQuery.mul (ofDigits b x) (ofDigits b y) h₁ h₂
+  | succ d' =>
+    -- extract parts
+    let x₁ := l₁.drop (2^d' + 1)
+    let x₂ := l₁.take (2^d' + 1)
+    let y₁ := l₂.drop (2^d' + 1)
+    let y₂ := l₂.take (2^d' + 1)
+    -- addition and bringing into the correct length
+    let x₁_add_x₂ := listAdd b x₁ x₂
+    let x₁_add_x₂ := x₁_add_x₂ ++ List.replicate (2^d' + 2 - x₁_add_x₂.length) 0
+    let y₁_add_y₂ := listAdd b y₁ y₂
+    let y₁_add_y₂ := y₁_add_y₂ ++ List.replicate (2^d' + 2 - y₁_add_y₂.length) 0
+    -- intermediate results
+    let x₁y₁ ← KaratsubaHelperProg b d' (x₁ ++ [0]) (y₁ ++ [0]) hb (by grind) (by grind)
+    let x₂y₂ ← KaratsubaHelperProg b d' (x₂ ++ [0]) (y₂ ++ [0]) hb (by grind) (by grind)
+    have h₁' : ∀ x ∈ x₁_add_x₂, x < b := by
+      expose_names
+      simp only [List.mem_append, List.mem_replicate, ne_eq, x₁_add_x₂, x₁_add_x₂_1]
+      intro x hx
+      cases hx with
+      | inl hx =>
+        apply lt_base_of_mem_listAdd (l₁ := x₁) (l₂ := x₂) hb (by grind) (by grind) x hx
+      | inr hx => grind
+    have h₂' : ∀ x ∈ y₁_add_y₂, x < b := by
+      expose_names
+      simp only [List.mem_append, List.mem_replicate, ne_eq, y₁_add_y₂, y₁_add_y₂_1]
+      intro x hx
+      cases hx with
+      | inl hx =>
+        apply lt_base_of_mem_listAdd (l₁ := y₁) (l₂ := y₂) hb (by grind) (by grind) x hx
+      | inr hx => grind
+    let x₁y₂_add_x₂y₁ := (← KaratsubaHelperProg b d' x₁_add_x₂ y₁_add_y₂ hb h₁' (by grind))
+      - x₁y₁ - x₂y₂
+    --final result
+    return x₂y₂ + b^(2^d' + 1) * x₁y₂_add_x₂y₁ + (b^(2^d' + 1))^2 * x₁y₁
+
+def KaratsubaProg (b x y : ℕ) (hb : 2 ≤ b) :
+    Prog (mulQuery (b^3)) ℕ := do
+  let l₁ := Nat.digits b x
+  let l₂ := Nat.digits b y
+  let maxLength := max l₁.length l₂.length
+  let d := Nat.clog 2 (maxLength - 2)
+  have h₁ : ∀ z ∈ (l₁ ++ List.replicate (2^d + 2 - l₁.length) 0), z < b := by
+    intro z hz
+    simp only [List.mem_append, List.mem_replicate, ne_eq] at hz
+    cases hz with
+    | inl hz => apply Nat.digits_lt_base (by grind) hz
+    | inr hz => grind
+  have h₂ : ∀ z ∈ (l₂ ++ List.replicate (2^d + 2 - l₂.length) 0), z < b := by
+    intro z hz
+    simp only [List.mem_append, List.mem_replicate, ne_eq] at hz
+    cases hz with
+    | inl hz => apply Nat.digits_lt_base (by grind) hz
+    | inr hz => grind
+  return ← (KaratsubaHelperProg b d (l₁ ++ List.replicate (2^d + 2 - l₁.length) 0)
+    (l₂ ++ List.replicate (2^d + 2 - l₂.length) 0) hb h₁ h₂)
+
+theorem KaratsubaHelperProg_eval {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ b)
+  (h₁ : ∀ x ∈ l₁, x < b) (h₂ : ∀ x ∈ l₂, x < b) :
+    (KaratsubaHelperProg b d l₁ l₂ hb h₁ h₂).eval (mulModel (b^3)) = KaratsubaHelper b d l₁ l₂ := by
+  fun_induction KaratsubaHelper with
+  | case1 l₁ l₂ x y =>
+    simp [KaratsubaHelperProg, x, y]
+  | case2 =>
+    expose_names
+    simp only [KaratsubaHelperProg, bind_pure_comp, eval_bind, eval_map]
+    rw [ih1, ih2, ih3]
+
+theorem KaratsubaProg_eval (b x y : ℕ) (hb : 2 ≤ b) :
+    (KaratsubaProg b x y hb).eval (mulModel (b^3)) = Karatsuba b x y := by
+  simp only [KaratsubaProg, bind_pure, Karatsuba]
+  rw [KaratsubaHelperProg_eval]
+
+end time
+
+end Algolean.Algorithms
