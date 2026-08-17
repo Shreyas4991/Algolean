@@ -170,7 +170,7 @@ def KaratsubaHelper (b d : ℕ) (l₁ l₂ : List ℕ) : ℕ :=
     --final result
     x₂y₂ + b^(2^d' + 1) * x₁y₂_add_x₂y₁ + (b^(2^d' + 1))^2 * x₁y₁
 
-def Karatsuba (b : ℕ) (x y : ℕ) : ℕ :=
+def Karatsuba (b x y : ℕ) : ℕ :=
   let l₁ := Nat.digits b x
   let l₂ := Nat.digits b y
   let maxLength := max l₁.length l₂.length
@@ -239,4 +239,51 @@ theorem KaratsubaHelper_correct {b d : ℕ} {l₁ l₂ : List ℕ} (h₁ : l₁.
     simp [hl₁, hl₂, ofDigits_append, hx₂_length, hy₂_length, hres₁, hres₂, hres₃]
     lia
 
+theorem Karatsuba_correct {b x y : ℕ} (hb : 2 ≤ b) :
+    Karatsuba b x y = x * y := by
+  simp only [Karatsuba]
+  rw [KaratsubaHelper_correct]
+  · simp [ofDigits_digits]
+  · simp only [List.length_append, List.length_replicate]
+    rw [← Nat.add_sub_assoc (n := (b.digits x).length), Nat.sub_add_comm]
+    · simp
+    · simp
+    · apply Nat.le_add_of_sub_le
+      simp only [max]
+      split
+      · rename_i h
+        refine Nat.le_trans (m := (b.digits y).length - 2) ?_ ?_
+        · exact Nat.sub_le_sub_right h 2
+        · apply le_pow_clog
+          simp
+      · rename_i h
+        apply le_pow_clog
+        simp
+  · simp only [List.length_append, List.length_replicate]
+    rw [← Nat.add_sub_assoc (n := (b.digits y).length), Nat.sub_add_comm]
+    · simp
+    · simp
+    · apply Nat.le_add_of_sub_le
+      simp only [max]
+      split
+      · rename_i h
+        apply le_pow_clog
+        simp
+      · rename_i h
+        refine Nat.le_trans (m := (b.digits x).length - 2) ?_ ?_
+        · simp only [not_le] at h
+          exact Nat.sub_le_sub_right (Nat.le_of_lt h) 2
+        · apply le_pow_clog
+          simp
+  · simp only [List.mem_append, List.mem_replicate, ne_eq]
+    intro x hx
+    cases hx with
+    | inl hx => apply Nat.digits_lt_base (by grind) hx
+    | inr hx => grind
+  · simp only [List.mem_append, List.mem_replicate, ne_eq]
+    intro x hx
+    cases hx with
+    | inl hx => apply Nat.digits_lt_base (by grind) hx
+    | inr hx => grind
+  · exact hb
 end correctness
