@@ -3,6 +3,7 @@ module
 public import Mathlib.Data.Nat.Digits.Defs
 public import Mathlib.Data.Nat.Log
 public import Algolean.QueryModel
+public import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 @[expose] public section
 
@@ -399,6 +400,73 @@ theorem KaratsubaProg_eval (b x y : ℕ) (hb : 2 ≤ b) :
     (KaratsubaProg b x y hb).eval (mulModel (b^3)) = Karatsuba b x y := by
   simp only [KaratsubaProg, bind_pure, Karatsuba]
   rw [KaratsubaHelperProg_eval]
+
+theorem KaratsubaHelperProg_time {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ b)
+  (h₁ : l₁.length = 2 ^ d + 2) (h₂ : l₂.length = 2 ^ d + 2)
+  (h₃ : ∀ x ∈ l₁, x < b) (h₄ : ∀ x ∈ l₂, x < b) :
+    (KaratsubaHelperProg b d l₁ l₂ hb h₃ h₄).time (mulModel (b^3)) = 3 ^ d := by
+  fun_induction KaratsubaHelperProg with
+  | case1 => simp
+  | case2 =>
+    expose_names
+    have hl₁ : l₁_1 = x₂ ++ x₁ := by simp [x₂, x₁]
+    have hl₂ : l₂_1 = y₂ ++ y₁ := by simp [y₂, y₁]
+    have hx₁_length : x₁.length = 2^d' + 1 := by simp [x₁, h₁]; lia
+    have hx₂_length : x₂.length = 2^d' + 1 := by simp [x₂, h₁]; lia
+    have hy₁_length : y₁.length = 2^d' + 1 := by simp [y₁, h₂]; lia
+    have hy₂_length : y₂.length = 2^d' + 1 := by simp [y₂, h₂]; lia
+    have hx₁ : ∀ x ∈ x₁, x < b := by grind
+    have hx₂ : ∀ x ∈ x₂, x < b := by grind
+    have hy₁ : ∀ y ∈ y₁, y < b := by grind
+    have hy₂ : ∀ y ∈ y₂, y < b := by grind
+    simp only [List.length_append, List.length_cons, List.length_nil, zero_add,
+      Nat.add_right_cancel_iff, bind_pure_comp, time_bind, time_map,
+      succ_eq_add_one] at ih1 ih2 ih3 ⊢
+    rw [ih1, ih2, ih3]
+    · lia
+    · assumption
+    · assumption
+    · assumption
+    · assumption
+    · simp [x₁_add_x₂_1, x₁_add_x₂]
+      have := length_listAdd hb hx₁ hx₂
+      grind
+    · simp [y₁_add_y₂_1, y₁_add_y₂]
+      have := length_listAdd hb hy₁ hy₂
+      grind
+
+theorem _root_.Nat.clog_le_add_one_log_base_two (n : ℕ) : Nat.clog 2 n ≤ 1 + Nat.log 2 n := by
+  sorry
+
+theorem help : 3 = (2 : ℝ)^(Real.logb 2 3) := by
+  sorry
+
+theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
+    (KaratsubaProg b x y hb).time (mulModel (b^3)) ≤
+      3 * ((max (digits b x).length (digits b y).length) : ℝ) ^ Real.logb 2 3 := by
+  simp only [KaratsubaProg, bind_pure]
+  rw [KaratsubaHelperProg_time]
+  · let n := max (b.digits x).length (b.digits y).length
+    have hn : n = max (b.digits x).length (b.digits y).length := by simp [n]
+    have hn' : (n : ℝ) = max ((b.digits x).length : ℝ) ((b.digits y).length :ℝ) := by
+      simp [n]
+    rw [← hn, ← hn']
+    have : (((3 : ℕ ) ^ (Nat.clog 2 (n - 2)) : ℕ) : ℝ) ≤ (((3 : ℕ) ^ (1 + log 2 (n-2)) : ℕ) : ℝ) :=
+      by
+        rw [Nat.cast_le]
+        apply Nat.pow_le_pow_right (n:= 3) (by simp) (clog_le_add_one_log_base_two (n - 2))
+    apply le_trans this
+    rw [Nat.add_comm 1, Nat.pow_add_one]
+    simp only [cast_mul, cast_pow, cast_ofNat]
+    rw [mul_comm _ 3]
+    apply mul_le_mul
+    · simp
+    · rw [help]
+      sorry
+    · simp
+    · simp
+  · sorry
+  · sorry
 
 end time
 
