@@ -438,9 +438,6 @@ theorem KaratsubaHelperProg_time {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ 
 theorem _root_.Nat.clog_le_add_one_log_base_two (n : ℕ) : Nat.clog 2 n ≤ 1 + Nat.log 2 n := by
   sorry
 
-theorem help : 3 = (2 : ℝ)^(Real.logb 2 3) := by
-  sorry
-
 theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
     (KaratsubaProg b x y hb).time (mulModel (b^3)) ≤
       3 * ((max (digits b x).length (digits b y).length) : ℝ) ^ Real.logb 2 3 := by
@@ -461,8 +458,15 @@ theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
     rw [mul_comm _ 3]
     apply mul_le_mul
     · simp
-    · rw [help]
-      sorry
+    · conv =>
+        lhs
+        rw [← Real.rpow_logb (b:= 2) (x:=3) (by simp) (by simp) (by simp),
+          ← Real.rpow_natCast, ← Real.rpow_mul (by simp),
+            ← Real.natFloor_logb_natCast, mul_comm, Real.rpow_mul (by simp)]
+      refine Real.rpow_le_rpow ?_ ?_ ?_
+      · simp
+      · sorry
+      · apply le_of_lt (Real.logb_pos (by simp) (by simp))
     · simp
     · simp
   · sorry
