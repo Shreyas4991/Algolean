@@ -1,7 +1,5 @@
 module
 
-public import Mathlib.Data.Nat.Digits.Defs
-public import Mathlib.Data.Nat.Log
 public import Algolean.QueryModel
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
 
@@ -369,6 +367,9 @@ def KaratsubaProg (b x y : ℕ) (hb : 2 ≤ b) :
   let l₁ := Nat.digits b x
   let l₂ := Nat.digits b y
   let maxLength := max l₁.length l₂.length
+  if maxLength < 1
+  then
+    return 0
   let d := Nat.clog 2 (maxLength - 2)
   have h₁ : ∀ z ∈ (l₁ ++ List.replicate (2^d + 2 - l₁.length) 0), z < b := by
     intro z hz
@@ -399,7 +400,22 @@ theorem KaratsubaHelperProg_eval {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ 
 theorem KaratsubaProg_eval (b x y : ℕ) (hb : 2 ≤ b) :
     (KaratsubaProg b x y hb).eval (mulModel (b^3)) = Karatsuba b x y := by
   simp only [KaratsubaProg, bind_pure, Karatsuba]
-  rw [KaratsubaHelperProg_eval]
+  split
+  · rename_i h
+    simp only [Order.lt_one_iff, max_eq_zero, List.length_eq_zero_iff,
+      digits_eq_nil_iff_eq_zero] at h
+    simp only [eval_pure, h.1, digits_zero, List.length_nil, h.2, max_self, zero_tsub,
+      clog_zero_right, pow_zero, reduceAdd, tsub_zero, List.reduceReplicate, List.nil_append]
+    rw [KaratsubaHelper_correct (hb := hb)]
+    · simp [ofDigits]
+    · decide
+    · decide
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, forall_eq]
+      exact zero_lt_of_lt hb
+    · simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, forall_eq]
+      exact zero_lt_of_lt hb
+  · simp only [pure_bind]
+    rw [KaratsubaHelperProg_eval]
 
 theorem KaratsubaHelperProg_time {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ b)
   (h₁ : l₁.length = 2 ^ d + 2) (h₂ : l₂.length = 2 ^ d + 2)
@@ -436,41 +452,84 @@ theorem KaratsubaHelperProg_time {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ 
       grind
 
 theorem _root_.Nat.clog_le_add_one_log_base_two (n : ℕ) : Nat.clog 2 n ≤ 1 + Nat.log 2 n := by
-  sorry
+  rw [← Real.natFloor_logb_natCast, ← Real.natCeil_logb_natCast, add_comm]
+  apply Nat.ceil_le_floor_add_one
 
 theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
     (KaratsubaProg b x y hb).time (mulModel (b^3)) ≤
       3 * ((max (digits b x).length (digits b y).length) : ℝ) ^ Real.logb 2 3 := by
   simp only [KaratsubaProg, bind_pure]
-  rw [KaratsubaHelperProg_time]
-  · let n := max (b.digits x).length (b.digits y).length
-    have hn : n = max (b.digits x).length (b.digits y).length := by simp [n]
-    have hn' : (n : ℝ) = max ((b.digits x).length : ℝ) ((b.digits y).length :ℝ) := by
-      simp [n]
-    rw [← hn, ← hn']
-    have : (((3 : ℕ ) ^ (Nat.clog 2 (n - 2)) : ℕ) : ℝ) ≤ (((3 : ℕ) ^ (1 + log 2 (n-2)) : ℕ) : ℝ) :=
-      by
+  let n := max (b.digits x).length (b.digits y).length
+  have hn : n = max (b.digits x).length (b.digits y).length := by simp [n]
+  have hn' : (n : ℝ) = max ((b.digits x).length : ℝ) ((b.digits y).length :ℝ) := by
+    simp [n]
+  split
+  · simp only [time_pure, CharP.cast_eq_zero, ofNat_pos, mul_nonneg_iff_of_pos_left, ge_iff_le]
+    positivity
+  · simp only [pure_bind, ge_iff_le]
+    rename_i h
+    rw [← hn, Nat.not_lt] at h
+    rw [KaratsubaHelperProg_time hb, ← hn, ← hn']
+    · have : (((3 : ℕ ) ^ (Nat.clog 2 (n - 2)) : ℕ) : ℝ) ≤
+        (((3 : ℕ) ^ (1 + log 2 (n-2)) : ℕ) : ℝ) := by
+          rw [Nat.cast_le]
+          apply Nat.pow_le_pow_right (n:= 3) (by simp) (clog_le_add_one_log_base_two (n - 2))
+      apply le_trans this
+      rw [Nat.add_comm 1, Nat.pow_add_one]
+      simp only [cast_mul, cast_pow, cast_ofNat]
+      rw [mul_comm _ 3]
+      apply mul_le_mul (a:= 3) (b:= 3) (by simp) ?_ (by simp) (by simp)
+      have : (3 : ℝ) ^ (log 2 (n-2)) ≤ (3 : ℝ) ^ (log 2 n) := by
+        refine (Real.pow_le_iff_le_log (by simp) (by simp)).mpr ?_
+        simp only [Real.log_pow]
+        refine (mul_le_mul_iff_of_pos_right (by positivity)).mpr ?_
         rw [Nat.cast_le]
-        apply Nat.pow_le_pow_right (n:= 3) (by simp) (clog_le_add_one_log_base_two (n - 2))
-    apply le_trans this
-    rw [Nat.add_comm 1, Nat.pow_add_one]
-    simp only [cast_mul, cast_pow, cast_ofNat]
-    rw [mul_comm _ 3]
-    apply mul_le_mul
-    · simp
-    · conv =>
+        refine log_mono (by simp) (by simp) (by simp)
+      apply le_trans this
+      conv =>
         lhs
         rw [← Real.rpow_logb (b:= 2) (x:=3) (by simp) (by simp) (by simp),
           ← Real.rpow_natCast, ← Real.rpow_mul (by simp),
             ← Real.natFloor_logb_natCast, mul_comm, Real.rpow_mul (by simp)]
-      refine Real.rpow_le_rpow ?_ ?_ ?_
+      apply Real.rpow_le_rpow (by simp) ?_ (le_of_lt (Real.logb_pos (by simp) (by simp)))
+      apply le_trans (b := 2 ^ (Real.logb 2 n))
+      · refine (Real.rpow_le_rpow_left_iff (by simp)).mpr ?_
+        apply le_trans (Nat.floor_le ?_)
+        · simp
+        · apply Real.logb_nonneg (by simp) (one_le_cast.mpr h)
+      rw [Real.rpow_logb (by simp) (by simp)]
+      exact cast_pos'.mpr h
+    · simp only [List.length_append, List.length_replicate]
+      rw [← Nat.add_sub_assoc (n := (b.digits x).length), Nat.sub_add_comm]
       · simp
-      · sorry
-      · apply le_of_lt (Real.logb_pos (by simp) (by simp))
-    · simp
-    · simp
-  · sorry
-  · sorry
+      · simp
+      · apply Nat.le_add_of_sub_le
+        simp only [max]
+        split
+        · rename_i h
+          refine Nat.le_trans (m := (b.digits y).length - 2) ?_ ?_
+          · exact Nat.sub_le_sub_right h 2
+          · apply le_pow_clog
+            simp
+        · rename_i h
+          apply le_pow_clog
+          simp
+    · simp only [List.length_append, List.length_replicate]
+      rw [← Nat.add_sub_assoc (n := (b.digits y).length), Nat.sub_add_comm]
+      · simp
+      · simp
+      · apply Nat.le_add_of_sub_le
+        simp only [max]
+        split
+        · rename_i h
+          apply le_pow_clog
+          simp
+        · rename_i h
+          refine Nat.le_trans (m := (b.digits x).length - 2) ?_ ?_
+          · simp only [not_le] at h
+            exact Nat.sub_le_sub_right (Nat.le_of_lt h) 2
+          · apply le_pow_clog
+            simp
 
 end time
 
