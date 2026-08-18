@@ -5,6 +5,7 @@ public import Algolean.AddWriter.Transformer
 public import Algolean.Algorithms.BoyerMooreMajorityVote
 public import Algolean.Algorithms.Circuits.FanInTwo.LogAnd
 public import Algolean.Algorithms.KMPPatternSearch
+public import Algolean.Algorithms.Karatsuba
 public import Algolean.Algorithms.ListInsertionSort
 public import Algolean.Algorithms.ListLinearSearch
 public import Algolean.Algorithms.ListOrderedInsert

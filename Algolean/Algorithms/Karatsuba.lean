@@ -1,7 +1,37 @@
+/-
+Copyright (c) 2026 Johannes Tantow. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Johannes Tantow
+-/
+
 module
 
 public import Algolean.QueryModel
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
+
+/-!
+# Karatsuba's Algorithm
+
+In this module we state Karatsuba's algorithm for multiplying two numbers
+in O(n^log_2(3)) and prove its correctness and the time bound. The algorithm works
+for arbitrary bases b ≥ 2. We analyse the complexity in the bounded-length multiplcation
+model where we are only allowed to multiple at most 3 digits long numbers except for shifts.
+We measure the runtime by counting the number of these multiplications.
+
+--
+
+## Main definitions
+
+- `Karatsuba` : Karatsuba's algorithm for two natural numbers x and y and a base b
+- `KaratsubaProg` : Karatsuba's algorithm implemented in Prog.
+
+## Main results
+
+- `Karatsuba_correct` : shows that the `Karatsuba` computes the product of x and y if 2 ≤ b
+- `Karatsuba_time` : shows that `KaratsubaProg` uses at most
+  3 * (max (b.digits x).length (b.digits y).length ^ (Real.logb 2 3) multiplication of
+    3 digit numbers in base b for 2 ≤ b
+-/
 
 @[expose] public section
 
@@ -17,6 +47,10 @@ theorem carryAddHelper (b x y z : ℕ) (h₁ : y < b) (h₂ : z < b) (h₃ : x �
   · apply Nat.lt_of_lt_of_le (by simp) h₄
   · lia
 
+/--
+A helper function that adds two lists of natural numbers viewed as a representation of a number
+in base b together with a carry.
+-/
 def listAddHelper (carry b : ℕ) (l₁ l₂ : List ℕ) : List ℕ :=
   match l₁, l₂ with
   | [], [] =>
@@ -30,6 +64,10 @@ def listAddHelper (carry b : ℕ) (l₁ l₂ : List ℕ) : List ℕ :=
   | hd::tl, hd'::tl' =>
     ((carry + hd + hd') % b)::(listAddHelper ((carry + hd + hd') / b) b tl tl')
 
+/--
+A helper function that adds two lists of natural numbers viewed as a representation of a number
+in base b. We use this to bound the length of the sum of two numbers.
+-/
 def listAdd (b : ℕ) (l₁ l₂ : List ℕ) : List ℕ :=
   listAddHelper 0 b l₁ l₂
 
@@ -152,6 +190,10 @@ end listAddition
 
 section correctness
 
+/--
+A helper function to execute Karatsubas algorithm for two numbers entered as digit lists l₁ l₂
+in base b. In order to be correct it is assumed that |l₁| = |l₂| = 2 ^ d + 2
+-/
 def KaratsubaHelper (b d : ℕ) (l₁ l₂ : List ℕ) : ℕ :=
   match d with
   | 0 =>
@@ -176,6 +218,9 @@ def KaratsubaHelper (b d : ℕ) (l₁ l₂ : List ℕ) : ℕ :=
     --final result
     x₂y₂ + b^(2^d' + 1) * x₁y₂_add_x₂y₁ + (b^(2^d' + 1))^2 * x₁y₁
 
+/--
+Karatsuba's algorithm to multiply two numbers in subquadratic time.
+-/
 def Karatsuba (b x y : ℕ) : ℕ :=
   let l₁ := Nat.digits b x
   let l₂ := Nat.digits b y
@@ -296,9 +341,15 @@ end correctness
 
 section time
 
+/--
+A query type that allows to multiply two numbers x and y if they are smaller than some bound lime.
+-/
 inductive mulQuery (lim : ℕ) : Type → Type
 | mul (x y : ℕ) (h₁ : x < lim) (h₂ : y < lim) : mulQuery lim ℕ
 
+/--
+A model that counts multiplication of bounded length numbers.
+-/
 @[simps]
 def mulModel (lim : ℕ) : Model (mulQuery lim) ℕ where
   evalQuery
@@ -317,6 +368,9 @@ theorem boundedMul_helper {b : ℕ} {l : List ℕ} (hb : 2 ≤ b) (h : ∀ x ∈
   · intro x hx
     apply h x (List.mem_of_mem_take hx)
 
+/--
+`KaratsubaHelper` implemented in Prog with the `mulQuery` query type.
+-/
 def KaratsubaHelperProg (b d : ℕ) (l₁ l₂ : List ℕ) (hb : 2 ≤ b)
   (h₁ : ∀ x ∈ l₁, x < b) (h₂ : ∀ x ∈ l₂, x < b) :
     Prog (mulQuery (b^3)) ℕ := do
@@ -362,6 +416,11 @@ def KaratsubaHelperProg (b d : ℕ) (l₁ l₂ : List ℕ) (hb : 2 ≤ b)
     --final result
     return x₂y₂ + b^(2^d' + 1) * x₁y₂_add_x₂y₁ + (b^(2^d' + 1))^2 * x₁y₁
 
+/--
+`Karatsuba` implemented in Prog. This differs from the original implementation that
+the multiplication of zeroes is directly handled here, because for the runtime proof
+it was important that maxLength ≥ 1 holds.
+-/
 def KaratsubaProg (b x y : ℕ) (hb : 2 ≤ b) :
     Prog (mulQuery (b^3)) ℕ := do
   let l₁ := Nat.digits b x
