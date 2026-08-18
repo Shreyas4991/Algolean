@@ -6,7 +6,7 @@ Authors: Johannes Tantow
 
 module
 
-public import Algolean.QueryModel
+public import Algolean.Models.Arithmetic
 public import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 /-!
@@ -340,21 +340,6 @@ theorem Karatsuba_correct {b x y : ℕ} (hb : 2 ≤ b) :
 end correctness
 
 section time
-
-/--
-A query type that allows to multiply two numbers x and y if they are smaller than some bound lime.
--/
-inductive mulQuery (lim : ℕ) : Type → Type
-| mul (x y : ℕ) (h₁ : x < lim) (h₂ : y < lim) : mulQuery lim ℕ
-
-/--
-A model that counts multiplication of bounded length numbers.
--/
-@[simps]
-def mulModel (lim : ℕ) : Model (mulQuery lim) ℕ where
-  evalQuery
-  | .mul x y _ _ => x * y
-  cost _ := 1
 
 theorem boundedMul_helper {b : ℕ} {l : List ℕ} (hb : 2 ≤ b) (h : ∀ x ∈ l, x < b) :
     ofDigits b (l.take 3) < b^3 := by
