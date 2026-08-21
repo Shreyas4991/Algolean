@@ -14,8 +14,8 @@ public import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 In this module we state Karatsuba's algorithm for multiplying two numbers
 in O(n^log_2(3)) and prove its correctness and the time bound. The algorithm works
-for arbitrary bases b ≥ 2. We analyse the complexity in the bounded-length multiplcation
-model where we are only allowed to multiple at most 3 digits long numbers except for shifts.
+for arbitrary bases b ≥ 2. We analyse the complexity in the bounded-length multiplication
+model where we are only allowed to multiply at most 3 digit numbers except for shifts.
 We measure the runtime by counting the number of these multiplications.
 
 --
