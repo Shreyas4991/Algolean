@@ -250,20 +250,14 @@ section Run
 variable [AddCommGroup G] [DecidableEq G]
 
 /-- What a program computes, run in the group `G`. -/
-def eval (oa : GroupProg G α) : α := Prog.eval oa (groupModel G)
+abbrev eval (oa : GroupProg G α) : α := Prog.eval oa (groupModel G)
 
 /-- The queries a program issues, tallied by operation. -/
-def cost (oa : GroupProg G α) : GroupCosts := Prog.time oa (groupModel G)
+abbrev cost (oa : GroupProg G α) : GroupCosts := Prog.time oa (groupModel G)
 
 /-- The element-producing queries a program issues: the count a classical generic group bound
 speaks about. -/
-def groupOps (oa : GroupProg G α) : ℕ := (cost oa).groupOps
-
-@[simp] lemma eval_pure (x : α) : eval (pure x : GroupProg G α) = x := rfl
-
-@[simp] lemma cost_pure (x : α) : cost (pure x : GroupProg G α) = 0 := rfl
-
-@[simp] lemma groupOps_pure (x : α) : groupOps (pure x : GroupProg G α) = 0 := rfl
+abbrev groupOps (oa : GroupProg G α) : ℕ := (cost oa).groupOps
 
 @[grind =] lemma eval_liftBind (q : GroupQuery G ι) (cont : ι → GroupProg G α) :
     eval (FreeM.liftBind q cont) = eval (cont q.answer) :=
@@ -276,26 +270,6 @@ def groupOps (oa : GroupProg G α) : ℕ := (cost oa).groupOps
 @[grind =] lemma groupOps_liftBind (q : GroupQuery G ι) (cont : ι → GroupProg G α) :
     groupOps (FreeM.liftBind q cont) = q.charge.groupOps + groupOps (cont q.answer) := by
   rw [groupOps, cost_liftBind, GroupCosts.groupOps_add, groupOps]
-
-@[simp] lemma eval_bind (oa : GroupProg G α) (ob : α → GroupProg G β) :
-    eval (oa >>= ob) = eval (ob (eval oa)) := Prog.eval_bind oa ob (groupModel G)
-
-@[simp] lemma cost_bind (oa : GroupProg G α) (ob : α → GroupProg G β) :
-    cost (oa >>= ob) = cost oa + cost (ob (eval oa)) := Prog.time_bind (groupModel G) oa ob
-
-@[simp] lemma groupOps_bind (oa : GroupProg G α) (ob : α → GroupProg G β) :
-    groupOps (oa >>= ob) = groupOps oa + groupOps (ob (eval oa)) := by
-  rw [groupOps, cost_bind, GroupCosts.groupOps_add, groupOps, groupOps]
-
-@[simp] lemma eval_map (f : α → β) (oa : GroupProg G α) : eval (f <$> oa) = f (eval oa) :=
-  Prog.eval_map f oa (groupModel G)
-
-@[simp] lemma cost_map (f : α → β) (oa : GroupProg G α) : cost (f <$> oa) = cost oa :=
-  Prog.time_map f oa (groupModel G)
-
-@[simp] lemma groupOps_map (f : α → β) (oa : GroupProg G α) :
-    groupOps (f <$> oa) = groupOps oa := by
-  rw [groupOps, cost_map, groupOps]
 
 /-!
 ### The queries as programs

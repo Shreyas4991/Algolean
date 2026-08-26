@@ -127,7 +127,7 @@ variable [AddCommGroup G] [DecidableEq G]
     ∀ k : ℕ, GroupProg.cost (nsmulSuccProg g k) = ⟨k, 0, 0⟩
   | 0 => rfl
   | k + 1 => by
-    simp only [nsmulSuccProg, GroupProg.cost_bind, GroupProg.cost_add, nsmulSuccProg_cost g k]
+    simp only [nsmulSuccProg, Prog.time_bind, GroupProg.cost_add, nsmulSuccProg_cost g k]
     ext <;> simp
 
 @[simp] lemma babySteps_cost (g : G) : ∀ (k : ℕ) (acc : G) (j : ℕ),
@@ -137,7 +137,7 @@ variable [AddCommGroup G] [DecidableEq G]
   | zero => intro acc j; rfl
   | succ k ih =>
     intro acc j
-    simp only [babySteps, GroupProg.cost_bind, GroupProg.cost_add, GroupProg.cost_pure, ih,
+    simp only [babySteps, Prog.time_bind, GroupProg.cost_add, Prog.time_pure, ih,
       add_zero]
     ext
     all_goals simp only [GroupCosts.add_adds, GroupCosts.add_negs, GroupCosts.add_eqs]
@@ -150,14 +150,14 @@ lemma babySteps_length (g : G) : ∀ (k : ℕ) (acc : G) (j : ℕ),
   | zero => intro acc j; rfl
   | succ k ih =>
     intro acc j
-    simp only [babySteps, GroupProg.eval_bind, GroupProg.eval_add, GroupProg.eval_pure,
+    simp only [babySteps, Prog.eval_bind, GroupProg.eval_add, Prog.eval_pure,
       List.length_cons, ih]
 
 lemma tableLookup_cost_le (target : G) : ∀ tbl : List (ℕ × G),
     GroupProg.cost (tableLookup target tbl) ≤ ⟨0, 0, tbl.length⟩
   | [] => by simp [tableLookup]
   | (j, b) :: rest => by
-    simp only [tableLookup, GroupProg.cost_bind, GroupProg.cost_eq, GroupProg.eval_eq,
+    simp only [tableLookup, Prog.time_bind, GroupProg.cost_eq, GroupProg.eval_eq,
       decide_eq_true_eq]
     by_cases hb : b = target
     · rw [if_pos hb]; simp
@@ -179,15 +179,20 @@ lemma giantSteps_cost_le (tbl : List (ℕ × G)) (gamma : G) (m : ℕ) :
     intro acc i
     have hmul : (remaining + 1) * tbl.length = remaining * tbl.length + tbl.length :=
       Nat.succ_mul remaining tbl.length
-    simp only [giantSteps, GroupProg.cost_bind]
-    have hlook := GroupCosts.le_mk_iff.mp (tableLookup_cost_le acc tbl)
-    rcases hl : GroupProg.eval (tableLookup acc tbl) with _ | j
-    · have hrec := GroupCosts.le_mk_iff.mp (ih (acc + gamma) (i + 1))
-      simp only [GroupProg.cost_bind, GroupProg.cost_add, GroupProg.eval_add]
+    simp only [giantSteps, Prog.time_bind]
+    have hlook' := tableLookup_cost_le acc tbl
+    change Prog.time (tableLookup acc tbl) (groupModel G) ≤ ⟨0, 0, tbl.length⟩ at hlook'
+    have hlook := GroupCosts.le_mk_iff.mp hlook'
+    rcases hl : Prog.eval (tableLookup acc tbl) (groupModel G) with _ | j
+    · have hrec' := ih (acc + gamma) (i + 1)
+      change Prog.time (giantSteps tbl gamma m (acc + gamma) (i + 1) remaining)
+        (groupModel G) ≤ ⟨remaining, 0, remaining * tbl.length⟩ at hrec'
+      have hrec := GroupCosts.le_mk_iff.mp hrec'
+      simp only [Prog.time_bind, GroupProg.cost_add, GroupProg.eval_add]
       simp only [GroupCosts.le_mk_iff, GroupCosts.add_adds, GroupCosts.add_negs,
         GroupCosts.add_eqs] at *
       omega
-    · simp only [GroupProg.cost_pure, add_zero]
+    · simp only [Prog.time_pure, add_zero]
       simp only [GroupCosts.le_mk_iff] at *
       omega
 
@@ -198,13 +203,19 @@ where `m = Nat.sqrt order + 1`.
 theorem bsgs_cost_le (inp : Fin 2 → G) (order : ℕ) :
     GroupProg.cost (bsgs G order inp) ≤
       ⟨3 * (Nat.sqrt order + 1), 0, (Nat.sqrt order + 1) * (Nat.sqrt order + 1)⟩ := by
-  simp only [bsgs, GroupProg.cost_bind, babySteps_cost, nsmulSuccProg_cost]
+  simp only [bsgs, Prog.time_bind, babySteps_cost, nsmulSuccProg_cost]
   set m := Nat.sqrt order + 1 with hm
-  have hgiant := GroupCosts.le_iff.mp (giantSteps_cost_le
+  have hgiant' := giantSteps_cost_le
     (GroupProg.eval (babySteps (inp 0) (inp 1) 0 m))
     (GroupProg.eval (nsmulSuccProg (inp 0) (Nat.sqrt order))) m m
-    (GroupProg.eval (nsmulSuccProg (inp 0) (Nat.sqrt order))) 1)
-  rw [babySteps_length] at hgiant
+    (GroupProg.eval (nsmulSuccProg (inp 0) (Nat.sqrt order))) 1
+  rw [babySteps_length] at hgiant'
+  change Prog.time (giantSteps
+    (Prog.eval (babySteps (inp 0) (inp 1) 0 m) (groupModel G))
+    (Prog.eval (nsmulSuccProg (inp 0) (Nat.sqrt order)) (groupModel G)) m
+    (Prog.eval (nsmulSuccProg (inp 0) (Nat.sqrt order)) (groupModel G)) 1 m)
+    (groupModel G) ≤ ⟨m, 0, m * m⟩ at hgiant'
+  have hgiant := GroupCosts.le_iff.mp hgiant'
   simp only [GroupCosts.le_iff, GroupCosts.add_adds, GroupCosts.add_negs,
     GroupCosts.add_eqs] at *
   omega
@@ -229,7 +240,7 @@ variable [AddCommGroup G] [DecidableEq G]
     GroupProg.eval (nsmulSuccProg g k) = (k + 1) • g
   | 0 => by simp [nsmulSuccProg]
   | k + 1 => by
-    simp only [nsmulSuccProg, GroupProg.eval_bind, GroupProg.eval_add, nsmulSuccProg_eval g k]
+    simp only [nsmulSuccProg, Prog.eval_bind, GroupProg.eval_add, nsmulSuccProg_eval g k]
     exact (succ_nsmul g (k + 1)).symm
 
 /--
@@ -256,10 +267,10 @@ lemma tableLookup_sound (target : G) : ∀ (tbl : List (ℕ × G)) (j : ℕ),
     GroupProg.eval (tableLookup target tbl) = some j → (j, target) ∈ tbl
   | [], j, hj => by simp [tableLookup] at hj
   | (i, b) :: rest, j, hj => by
-    simp only [tableLookup, GroupProg.eval_bind, GroupProg.eval_eq, decide_eq_true_eq] at hj
+    simp only [tableLookup, Prog.eval_bind, GroupProg.eval_eq, decide_eq_true_eq] at hj
     by_cases hb : b = target
     · rw [if_pos hb] at hj
-      simp only [GroupProg.eval_pure, Option.some.injEq] at hj
+      simp only [Prog.eval_pure, Option.some.injEq] at hj
       exact hj ▸ hb ▸ List.mem_cons_self ..
     · rw [if_neg hb] at hj
       exact List.mem_cons_of_mem _ (tableLookup_sound target rest j hj)
@@ -269,7 +280,7 @@ lemma tableLookup_complete (target : G) : ∀ (tbl : List (ℕ × G)) (j : ℕ),
     (GroupProg.eval (tableLookup target tbl)).isSome
   | [], j, hmem => by simp at hmem
   | (i, b) :: rest, j, hmem => by
-    simp only [tableLookup, GroupProg.eval_bind, GroupProg.eval_eq, decide_eq_true_eq]
+    simp only [tableLookup, Prog.eval_bind, GroupProg.eval_eq, decide_eq_true_eq]
     by_cases hb : b = target
     · rw [if_pos hb]; rfl
     · rw [if_neg hb]
@@ -294,16 +305,17 @@ lemma giantSteps_eval (g h : G) (tbl : List (ℕ × G)) (gamma : G) (m : ℕ) (h
   | zero => rintro acc i - - ⟨i', j, hle, hlt, -, -⟩; omega
   | succ remaining ih =>
     rintro acc i rfl hi ⟨i', j, hle, hlt, hjm, hmatch⟩
-    simp only [giantSteps, GroupProg.eval_bind]
-    rcases hl : GroupProg.eval (tableLookup ((i * m) • g) tbl) with _ | j'
+    simp only [giantSteps, Prog.eval_bind]
+    rcases hl : Prog.eval (tableLookup ((i * m) • g) tbl) (groupModel G) with _ | j'
     · have hne : i ≠ i' := by
         rintro rfl
         have hsome := tableLookup_complete ((i * m) • g) tbl j (hmatch ▸ hcomplete j hjm)
+        change (Prog.eval (tableLookup ((i * m) • g) tbl) (groupModel G)).isSome at hsome
         rw [hl] at hsome
         simp at hsome
       have hstep : (i * m) • g + m • g = ((i + 1) * m) • g := by
         rw [← add_nsmul]; congr 1; ring
-      simp only [GroupProg.eval_bind, GroupProg.eval_add, hstep]
+      simp only [Prog.eval_bind, GroupProg.eval_add, hstep]
       exact ih _ (i + 1) rfl (by omega) ⟨i', j, by omega, by omega, hjm, hmatch⟩
     · have hmem := tableLookup_sound ((i * m) • g) tbl j' hl
       obtain ⟨hj'm, hbd⟩ := hsound _ hmem
@@ -329,7 +341,7 @@ theorem bsgs_eval (g h : G) {order x : ℕ} (hx0 : 0 < x) (hx : x ≤ order) (hx
     lt_of_mul_lt_mul_left (a := Nat.sqrt order + 1) (by omega) (Nat.zero_le _)
   have hqm : (q + 1) * (Nat.sqrt order + 1) =
       (Nat.sqrt order + 1) * q + (Nat.sqrt order + 1) := by ring
-  simp only [bsgs, GroupProg.eval_bind, dlogInputs_zero, dlogInputs_one, babySteps_eval,
+  simp only [bsgs, Prog.eval_bind, dlogInputs_zero, dlogInputs_one, babySteps_eval,
     nsmulSuccProg_eval]
   refine giantSteps_eval g h _ _ (Nat.sqrt order + 1) rfl (fun p hp => ?_) (fun t ht => ?_)
     (Nat.sqrt order + 1) _ 1 (by rw [one_mul]) le_rfl

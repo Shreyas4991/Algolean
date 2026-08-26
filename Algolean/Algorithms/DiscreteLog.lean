@@ -122,10 +122,11 @@ lemma bruteForceDLogAux_eval (g h : G) {k : ℕ} :
         rw [add_add_nsmul]
         exact hmin (i + 1) (by omega)
       have hk' : acc + g + k • g = h := by rw [add_add_nsmul]; exact hk
-      simp only [bruteForceDLogAux, GroupProg.eval_bind, GroupProg.eval_eq, decide_eq_true_eq,
+      simp only [bruteForceDLogAux, Prog.eval_bind, GroupProg.eval_eq, decide_eq_true_eq,
         hne, if_false, GroupProg.eval_add]
-      rw [ih (acc + g) (exp + 1) remaining hmin' hk' (by omega)]
-      omega
+      calc
+        _ = exp + 1 + k := ih (acc + g) (exp + 1) remaining hmin' hk' (by omega)
+        _ = exp + (k + 1) := by omega
 
 /--
 The brute force search returns `k` whenever `k` is the least positive exponent whose multiple of
@@ -154,13 +155,13 @@ lemma bruteForceDLogAux_cost_le (g h : G) :
   | zero => intro acc exp; simp [bruteForceDLogAux]
   | succ remaining ih =>
     intro acc exp
-    simp only [bruteForceDLogAux, GroupProg.cost_bind, GroupProg.cost_eq, GroupProg.eval_eq,
+    simp only [bruteForceDLogAux, Prog.time_bind, GroupProg.cost_eq, GroupProg.eval_eq,
       decide_eq_true_eq]
     by_cases hb : acc = h
     · rw [if_pos hb]
       simp
     · rw [if_neg hb]
-      simp only [GroupProg.cost_bind, GroupProg.cost_add, GroupProg.eval_add]
+      simp only [Prog.time_bind, GroupProg.cost_add, GroupProg.eval_add]
       calc (⟨0, 0, 1⟩ : GroupCosts) + (⟨1, 0, 0⟩ + GroupProg.cost
             (bruteForceDLogAux g h (acc + g) (exp + 1) remaining))
           ≤ ⟨0, 0, 1⟩ + (⟨1, 0, 0⟩ + ⟨remaining, 0, remaining⟩) := by
@@ -261,7 +262,7 @@ theorem bruteForceDLog_eval_natCast (hcard : Fintype.card G = p) {g : G} (hgen :
   rw [hcard] at h
   have hmod := nsmul_eq_nsmul_iff_modEq.mp h
   rw [hgen] at hmod
-  simp only [GroupProg.eval_map]
+  simp only [Prog.eval_map]
   exact (ZMod.natCast_eq_natCast_iff _ _ _).mpr hmod
 
 omit [DecidableEq G] in
