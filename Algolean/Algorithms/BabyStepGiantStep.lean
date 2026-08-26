@@ -183,19 +183,17 @@ lemma giantSteps_cost_le (tbl : List (ℕ × G)) (gamma : G) (m : ℕ) :
     simp only [giantSteps, Prog.time_bind]
     have hlook' := tableLookup_cost_le acc tbl
     change Prog.time (tableLookup acc tbl) (groupModel G) ≤ ⟨0, 0, tbl.length⟩ at hlook'
-    have hlook := GroupCosts.le_iff.mp hlook'
     rcases hl : Prog.eval (tableLookup acc tbl) (groupModel G) with _ | j
     · have hrec' := ih (acc + gamma) (i + 1)
       change Prog.time (giantSteps tbl gamma m (acc + gamma) (i + 1) remaining)
         (groupModel G) ≤ ⟨remaining, 0, remaining * tbl.length⟩ at hrec'
-      have hrec := GroupCosts.le_iff.mp hrec'
       simp only [Prog.time_bind, Prog.time_lift, groupModel_cost, GroupQuery.charge,
         Prog.eval_lift, groupModel_evalQuery, GroupQuery.answer]
-      simp only [GroupCosts.le_iff, GroupCosts.add_adds, GroupCosts.add_negs,
+      simp only [GroupCosts.le_def, GroupCosts.add_adds, GroupCosts.add_negs,
         GroupCosts.add_eqs] at *
       lia
     · simp only [Prog.time_pure, add_zero]
-      simp only [GroupCosts.le_iff] at *
+      simp only [GroupCosts.le_def] at *
       lia
 
 /--
@@ -217,15 +215,14 @@ theorem bsgs_cost_le (inp : Fin 2 → G) (order : ℕ) :
     (Prog.eval (nsmulSuccProg (inp 0) (Nat.sqrt order)) (groupModel G)) m
     (Prog.eval (nsmulSuccProg (inp 0) (Nat.sqrt order)) (groupModel G)) 1 m)
     (groupModel G) ≤ ⟨m, 0, m * m⟩ at hgiant'
-  have hgiant := GroupCosts.le_iff.mp hgiant'
-  simp only [GroupCosts.le_iff, GroupCosts.add_adds, GroupCosts.add_negs,
+  simp only [GroupCosts.le_def, GroupCosts.add_adds, GroupCosts.add_negs,
     GroupCosts.add_eqs] at *
   lia
 
 /-- **`bsgs` asks for only `O(√order)` group elements.** -/
 theorem bsgs_groupOps_le (inp : Fin 2 → G) (order : ℕ) :
     GroupProg.groupOps (bsgs G order inp) ≤ 3 * (Nat.sqrt order + 1) :=
-  GroupCosts.groupOps_le_groupOps (bsgs_cost_le inp order)
+  by grind [bsgs_cost_le inp order]
 
 end Cost
 

@@ -84,10 +84,10 @@ def GroupCosts.equivProd : GroupCosts ≃ (ℕ × ℕ × ℕ) where
 
 namespace GroupCosts
 
-@[simps, grind]
+@[simps (attr := grind =), grind]
 instance : Zero GroupCosts := ⟨0, 0, 0⟩
 
-@[simps]
+@[simps (attr := grind =)]
 instance : LE GroupCosts where
   le gc₁ gc₂ := gc₁.adds ≤ gc₂.adds ∧ gc₁.negs ≤ gc₂.negs ∧ gc₁.eqs ≤ gc₂.eqs
 
@@ -110,32 +110,14 @@ instance : AddCommMonoid GroupCosts :=
   fast_instance%
     GroupCosts.equivProd.injective.addCommMonoid _ rfl (fun _ _ => rfl) (fun _ _ => rfl)
 
-lemma le_iff {gc₁ gc₂ : GroupCosts} :
-    gc₁ ≤ gc₂ ↔ gc₁.adds ≤ gc₂.adds ∧ gc₁.negs ≤ gc₂.negs ∧ gc₁.eqs ≤ gc₂.eqs :=
-  Iff.rfl
-
 instance : IsOrderedAddMonoid GroupCosts where
-  add_le_add_left _ _ h _ := by
-    simp only [le_iff, add_adds, add_negs, add_eqs] at h ⊢
-    lia
+  add_le_add_left _ _ h _ := by grind
 
 /--
 The queries that produce a new group element. This is the count a classical generic group bound
 speaks about: equality tests are free to it, and the group operations are not.
 -/
 @[simp, grind] def groupOps (gc : GroupCosts) : ℕ := gc.adds + gc.negs
-
-@[simp] lemma groupOps_zero : (0 : GroupCosts).groupOps = 0 := rfl
-
-@[grind =] lemma groupOps_add (gc₁ gc₂ : GroupCosts) :
-    (gc₁ + gc₂).groupOps = gc₁.groupOps + gc₂.groupOps := by
-  simp only [groupOps, add_adds, add_negs]; lia
-
-lemma groupOps_le_groupOps {gc₁ gc₂ : GroupCosts} (h : gc₁ ≤ gc₂) :
-    gc₁.groupOps ≤ gc₂.groupOps := by
-  obtain ⟨h₁, h₂, -⟩ := le_iff.mp h
-  simp only [groupOps]
-  lia
 
 end GroupCosts
 
@@ -181,10 +163,6 @@ works on generic group programs out of the box. -/
 instance [AddCommGroup G] [DecidableEq G] : HasModel (GroupQuery G) GroupCosts where
   model := groupModel G
 
-/-- The default generic group model unfolds to `groupModel`. -/
-@[simp, grind =] theorem GroupQuery.hasModel_model [AddCommGroup G] [DecidableEq G] :
-    (HasModel.model : Model (GroupQuery G) GroupCosts) = groupModel G := rfl
-
 /-!
 ## Programs
 -/
@@ -214,18 +192,6 @@ abbrev cost (oa : GroupProg G α) : GroupCosts := Prog.time oa (groupModel G)
 /-- The element-producing queries a program issues: the count a classical generic group bound
 speaks about. -/
 abbrev groupOps (oa : GroupProg G α) : ℕ := (cost oa).groupOps
-
-@[grind =] lemma eval_liftBind (q : GroupQuery G ι) (cont : ι → GroupProg G α) :
-    eval (FreeM.liftBind q cont) = eval (cont q.answer) :=
-  Prog.eval_liftBind q cont (groupModel G)
-
-@[grind =] lemma cost_liftBind (q : GroupQuery G ι) (cont : ι → GroupProg G α) :
-    cost (FreeM.liftBind q cont) = q.charge + cost (cont q.answer) :=
-  Prog.time_liftBind q cont (groupModel G)
-
-@[grind =] lemma groupOps_liftBind (q : GroupQuery G ι) (cont : ι → GroupProg G α) :
-    groupOps (FreeM.liftBind q cont) = q.charge.groupOps + groupOps (cont q.answer) := by
-  rw [groupOps, cost_liftBind, GroupCosts.groupOps_add, groupOps]
 
 /-!
 ### The queries as Hoare specs

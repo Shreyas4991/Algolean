@@ -112,7 +112,7 @@ lemma bruteForceDLogAux_eval (g h : G) {k : ℕ} :
     rintro acc exp (_ | remaining) - hk hlt
     · lia
     · have hacc : acc = h := by simpa using hk
-      simp [bruteForceDLogAux, hacc]
+      simp [bruteForceDLogAux, groupModel, hacc]
   | succ k ih =>
     rintro acc exp (_ | remaining) hmin hk hlt
     · lia

@@ -434,10 +434,6 @@ private structure Res (p : ℕ) (α : Type) where
 /-- Charge `c` group operations to a result. -/
 private def Res.bump (c : ℕ) (r : Res p α) : Res p α := ⟨r.out, r.st, c + r.cost⟩
 
-@[simp] private lemma Res.bump_out (c : ℕ) (r : Res p α) : (Res.bump c r).out = r.out := rfl
-@[simp] private lemma Res.bump_st (c : ℕ) (r : Res p α) : (Res.bump c r).st = r.st := rfl
-@[simp] private lemma Res.bump_cost (c : ℕ) (r : Res p α) : (Res.bump c r).cost = c + r.cost := rfl
-
 /-- The symbolic run of a program: `step` answers the queries, and `B` bounds the number of
 element-producing ones the run may make. -/
 private noncomputable def sim : GroupProg (Lbl p) α → St p → ℕ → Res p α
@@ -479,7 +475,7 @@ private lemma sim_length (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ) :
       · next hfuel =>
         have h1 := step_length q s
         have h2 := ih (step q s).1 (step q s).2 (B - q.charge.groupOps)
-        simp only [Res.bump_st]
+        simp only [Res.bump]
         lia
       · exact Nat.le_add_right _ _
 
@@ -504,7 +500,10 @@ private lemma sim_cost_of_none (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ)
       rw [sim_liftBind] at h ⊢
       split at h
       · next hfuel =>
-        rw [if_pos hfuel, Res.bump_cost, ih _ _ _ h]
+        rw [if_pos hfuel]
+        change q.charge.groupOps +
+          (sim (cont (step q s).1) (step q s).2 (B - q.charge.groupOps)).cost = B
+        rw [ih _ _ _ h]
         lia
       · next hfuel =>
         have := charge_groupOps_le_one q
@@ -558,13 +557,12 @@ private lemma sim_sound [AddCommGroup (Lbl p)] (E : Lbl p ≃+ ZMod p) {X : ZMod
   | liftBind q cont ih =>
       by_cases hfuel : q.charge.groupOps ≤ B
       · rw [sim_liftBind, if_pos hfuel] at hst ⊢
-        rw [Res.bump_st] at hst
+        change (sim (cont (step q s).1) (step q s).2 (B - q.charge.groupOps)).st = ψ at hst
         have hkey : (step q s).1 = q.answer :=
           step_answer E ψ hagree q s (by rw [← hst]; exact sim_sublist _ _ _)
         obtain ⟨ihc, iho⟩ := ih _ _ _ hst
         rw [hkey] at ihc iho ⊢
-        rw [GroupProg.groupOps_liftBind, GroupProg.eval_liftBind]
-        exact ⟨by simp only [Res.bump_cost]; lia, iho⟩
+        grind [Res.bump]
       · rw [sim_liftBind, if_neg hfuel]
         exact ⟨Nat.zero_le _, by simp⟩
 
@@ -640,8 +638,6 @@ private def lblH (p : ℕ) : Lbl p := (1 : ZMod p)
 /-- The initial state: `g` has form `1` and `H` has form `X`. -/
 private def st0 (p : ℕ) : St p :=
   [(lblG p, ((1 : ZMod p), (0 : ZMod p))), (lblH p, ((0 : ZMod p), (1 : ZMod p)))]
-
-private lemma st0_length (p : ℕ) : (st0 p).length = 2 := rfl
 
 private lemma mem_st0_G (p : ℕ) : (lblG p, ((1 : ZMod p), (0 : ZMod p))) ∈ st0 p := by simp [st0]
 
@@ -730,10 +726,10 @@ private lemma sqrt_le_groupOps_of_solvesDLog (alg : GroupAlg 2 ℕ) (hcorrect : 
   have h10M : 10 * Nat.sqrt p ≤ p := le_trans (Nat.mul_le_mul_right _ hM) hMsq
   set B := Nat.sqrt p / 5 with hB
   have hnd : NodupSt (dlogRun alg p B).st :=
-    sim_nodup _ _ _ (by rw [st0_length]; lia) st0_nodup
+    sim_nodup _ _ _ (by simp [st0]; lia) st0_nodup
   have hlenR : (dlogRun alg p B).st.length + 2 ≤ Nat.sqrt p := by
     have h : (dlogRun alg p B).st.length ≤ (st0 p).length + 3 * B := sim_length _ _ _
-    rw [st0_length] at h
+    change (dlogRun alg p B).st.length ≤ 2 + 3 * B at h
     lia
   have hsq : (dlogRun alg p B).st.length * (dlogRun alg p B).st.length + 2 ≤ p := by
     set L := (dlogRun alg p B).st.length
