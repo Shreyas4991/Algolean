@@ -30,8 +30,8 @@ variable {V G : Type}
 
 /-- Quadrupling an element by repeated doubling: two `add` queries. -/
 def quadruple (x : V) : GroupProg V V := do
-  let d ← GroupProg.add x x
-  GroupProg.add d d
+  let d : V ← GroupQuery.add x x
+  GroupQuery.add d d
 
 /-- Quadrupling costs two `add` queries and nothing else, in whatever group it is run. -/
 example [AddCommGroup G] [DecidableEq G] (x : G) : GroupProg.cost (quadruple x) = ⟨2, 0, 0⟩ := rfl
@@ -142,8 +142,8 @@ example (x : G) : GroupProg.eval (quadruple x) = (4 : ℕ) • x :=
 
 /-- Test whether `y` is the double of `x`: one `add` and one `eq`. -/
 def isDouble (x y : V) : GroupProg V Bool := do
-  let d ← GroupProg.add x x
-  GroupProg.eq d y
+  let d : V ← GroupQuery.add x x
+  GroupQuery.eq d y
 
 /-- The oracle's answer to the comparison is the comparison in the group. -/
 theorem isDouble_spec (x y : G) :
@@ -159,7 +159,7 @@ example (x y : G) : GroupProg.cost (isDouble x y) = ⟨1, 0, 1⟩ := rfl
 def repeatedDouble (x : V) (k : ℕ) : GroupProg V V := do
   let mut acc := x
   for _ in List.range k do
-    acc ← GroupProg.add acc acc
+    acc ← GroupQuery.add acc acc
   return acc
 
 /-- The loop is where `mvcgen` earns its keep: one invariant, and the three verification

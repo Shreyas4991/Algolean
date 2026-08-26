@@ -263,7 +263,7 @@ private lemma exists_fresh {β : Type} [Fintype β] (hβ : p ≤ Fintype.card β
       have h := List.toFinset_card_le (s.map k)
       rw [List.length_map] at h
       rw [Finset.card_univ]
-      omega
+      lia
   exact ⟨b, fun hm => hb (List.mem_toFinset.2 hm)⟩
 
 /-- A label no entry of `s` uses (junk if there is none). -/
@@ -376,13 +376,13 @@ private lemma step_length (q : GroupQuery (Lbl p) ι) (s : St p) :
       have h1 := ensure_length s x
       have h2 := ensure_length (ensure s x) y
       refine le_trans (addFrm_length _ _) ?_
-      simp only [GroupQuery.groupOps_charge_add]
-      omega
+      simp
+      lia
   | neg x =>
       have h1 := ensure_length s x
       refine le_trans (addFrm_length _ _) ?_
-      simp only [GroupQuery.groupOps_charge_neg]
-      omega
+      simp
+      lia
   | eq x y => exact Nat.le_add_right _ _
 
 /-! ### The `Nodup` invariant -/
@@ -410,14 +410,14 @@ private lemma step_nodup [NeZero p] (q : GroupQuery (Lbl p) ι) {s : St p}
     (hlen : s.length + 3 * q.charge.groupOps < p) (hs : NodupSt s) : NodupSt (step q s).2 := by
   cases q with
   | add x y =>
-      simp only [GroupQuery.groupOps_charge_add] at hlen
+      simp at hlen
       have h1 := ensure_length s x
       have h2 := ensure_length (ensure s x) y
-      exact addFrm_nodup (by omega) (ensure_nodup (by omega) (ensure_nodup (by omega) hs x) y) _
+      exact addFrm_nodup (by lia) (ensure_nodup (by lia) (ensure_nodup (by lia) hs x) y) _
   | neg x =>
-      simp only [GroupQuery.groupOps_charge_neg] at hlen
+      simp at hlen
       have h1 := ensure_length s x
-      exact addFrm_nodup (by omega) (ensure_nodup (by omega) hs x) _
+      exact addFrm_nodup (by lia) (ensure_nodup (by lia) hs x) _
   | eq x y => exact hs
 
 /-! ### The simulator -/
@@ -480,7 +480,7 @@ private lemma sim_length (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ) :
         have h1 := step_length q s
         have h2 := ih (step q s).1 (step q s).2 (B - q.charge.groupOps)
         simp only [Res.bump_st]
-        omega
+        lia
       · exact Nat.le_add_right _ _
 
 private lemma sim_nodup [NeZero p] (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ)
@@ -492,7 +492,7 @@ private lemma sim_nodup [NeZero p] (P : GroupProg (Lbl p) α) (s : St p) (B : �
       split
       · next hfuel =>
         have h1 := step_length q s
-        exact ih _ _ _ (by omega) (step_nodup q (by omega) hs)
+        exact ih _ _ _ (by lia) (step_nodup q (by lia) hs)
       · exact hs
 
 /-- A run that was cut off spent the whole budget. -/
@@ -505,12 +505,12 @@ private lemma sim_cost_of_none (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ)
       split at h
       · next hfuel =>
         rw [if_pos hfuel, Res.bump_cost, ih _ _ _ h]
-        omega
+        lia
       · next hfuel =>
         have := charge_groupOps_le_one q
         rw [if_neg hfuel]
         change (0 : ℕ) = B
-        omega
+        lia
 
 /-! ### Soundness of the simulation
 
@@ -564,7 +564,7 @@ private lemma sim_sound [AddCommGroup (Lbl p)] (E : Lbl p ≃+ ZMod p) {X : ZMod
         obtain ⟨ihc, iho⟩ := ih _ _ _ hst
         rw [hkey] at ihc iho ⊢
         rw [GroupProg.groupOps_liftBind, GroupProg.eval_liftBind]
-        exact ⟨by simp only [Res.bump_cost]; omega, iho⟩
+        exact ⟨by simp only [Res.bump_cost]; lia, iho⟩
       · rw [sim_liftBind, if_neg hfuel]
         exact ⟨Nat.zero_le _, by simp⟩
 
@@ -612,7 +612,7 @@ private lemma exists_two_good [Fact p.Prime] (ψ : St p) (hlen : ψ.length * ψ.
     rw [Finset.card_filter_add_card_filter_not (s := (Finset.univ : Finset (ZMod p)))
       (p := fun X : ZMod p => Good ψ X), Finset.card_univ, ZMod.card]
   obtain ⟨X₁, h1, X₂, h2, hne⟩ :=
-    Finset.one_lt_card.1 (show 1 < (Finset.univ.filter fun X : ZMod p => Good ψ X).card by omega)
+    Finset.one_lt_card.1 (show 1 < (Finset.univ.filter fun X : ZMod p => Good ψ X).card by lia)
   exact ⟨X₁, X₂, hne, (Finset.mem_filter.1 h1).2, (Finset.mem_filter.1 h2).2⟩
 
 /-- From a good `X` we obtain a permutation of `ZMod p` realizing every form of `ψ`: with distinct
@@ -725,16 +725,16 @@ private lemma sqrt_le_groupOps_of_solvesDLog (alg : GroupAlg 2 ℕ) (hcorrect : 
   haveI : NeZero p := ⟨hpp.ne_zero⟩
   have hpN : N ≤ p := le_trans (le_max_left N 100) hpge
   have hp100 : 100 ≤ p := le_trans (le_max_right N 100) hpge
-  have hM : 10 ≤ Nat.sqrt p := Nat.le_sqrt.mpr (by omega)
+  have hM : 10 ≤ Nat.sqrt p := Nat.le_sqrt.mpr (by lia)
   have hMsq : Nat.sqrt p * Nat.sqrt p ≤ p := Nat.sqrt_le p
   have h10M : 10 * Nat.sqrt p ≤ p := le_trans (Nat.mul_le_mul_right _ hM) hMsq
   set B := Nat.sqrt p / 5 with hB
   have hnd : NodupSt (dlogRun alg p B).st :=
-    sim_nodup _ _ _ (by rw [st0_length]; omega) st0_nodup
+    sim_nodup _ _ _ (by rw [st0_length]; lia) st0_nodup
   have hlenR : (dlogRun alg p B).st.length + 2 ≤ Nat.sqrt p := by
     have h : (dlogRun alg p B).st.length ≤ (st0 p).length + 3 * B := sim_length _ _ _
     rw [st0_length] at h
-    omega
+    lia
   have hsq : (dlogRun alg p B).st.length * (dlogRun alg p B).st.length + 2 ≤ p := by
     set L := (dlogRun alg p B).st.length
     calc L * L + 2 ≤ (L + 2) * (L + 2) := by nlinarith
@@ -756,7 +756,7 @@ private lemma sqrt_le_groupOps_of_solvesDLog (alg : GroupAlg 2 ℕ) (hcorrect : 
     · rw [card_Lbl]; exact ZMod.val_lt X₁
     · rw [card_Lbl, hxg]
       change Nat.sqrt p ≤ 10 * GroupProg.groupOps (dlogProg alg p)
-      omega
+      lia
 
 end Main
 

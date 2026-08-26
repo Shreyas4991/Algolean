@@ -115,60 +115,34 @@ lemma le_iff {gc₁ gc₂ : GroupCosts} :
 instance : IsOrderedAddMonoid GroupCosts where
   add_le_add_left _ _ h _ := by
     simp only [le_iff, add_adds, add_negs, add_eqs] at h ⊢
-    omega
-
-/-- A cost is bounded componentwise by a triple exactly when each of its counts is. -/
-lemma le_mk_iff {gc : GroupCosts} {a n e : ℕ} :
-    gc ≤ ⟨a, n, e⟩ ↔ gc.adds ≤ a ∧ gc.negs ≤ n ∧ gc.eqs ≤ e :=
-  Iff.rfl
+    lia
 
 /--
 The queries that produce a new group element. This is the count a classical generic group bound
 speaks about: equality tests are free to it, and the group operations are not.
 -/
-def groupOps (gc : GroupCosts) : ℕ := gc.adds + gc.negs
+@[simp] def groupOps (gc : GroupCosts) : ℕ := gc.adds + gc.negs
 
 @[simp] lemma groupOps_zero : (0 : GroupCosts).groupOps = 0 := rfl
 
 @[simp] lemma groupOps_add (gc₁ gc₂ : GroupCosts) :
     (gc₁ + gc₂).groupOps = gc₁.groupOps + gc₂.groupOps := by
-  simp only [groupOps, add_adds, add_negs]; omega
+  simp only [groupOps, add_adds, add_negs]; lia
 
 lemma groupOps_le_groupOps {gc₁ gc₂ : GroupCosts} (h : gc₁ ≤ gc₂) :
     gc₁.groupOps ≤ gc₂.groupOps := by
   obtain ⟨h₁, h₂, -⟩ := le_iff.mp h
   simp only [groupOps]
-  omega
-
-/-- `groupOps` as an additive monoid homomorphism. -/
-def groupOpsHom : GroupCosts →+ ℕ where
-  toFun := groupOps
-  map_zero' := groupOps_zero
-  map_add' := groupOps_add
+  lia
 
 end GroupCosts
 
 /-- The cost of a single query: one unit in the component naming its operation. -/
-def GroupQuery.charge (q : GroupQuery V ι) : GroupCosts :=
+@[simp] def GroupQuery.charge (q : GroupQuery V ι) : GroupCosts :=
   match q with
   | .add _ _ => ⟨1, 0, 0⟩
   | .neg _ => ⟨0, 1, 0⟩
   | .eq _ _ => ⟨0, 0, 1⟩
-
-@[simp] lemma GroupQuery.charge_add (x y : V) : (GroupQuery.add x y).charge = ⟨1, 0, 0⟩ := rfl
-
-@[simp] lemma GroupQuery.charge_neg (x : V) : (GroupQuery.neg x).charge = ⟨0, 1, 0⟩ := rfl
-
-@[simp] lemma GroupQuery.charge_eq (x y : V) : (GroupQuery.eq x y).charge = ⟨0, 0, 1⟩ := rfl
-
-lemma GroupQuery.groupOps_charge_add (x y : V) :
-    (GroupQuery.add x y).charge.groupOps = 1 := rfl
-
-lemma GroupQuery.groupOps_charge_neg (x : V) :
-    (GroupQuery.neg x).charge.groupOps = 1 := rfl
-
-lemma GroupQuery.groupOps_charge_eq (x y : V) :
-    (GroupQuery.eq x y).charge.groupOps = 0 := rfl
 
 /-!
 ## The oracle is the group
@@ -229,15 +203,6 @@ abbrev GroupProg (V α : Type) : Type 1 := Prog (GroupQuery V) α
 
 namespace GroupProg
 
-/-- Ask the oracle for the sum of `x` and `y`. -/
-def add (x y : V) : GroupProg V V := FreeM.lift (.add x y)
-
-/-- Ask the oracle for the negation of `x`. -/
-def neg (x : V) : GroupProg V V := FreeM.lift (.neg x)
-
-/-- Ask the oracle whether `x` and `y` are equal. -/
-def eq (x y : V) : GroupProg V Bool := FreeM.lift (.eq x y)
-
 /-!
 ### The observables of a run
 
@@ -272,40 +237,12 @@ abbrev groupOps (oa : GroupProg G α) : ℕ := (cost oa).groupOps
   rw [groupOps, cost_liftBind, GroupCosts.groupOps_add, groupOps]
 
 /-!
-### The queries as programs
--/
-
-@[simp] lemma eval_add (x y : G) : eval (GroupProg.add x y) = x + y := rfl
-
-@[simp] lemma eval_neg (x : G) : eval (GroupProg.neg x) = -x := rfl
-
-@[simp] lemma eval_eq (x y : G) : eval (GroupProg.eq x y) = decide (x = y) := rfl
-
-@[simp] lemma cost_add (x y : G) : cost (GroupProg.add x y) = ⟨1, 0, 0⟩ :=
-  Prog.time_lift _ (groupModel G)
-
-@[simp] lemma cost_neg (x : G) : cost (GroupProg.neg x) = ⟨0, 1, 0⟩ :=
-  Prog.time_lift _ (groupModel G)
-
-@[simp] lemma cost_eq (x y : G) : cost (GroupProg.eq x y) = ⟨0, 0, 1⟩ :=
-  Prog.time_lift _ (groupModel G)
-
-@[simp] lemma groupOps_add (x y : G) : groupOps (GroupProg.add x y) = 1 := by
-  rw [groupOps, cost_add]; rfl
-
-@[simp] lemma groupOps_neg (x : G) : groupOps (GroupProg.neg x) = 1 := by
-  rw [groupOps, cost_neg]; rfl
-
-@[simp] lemma groupOps_eq (x y : G) : groupOps (GroupProg.eq x y) = 0 := by
-  rw [groupOps, cost_eq]; rfl
-
-/-!
 ### The queries as Hoare specs
 
 `groupModel` is the registered default model of `GroupQuery`, so the weakest-precondition
 instances of `Algolean.QueryModel` fire on `GroupProg`. The three specs below are all that stands
-between that and `mvcgen`: `Spec.query` already discharges a lifted query, and `add`, `neg` and
-`eq` are named wrappers around one.
+between that and `mvcgen`: the generic `Spec.query` discharges a lifted query but leaves the
+model's answer unevaluated, so these take priority over it and read that answer back in `G`.
 
 Cost is not in view here. The `.pure` post-shape sees only the returned value, and the query counts
 remain the business of `cost` above.
@@ -316,21 +253,21 @@ section Specs
 open Std.Do
 
 /-- The oracle answers `add x y` with the sum of `x` and `y`. -/
-@[spec]
+@[spec high]
 theorem add_spec (x y : G) {Q' : PostCond G .pure} :
-    Triple (GroupProg.add x y) (Q'.1 (x + y)) Q' :=
+    Triple (GroupQuery.add x y : GroupProg G G) (Q'.1 (x + y)) Q' :=
   Spec.query (Cost := GroupCosts) (GroupQuery.add x y)
 
 /-- The oracle answers `neg x` with the negation of `x`. -/
-@[spec]
+@[spec high]
 theorem neg_spec (x : G) {Q' : PostCond G .pure} :
-    Triple (GroupProg.neg x) (Q'.1 (-x)) Q' :=
+    Triple (GroupQuery.neg x : GroupProg G G) (Q'.1 (-x)) Q' :=
   Spec.query (Cost := GroupCosts) (GroupQuery.neg x)
 
 /-- The oracle answers `eq x y` with the decision of `x = y`. -/
-@[spec]
+@[spec high]
 theorem eq_spec (x y : G) {Q' : PostCond Bool .pure} :
-    Triple (GroupProg.eq x y) (Q'.1 (decide (x = y))) Q' :=
+    Triple (GroupQuery.eq x y : GroupProg G Bool) (Q'.1 (decide (x = y))) Q' :=
   Spec.query (Cost := GroupCosts) (GroupQuery.eq x y)
 
 /-- A triple with a trivial precondition is a statement about what the program `eval`uates to in

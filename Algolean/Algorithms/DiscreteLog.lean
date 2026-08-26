@@ -80,11 +80,11 @@ stopped.
 def bruteForceDLogAux (g h acc : V) (exp : ℕ) : ℕ → GroupProg V ℕ
   | 0 => pure exp
   | remaining + 1 => do
-    let matched ← GroupProg.eq acc h
+    let matched : Bool ← GroupQuery.eq acc h
     if matched then
       pure exp
     else do
-      let acc' ← GroupProg.add acc g
+      let acc' : V ← GroupQuery.add acc g
       bruteForceDLogAux g h acc' (exp + 1) remaining
 
 /--
@@ -110,23 +110,23 @@ lemma bruteForceDLogAux_eval (g h : G) {k : ℕ} :
   induction k with
   | zero =>
     rintro acc exp (_ | remaining) - hk hlt
-    · omega
+    · lia
     · have hacc : acc = h := by simpa using hk
       simp [bruteForceDLogAux, hacc]
   | succ k ih =>
     rintro acc exp (_ | remaining) hmin hk hlt
-    · omega
-    · have hne : acc ≠ h := by simpa using hmin 0 (by omega)
+    · lia
+    · have hne : acc ≠ h := by simpa using hmin 0 (by lia)
       have hmin' : ∀ i < k, acc + g + i • g ≠ h := by
         intro i hi
         rw [add_add_nsmul]
-        exact hmin (i + 1) (by omega)
+        exact hmin (i + 1) (by lia)
       have hk' : acc + g + k • g = h := by rw [add_add_nsmul]; exact hk
-      simp only [bruteForceDLogAux, Prog.eval_bind, GroupProg.eval_eq, decide_eq_true_eq,
-        hne, if_false, GroupProg.eval_add]
+      simp only [bruteForceDLogAux, Prog.eval_bind, Prog.eval_lift, groupModel_evalQuery,
+        GroupQuery.answer, decide_eq_true_eq, hne, if_false]
       calc
-        _ = exp + 1 + k := ih (acc + g) (exp + 1) remaining hmin' hk' (by omega)
-        _ = exp + (k + 1) := by omega
+        _ = exp + 1 + k := ih (acc + g) (exp + 1) remaining hmin' hk' (by lia)
+        _ = exp + (k + 1) := by lia
 
 /--
 The brute force search returns `k` whenever `k` is the least positive exponent whose multiple of
@@ -138,13 +138,13 @@ theorem bruteForceDLog_eval (g h : G) {k order : ℕ} (hmin : ∀ i, 0 < i → i
   have hmin' : ∀ i < k - 1, g + i • g ≠ h := by
     intro i hi
     rw [add_comm, ← succ_nsmul]
-    exact hmin (i + 1) (by omega) (by omega)
+    exact hmin (i + 1) (by lia) (by lia)
   have hk' : g + (k - 1) • g = h := by
     rw [add_comm, ← succ_nsmul, Nat.sub_add_cancel hk0]
     exact hk
   rw [bruteForceDLog, dlogInputs_zero, dlogInputs_one,
-    bruteForceDLogAux_eval g h g 1 order hmin' hk' (by omega)]
-  omega
+    bruteForceDLogAux_eval g h g 1 order hmin' hk' (by lia)]
+  lia
 
 /-- The main loop performs at most one addition and one equality test per remaining candidate. -/
 lemma bruteForceDLogAux_cost_le (g h : G) :
@@ -155,19 +155,21 @@ lemma bruteForceDLogAux_cost_le (g h : G) :
   | zero => intro acc exp; simp [bruteForceDLogAux]
   | succ remaining ih =>
     intro acc exp
-    simp only [bruteForceDLogAux, Prog.time_bind, GroupProg.cost_eq, GroupProg.eval_eq,
+    simp only [bruteForceDLogAux, Prog.time_bind, Prog.time_lift, groupModel_cost,
+      GroupQuery.charge, Prog.eval_lift, groupModel_evalQuery, GroupQuery.answer,
       decide_eq_true_eq]
     by_cases hb : acc = h
     · rw [if_pos hb]
       simp
     · rw [if_neg hb]
-      simp only [Prog.time_bind, GroupProg.cost_add, GroupProg.eval_add]
+      simp only [Prog.time_bind, Prog.time_lift, groupModel_cost, GroupQuery.charge,
+        Prog.eval_lift, groupModel_evalQuery, GroupQuery.answer]
       calc (⟨0, 0, 1⟩ : GroupCosts) + (⟨1, 0, 0⟩ + GroupProg.cost
             (bruteForceDLogAux g h (acc + g) (exp + 1) remaining))
           ≤ ⟨0, 0, 1⟩ + (⟨1, 0, 0⟩ + ⟨remaining, 0, remaining⟩) := by
             gcongr
             exact ih (acc + g) (exp + 1)
-        _ = ⟨remaining + 1, 0, remaining + 1⟩ := by ext <;> simp <;> omega
+        _ = ⟨remaining + 1, 0, remaining + 1⟩ := by ext <;> simp <;> lia
 
 /-- The brute force search performs at most one addition and one equality test per candidate
 exponent. -/
