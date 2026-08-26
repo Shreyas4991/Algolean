@@ -84,8 +84,8 @@ matching element. -/
 def tableLookup (target : V) : List (ℕ × V) → GroupProg V (Option ℕ)
   | [] => pure none
   | (j, b) :: rest => do
-    let matched : Bool ← GroupQuery.eq b target
-    if matched then pure (some j) else tableLookup target rest
+    let matched : ULift Bool ← GroupQuery.eq b target
+    if matched.down then pure (some j) else tableLookup target rest
 
 /--
 The giant steps of the search. `acc` is the current multiple `(i * m) • g` of the giant step

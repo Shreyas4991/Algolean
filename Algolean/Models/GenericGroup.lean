@@ -39,7 +39,9 @@ namespace Algorithms
 
 open Cslib Prog
 
-variable {V G α β ι : Type}
+universe u
+
+variable {V G α β ι : Type u}
 
 /-!
 ## The query type
@@ -50,13 +52,13 @@ The queries of the generic group model over elements of type `V`. `add x y` asks
 the sum of `x` and `y`, `neg x` for the negation of `x`, and `eq x y` whether `x` and `y` are
 equal.
 -/
-inductive GroupQuery (V : Type) : Type → Type where
+inductive GroupQuery (V : Type u) : Type u → Type (u + 1) where
   /-- Ask for the sum of `x` and `y`. -/
   | add (x y : V) : GroupQuery V V
   /-- Ask for the negation of `x`. -/
   | neg (x : V) : GroupQuery V V
   /-- Ask whether `x` and `y` are equal. -/
-  | eq (x y : V) : GroupQuery V Bool
+  | eq (x y : V) : GroupQuery V (ULift.{u} Bool)
 
 /-!
 ## Costs
@@ -96,7 +98,7 @@ instance : LT GroupCosts where
 instance : PartialOrder GroupCosts :=
   fast_instance% GroupCosts.equivProd.injective.partialOrder _ .rfl .rfl
 
-@[simps]
+@[simps (attr := grind =)]
 instance : Add GroupCosts where
   add gc₁ gc₂ := ⟨gc₁.adds + gc₂.adds, gc₁.negs + gc₂.negs, gc₁.eqs + gc₂.eqs⟩
 
@@ -121,11 +123,11 @@ instance : IsOrderedAddMonoid GroupCosts where
 The queries that produce a new group element. This is the count a classical generic group bound
 speaks about: equality tests are free to it, and the group operations are not.
 -/
-@[simp] def groupOps (gc : GroupCosts) : ℕ := gc.adds + gc.negs
+@[simp, grind] def groupOps (gc : GroupCosts) : ℕ := gc.adds + gc.negs
 
 @[simp] lemma groupOps_zero : (0 : GroupCosts).groupOps = 0 := rfl
 
-@[simp] lemma groupOps_add (gc₁ gc₂ : GroupCosts) :
+@[grind =] lemma groupOps_add (gc₁ gc₂ : GroupCosts) :
     (gc₁ + gc₂).groupOps = gc₁.groupOps + gc₂.groupOps := by
   simp only [groupOps, add_adds, add_negs]; lia
 
@@ -138,7 +140,7 @@ lemma groupOps_le_groupOps {gc₁ gc₂ : GroupCosts} (h : gc₁ ≤ gc₂) :
 end GroupCosts
 
 /-- The cost of a single query: one unit in the component naming its operation. -/
-@[simp] def GroupQuery.charge (q : GroupQuery V ι) : GroupCosts :=
+@[simp, grind] def GroupQuery.charge (q : GroupQuery V ι) : GroupCosts :=
   match q with
   | .add _ _ => ⟨1, 0, 0⟩
   | .neg _ => ⟨0, 1, 0⟩
@@ -152,36 +154,25 @@ the program is run in.
 -/
 
 /-- The answer the group `G` gives to a single query. -/
-def GroupQuery.answer [AddCommGroup G] [DecidableEq G] : GroupQuery G ι → ι
+@[simp, grind] def GroupQuery.answer [AddCommGroup G] [DecidableEq G] : GroupQuery G ι → ι
   | .add x y => x + y
   | .neg x => -x
-  | .eq x y => decide (x = y)
-
-section Answer
-
-variable [AddCommGroup G] [DecidableEq G]
-
-@[simp] lemma GroupQuery.answer_add (x y : G) : (GroupQuery.add x y).answer = x + y := rfl
-
-@[simp] lemma GroupQuery.answer_neg (x : G) : (GroupQuery.neg x).answer = -x := rfl
-
-@[simp] lemma GroupQuery.answer_eq (x y : G) : (GroupQuery.eq x y).answer = decide (x = y) := rfl
-
-end Answer
+  | .eq x y => ULift.up (decide (x = y))
 
 /--
 The group read as a `Model` of `GroupQuery G`: it answers a query with `GroupQuery.answer` and
 charges it `GroupQuery.charge`, so `GroupProg.eval` and `GroupProg.cost` below are the `Prog.eval`
 and `Prog.time` of `Algolean.QueryModel`.
 -/
-def groupModel (G : Type) [AddCommGroup G] [DecidableEq G] : Model (GroupQuery G) GroupCosts where
+def groupModel (G : Type u) [AddCommGroup G] [DecidableEq G] :
+    Model (GroupQuery G) GroupCosts where
   evalQuery q := q.answer
   cost q := q.charge
 
-@[simp] lemma groupModel_evalQuery [AddCommGroup G] [DecidableEq G] (q : GroupQuery G ι) :
+@[simp, grind =] lemma groupModel_evalQuery [AddCommGroup G] [DecidableEq G] (q : GroupQuery G ι) :
     (groupModel G).evalQuery q = q.answer := rfl
 
-@[simp] lemma groupModel_cost [AddCommGroup G] [DecidableEq G] (q : GroupQuery G ι) :
+@[simp, grind =] lemma groupModel_cost [AddCommGroup G] [DecidableEq G] (q : GroupQuery G ι) :
     (groupModel G).cost q = q.charge := rfl
 
 /-- Register `groupModel` as the default model for `GroupQuery`, so the global
@@ -191,7 +182,7 @@ instance [AddCommGroup G] [DecidableEq G] : HasModel (GroupQuery G) GroupCosts w
   model := groupModel G
 
 /-- The default generic group model unfolds to `groupModel`. -/
-@[simp] theorem GroupQuery.hasModel_model [AddCommGroup G] [DecidableEq G] :
+@[simp, grind =] theorem GroupQuery.hasModel_model [AddCommGroup G] [DecidableEq G] :
     (HasModel.model : Model (GroupQuery G) GroupCosts) = groupModel G := rfl
 
 /-!
@@ -199,7 +190,7 @@ instance [AddCommGroup G] [DecidableEq G] : HasModel (GroupQuery G) GroupCosts w
 -/
 
 /-- A generic group program over elements of type `V`, returning an `α`. -/
-abbrev GroupProg (V α : Type) : Type 1 := Prog (GroupQuery V) α
+abbrev GroupProg (V α : Type u) : Type (u + 1) := Prog (GroupQuery V) α
 
 namespace GroupProg
 
@@ -264,10 +255,11 @@ theorem neg_spec (x : G) {Q' : PostCond G .pure} :
     Triple (GroupQuery.neg x : GroupProg G G) (Q'.1 (-x)) Q' :=
   Spec.query (Cost := GroupCosts) (GroupQuery.neg x)
 
-/-- The oracle answers `eq x y` with the decision of `x = y`. -/
+/-- The oracle answers `eq x y` with the lifted decision of `x = y`. -/
 @[spec high]
-theorem eq_spec (x y : G) {Q' : PostCond Bool .pure} :
-    Triple (GroupQuery.eq x y : GroupProg G Bool) (Q'.1 (decide (x = y))) Q' :=
+theorem eq_spec (x y : G) {Q' : PostCond (ULift Bool) .pure} :
+    Triple (GroupQuery.eq x y : GroupProg G (ULift Bool))
+      (Q'.1 (ULift.up (decide (x = y)))) Q' :=
   Spec.query (Cost := GroupCosts) (GroupQuery.eq x y)
 
 /-- A triple with a trivial precondition is a statement about what the program `eval`uates to in

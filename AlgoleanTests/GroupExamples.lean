@@ -143,7 +143,8 @@ example (x : G) : GroupProg.eval (quadruple x) = (4 : ℕ) • x :=
 /-- Test whether `y` is the double of `x`: one `add` and one `eq`. -/
 def isDouble (x y : V) : GroupProg V Bool := do
   let d : V ← GroupQuery.add x x
-  GroupQuery.eq d y
+  let matched : ULift Bool ← GroupQuery.eq d y
+  return matched.down
 
 /-- The oracle's answer to the comparison is the comparison in the group. -/
 theorem isDouble_spec (x y : G) :

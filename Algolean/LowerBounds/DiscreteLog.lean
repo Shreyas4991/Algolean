@@ -313,7 +313,7 @@ private noncomputable def step : GroupQuery (Lbl p) ι → St p → ι × St p
       addFrm (ensure (ensure s x) y)
         ((lookLbl (ensure (ensure s x) y) x).getD 0 + (lookLbl (ensure (ensure s x) y) y).getD 0)
   | .neg x, s => addFrm (ensure s x) (-(lookLbl (ensure s x) x).getD 0)
-  | .eq x y, s => (decide (x = y), s)
+  | .eq x y, s => (ULift.up (decide (x = y)), s)
 
 private lemma charge_groupOps_le_one (q : GroupQuery (Lbl p) ι) : q.charge.groupOps ≤ 1 := by
   cases q <;> simp [GroupQuery.charge, GroupCosts.groupOps]
@@ -535,7 +535,7 @@ private lemma step_answer [AddCommGroup (Lbl p)] (E : Lbl p ≃+ ZMod p) {X : ZM
         simp [step, hu', hv]
       rw [hstep] at hsub ⊢
       refine E.injective ?_
-      rw [GroupQuery.answer_add, map_add, hagree _ _ (hsub.mem (addFrm_mem _ _)),
+      rw [GroupQuery.answer, map_add, hagree _ _ (hsub.mem (addFrm_mem _ _)),
         hagree _ _ (hsub.mem ((addFrm_sublist _ _).mem (mem_of_lookLbl hu'))),
         hagree _ _ (hsub.mem ((addFrm_sublist _ _).mem (mem_of_lookLbl hv))), Frm.ev_add]
   | neg x =>
@@ -543,7 +543,7 @@ private lemma step_answer [AddCommGroup (Lbl p)] (E : Lbl p ≃+ ZMod p) {X : ZM
       have hstep : step (GroupQuery.neg x) s = addFrm (ensure s x) (-u) := by simp [step, hu]
       rw [hstep] at hsub ⊢
       refine E.injective ?_
-      rw [GroupQuery.answer_neg, map_neg, hagree _ _ (hsub.mem (addFrm_mem _ _)),
+      rw [GroupQuery.answer, map_neg, hagree _ _ (hsub.mem (addFrm_mem _ _)),
         hagree _ _ (hsub.mem ((addFrm_sublist _ _).mem (mem_of_lookLbl hu))), Frm.ev_neg]
 
 private lemma sim_sound [AddCommGroup (Lbl p)] (E : Lbl p ≃+ ZMod p) {X : ZMod p} (ψ : St p)

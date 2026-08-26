@@ -80,8 +80,8 @@ stopped.
 def bruteForceDLogAux (g h acc : V) (exp : ℕ) : ℕ → GroupProg V ℕ
   | 0 => pure exp
   | remaining + 1 => do
-    let matched : Bool ← GroupQuery.eq acc h
-    if matched then
+    let matched : ULift Bool ← GroupQuery.eq acc h
+    if matched.down then
       pure exp
     else do
       let acc' : V ← GroupQuery.add acc g
