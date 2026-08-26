@@ -313,8 +313,7 @@ lemma giantSteps_eval (g h : G) (tbl : List (ℕ × G)) (gamma : G) (m : ℕ) (h
         rintro rfl
         have hsome := tableLookup_complete ((i * m) • g) tbl j (hmatch ▸ hcomplete j hjm)
         change (Prog.eval (tableLookup ((i * m) • g) tbl) (groupModel G)).isSome at hsome
-        rw [hl] at hsome
-        simp at hsome
+        simp [hl] at hsome
       have hstep : (i * m) • g + m • g = ((i + 1) * m) • g := by
         rw [← add_nsmul]; congr 1; ring
       simp only [Prog.eval_bind, Prog.eval_lift, groupModel_evalQuery, GroupQuery.answer, hstep]
@@ -343,8 +342,8 @@ theorem bsgs_eval (g h : G) {order x : ℕ} (hx0 : 0 < x) (hx : x ≤ order) (hx
     lt_of_mul_lt_mul_left (a := Nat.sqrt order + 1) (by lia) (Nat.zero_le _)
   have hqm : (q + 1) * (Nat.sqrt order + 1) =
       (Nat.sqrt order + 1) * q + (Nat.sqrt order + 1) := by ring
-  simp only [bsgs, Prog.eval_bind, dlogInputs_zero, dlogInputs_one, babySteps_eval,
-    nsmulSuccProg_eval]
+  simp only [bsgs, dlogInputs, Fin.isValue, Matrix.cons_val_zero, Matrix.cons_val_one,
+    Matrix.cons_val_fin_one, Prog.eval_bind, babySteps_eval, zero_add, nsmulSuccProg_eval]
   refine giantSteps_eval g h _ _ (Nat.sqrt order + 1) rfl (fun p hp => ?_) (fun t ht => ?_)
     (Nat.sqrt order + 1) _ 1 (by rw [one_mul]) le_rfl
     ⟨q + 1, (q + 1) * (Nat.sqrt order + 1) - x, by lia, by lia, by lia, ?_⟩

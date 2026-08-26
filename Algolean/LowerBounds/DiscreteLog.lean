@@ -315,9 +315,6 @@ private noncomputable def step : GroupQuery (Lbl p) ι → St p → ι × St p
   | .neg x, s => addFrm (ensure s x) (-(lookLbl (ensure s x) x).getD 0)
   | .eq x y, s => (ULift.up (decide (x = y)), s)
 
-private lemma charge_groupOps_le_one (q : GroupQuery (Lbl p) ι) : q.charge.groupOps ≤ 1 := by
-  cases q <;> simp [GroupQuery.charge, GroupCosts.groupOps]
-
 /-! ### The state only grows, and slowly -/
 
 private lemma ensure_sublist (s : St p) (l : Lbl p) : s.Sublist (ensure s l) := by
@@ -336,16 +333,12 @@ private lemma ensure_length (s : St p) (l : Lbl p) : (ensure s l).length ≤ s.l
 private lemma addFrm_length (s : St p) (f : Frm p) : (addFrm s f).2.length ≤ s.length + 1 := by
   unfold addFrm; split <;> simp
 
-@[simp] private lemma lookLbl_cons_self (l : Lbl p) (f : Frm p) (s : St p) :
-    lookLbl ((l, f) :: s) l = some f := by
-  simp [lookLbl, List.find?_cons_of_pos]
-
 /-- After `ensure s l`, the label `l` does carry a form. -/
 private lemma ensure_lookLbl_self (s : St p) (l : Lbl p) :
     ∃ f, lookLbl (ensure s l) l = some f := by
   unfold ensure; split
   · next f h => exact ⟨f, h⟩
-  · exact ⟨_, lookLbl_cons_self _ _ _⟩
+  · exact ⟨freshFrm s, by simp [lookLbl, List.find?_cons_of_pos]⟩
 
 /-- `ensure` never disturbs a form already recorded. -/
 private lemma lookLbl_ensure {s : St p} {l : Lbl p} {f : Frm p} (l' : Lbl p)
@@ -443,24 +436,12 @@ private noncomputable def sim : GroupProg (Lbl p) α → St p → ℕ → Res p 
         Res.bump q.charge.groupOps (sim (cont (step q s).1) (step q s).2 (B - q.charge.groupOps))
       else ⟨none, s, 0⟩
 
-private lemma sim_pure (a : α) (s : St p) (B : ℕ) :
-    sim (.pure a : GroupProg (Lbl p) α) s B = ⟨some a, s, 0⟩ := by
-  rw [sim]
-
-private lemma sim_liftBind (q : GroupQuery (Lbl p) ι) (cont : ι → GroupProg (Lbl p) α) (s : St p)
-    (B : ℕ) :
-    sim (.liftBind q cont) s B =
-      if q.charge.groupOps ≤ B then
-        Res.bump q.charge.groupOps (sim (cont (step q s).1) (step q s).2 (B - q.charge.groupOps))
-      else ⟨none, s, 0⟩ := by
-  rw [sim]
-
 private lemma sim_sublist (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ) :
     s.Sublist (sim P s B).st := by
   induction P generalizing s B with
   | pure a => exact .refl _
   | liftBind q cont ih =>
-      rw [sim_liftBind]
+      rw [sim]
       split
       · exact (step_sublist q s).trans (ih _ _ _)
       · exact .refl _
@@ -470,7 +451,7 @@ private lemma sim_length (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ) :
   induction P generalizing s B with
   | pure a => exact Nat.le_add_right _ _
   | liftBind q cont ih =>
-      rw [sim_liftBind]
+      rw [sim]
       split
       · next hfuel =>
         have h1 := step_length q s
@@ -484,7 +465,7 @@ private lemma sim_nodup [NeZero p] (P : GroupProg (Lbl p) α) (s : St p) (B : �
   induction P generalizing s B with
   | pure a => exact hs
   | liftBind q cont ih =>
-      rw [sim_liftBind]
+      rw [sim]
       split
       · next hfuel =>
         have h1 := step_length q s
@@ -495,9 +476,9 @@ private lemma sim_nodup [NeZero p] (P : GroupProg (Lbl p) α) (s : St p) (B : �
 private lemma sim_cost_of_none (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ)
     (h : (sim P s B).out = none) : (sim P s B).cost = B := by
   induction P generalizing s B with
-  | pure a => rw [sim_pure] at h; simp at h
+  | pure a => rw [sim] at h; simp at h
   | liftBind q cont ih =>
-      rw [sim_liftBind] at h ⊢
+      rw [sim] at h ⊢
       split at h
       · next hfuel =>
         rw [if_pos hfuel]
@@ -506,10 +487,9 @@ private lemma sim_cost_of_none (P : GroupProg (Lbl p) α) (s : St p) (B : ℕ)
         rw [ih _ _ _ h]
         lia
       · next hfuel =>
-        have := charge_groupOps_le_one q
         rw [if_neg hfuel]
         change (0 : ℕ) = B
-        lia
+        cases q <;> simp [GroupQuery.charge, GroupCosts.groupOps] at hfuel <;> lia
 
 /-! ### Soundness of the simulation
 
@@ -552,18 +532,18 @@ private lemma sim_sound [AddCommGroup (Lbl p)] (E : Lbl p ≃+ ZMod p) {X : ZMod
       ∀ a, (sim P s B).out = some a → GroupProg.eval P = a := by
   induction P generalizing s B with
   | pure a =>
-      rw [sim_pure]
+      rw [sim]
       exact ⟨Nat.zero_le _, fun a' h => by simpa using Option.some.inj h⟩
   | liftBind q cont ih =>
       by_cases hfuel : q.charge.groupOps ≤ B
-      · rw [sim_liftBind, if_pos hfuel] at hst ⊢
+      · rw [sim, if_pos hfuel] at hst ⊢
         change (sim (cont (step q s).1) (step q s).2 (B - q.charge.groupOps)).st = ψ at hst
         have hkey : (step q s).1 = q.answer :=
           step_answer E ψ hagree q s (by rw [← hst]; exact sim_sublist _ _ _)
         obtain ⟨ihc, iho⟩ := ih _ _ _ hst
         rw [hkey] at ihc iho ⊢
         grind [Res.bump]
-      · rw [sim_liftBind, if_neg hfuel]
+      · rw [sim, if_neg hfuel]
         exact ⟨Nat.zero_le _, by simp⟩
 
 /-! ### Counting the good specializations -/

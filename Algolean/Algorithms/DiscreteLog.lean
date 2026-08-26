@@ -62,10 +62,6 @@ logarithm algorithms of `Algolean.Algorithms` are run on inputs of this shape.
 -/
 def dlogInputs (g h : V) : Fin 2 → V := ![g, h]
 
-@[simp] lemma dlogInputs_zero (g h : V) : dlogInputs g h 0 = g := rfl
-
-@[simp] lemma dlogInputs_one (g h : V) : dlogInputs g h 1 = h := rfl
-
 /-- Absorbing one step of a discrete logarithm search into the exponent. -/
 lemma add_add_nsmul [AddCommGroup G] (g acc : G) (i : ℕ) :
     acc + g + i • g = acc + (i + 1) • g := by
@@ -142,8 +138,8 @@ theorem bruteForceDLog_eval (g h : G) {k order : ℕ} (hmin : ∀ i, 0 < i → i
   have hk' : g + (k - 1) • g = h := by
     rw [add_comm, ← succ_nsmul, Nat.sub_add_cancel hk0]
     exact hk
-  rw [bruteForceDLog, dlogInputs_zero, dlogInputs_one,
-    bruteForceDLogAux_eval g h g 1 order hmin' hk' (by lia)]
+  change GroupProg.eval (bruteForceDLogAux g h g 1 order) = k
+  rw [bruteForceDLogAux_eval g h g 1 order hmin' hk' (by lia)]
   lia
 
 /-- The main loop performs at most one addition and one equality test per remaining candidate. -/
@@ -214,15 +210,12 @@ of the target — whatever the group, whatever the base, and whatever the secret
 theorem bruteForceDLog_eval_nsmul (g : G) (x : ℕ) :
     GroupProg.eval (bruteForceDLog G (Fintype.card G) (dlogInputs g (x • g))) • g = x • g := by
   classical
-  have hex : ∃ k, 0 < k ∧ k • g = x • g := by
-    obtain ⟨k, hk0, -, hk⟩ := exists_pos_le_card_nsmul_eq g x
-    exact ⟨k, hk0, hk⟩
+  obtain ⟨k, hk0, hkle, hk⟩ := exists_pos_le_card_nsmul_eq g x
+  have hex : ∃ k, 0 < k ∧ k • g = x • g := ⟨k, hk0, hk⟩
   obtain ⟨hm0, hmk⟩ : 0 < Nat.find hex ∧ Nat.find hex • g = x • g := Nat.find_spec hex
   have hmin : ∀ i, 0 < i → i < Nat.find hex → i • g ≠ x • g := fun i hi0 him hi =>
     Nat.find_min hex him ⟨hi0, hi⟩
-  have hmle : Nat.find hex ≤ Fintype.card G := by
-    obtain ⟨k, hk0, hkle, hk⟩ := exists_pos_le_card_nsmul_eq g x
-    exact le_trans (Nat.find_le ⟨hk0, hk⟩) hkle
+  have hmle : Nat.find hex ≤ Fintype.card G := le_trans (Nat.find_le ⟨hk0, hk⟩) hkle
   rw [bruteForceDLog_eval g (x • g) hmin hmk hm0 hmle]
   exact hmk
 
@@ -267,14 +260,6 @@ theorem bruteForceDLog_eval_natCast (hcard : Fintype.card G = p) {g : G} (hgen :
   simp only [Prog.eval_map]
   exact (ZMod.natCast_eq_natCast_iff _ _ _).mpr hmod
 
-omit [DecidableEq G] in
-/-- **In a group of prime order, every element other than `0` generates.** Its order divides the
-order of the group, which is prime, and only `0` has order `1`. -/
-lemma addOrderOf_eq_of_card_eq_prime (hp : p.Prime) (hcard : Fintype.card G = p) {g : G}
-    (hg : g ≠ 0) : addOrderOf g = p := by
-  haveI : Fact p.Prime := ⟨hp⟩
-  exact addOrderOf_eq_prime (by rw [← hcard]; exact card_nsmul_eq_zero) hg
-
 /--
 **Brute force recovers every secret exactly in a group of prime order.** The algorithm is the same
 one as before, run on an arbitrary group `G` of prime order `p` and an arbitrary base `g ≠ 0`, and
@@ -288,8 +273,10 @@ theorem bruteForceDLog_eval_zmod (hp : p.Prime) (hcard : Fintype.card G = p) {g 
     GroupProg.eval ((fun n : ℕ => (n : ZMod p)) <$> bruteForceDLog G p (dlogInputs g (x.val • g)))
       = x := by
   haveI : NeZero p := ⟨hp.ne_zero⟩
-  rw [bruteForceDLog_eval_natCast hcard (addOrderOf_eq_of_card_eq_prime hp hcard hg) x.val,
-    ZMod.natCast_val, ZMod.cast_id]
+  haveI : Fact p.Prime := ⟨hp⟩
+  have hgen : addOrderOf g = p :=
+    addOrderOf_eq_prime (by rw [← hcard]; exact card_nsmul_eq_zero) hg
+  rw [bruteForceDLog_eval_natCast hcard hgen x.val, ZMod.natCast_val, ZMod.cast_id]
 
 end PrimeOrder
 
