@@ -9,6 +9,7 @@ public import Algolean.Models.ListComparisonSort
 public import Algolean.Models.UniformSample
 public import Algolean.QueryComposition
 public import Batteries.Data.Array.Pairwise
+public import Mathlib.NumberTheory.Harmonic.Bounds
 
 /-!
 # Randomized quicksort with Hoare partitioning
@@ -31,6 +32,8 @@ weakest-precondition semantics of `PMF`.
 - `hoarePartition_spec`: the two groups lie weakly on opposite sides of the pivot.
 - `hoarePartition_costM`: partitioning costs exactly one comparison per non-pivot element.
 - `hoarePartition_balanced_spec`: comparator-equivalent inputs split evenly.
+- `quicksortRecurrence_eq_harmonic`: the exact solution of the standalone uniform-rank recurrence.
+- `quicksortRecurrence_le_two_mul_log`: its `2 * n * log n` upper bound.
 -/
 
 @[expose] public section
@@ -226,11 +229,12 @@ private theorem HoarePartition.loop_costM [Monad m] [LawfulMonad m] (le : α →
 
 section Correctness
 
+set_option mvcgen.warning false
+
 variable {α : Type}
 
 variable (le : α → α → Bool)
 
-set_option mvcgen.warning false in
 /-- A comparison query returns the supplied comparator's answer. -/
 theorem query_cmpLE_spec (y p : α) :
     letI := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
@@ -241,7 +245,6 @@ theorem query_cmpLE_spec (y p : α) :
   intro b hb
   exact (PMF.mem_support_pure_iff (le y p) b).mp hb
 
-set_option mvcgen.warning false in
 private theorem HoarePartition.loop_spec
     [FreeM.HasHandler (RandomQuicksortOps α) .pure]
     [Std.Total (fun a b => le a b = true)]
@@ -301,7 +304,6 @@ private theorem HoarePartition.loop_spec
     refine ⟨hleft, ?_⟩
     intro i hidx hige
     exact hright i hidx (by lia)
-set_option mvcgen.warning false in
 /-- The left and right views lie weakly before and after the pivot, respectively. -/
 theorem hoarePartition_spec
     [FreeM.HasHandler (RandomQuicksortOps α) .pure]
@@ -341,7 +343,6 @@ theorem hoarePartition_spec
     rw [← he]
     simpa using hpr (p.split + i) (by lia) (by lia)
 
-set_option mvcgen.warning false in
 private theorem HoarePartition.loop_balanced_spec
     [FreeM.HasHandler (RandomQuicksortOps α) .pure]
     (hcmp : ∀ (x y : α), ⦃⌜True⌝⦄ queryCmpLE x y ⦃⇓b => ⌜b = le x y⌝⦄)
@@ -372,7 +373,6 @@ private theorem HoarePartition.loop_balanced_spec
     mvcgen
     simp [Nat.sub_eq_zero_of_le (show hi ≤ lo by lia)]
 
-set_option mvcgen.warning false in
 /-- Comparator-equivalent inputs split evenly, with any extra element on the right. -/
 theorem hoarePartition_balanced_spec
     [FreeM.HasHandler (RandomQuicksortOps α) .pure]
@@ -423,7 +423,6 @@ private lemma quicksort_combine [IsTrans α (fun a b => le a b = true)]
         subst a
         exact hge b hb
 
-set_option mvcgen.warning false in
 /-- Correctness only needs accurate comparisons and a pivot in the requested finite range. -/
 theorem randomQuicksort_spec_of_queries
     [FreeM.HasHandler (RandomQuicksortOps α) .pure]
@@ -452,7 +451,6 @@ theorem randomQuicksort_spec_of_queries
       hparts hsl.1 hsl.2 hsr.1 hsr.2
     exact hc
 
-set_option mvcgen.warning false in
 /-- Uniform randomized quicksort returns a sorted permutation under the supplied comparator. -/
 theorem randomQuicksort_spec [Std.Total (fun a b => le a b = true)]
     [IsTrans α (fun a b => le a b = true)] (xs : Array α) :
@@ -467,6 +465,102 @@ theorem randomQuicksort_spec [Std.Total (fun a b => le a b = true)]
   exact fun _ _ => True.intro
 
 end Correctness
+
+section Complexity
+
+/-- The scalar quicksort recurrence with a uniform pivot rank and one comparison per
+non-pivot element: `C 0 = 0` and `C (n + 1) = n + 2 / (n + 1) * ∑ i ≤ n, C i`.
+
+This numerical recurrence is analyzed independently of the program semantics. Applying it to
+Hoare partitioning, particularly with comparator-equivalent elements, requires a separate bound
+on the recursive subproblem costs. -/
+noncomputable def quicksortRecurrence : ℕ → ℝ
+  | 0 => 0
+  | n + 1 => n + 2 / (n + 1) * ∑ i : Fin (n + 1), quicksortRecurrence i
+termination_by n => n
+
+@[simp] theorem quicksortRecurrence_zero : quicksortRecurrence 0 = 0 := by
+  rw [quicksortRecurrence]
+
+private theorem quicksortRecurrence_step (n : ℕ) :
+    (n + 1 : ℝ) * quicksortRecurrence (n + 1) =
+      n * (n + 1) + 2 * ∑ i : Fin (n + 1), quicksortRecurrence i := by
+  rw [quicksortRecurrence]
+  have hn : (n + 1 : ℝ) ≠ 0 := by positivity
+  field_simp
+
+private theorem quicksortRecurrence_adjacent (n : ℕ) :
+    (n + 1 : ℝ) * quicksortRecurrence (n + 1) =
+      (n + 2) * quicksortRecurrence n + 2 * n := by
+  cases n with
+  | zero => simpa using quicksortRecurrence_step 0
+  | succ n =>
+    have h := quicksortRecurrence_step n
+    have h' := quicksortRecurrence_step (n + 1)
+    rw [Fin.sum_univ_castSucc] at h'
+    simp only [Fin.val_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_one] at h' ⊢
+    nlinarith
+
+/-- The exact solution of the uniform-rank quicksort recurrence. -/
+theorem quicksortRecurrence_eq_harmonic (n : ℕ) :
+    quicksortRecurrence n = 2 * (n + 1) * (harmonic n : ℝ) - 4 * n := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    have h := quicksortRecurrence_adjacent n
+    rw [ih] at h
+    have hn : (n + 1 : ℝ) ≠ 0 := by positivity
+    rw [harmonic_succ]
+    push_cast
+    apply (mul_left_cancel₀ hn)
+    field_simp
+    nlinarith
+
+/-- The recurrence is bounded by `2 * n * log n`, including at sizes zero and one. -/
+theorem quicksortRecurrence_le_two_mul_log (n : ℕ) :
+    quicksortRecurrence n ≤ 2 * n * Real.log n := by
+  cases n with
+  | zero => simp
+  | succ n =>
+    rw [quicksortRecurrence_eq_harmonic]
+    have hh := harmonic_le_one_add_log (n + 1)
+    have hl := Real.log_le_sub_one_of_pos (show (0 : ℝ) < (n + 1) by positivity)
+    push_cast at hh ⊢
+    nlinarith
+
+/-- The scalar recurrence has nonnegative values. -/
+theorem quicksortRecurrence_nonneg (n : ℕ) : 0 ≤ quicksortRecurrence n := by
+  induction n using Nat.strong_induction_on with
+  | h n ih =>
+    cases n with
+    | zero => simp
+    | succ n =>
+      rw [quicksortRecurrence]
+      exact add_nonneg (Nat.cast_nonneg _) (mul_nonneg (by positivity)
+        (Finset.sum_nonneg fun i _ => ih i i.isLt))
+
+/-- Each pivot rank contributes the costs of its two recursive subproblems. -/
+theorem quicksortRecurrence_succ (n : ℕ) :
+    quicksortRecurrence (n + 1) = n + (∑ i : Fin (n + 1),
+      (quicksortRecurrence i + quicksortRecurrence (n - i))) / (n + 1) := by
+  have hr : (∑ i : Fin (n + 1), quicksortRecurrence (n - i)) =
+      ∑ i : Fin (n + 1), quicksortRecurrence i := by
+    simpa using (Equiv.sum_comp (⟨Fin.rev, Fin.rev, Fin.rev_rev, Fin.rev_rev⟩)
+      (fun i : Fin (n + 1) => quicksortRecurrence i))
+  rw [quicksortRecurrence, Finset.sum_add_distrib, hr]
+  ring
+
+/-- The standalone recurrence grows at most as `n * log n`. -/
+theorem quicksortRecurrence_isBigO :
+    quicksortRecurrence =O[Filter.atTop] (fun n : ℕ => (n : ℝ) * Real.log n) := by
+  refine Asymptotics.isBigO_iff.mpr ⟨2, Filter.Eventually.of_forall fun n => ?_⟩
+  rw [Real.norm_eq_abs, abs_of_nonneg (quicksortRecurrence_nonneg n), Real.norm_eq_abs]
+  calc
+    _ ≤ 2 * ((n : ℝ) * Real.log n) := by
+      simpa [mul_assoc] using quicksortRecurrence_le_two_mul_log n
+    _ ≤ _ := mul_le_mul_of_nonneg_left (le_abs_self _) (by norm_num)
+
+end Complexity
 
 end Models
 
