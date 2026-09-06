@@ -6,8 +6,7 @@ Authors: Tanner Duve
 module
 
 public import Algolean.Models.ListComparisonSort
-public import Algolean.Models.RandomSample
-public import Mathlib.Probability.Distributions.Uniform
+public import Algolean.Models.UniformSample
 
 /-!
 # Randomized quicksort of a list
@@ -19,10 +18,13 @@ weakest-precondition semantics of `PMF`.
 ## Main definitions
 
 - `randomQuicksort`: randomized quicksort in the `SortOps` query model.
+- `randomQuicksortModel`: interpret comparisons with a supplied Boolean comparator and
+  pivot draws with a supplied sampling model.
 
 ## Main results
 
 - `randomQuicksort_spec`: randomized quicksort returns a sorted permutation.
+- `randomQuicksort_spec_of_queries`: correctness for any handler satisfying the query contracts.
 -/
 
 @[expose] public section
@@ -33,7 +35,26 @@ namespace Algorithms
 
 namespace Models
 
-open SortOps Std.Do
+open SortOps Std.Do Cslib
+
+/-- Comparison queries and computable finite pivot requests. -/
+abbrev RandomQuicksortOps (α : Type) := fun β => Sum (SortOps α β) (UniformSample β)
+
+/-- Interpret comparisons with `le`, charging one per comparison and using `sampling` for draws. -/
+def randomQuicksortModel [Monad m] (le : α → α → Bool)
+    (sampling : ModelM UniformSample m ℕ) : ModelM (RandomQuicksortOps α) m ℕ :=
+  ModelM.sum
+    { evalQuery := fun q => pure ((sortModelNat le).evalQuery q)
+      cost := (sortModelNat le).cost }
+    sampling
+
+/-- Compare two values through the model's Boolean comparator. -/
+def queryCmpLE (y p : α) : Prog (RandomQuicksortOps α) Bool :=
+  FreeM.lift (.inl (SortOps.cmpLE y p))
+
+/-- Request a pivot index without embedding a probability distribution in the program. -/
+def drawPivot (n : Nat) : Prog (RandomQuicksortOps α) (Fin (n + 1)) :=
+  FreeM.lift (.inr (.fin n))
 
 /-- Keep the elements of `xs` whose corresponding flag in `bs` is `true`. -/
 def keepFlagged (xs : List α) (bs : List Bool) : List α :=
@@ -46,16 +67,19 @@ theorem keepFlagged_length_le (xs : List α) (bs : List Bool) :
     _ ≤ (xs.zip bs).length := List.length_filter_le _ _
     _ ≤ xs.length := by rw [List.length_zip]; exact Nat.min_le_left _ _
 
-/-- Draw a pivot uniformly, partition the rest by comparison against it, sort each side. -/
-noncomputable def randomQuicksort (l : List α) :
-    Prog (RandomizeQuery (SortOps α)) (List α) :=
+/-- Draw a pivot, partition the rest by comparison against it, and sort each side.
+
+Like `mergeSort`, this program obtains its comparator from the model. Using
+`randomQuicksortModel le UniformSample.pmfModel` gives uniform randomized semantics.
+-/
+def randomQuicksort (l : List α) : Prog (RandomQuicksortOps α) (List α) :=
   match l with
   | [] => pure []
   | x :: xs => do
-    let r ← RandomizeQuery.draw (PMF.uniformOfFintype (Fin (xs.length + 1)))
+    let r ← drawPivot xs.length
     let pivot := (x :: xs).get r
     let rest := (x :: xs).eraseIdx r
-    let flags ← rest.mapM (fun y ↦ RandomizeQuery.query (SortOps.cmpLE y pivot))
+    let flags ← rest.mapM (fun y ↦ queryCmpLE y pivot)
     let lt := keepFlagged rest flags
     let rt := keepFlagged rest (flags.map (!·))
     let sortedlt ← randomQuicksort lt
@@ -72,30 +96,31 @@ section Correctness
 
 variable {α : Type}
 
-/-- The order relation `x ≤ y` under `[Ord α]`. -/
-local notation:50 a:51 " ≼ " b:51 => Ordering.isLE (compare a b) = true
+variable (le : α → α → Bool)
 
 set_option mvcgen.warning false in
-/-- A comparison query returns whether `y ≤ p` under the `Ord` model. -/
-theorem query_cmpLE_spec [Ord α] (y p : α) :
+/-- A comparison query returns the supplied comparator's answer. -/
+theorem query_cmpLE_spec (y p : α) :
+    letI := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
     ⦃⌜True⌝⦄
-      (RandomizeQuery.query (SortOps.cmpLE y p) : Prog (RandomizeQuery (SortOps α)) Bool)
-      ⦃⇓ b => ⌜b = (compare y p).isLE⌝⦄ := by
-  mvcgen [RandomizeQuery.query]
+      queryCmpLE y p
+      ⦃⇓b => ⌜b = le y p⌝⦄ := by
+  mvcgen [queryCmpLE]
   intro b hb
-  exact (PMF.mem_support_pure_iff ((compare y p).isLE) b).mp hb
+  exact (PMF.mem_support_pure_iff (le y p) b).mp hb
 
 set_option mvcgen.warning false in
-/-- Comparing every element of `xs` against `p` yields the flags `xs.map (compare · p |>.isLE)`. -/
-theorem mapM_cmpLE_spec [Ord α] (p : α) (xs : List α) :
-    ⦃⌜True⌝⦄ (xs.mapM (fun y ↦ RandomizeQuery.query (SortOps.cmpLE y p))
-        : Prog (RandomizeQuery (SortOps α)) (List Bool))
-      ⦃⇓ flags => ⌜flags = xs.map (fun y ↦ (compare y p).isLE)⌝⦄ := by
+/-- Comparing every element against `p` yields the flags `xs.map (le · p)`. -/
+theorem mapM_cmpLE_spec [FreeM.HasHandler (RandomQuicksortOps α) .pure]
+    (hcmp : ∀ (y p : α), ⦃⌜True⌝⦄ queryCmpLE y p ⦃⇓b => ⌜b = le y p⌝⦄)
+    (p : α) (xs : List α) :
+    ⦃⌜True⌝⦄ (xs.mapM (fun y ↦ queryCmpLE y p))
+      ⦃⇓ flags => ⌜flags = xs.map (fun y ↦ le y p)⌝⦄ := by
   induction xs with
   | nil => mvcgen
   | cons a as ih =>
     rw [List.mapM_cons]
-    mvcgen [query_cmpLE_spec, ih]
+    mvcgen [hcmp, ih]
     simp_all
 
 /-- Keeping the elements flagged by `xs.map g` is filtering by `g`. -/
@@ -121,57 +146,84 @@ private lemma partition_glue_perm (pivot : α) (g : α → Bool) (rest sl sr : L
     (List.Perm.append_left _ hsrp)).trans h3
 
 /-- The glued list is sorted: each half is sorted and lies on its side of the pivot. -/
-private lemma sorted_glue [Ord α] [Std.TransCmp (compare : α → α → Ordering)]
+private lemma sorted_glue [Std.Total (fun a b => le a b = true)]
+    [IsTrans α (fun a b => le a b = true)]
     (pivot : α) (rest sl sr : List α)
-    (hslp : sl.Perm (rest.filter (fun y ↦ (compare y pivot).isLE)))
-    (hsls : sl.Pairwise (· ≼ ·))
-    (hsrp : sr.Perm (rest.filter (fun y ↦ !(compare y pivot).isLE)))
-    (hsrs : sr.Pairwise (· ≼ ·)) :
-    (sl ++ [pivot] ++ sr).Pairwise (· ≼ ·) := by
-  have hle : ∀ a ∈ sl, a ≼ pivot :=
+    (hslp : sl.Perm (rest.filter (fun y ↦ le y pivot)))
+    (hsls : sl.Pairwise (fun a b => le a b = true))
+    (hsrp : sr.Perm (rest.filter (fun y ↦ !le y pivot)))
+    (hsrs : sr.Pairwise (fun a b => le a b = true)) :
+    (sl ++ [pivot] ++ sr).Pairwise (fun a b => le a b = true) := by
+  have hle : ∀ a ∈ sl, le a pivot = true :=
     fun a ha ↦ (List.mem_filter.mp (hslp.mem_iff.mp ha)).2
-  have hge : ∀ b ∈ sr, pivot ≼ b := by
+  have hge : ∀ b ∈ sr, le pivot b = true := by
     intro b hb
     have h2 := (List.mem_filter.mp (hsrp.mem_iff.mp hb)).2
-    rw [(Std.OrientedCmp.eq_swap : compare pivot b = _)]
-    cases h : compare b pivot <;> simp_all [Ordering.swap, Ordering.isLE]
-  have hcross : ∀ a ∈ sl, ∀ c ∈ pivot :: sr, a ≼ c := by
+    have ht := Std.Total.total (r := fun a b => le a b = true) pivot b
+    simp_all
+  have hcross : ∀ a ∈ sl, ∀ c ∈ pivot :: sr, le a c = true := by
     intro a ha c hc
     cases List.mem_cons.mp hc with
     | inl h => exact h ▸ hle a ha
-    | inr h => exact Std.TransCmp.isLE_trans (hle a ha) (hge c h)
+    | inr h =>
+      exact IsTrans.trans (r := fun a b => le a b = true)
+        a pivot c (hle a ha) (hge c h)
   rw [List.append_assoc, List.singleton_append, List.pairwise_append]
   exact ⟨hsls, List.pairwise_cons.mpr ⟨hge, hsrs⟩, hcross⟩
 
 /-- The glued list is a sorted permutation of `pivot :: rest`. -/
-private lemma quicksort_combine [Ord α] [Std.TransCmp (compare : α → α → Ordering)]
+private lemma quicksort_combine [Std.Total (fun a b => le a b = true)]
+    [IsTrans α (fun a b => le a b = true)]
     (pivot : α) (rest sl sr : List α)
-    (hslp : sl.Perm (rest.filter (fun y ↦ (compare y pivot).isLE)))
-    (hsls : sl.Pairwise (· ≼ ·))
-    (hsrp : sr.Perm (rest.filter (fun y ↦ !(compare y pivot).isLE)))
-    (hsrs : sr.Pairwise (· ≼ ·)) :
-    (sl ++ [pivot] ++ sr).Perm (pivot :: rest) ∧ (sl ++ [pivot] ++ sr).Pairwise (· ≼ ·) :=
+    (hslp : sl.Perm (rest.filter (fun y ↦ le y pivot)))
+    (hsls : sl.Pairwise (fun a b => le a b = true))
+    (hsrp : sr.Perm (rest.filter (fun y ↦ !le y pivot)))
+    (hsrs : sr.Pairwise (fun a b => le a b = true)) :
+    (sl ++ [pivot] ++ sr).Perm (pivot :: rest) ∧
+      (sl ++ [pivot] ++ sr).Pairwise (fun a b => le a b = true) :=
   ⟨partition_glue_perm pivot _ rest sl sr hslp hsrp,
-    sorted_glue pivot rest sl sr hslp hsls hsrp hsrs⟩
+    sorted_glue le pivot rest sl sr hslp hsls hsrp hsrs⟩
 
 set_option mvcgen.warning false in
-/-- Randomized quicksort always returns a sorted permutation of its input. -/
-theorem randomQuicksort_spec [Ord α] [Std.TransCmp (compare : α → α → Ordering)]
+/-- Correctness only needs accurate comparisons and a pivot in the requested finite range. -/
+theorem randomQuicksort_spec_of_queries
+    [FreeM.HasHandler (RandomQuicksortOps α) .pure]
+    [Std.Total (fun a b => le a b = true)]
+    [IsTrans α (fun a b => le a b = true)]
+    (hcmp : ∀ (y p : α), ⦃⌜True⌝⦄ queryCmpLE y p ⦃⇓b => ⌜b = le y p⌝⦄)
+    (hdraw : ∀ n, ⦃⌜True⌝⦄ (drawPivot n : Prog (RandomQuicksortOps α) _)
+      ⦃⇓_ => ⌜True⌝⦄)
     (l : List α) :
     ⦃⌜True⌝⦄ randomQuicksort l
-      ⦃⇓ out => ⌜out.Perm l ∧ out.Pairwise (· ≼ ·)⌝⦄ := by
+      ⦃⇓ out => ⌜out.Perm l ∧ out.Pairwise (fun a b => le a b = true)⌝⦄ := by
   fun_induction randomQuicksort l
   next => mvcgen; exact ⟨.refl _, .nil⟩
   next x xs ih_lt ih_rt =>
-    mvcgen [RandomizeQuery.draw]
-    intro r _hr
-    mvcgen [mapM_cmpLE_spec, ih_lt, ih_rt]
+    have hflags := mapM_cmpLE_spec le hcmp
+    mvcgen [hdraw]
+    rename_i r pivot rest
+    dsimp +zetaDelta only
+    mvcgen [hflags, ih_lt, ih_rt]
     rename_i flags hflags sl hsl sr hsr
     subst hflags
     simp only [keepFlagged_map, List.map_map, Function.comp_def] at hsl hsr
-    have hc := quicksort_combine ((x :: xs).get r) ((x :: xs).eraseIdx ↑r) sl sr
+    have hc := quicksort_combine le ((x :: xs).get r) ((x :: xs).eraseIdx ↑r) sl sr
       hsl.1 hsl.2 hsr.1 hsr.2
     exact ⟨hc.1.trans (List.getElem_cons_eraseIdx_perm r.isLt), hc.2⟩
+
+set_option mvcgen.warning false in
+/-- Uniform randomized quicksort returns a sorted permutation under the supplied comparator. -/
+theorem randomQuicksort_spec [Std.Total (fun a b => le a b = true)]
+    [IsTrans α (fun a b => le a b = true)] (l : List α) :
+    letI := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
+    ⦃⌜True⌝⦄ randomQuicksort l
+      ⦃⇓ out => ⌜out.Perm l ∧ out.Pairwise (fun a b => le a b = true)⌝⦄ := by
+  apply @randomQuicksort_spec_of_queries α le
+    (randomQuicksortModel le UniformSample.pmfModel).hasHandler _ _
+    (query_cmpLE_spec le)
+  intro n
+  mvcgen [drawPivot]
+  exact fun _ _ => True.intro
 
 end Correctness
 
