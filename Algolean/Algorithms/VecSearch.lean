@@ -46,9 +46,9 @@ open ReadOnlyVec in
 /-- Linear Search in Lists on top of the `ListSearch` query model. -/
 @[grind]
 def vecLinearSearch [BEq α] (v : Vector α n) (x : α) : Prog (ReadOnlyVec α) Bool := do
-  match n with
-  | 0 => return false
-  | _ + 1 =>
+  match n, v with
+  | 0, _ => return false
+  | _ + 1, v =>
     let topElem : α ← read v 0
     if topElem == x then
       return true
