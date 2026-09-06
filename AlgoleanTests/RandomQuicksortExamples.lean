@@ -30,19 +30,19 @@ def allPivots : ModelM UniformSample List Nat :=
   UniformSample.model (fun n => List.finRange (n + 1)) 0
 
 /-- Collect the results from every possible pivot sequence. -/
-def outcomes (xs : List α) (le : α → α → Bool) : List (List α) :=
+def outcomes (xs : Array α) (le : α → α → Bool) : List (Array α) :=
   (randomQuicksort xs).evalM (randomQuicksortModel le allPivots)
 
-/-- Every pivot sequence must succeed and return the expected list, with at least one outcome. -/
-def checks [BEq α] (xs expected : List α) (le : α → α → Bool) : Bool :=
+/-- Every pivot sequence must succeed and return the expected array, with at least one outcome. -/
+def checks [BEq α] (xs expected : Array α) (le : α → α → Bool) : Bool :=
   let results := outcomes xs le
   !results.isEmpty && results.all (· == expected)
 
-#guard checks ([] : List Nat) [] (· ≤ ·)
-#guard checks [7] [7] (· ≤ ·)
-#guard checks [3, 1, 2, 1, 3] [1, 1, 2, 3, 3] (· ≤ ·)
-#guard checks [3, 1, 2, 1, 3] [3, 3, 2, 1, 1] (· ≥ ·)
-#guard checks [4, 4, 4] [4, 4, 4] (· ≤ ·)
+#guard checks (#[] : Array Nat) #[] (· ≤ ·)
+#guard checks #[7] #[7] (· ≤ ·)
+#guard checks #[3, 1, 2, 1, 3] #[1, 1, 2, 3, 3] (· ≤ ·)
+#guard checks #[3, 1, 2, 1, 3] #[3, 3, 2, 1, 1] (· ≥ ·)
+#guard checks #[4, 4, 4] #[4, 4, 4] (· ≤ ·)
 
 /-- A payload type deliberately lacking an `Ord` instance. -/
 structure Entry where
@@ -50,39 +50,44 @@ structure Entry where
   payload : String
   deriving BEq, Repr
 
-#guard checks ([⟨2, "b"⟩, ⟨1, "a"⟩, ⟨3, "c"⟩] : List Entry)
-    [⟨3, "c"⟩, ⟨2, "b"⟩, ⟨1, "a"⟩] (fun a b => a.key ≥ b.key)
+#guard checks (#[⟨2, "b"⟩, ⟨1, "a"⟩, ⟨3, "c"⟩] : Array Entry)
+    #[⟨3, "c"⟩, ⟨2, "b"⟩, ⟨1, "a"⟩] (fun a b => a.key ≥ b.key)
 
--- Each `Ordering` uses both comparisons, including when the first answer is false.
-#guard (queryCmp 1 2).evalM (randomQuicksortModel (· ≤ ·) allPivots) == [.lt]
-#guard (queryCmp 2 2).evalM (randomQuicksortModel (· ≤ ·) allPivots) == [.eq]
-#guard (queryCmp 2 1).evalM (randomQuicksortModel (· ≤ ·) allPivots) == [.gt]
-#guard (queryCmp 2 1).costM (randomQuicksortModel (· ≤ ·) allPivots) == [2]
+/-- Inspect the recursive views, which exclude the selected pivot. -/
+def partitionOutcomes (xs : Array α) (pivotIndex : Fin xs.size) (le : α → α → Bool) :
+    List (Array α × Array α) :=
+  (fun p => (p.left.toArray, p.right.toArray)) <$>
+    (hoarePartition xs pivotIndex).evalM (randomQuicksortModel le allPivots)
 
-/-- Inspect the three groups without their erased permutation proof. -/
-def partitionOutcomes (pivot : α) (xs : List α) (le : α → α → Bool) :
-    List (List α × List α × List α) :=
-  (fun p => (p.lt, p.eq, p.gt)) <$>
-    (partition3 pivot xs).evalM (randomQuicksortModel le allPivots)
+#guard partitionOutcomes #[2] 0 (· ≤ ·) == [(#[], #[])]
+#guard partitionOutcomes #[2, 1] 0 (· ≤ ·) == [(#[1], #[])]
+#guard partitionOutcomes #[2, 3] 0 (· ≤ ·) == [(#[], #[3])]
+#guard partitionOutcomes #[2, 2] 0 (· ≤ ·) == [(#[], #[2])]
+#guard partitionOutcomes #[3, 1, 2, 3, 2, 4, 2] 6 (· ≤ ·) == [(#[2, 1], #[2, 3, 3, 4])]
+#guard partitionOutcomes #[3, 1, 2, 3, 2, 4, 2] 6 (· ≥ ·) == [(#[3, 4, 2, 3], #[2, 1])]
+-- A middle pivot is reserved by swapping; every other input element is retained.
+#guard partitionOutcomes #[3, 1, 2, 3, 2, 4] 2 (· ≤ ·) == [(#[2, 1], #[4, 3, 3])]
+#guard (hoarePartition #[3, 1, 2, 3, 2, 4] 2).costM
+    (randomQuicksortModel (· ≤ ·) allPivots) == [5]
+#guard (hoarePartition #[7] 0).costM (randomQuicksortModel (· ≤ ·) allPivots) == [0]
 
-#guard partitionOutcomes 2 [3, 1, 2, 3, 2, 4] (· ≤ ·) == [([1], [2, 2], [3, 3, 4])]
-#guard partitionOutcomes 2 [3, 1, 2, 3, 2, 4] (· ≥ ·) == [([3, 3, 4], [2, 2], [1])]
-#guard partitionOutcomes 2 [] (· ≤ ·) == [([], [], [])]
-#guard (partition3 2 [3, 1, 2, 3, 2, 4]).costM
-    (randomQuicksortModel (· ≤ ·) allPivots) == [12]
+-- Equal keys stop both scans; the selected payload is excluded from both views.
+#guard partitionOutcomes (#[⟨2, "pivot"⟩, ⟨2, "a"⟩, ⟨2, "b"⟩] : Array Entry)
+    0 (fun a b => a.key ≤ b.key) == [(#[⟨2, "a"⟩], #[⟨2, "b"⟩])]
 
--- Equivalence depends on the comparison key, not on equality of the payload.
-#guard partitionOutcomes (⟨2, "pivot"⟩ : Entry)
-    [⟨2, "a"⟩, ⟨1, "low"⟩, ⟨2, "b"⟩, ⟨3, "high"⟩] (fun a b => a.key ≤ b.key) ==
-  [([⟨1, "low"⟩], [⟨2, "a"⟩, ⟨2, "b"⟩], [⟨3, "high"⟩])]
+-- Even and odd intervals split evenly for every choice of an equivalent pivot.
+#guard (List.range 33).all fun n =>
+  (List.finRange (n + 1)).all fun i =>
+    partitionOutcomes (Array.replicate (n + 1) 4) ⟨i.val, by simpa using i.isLt⟩ (· ≤ ·) ==
+      [(Array.replicate (n / 2) 4, Array.replicate ((n + 1) / 2) 4)]
 
--- The middle pivot takes four comparisons; either end pivot takes six. Finite draws are free.
-#guard (randomQuicksort [1, 2, 3]).costM (randomQuicksortModel (· ≤ ·) allPivots) ==
-  [6, 6, 4, 6, 6]
-#guard (randomQuicksort [7]).costM (randomQuicksortModel (· ≤ ·) allPivots) == [0]
+-- The middle pivot takes two comparisons; either end pivot takes three.
+#guard (randomQuicksort #[1, 2, 3]).costM (randomQuicksortModel (· ≤ ·) allPivots) ==
+  [3, 3, 2, 3, 3]
+#guard (randomQuicksort #[7]).costM (randomQuicksortModel (· ≤ ·) allPivots) == [0]
 
--- All equivalent elements are emitted together: every pivot costs just 2 * (n - 1).
-#guard (randomQuicksort [4, 4, 4, 4]).costM (randomQuicksortModel (· ≤ ·) allPivots) ==
-  [6, 6, 6, 6]
+-- Every pivot gives a balanced split for all-equal inputs: 3 + 0 + 1 comparisons.
+#guard (randomQuicksort #[4, 4, 4, 4]).costM (randomQuicksortModel (· ≤ ·) allPivots) ==
+  List.replicate 8 4
 
 end AlgoleanTests.RandomQuicksortExamples
