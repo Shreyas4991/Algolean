@@ -300,7 +300,7 @@ theorem Model.wp_eq_wp_interp (M : Model Q Cost) (P : Prog Q α) :
     wpH M.handler P = wp (P.liftM (fun {_} q => (M.evalQuery q : Id _))) :=
   wpH_ofInterp_eq_wp_liftM (m := Id) (fun _ q => M.evalQuery q) P
 
-@[simp]
+
 theorem FreeM.liftM_bind_id {F : Type u → Type v} {α β : Type u}
     (interp : {ι : Type u} → F ι → ι) (x : FreeM F α)
     (f : α → FreeM F β) :

@@ -7,8 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Basic
-public import Cslib.Computability.Machines.SingleTapeTuring.Basic
-
+public import Cslib.Computability.Machines.Turing.SingleTape.Deterministic
 /-!
 # Query Type for Single Tape Turing Machines
 
