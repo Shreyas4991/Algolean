@@ -2,8 +2,10 @@ module  -- shake: keep-all --deprecated_module: ignore
 
 public import Algolean.AddWriter.Basic
 public import Algolean.AddWriter.Transformer
+public import Algolean.Algorithms.BabyStepGiantStep
 public import Algolean.Algorithms.BoyerMooreMajorityVote
 public import Algolean.Algorithms.Circuits.FanInTwo.LogAnd
+public import Algolean.Algorithms.DiscreteLog
 public import Algolean.Algorithms.KMPPatternSearch
 public import Algolean.Algorithms.Karatsuba
 public import Algolean.Algorithms.ListInsertionSort
@@ -18,11 +20,13 @@ public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.LowerBounds.ComparisonSort
+public import Algolean.LowerBounds.DiscreteLog
 public import Algolean.ModelM
 public import Algolean.Models.Arithmetic
 public import Algolean.Models.Circuits
 public import Algolean.Models.Comparison
 public import Algolean.Models.FanInTwoCircuits
+public import Algolean.Models.GenericGroup
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
 public import Algolean.Models.Quantum.Circuit
