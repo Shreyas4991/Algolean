@@ -273,7 +273,7 @@ theorem ModelM.query_spec [Monad m] [WPMonad m ps]
     (M : ModelM Q m Cost) (q : Q α) {Q' : PostCond α ps} :
     let _ : HasHandler Q ps := M.hasHandler
     Triple (FreeM.lift q : Prog Q α) (wp⟦M.evalQuery q⟧ Q') Q' := by
-  letI := M.hasHandler
+  let _inst := M.hasHandler
   exact Cslib.FreeM.Spec.lift_FreeM q
 
 end WeakestPrecondition

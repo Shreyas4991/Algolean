@@ -443,7 +443,7 @@ theorem KaratsubaHelperProg_eval {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ 
 
 theorem KaratsubaProg_eval (b x y : ℕ) (hb : 2 ≤ b) :
     (KaratsubaProg b x y hb).eval (mulModel (b^3)) = Karatsuba b x y := by
-  simp only [KaratsubaProg, bind_pure, Karatsuba]
+  simp only [KaratsubaProg, Karatsuba]
   split
   · rename_i h
     simp only [Order.lt_one_iff, max_eq_zero, List.length_eq_zero_iff,
@@ -458,8 +458,7 @@ theorem KaratsubaProg_eval (b x y : ℕ) (hb : 2 ≤ b) :
       exact zero_lt_of_lt hb
     · simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, forall_eq]
       exact zero_lt_of_lt hb
-  · simp only [pure_bind]
-    rw [KaratsubaHelperProg_eval]
+  · rw [KaratsubaHelperProg_eval]
 
 theorem KaratsubaHelperProg_time {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ b)
   (h₁ : l₁.length = 2 ^ d + 2) (h₂ : l₂.length = 2 ^ d + 2)
@@ -502,7 +501,7 @@ theorem _root_.Nat.clog_le_add_one_log_base_two (n : ℕ) : Nat.clog 2 n ≤ 1 +
 theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
     (KaratsubaProg b x y hb).time (mulModel (b^3)) ≤
       3 * ((max (digits b x).length (digits b y).length) : ℝ) ^ Real.logb 2 3 := by
-  simp only [KaratsubaProg, bind_pure]
+  simp only [KaratsubaProg]
   let n := max (b.digits x).length (b.digits y).length
   have hn : n = max (b.digits x).length (b.digits y).length := by simp [n]
   have hn' : (n : ℝ) = max ((b.digits x).length : ℝ) ((b.digits y).length :ℝ) := by
@@ -510,7 +509,7 @@ theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
   split
   · simp only [time_pure, CharP.cast_eq_zero, ofNat_pos, mul_nonneg_iff_of_pos_left, ge_iff_le]
     positivity
-  · simp only [pure_bind, ge_iff_le]
+  · simp only [ge_iff_le]
     rename_i h
     rw [← hn, Nat.not_lt] at h
     rw [KaratsubaHelperProg_time hb, ← hn, ← hn']

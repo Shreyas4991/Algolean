@@ -394,7 +394,7 @@ private lemma kmpSearchLoop_exhausted [BEq α] [LawfulBEq α]
     acc (txt.length - j) txt.length hacc (by lia)
     (fun t ht1 ht2 => by grind)
 
-private abbrev KmpSearchLoopIH [BEq α] [LawfulBEq α]
+private abbrev KmpSearchLoopIH [BEq α]
     (fuel : Nat) (pat txt : List α) (lps : List Nat) :=
   ∀ i j acc,
     2 * (txt.length - i) + j ≤ fuel →
