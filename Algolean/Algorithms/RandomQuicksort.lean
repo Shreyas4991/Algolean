@@ -601,7 +601,31 @@ private theorem pivotWeight_perm (le : α → α → Bool) {xs ys : Array α}
     (h : xs.Perm ys) (p : α) : pivotWeight le xs p = pivotWeight le ys p := by
   simp only [pivotWeight, h.size_eq, countP_perm _ h]
 
-/-- The sum of pivot weights is at least one quarter of the square of the input size. -/
+/-- A sorted array has total pivot weight at least one quarter of the square of its size.
+
+Write `n = xs.size`. At index `i`, every element strictly below the pivot under `le` occurs
+before `i`, and every element strictly above it occurs after `i`. The respective strict counts
+are therefore at most `i` and `n - 1 - i`, so the pivot weight is at least
+`min (i + 1) (n - i)`. Summing these rank bounds and applying `rankWeightSum_lower` gives
+`n * n ≤ 4 * ∑ i, pivotWeight le xs xs[i]`.
+
+Equivalent elements cause no difficulty: these are upper bounds on strict counts, and each
+array position contributes separately to the sum. -/
+theorem sum_pivotWeight_lower_of_pairwise (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)]
+    (xs : Array α) (hs : xs.Pairwise (fun a b => le a b = true)) :
+    xs.size * xs.size ≤ 4 * ∑ i : Fin xs.size, pivotWeight le xs xs[i.val] := by
+  apply (rankWeightSum_lower xs.size).trans
+  apply Nat.mul_le_mul_left 4 (Finset.sum_le_sum ?_)
+  intro i _
+  have h := sorted_strict_counts le xs hs i
+  grind [pivotWeight]
+
+/-- The sum of pivot weights is at least one quarter of the square of the input size.
+
+Apply `sum_pivotWeight_lower_of_pairwise` to a sorted permutation of `xs`, obtained using
+`mergeSort`. Pivot weights depend only on the array's size and element counts, so the sum is
+invariant under permutation and the bound transfers back to `xs`. -/
 theorem sum_pivotWeight_lower (le : α → α → Bool)
     [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
     (xs : Array α) : xs.size * xs.size ≤
@@ -611,13 +635,7 @@ theorem sum_pivotWeight_lower (le : α → α → Bool)
     Array.pairwise_mergeSort (le := le) (xs := xs)
       (fun a b c hab hbc => trans_of (fun a b => le a b = true) hab hbc)
       (fun a b => by simpa using Std.Total.total (r := fun a b => le a b = true) a b)
-  have hr (i : Fin (xs.mergeSort le).size) :
-      min (i.val + 1) ((xs.mergeSort le).size - i.val) ≤
-        pivotWeight le (xs.mergeSort le) (xs.mergeSort le)[i.val] := by
-    have h := sorted_strict_counts le (xs.mergeSort le) hs i
-    grind [pivotWeight]
-  have hb := (rankWeightSum_lower (xs.mergeSort le).size).trans
-    (Nat.mul_le_mul_left 4 (Finset.sum_le_sum fun i _ => hr i))
+  have hb := sum_pivotWeight_lower_of_pairwise le (xs.mergeSort le) hs
   rw [sum_getElem] at hb ⊢
   simpa only [hp.size_eq, funext (pivotWeight_perm le hp), ← Array.sum_toList, Array.toList_map,
     (hp.toList.map (pivotWeight le xs)).sum_eq] using hb
