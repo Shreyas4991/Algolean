@@ -11,10 +11,12 @@ public import Algolean.Algorithms.ListLinearSearch
 public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
+public import Algolean.Algorithms.RandomQuicksort
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.ExpectedCost
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.LowerBounds.ComparisonSort
@@ -34,5 +36,6 @@ public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
+public import Algolean.Models.UniformSample
 public import Algolean.QueryComposition
 public import Algolean.QueryModel
