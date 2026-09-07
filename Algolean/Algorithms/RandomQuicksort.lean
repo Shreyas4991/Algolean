@@ -101,7 +101,7 @@ variable {α : Type} {xs ys : Array α} {pivot : α}
 @[simps] def cast (h : xs.Perm ys) (p : HoarePartition xs pivot) : HoarePartition ys pivot :=
   ⟨p.array, p.split, p.perm.trans h, p.pivot_eq⟩
 
-attribute [grind =] cast_split
+attribute [grind =] cast_array cast_split
 
 /-- The prefix view, sharing the partitioned array. -/
 def left (p : HoarePartition xs pivot) : Subarray α := p.array[*...p.split.val]
@@ -123,6 +123,19 @@ def right (p : HoarePartition xs pivot) : Subarray α := p.array[p.split.val...(
 
 @[simp] theorem right_cast (h : xs.Perm ys) (p : HoarePartition xs pivot) :
     (p.cast h).right = p.right := rfl
+
+/-- Members of the left view occur before the split in the partitioned array. -/
+@[grind =] theorem mem_left (p : HoarePartition xs pivot) (x : α) :
+    x ∈ p.left.toArray ↔ ∃ (i : ℕ) (h : i < p.split.val), p.array[i]'(by grind) = x := by
+  simp only [left, Array.toArray_mkSlice_rio, Array.mem_extract_iff_getElem,
+    Nat.min_eq_left p.split.isLt.le, Nat.sub_zero, Nat.zero_add]
+
+/-- Members of the right view have an offset before the reserved pivot slot. -/
+@[grind =] theorem mem_right (p : HoarePartition xs pivot) (x : α) :
+    x ∈ p.right.toArray ↔ ∃ (i : ℕ) (h : i < p.array.size - 1 - p.split.val),
+      p.array[p.split.val + i]'(by grind) = x := by
+  simp only [right, Array.toArray_mkSlice_rco, Array.mem_extract_iff_getElem,
+    Nat.min_eq_left (Nat.sub_le _ _)]
 
 /-- The partition views and reserved pivot reconstruct the entire array. -/
 theorem parts_eq (p : HoarePartition xs pivot) :
@@ -289,9 +302,6 @@ theorem hoarePartition_spec
         (∀ y ∈ p.right.toArray, le xs[pivotIndex.val] y = true)⌝⦄ := by
   have hs := HoarePartition.loop_spec le hcmp
   mvcgen [hoarePartition, hs] <;>
-    (try simp_all only [HoarePartition.left, HoarePartition.right,
-      HoarePartition.cast_array, HoarePartition.cast_split, Array.toArray_mkSlice_rio,
-      Array.toArray_mkSlice_rco, Array.mem_iff_getElem]) <;>
     grind [Std.Total.total (r := fun a b => le a b = true)]
 
 /-- Sorted permutations of the two partitions can be joined with the pivot. -/
@@ -542,6 +552,10 @@ def pivotWeight (le : α → α → Bool) (xs : Array α) (p : α) : ℕ :=
   min (xs.size - xs.countP (fun x => !(le p x)))
     (xs.size - xs.countP (fun x => !(le x p)))
 
+/-- Total pivot weight, counting each array position separately. -/
+def pivotWeightSum (le : α → α → Bool) (xs : Array α) : ℕ :=
+  ∑ i : Fin xs.size, pivotWeight le xs xs[i.val]
+
 /-- A predicate confined to an index interval holds at most as often as its length. -/
 private theorem countP_le_interval (f : α → Bool) (xs : Array α) (lo hi : ℕ)
     (hl : lo ≤ hi) (hh : hi ≤ xs.size)
@@ -553,10 +567,6 @@ private theorem countP_le_interval (f : α → Bool) (xs : Array α) (lo hi : �
   have he : xs.extract 0 lo ++ xs.extract lo hi ++ xs.extract hi xs.size = xs := by
     simp [Array.extract_append_extract, Nat.max_eq_right hl,
       Nat.max_eq_right hh]
-  have hc := congrArg (Array.countP f) he
-  simp only [Array.countP_append, hz 0 lo (Or.inl le_rfl), hz hi xs.size (Or.inr le_rfl),
-    Nat.zero_add, Nat.add_zero] at hc
-  have := Array.countP_le_size (p := f) (xs := xs.extract lo hi)
   grind
 
 private theorem sorted_strict_counts (le : α → α → Bool)
@@ -572,8 +582,10 @@ private theorem sorted_strict_counts (le : α → α → Bool)
       countP_le_interval (fun x => !(le x xs[r.val])) xs (r.val + 1) xs.size
         (by grind) le_rfl (by grind [Std.Total.total (r := fun a b => le a b = true)])
 
-private theorem sum_getElem (xs : Array α) (f : α → ℕ) :
-    (∑ i : Fin xs.size, f xs[i.val]) = (xs.map f).sum := by
+/-- An indexed sum depends on the index bound only through its equality to the array size. -/
+private theorem sum_getElem (xs : Array α) (f : α → ℕ) {n : ℕ} (hsize : xs.size = n) :
+    (∑ i : Fin n, f (xs[i.val]'(by grind))) = (xs.map f).sum := by
+  subst n
   rw [← List.sum_ofFn]
   have h := List.ofFn_getElem_eq_map xs.toList f
   simpa [← Array.toList_map, Array.sum_toList] using congrArg List.sum h
@@ -601,6 +613,12 @@ private theorem pivotWeight_perm (le : α → α → Bool) {xs ys : Array α}
     (h : xs.Perm ys) (p : α) : pivotWeight le xs p = pivotWeight le ys p := by
   simp only [pivotWeight, h.size_eq, countP_perm _ h]
 
+/-- Permuting an array preserves both each pivot's weight and the total over all positions. -/
+theorem pivotWeightSum_perm (le : α → α → Bool) {xs ys : Array α} (h : xs.Perm ys) :
+    pivotWeightSum le xs = pivotWeightSum le ys := by
+  simp only [pivotWeightSum, sum_getElem _ _ rfl, funext (pivotWeight_perm le h),
+    ← Array.sum_toList, Array.toList_map, (h.toList.map (pivotWeight le ys)).sum_eq]
+
 /-- A sorted array has total pivot weight at least one quarter of the square of its size.
 
 Write `n = xs.size`. At index `i`, every element strictly below the pivot under `le` occurs
@@ -614,7 +632,7 @@ array position contributes separately to the sum. -/
 theorem sum_pivotWeight_lower_of_pairwise (le : α → α → Bool)
     [Std.Total (fun a b => le a b = true)]
     (xs : Array α) (hs : xs.Pairwise (fun a b => le a b = true)) :
-    xs.size * xs.size ≤ 4 * ∑ i : Fin xs.size, pivotWeight le xs xs[i.val] := by
+    xs.size * xs.size ≤ 4 * pivotWeightSum le xs := by
   apply (rankWeightSum_lower xs.size).trans
   apply Nat.mul_le_mul_left 4 (Finset.sum_le_sum ?_)
   intro i _
@@ -628,17 +646,14 @@ Apply `sum_pivotWeight_lower_of_pairwise` to a sorted permutation of `xs`, obtai
 invariant under permutation and the bound transfers back to `xs`. -/
 theorem sum_pivotWeight_lower (le : α → α → Bool)
     [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
-    (xs : Array α) : xs.size * xs.size ≤
-      4 * ∑ i : Fin xs.size, pivotWeight le xs xs[i.val] := by
+    (xs : Array α) : xs.size * xs.size ≤ 4 * pivotWeightSum le xs := by
   have hp : (xs.mergeSort le).Perm xs := Array.mergeSort_perm
   have hs : (xs.mergeSort le).Pairwise (fun a b => le a b = true) :=
     Array.pairwise_mergeSort (le := le) (xs := xs)
       (fun a b c hab hbc => trans_of (fun a b => le a b = true) hab hbc)
       (fun a b => by simpa using Std.Total.total (r := fun a b => le a b = true) a b)
-  have hb := sum_pivotWeight_lower_of_pairwise le (xs.mergeSort le) hs
-  rw [sum_getElem] at hb ⊢
-  simpa only [hp.size_eq, funext (pivotWeight_perm le hp), ← Array.sum_toList, Array.toList_map,
-    (hp.toList.map (pivotWeight le xs)).sum_eq] using hb
+  simpa only [hp.size_eq, pivotWeightSum_perm le hp] using
+    sum_pivotWeight_lower_of_pairwise le (xs.mergeSort le) hs
 
 private theorem harmonic_gap (k n : ℕ) (h : k ≤ n) :
     0 ≤ (harmonic n : ℝ) - harmonic k ∧
@@ -739,18 +754,11 @@ private theorem uniform_pivotWeight_bound (le : α → α → Bool)
     (xs : Array α) (n : ℕ) (hn : xs.size = n + 1) :
     (xs.size : ℝ≥0∞) ≤ (PMF.uniformOfFintype (Fin (n + 1))).expectation
       (fun i => ((4 * pivotWeight le xs (xs[i.val]'(by grind)) : ℕ) : ℝ≥0∞)) := by
-  rw [PMF.expectation_uniformOfFintype]
-  simp only [Fintype.card_fin]
-  apply (ENNReal.mul_le_iff_le_inv (by simp) (by simp)).mp
-  rw [← Nat.cast_sum]
-  have he : (∑ i : Fin (n + 1), 4 * pivotWeight le xs (xs[i.val]'(by grind))) =
-      4 * ∑ i : Fin xs.size, pivotWeight le xs xs[i.val] := by
-    rw [← Finset.mul_sum]
-    congr 1
-    simpa using (Equiv.sum_comp (finCongr hn.symm)
-      (fun i : Fin xs.size => pivotWeight le xs xs[i.val]))
-  rw [he, ← hn, ← Nat.cast_mul]
-  exact_mod_cast sum_pivotWeight_lower le xs
+  rw [PMF.le_expectation_uniformOfFintype_iff]
+  simp only [Fintype.card_fin, ← Nat.cast_sum, ← Nat.cast_mul]
+  norm_cast
+  simpa only [← Finset.mul_sum, sum_getElem xs _ hn, ← hn, pivotWeightSum,
+    sum_getElem xs _ rfl] using sum_pivotWeight_lower le xs
 
 /-- Expected comparison cost is bounded by the harmonic potential
 for any total transitive ordering relation `le`. -/

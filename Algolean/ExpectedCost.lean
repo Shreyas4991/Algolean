@@ -82,6 +82,14 @@ theorem expectation_uniformOfFintype [Fintype α] [Nonempty α] (f : α → ℝ�
     expectation (uniformOfFintype α) f = (Fintype.card α : ℝ≥0∞)⁻¹ * ∑ a, f a := by
   simp [expectation, uniformOfFintype_apply, tsum_fintype, Finset.mul_sum]
 
+/-- A lower bound on a uniform expectation is equivalent to a bound on the finite sum.
+Multiplying by the nonzero finite cardinality is valid even for infinite expectations. -/
+theorem le_expectation_uniformOfFintype_iff [Fintype α] [Nonempty α]
+    (f : α → ℝ≥0∞) (b : ℝ≥0∞) :
+    b ≤ (uniformOfFintype α).expectation f ↔ (Fintype.card α : ℝ≥0∞) * b ≤ ∑ a, f a := by
+  rw [expectation_uniformOfFintype]
+  exact (ENNReal.mul_le_iff_le_inv (by simp) (by simp)).symm
+
 end PMF
 
 namespace Algolean.Algorithms.Prog
