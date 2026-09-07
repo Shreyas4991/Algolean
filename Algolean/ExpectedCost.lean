@@ -54,7 +54,7 @@ theorem expectation_bind (p : PMF α) (g : α → PMF β) (f : β → ℝ≥0∞
   simp [expectation, ENNReal.tsum_mul_right]
 
 /-- Nonnegative expectation is additive, even for infinite expectations. -/
-theorem expectation_add (p : PMF α) (f g : α → ℝ≥0∞) :
+@[simp] theorem expectation_add (p : PMF α) (f g : α → ℝ≥0∞) :
     expectation p (fun a => f a + g a) = expectation p f + expectation p g := by
   simp [expectation, mul_add, ENNReal.tsum_add]
 
@@ -66,6 +66,16 @@ theorem expectation_mono (p : PMF α) {f g : α → ℝ≥0∞}
   by_cases ha : p a = 0
   · simp [ha]
   · exact mul_le_mul_right (h a ha) _
+
+/-- A bound on every possible outcome bounds its expectation. -/
+theorem expectation_le (p : PMF α) {f : α → ℝ≥0∞} {b : ℝ≥0∞}
+    (h : ∀ a ∈ p.support, f a ≤ b) : p.expectation f ≤ b :=
+  (p.expectation_mono h).trans_eq (p.expectation_const b)
+
+/-- A constant cost can be included in an outcome-wise expectation bound. -/
+theorem expectation_add_le (p : PMF α) {f : α → ℝ≥0∞} {c b : ℝ≥0∞}
+    (h : ∀ a ∈ p.support, f a + c ≤ b) : p.expectation f + c ≤ b := by
+  simpa using p.expectation_le h
 
 /-- Uniform finite expectation is an arithmetic mean. -/
 theorem expectation_uniformOfFintype [Fintype α] [Nonempty α] (f : α → ℝ≥0∞) :
@@ -93,7 +103,7 @@ theorem expectedCost_eq_runM (P : Prog Q α) (M : ModelM Q PMF ℕ) :
   simp [expectedCost, costM, AddWriterT.cost]
 
 /-- Sequencing adds the initial expected cost and the expected continuation cost. -/
-theorem expectedCost_bind (P : Prog Q α) (f : α → Prog Q β) (M : ModelM Q PMF ℕ) :
+@[simp] theorem expectedCost_bind (P : Prog Q α) (f : α → Prog Q β) (M : ModelM Q PMF ℕ) :
     expectedCost (P >>= f) M = expectedCost P M +
       (P.evalM M).expectation (fun a => expectedCost (f a) M) := by
   simp only [expectedCost_eq_runM, runM_bind, AddWriterT.run_bind, PMF.expectation_bind,
