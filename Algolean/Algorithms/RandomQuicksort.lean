@@ -153,10 +153,10 @@ theorem parts_perm (p : HoarePartition xs pivot) :
 grind_pattern sizes => p.left
 grind_pattern sizes => p.right
 
-@[simp, grind .] theorem left_lt (p : HoarePartition xs pivot) :
+@[grind .] theorem left_lt (p : HoarePartition xs pivot) :
     p.left.toArray.size < xs.size := by grind [p.sizes]
 
-@[simp, grind .] theorem right_lt (p : HoarePartition xs pivot) :
+@[grind .] theorem right_lt (p : HoarePartition xs pivot) :
     p.right.toArray.size < xs.size := by grind [p.sizes]
 
 /-- Scan `[lo, hi)` from both ends, swapping endpoints when both scans stop.
