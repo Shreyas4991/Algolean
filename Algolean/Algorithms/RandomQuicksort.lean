@@ -5,6 +5,7 @@ Authors: Tanner Duve
 -/
 module
 
+public import Algolean.ExpectedCost
 public import Algolean.Models.ListComparisonSort
 public import Algolean.Models.UniformSample
 public import Algolean.QueryComposition
@@ -14,15 +15,16 @@ public import Mathlib.NumberTheory.Harmonic.Bounds
 /-!
 # Randomized quicksort with Hoare partitioning
 
-This file defines randomized quicksort in the comparison-query model and proves that it always
-returns a sorted permutation of its input. The proof is by `mvcgen` through the support-based
-weakest-precondition semantics of `PMF`.
+This file defines randomized quicksort in the comparison-query model and proves that it returns
+a sorted permutation with expected comparison cost `O(n * log n)`, including inputs with repeated
+elements. Correctness and partition-size specifications use `mvcgen`. The complexity proof combines
+these specifications with uniform pivot probabilities and a harmonic potential.
 
 ## Main definitions
 
 - `randomQuicksort`: randomized quicksort in the `SortOps` query model.
 - `hoarePartition`: partition using two inward scans, stopping on equivalent elements.
-- `randomQuicksortModel`: interpret comparisons with a supplied Boolean comparator and
+- `randomQuicksortModel`: interpret comparisons with a supplied Boolean ordering relation and
   pivot draws with a supplied sampling model.
 
 ## Main results
@@ -31,9 +33,11 @@ weakest-precondition semantics of `PMF`.
 - `randomQuicksort_spec_of_queries`: correctness for any handler satisfying the query contracts.
 - `hoarePartition_spec`: the two groups lie weakly on opposite sides of the pivot.
 - `hoarePartition_costM`: partitioning costs exactly one comparison per non-pivot element.
-- `hoarePartition_balanced_spec`: comparator-equivalent inputs split evenly.
+- `hoarePartition_balanced_spec`: inputs equivalent under `le` split evenly.
 - `quicksortRecurrence_eq_harmonic`: the exact solution of the standalone uniform-rank recurrence.
 - `quicksortRecurrence_le_two_mul_log`: its `2 * n * log n` upper bound.
+- `randomQuicksort_expectedCost_le`: expected comparison cost is at most `8 * n * log n + 16 * n`.
+- `randomQuicksort_expectedCost_isBigO`: the corresponding asymptotic bound.
 -/
 
 @[expose] public section
@@ -70,7 +74,7 @@ def randomQuicksortModel [Monad m] (le : α → α → Bool)
     (sampling : ModelM UniformSample m ℕ) (x y : α) :
     (randomQuicksortModel le sampling).cost (.inl (.cmpLE x y)) = 1 := rfl
 
-/-- Compare two values through the model's Boolean comparator. -/
+/-- Compare two values through the model's Boolean ordering relation. -/
 def queryCmpLE (y p : α) : Prog (RandomQuicksortOps α) Bool :=
   FreeM.lift (.inl (SortOps.cmpLE y p))
 
@@ -177,7 +181,7 @@ def hoarePartition (xs : Array α) (pivotIndex : Fin xs.size) :
 
 /-- Draw a pivot, partition from both ends, and recursively sort both groups.
 
-Like `mergeSort`, this program obtains its comparator from the model. Using
+Like `mergeSort`, this program obtains its ordering relation from the model. Using
 `randomQuicksortModel le UniformSample.pmfModel` gives uniform randomized semantics.
 The reserved pivot belongs to neither recursive view, so both recursive inputs are smaller.
 -/
@@ -235,7 +239,7 @@ variable {α : Type}
 
 variable (le : α → α → Bool)
 
-/-- A comparison query returns the supplied comparator's answer. -/
+/-- A comparison query returns the supplied ordering relation's answer. -/
 theorem query_cmpLE_spec (y p : α) :
     letI := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
     ⦃⌜True⌝⦄
@@ -373,7 +377,7 @@ private theorem HoarePartition.loop_balanced_spec
     mvcgen
     simp [Nat.sub_eq_zero_of_le (show hi ≤ lo by lia)]
 
-/-- Comparator-equivalent inputs split evenly, with any extra element on the right. -/
+/-- Inputs equivalent under `le` split evenly, with any extra element on the right. -/
 theorem hoarePartition_balanced_spec
     [FreeM.HasHandler (RandomQuicksortOps α) .pure]
     (hcmp : ∀ (x y : α), ⦃⌜True⌝⦄ queryCmpLE x y ⦃⇓b => ⌜b = le x y⌝⦄)
@@ -451,7 +455,7 @@ theorem randomQuicksort_spec_of_queries
       hparts hsl.1 hsl.2 hsr.1 hsr.2
     exact hc
 
-/-- Uniform randomized quicksort returns a sorted permutation under the supplied comparator. -/
+/-- Uniform randomized quicksort returns a sorted permutation under `le`. -/
 theorem randomQuicksort_spec [Std.Total (fun a b => le a b = true)]
     [IsTrans α (fun a b => le a b = true)] (xs : Array α) :
     letI := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
@@ -464,6 +468,121 @@ theorem randomQuicksort_spec [Std.Total (fun a b => le a b = true)]
   mvcgen [drawPivot]
   exact fun _ _ => True.intro
 
+private theorem countP_extract_left (f : α → Bool) (a : Array α) {lo hi : ℕ}
+    (hl : lo < hi) (hh : hi ≤ a.size) :
+    (a.extract lo hi).countP f = (if f a[lo] then 1 else 0) +
+      (a.extract (lo + 1) hi).countP f := by
+  have hs : a.extract lo (lo + 1) = #[a[lo]] := by
+    simpa [Array.extract_empty_of_stop_le_start (Nat.le_refl lo)] using
+      (Array.push_extract_getElem (as := a) (i := lo) (j := lo) (by lia)).symm
+  have he : a.extract lo (lo + 1) ++ a.extract (lo + 1) hi = a.extract lo hi := by
+    rw [Array.extract_append_extract, Nat.min_eq_left (by lia), Nat.max_eq_right (by lia)]
+  rw [← he, Array.countP_append, hs, Array.countP_singleton]
+
+private theorem countP_extract_right (f : α → Bool) (a : Array α) {lo hi : ℕ}
+    (hl : lo < hi) (hh : hi ≤ a.size) :
+    (a.extract lo hi).countP f = (a.extract lo (hi - 1)).countP f +
+      (if f a[hi - 1] then 1 else 0) := by
+  have he : (a.extract lo (hi - 1)).push a[hi - 1] = a.extract lo hi := by
+    rw [Array.push_extract_getElem, Nat.min_eq_left (by lia)]
+    congr 1
+    lia
+  rw [← he, Array.countP_push]
+
+private theorem extract_swap_inner (a : Array α) {lo hi : ℕ}
+    (hl : lo + 1 < hi) (hh : hi ≤ a.size) :
+    (a.swap lo (hi - 1) (by lia) (by lia)).extract (lo + 1) (hi - 1) =
+      a.extract (lo + 1) (hi - 1) := by
+  ext i h₁ h₂
+  · simp
+  · simp only [Array.getElem_extract]
+    rw [Array.getElem_swap_of_ne (by lia) (by simp only [Array.size_extract] at h₂; lia)]
+
+private theorem countP_extract_le (f : α → Bool) (a : Array α) {lo hi : ℕ}
+    (hl : lo ≤ hi) (hh : hi ≤ a.size) :
+    (a.extract lo hi).countP f ≤ a.countP f := by
+  have he : (a.extract 0 lo ++ a.extract lo hi) ++ a.extract hi a.size = a := by
+    simp only [Array.extract_append_extract, Nat.min_eq_left (Nat.zero_le _),
+      Nat.max_eq_right hl, Nat.max_eq_right hh, Array.extract_size]
+  rw [← he, Array.countP_append, Array.countP_append]
+  lia
+
+private theorem countP_perm (f : α → Bool) {a b : Array α} (h : a.Perm b) :
+    a.countP f = b.countP f := by
+  simpa using h.toList.countP_eq f
+
+private theorem HoarePartition.loop_size_spec
+    (le : α → α → Bool)
+    [FreeM.HasHandler (RandomQuicksortOps α) .pure]
+    (hcmp : ∀ (x y : α), ⦃⌜True⌝⦄ queryCmpLE x y ⦃⇓b => ⌜b = le x y⌝⦄)
+    (pivot : α) (a : Array α) (lo hi : ℕ) (hl : lo ≤ hi) (hh : hi < a.size)
+    (hpivot : a[a.size - 1]'(by lia) = pivot) (stopped : Bool) :
+    ⦃⌜True⌝⦄ HoarePartition.loop pivot a lo hi hl hh hpivot stopped
+      ⦃⇓p => ⌜lo ≤ p.split.val ∧ p.split.val ≤ hi ∧
+        2 * (p.split.val - lo) ≤ hi - lo +
+          (a.extract lo hi).countP (fun x => !(le pivot x)) ∧
+        2 * (hi - p.split.val) ≤ hi - lo +
+          (a.extract lo hi).countP (fun x => !(le x pivot)) + 1⌝⦄ := by
+  fun_induction HoarePartition.loop pivot a lo hi hl hh hpivot stopped
+  next a lo hi hl hh hpivot h hp y ihSwap ihRight =>
+    have hinner := extract_swap_inner a hp (by lia)
+    have hleft := countP_extract_left (fun x => !(le pivot x)) a h (by lia)
+    have hleft' := countP_extract_right (fun x => !(le pivot x)) a hp (by lia)
+    have hright := countP_extract_left (fun x => !(le x pivot)) a h (by lia)
+    have hright' := countP_extract_right (fun x => !(le x pivot)) a hp (by lia)
+    have hrightFull := countP_extract_right (fun x => !(le x pivot)) a h (by lia)
+    have hleftFull := countP_extract_right (fun x => !(le pivot x)) a h (by lia)
+    mvcgen [hcmp, ihSwap, ihRight]
+    all_goals simp_all
+    all_goals lia
+  next a lo hi hl hh hpivot h hp =>
+    mvcgen
+    simp
+    lia
+  next a lo hi hl hh hpivot stopped h x hstop ihRight ihLeft =>
+    have hleft := countP_extract_left (fun x => !(le pivot x)) a h (by lia)
+    have hright := countP_extract_left (fun x => !(le x pivot)) a h (by lia)
+    mvcgen [hcmp, ihRight, ihLeft]
+    all_goals simp_all
+    all_goals lia
+  next a lo hi hl hh hpivot stopped h =>
+    mvcgen
+    simp
+    lia
+/-- Bounds on both partition sizes in terms of strict comparisons with the pivot. -/
+theorem hoarePartition_size_spec (le : α → α → Bool)
+    [FreeM.HasHandler (RandomQuicksortOps α) .pure]
+    (hcmp : ∀ (x y : α), ⦃⌜True⌝⦄ queryCmpLE x y ⦃⇓b => ⌜b = le x y⌝⦄)
+    (xs : Array α) (r : Fin xs.size) :
+    ⦃⌜True⌝⦄ hoarePartition xs r
+      ⦃⇓p => ⌜2 * p.left.size ≤ xs.size - 1 + xs.countP (fun x => !(le xs[r.val] x)) ∧
+        2 * p.right.size ≤ xs.size + xs.countP (fun x => !(le x xs[r.val]))⌝⦄ := by
+  have hs := HoarePartition.loop_size_spec le hcmp xs[r.val]
+    (xs.swap r.val (xs.size - 1) r.isLt (by have := r.isLt; lia))
+    0 (xs.size - 1) (by lia) (by simp; have := r.isLt; lia) (by simp) false
+  have hleft := countP_extract_le (fun x => !(le xs[r.val] x))
+    (xs.swap r.val (xs.size - 1) r.isLt (by have := r.isLt; lia))
+    (lo := 0) (hi := xs.size - 1) (by lia) (by simp)
+  have hright := countP_extract_le (fun x => !(le x xs[r.val]))
+    (xs.swap r.val (xs.size - 1) r.isLt (by have := r.isLt; lia))
+    (lo := 0) (hi := xs.size - 1) (by lia) (by simp)
+  rw [countP_perm _ (Array.swap_perm ..)] at hleft hright
+  mvcgen [hoarePartition, hs]
+  rename_i p hp
+  have hsize := p.perm.size_eq
+  have hb := p.split.isLt
+  have hn := r.isLt
+  simp only [Array.size_swap] at hsize
+  simp only [HoarePartition.left, HoarePartition.right, HoarePartition.cast,
+    Array.size_mkSlice_rio, Array.size_mkSlice_rco]
+  simp only [Nat.sub_zero] at hp
+  have hL := hp.2.2.1.trans (Nat.add_le_add_left hleft _)
+  have hR := hp.2.2.2.trans (Nat.add_le_add_right (Nat.add_le_add_left hright _) 1)
+  simp only [Nat.min_eq_left (Nat.sub_le _ _), hsize]
+  constructor
+  · simpa only [Nat.min_eq_left (show p.split.val ≤ xs.size by lia)] using hL
+  · convert hR using 1 <;> first | rfl | lia
+
 end Correctness
 
 section Complexity
@@ -471,9 +590,9 @@ section Complexity
 /-- The scalar quicksort recurrence with a uniform pivot rank and one comparison per
 non-pivot element: `C 0 = 0` and `C (n + 1) = n + 2 / (n + 1) * ∑ i ≤ n, C i`.
 
-This numerical recurrence is analyzed independently of the program semantics. Applying it to
-Hoare partitioning, particularly with comparator-equivalent elements, requires a separate bound
-on the recursive subproblem costs. -/
+This numerical recurrence is analyzed independently of the program semantics. The expected-cost
+proof for Hoare partitioning uses the larger `quicksortPotential` to account for elements
+equivalent under `le`. -/
 noncomputable def quicksortRecurrence : ℕ → ℝ
   | 0 => 0
   | n + 1 => n + 2 / (n + 1) * ∑ i : Fin (n + 1), quicksortRecurrence i
@@ -559,6 +678,360 @@ theorem quicksortRecurrence_isBigO :
     _ ≤ 2 * ((n : ℝ) * Real.log n) := by
       simpa [mul_assoc] using quicksortRecurrence_le_two_mul_log n
     _ ≤ _ := mul_le_mul_of_nonneg_left (le_abs_self _) (by norm_num)
+
+
+/-- The smaller of the numbers of elements weakly above and weakly below the pivot under `le`. -/
+def pivotWeight (le : α → α → Bool) (xs : Array α) (p : α) : ℕ :=
+  min (xs.size - xs.countP (fun x => !(le p x)))
+    (xs.size - xs.countP (fun x => !(le x p)))
+
+private theorem sorted_strict_counts (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)]
+    (xs : Array α) (hs : xs.Pairwise (fun a b => le a b = true)) (r : Fin xs.size) :
+    xs.countP (fun x => !(le xs[r.val] x)) ≤ r.val ∧
+      xs.countP (fun x => !(le x xs[r.val])) ≤ xs.size - 1 - r.val := by
+  have hrefl : le xs[r.val] xs[r.val] = true :=
+    (Std.Total.total (r := fun a b => le a b = true) _ _).elim id id
+  have hs' := Array.pairwise_iff_getElem.mp hs
+  constructor
+  · have hz : (xs.extract r.val xs.size).countP (fun x => !(le xs[r.val] x)) = 0 := by
+      apply Array.countP_eq_zero.mpr
+      intro x hx
+      obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.mp hx
+      simp only [Array.size_extract, Nat.min_self] at hi
+      simp only [Array.getElem_extract]
+      have he : le xs[r.val] xs[r.val + i] = true := by
+        by_cases h : i = 0
+        · simpa [h] using hrefl
+        · exact hs' _ _ r.isLt (by lia) (by lia)
+      simp [he]
+    have he : xs.extract 0 r.val ++ xs.extract r.val xs.size = xs := by
+      simp only [Array.extract_append_extract, Nat.min_eq_left (Nat.zero_le _),
+        Nat.max_eq_right r.isLt.le, Array.extract_size]
+    have hc := congrArg (fun a => a.countP (fun x => !(le xs[r.val] x))) he
+    rw [Array.countP_append, hz, Nat.add_zero] at hc
+    rw [← hc]
+    have hb := Array.countP_le_size (p := fun x => !(le xs[r.val] x))
+      (xs := xs.extract 0 r.val)
+    simpa [Array.size_extract, Nat.min_eq_left r.isLt.le] using hb
+  · have hz : (xs.extract 0 (r.val + 1)).countP (fun x => !(le x xs[r.val])) = 0 := by
+      apply Array.countP_eq_zero.mpr
+      intro x hx
+      obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.mp hx
+      simp only [Array.size_extract, Nat.sub_zero] at hi
+      simp only [Array.getElem_extract, Nat.zero_add]
+      have he : le xs[i] xs[r.val] = true := by
+        by_cases h : i = r.val
+        · subst i; exact hrefl
+        · exact hs' _ _ (by lia) r.isLt (by lia)
+      simp [he]
+    have he : xs.extract 0 (r.val + 1) ++ xs.extract (r.val + 1) xs.size = xs := by
+      simp only [Array.extract_append_extract, Nat.min_eq_left (Nat.zero_le _),
+        Nat.max_eq_right (show r.val + 1 ≤ xs.size by lia), Array.extract_size]
+    have hc := congrArg (fun a => a.countP (fun x => !(le x xs[r.val]))) he
+    rw [Array.countP_append, hz, Nat.zero_add] at hc
+    rw [← hc]
+    have hb := Array.countP_le_size (p := fun x => !(le x xs[r.val]))
+      (xs := xs.extract (r.val + 1) xs.size)
+    simpa [Array.size_extract, Nat.sub_sub, Nat.add_comm] using hb
+
+private theorem sum_getElem (xs : Array α) (f : α → ℕ) :
+    (∑ i : Fin xs.size, f xs[i.val]) = (xs.map f).sum := by
+  rw [← List.sum_ofFn]
+  have h := List.ofFn_getElem_eq_map xs.toList f
+  simpa [← Array.toList_map, Array.sum_toList] using congrArg List.sum h
+
+private def rankWeightSum (n : ℕ) : ℕ := ∑ i : Fin n, min (i.val + 1) (n - i.val)
+
+private theorem rankWeightSum_step (n : ℕ) :
+    rankWeightSum (n + 2) = rankWeightSum n + n + 2 := by
+  unfold rankWeightSum
+  rw [Fin.sum_univ_succ, Fin.sum_univ_castSucc]
+  simp only [Fin.val_zero, Fin.val_succ, Fin.val_castSucc, Fin.val_last]
+  have he (i : Fin n) : min (i.val + 1 + 1) (n + 2 - (i.val + 1)) =
+      min (i.val + 1) (n - i.val) + 1 := by have := i.isLt; lia
+  simp_rw [he]
+  simp [Finset.sum_add_distrib]
+  lia
+
+private theorem rankWeightSum_lower (n : ℕ) : n * n ≤ 4 * rankWeightSum n := by
+  induction n using Nat.twoStepInduction with
+  | zero => simp [rankWeightSum]
+  | one => simp [rankWeightSum]
+  | more n ih _ => rw [rankWeightSum_step]; nlinarith
+
+private theorem pivotWeight_perm (le : α → α → Bool) {xs ys : Array α}
+    (h : xs.Perm ys) (p : α) : pivotWeight le xs p = pivotWeight le ys p := by
+  have hl := h.toList.countP_eq (fun x => !(le p x))
+  have hr := h.toList.countP_eq (fun x => !(le x p))
+  simp only [pivotWeight, h.size_eq, ← Array.countP_toList, hl, hr]
+
+/-- The sum of pivot weights is at least one quarter of the square of the input size. -/
+theorem sum_pivotWeight_lower (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
+    (xs : Array α) : xs.size * xs.size ≤
+      4 * ∑ i : Fin xs.size, pivotWeight le xs xs[i.val] := by
+  have hp : (xs.mergeSort le).Perm xs := Array.mergeSort_perm
+  have hs : (xs.mergeSort le).Pairwise (fun a b => le a b = true) :=
+    Array.pairwise_mergeSort (le := le) (xs := xs)
+      (fun a b c hab hbc => trans_of (fun a b => le a b = true) hab hbc)
+      (fun a b => by simpa using Std.Total.total (r := fun a b => le a b = true) a b)
+  have hr (i : Fin (xs.mergeSort le).size) :
+      min (i.val + 1) ((xs.mergeSort le).size - i.val) ≤
+        pivotWeight le (xs.mergeSort le) (xs.mergeSort le)[i.val] := by
+    have h := sorted_strict_counts le (xs.mergeSort le) hs i
+    dsimp [pivotWeight]
+    have hi := i.isLt
+    lia
+  have hb := (rankWeightSum_lower (xs.mergeSort le).size).trans
+    (Nat.mul_le_mul_left 4 (Finset.sum_le_sum fun i _ => hr i))
+  rw [sum_getElem] at hb ⊢
+  have hm := (hp.toList.map (pivotWeight le xs)).sum_eq
+  have he : ((xs.mergeSort le).map (pivotWeight le (xs.mergeSort le))).sum =
+      (xs.map (pivotWeight le xs)).sum := by
+    have hf : pivotWeight le (xs.mergeSort le) = pivotWeight le xs :=
+      funext (pivotWeight_perm le hp)
+    rw [hf]
+    simpa [← Array.toList_map, Array.sum_toList] using hm
+  rw [he, hp.size_eq] at hb
+  exact hb
+
+private theorem harmonic_gap (k n : ℕ) (h : k ≤ n) :
+    0 ≤ (harmonic n : ℝ) - harmonic k ∧
+      (n : ℝ) - k ≤ n * ((harmonic n : ℝ) - harmonic k) := by
+  induction n generalizing k with
+  | zero =>
+    have hk : k = 0 := by lia
+    subst k
+    simp
+  | succ n ih =>
+    by_cases hk : k = n + 1
+    · subst k; simp
+    have hi := ih k (by lia)
+    have hn : (n + 1 : ℝ) ≠ 0 := by positivity
+    have hc := mul_inv_cancel₀ hn
+    have hn' : 0 ≤ (n + 1 : ℝ)⁻¹ := by positivity
+    rw [harmonic_succ]
+    push_cast
+    constructor <;> nlinarith [hi.1, hi.2]
+
+/-- Harmonic potential used to bound the expected comparison cost, including equivalent elements. -/
+noncomputable def quicksortPotential (n : ℕ) : ℝ := 8 * (n + 1) * harmonic n
+
+@[simp] theorem quicksortPotential_zero : quicksortPotential 0 = 0 := by
+  simp [quicksortPotential]
+
+/-- The harmonic potential is nonnegative. -/
+theorem quicksortPotential_nonneg (n : ℕ) : 0 ≤ quicksortPotential n := by
+  have h := (harmonic_gap 0 n (Nat.zero_le _)).1
+  simp only [harmonic_zero, Rat.cast_zero, sub_zero] at h
+  exact mul_nonneg (by positivity) h
+
+/-- An explicit `n * log n` bound on the harmonic potential. -/
+theorem quicksortPotential_le (n : ℕ) :
+    quicksortPotential n ≤ 8 * n * Real.log n + 16 * n := by
+  have h := quicksortRecurrence_le_two_mul_log n
+  rw [quicksortRecurrence_eq_harmonic] at h
+  dsimp [quicksortPotential]
+  nlinarith
+
+/-- The decrease in potential pays four times the pivot weight. -/
+theorem quicksortPotential_split (n l r w : ℕ) (hn : 0 < n)
+    (hs : l + r + 1 = n) (hw : w ≤ 2 * (n - max l r)) :
+    quicksortPotential l + quicksortPotential r + 4 * w ≤ quicksortPotential n := by
+  have hl := harmonic_gap l n (by lia)
+  have hr := harmonic_gap r n (by lia)
+  have hls := mul_le_mul_of_nonneg_left hl.2 (show (0 : ℝ) ≤ l + 1 by positivity)
+  have hrs := mul_le_mul_of_nonneg_left hr.2 (show (0 : ℝ) ≤ r + 1 by positivity)
+  have hln : (l : ℝ) ≤ max l r := by exact_mod_cast Nat.le_max_left l r
+  have hrn : (r : ℝ) ≤ max l r := by exact_mod_cast Nat.le_max_right l r
+  have hsq1 := mul_le_mul_of_nonneg_left hln (show (0 : ℝ) ≤ l by positivity)
+  have hsq2 := mul_le_mul_of_nonneg_left hrn (show (0 : ℝ) ≤ r by positivity)
+  have hs' : (l : ℝ) + r + 1 = n := by exact_mod_cast hs
+  have hw' : (w : ℝ) ≤ 2 * ((n : ℝ) - max l r) := by
+    rw [← Nat.cast_sub (show max l r ≤ n by lia)]
+    exact_mod_cast hw
+  have hn' : (0 : ℝ) < n := by exact_mod_cast hn
+  have hd : quicksortPotential n - quicksortPotential l - quicksortPotential r =
+      8 * ((l + 1) * ((harmonic n : ℝ) - harmonic l) +
+        (r + 1) * ((harmonic n : ℝ) - harmonic r)) := by
+    dsimp [quicksortPotential]
+    rw [← hs']
+    ring
+  have hdrop : 8 * ((n : ℝ) - max l r) ≤
+      quicksortPotential n - quicksortPotential l - quicksortPotential r := by
+    apply (mul_le_mul_iff_right₀ hn').mp
+    rw [hd]
+    nlinarith
+  linarith
+
+open scoped ENNReal
+
+private theorem support_of_spec (P : Prog Q α) (M : ModelM Q PMF ℕ) (post : α → Prop)
+    (h : letI := M.hasHandler; ⦃⌜True⌝⦄ P ⦃⇓a => ⌜post a⌝⦄) :
+    ∀ a ∈ (P.evalM M).support, post a := by
+  change (∀ (_ : True), ((FreeM.wpH M.handler P).apply
+    (PostCond.noThrow fun a => ⌜post a⌝)).down) at h
+  rw [ModelM.wp_eq_wp_evalM] at h
+  exact h True.intro
+
+private theorem weight_bound (n l r a b : ℕ)
+    (hl : 2 * l ≤ n - 1 + a) (hr : 2 * r ≤ n + b) :
+    min (n - a) (n - b) ≤ 2 * (n - max l r) := by lia
+
+private theorem partition_potential_bound (le : α → α → Bool)
+    (xs : Array α) (r : Fin xs.size)
+    (p : HoarePartition xs xs[r.val])
+    (hp : p ∈ ((hoarePartition xs r).evalM
+      (randomQuicksortModel le UniformSample.pmfModel)).support) :
+    quicksortPotential p.left.toArray.size + quicksortPotential p.right.toArray.size +
+      4 * pivotWeight le xs xs[r.val] ≤ quicksortPotential xs.size := by
+  have h := support_of_spec (hoarePartition xs r)
+    (randomQuicksortModel le UniformSample.pmfModel) _
+    (@hoarePartition_size_spec α le
+      (randomQuicksortModel le UniformSample.pmfModel).hasHandler (query_cmpLE_spec le) xs r) p hp
+  have hs := p.parts_perm.size_eq
+  simp only [Array.size_append, Array.size_singleton] at hs
+  apply quicksortPotential_split xs.size _ _ _ (by have := r.isLt; lia) (by lia)
+  dsimp only [pivotWeight]
+  apply weight_bound
+  · simpa only [Subarray.size_toArray] using h.1
+  · simpa only [Subarray.size_toArray] using h.2
+
+@[simp] private theorem expectedCost_hoarePartition (le : α → α → Bool)
+    (xs : Array α) (r : Fin xs.size) :
+    (hoarePartition xs r).expectedCost (randomQuicksortModel le UniformSample.pmfModel) =
+      (xs.size - 1 : ℕ) := by
+  simp [Prog.expectedCost]
+
+@[simp] private theorem expectedCost_drawPivot (le : α → α → Bool) (n : ℕ) :
+    (drawPivot n).expectedCost (randomQuicksortModel le UniformSample.pmfModel) = 0 := by
+  simp [Prog.expectedCost, drawPivot, randomQuicksortModel,
+    UniformSample.pmfModel, UniformSample.model]
+
+@[simp] private theorem evalM_drawPivot (le : α → α → Bool) (n : ℕ) :
+    (drawPivot n).evalM (randomQuicksortModel le UniformSample.pmfModel) =
+      PMF.uniformOfFintype (Fin (n + 1)) := by
+  simp [drawPivot, randomQuicksortModel, UniformSample.pmfModel, UniformSample.model]
+
+private theorem uniform_pivotWeight_bound (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
+    (xs : Array α) (n : ℕ) (hn : xs.size = n + 1) :
+    (xs.size : ℝ≥0∞) ≤ (PMF.uniformOfFintype (Fin (n + 1))).expectation
+      (fun i => ((4 * pivotWeight le xs (xs[i.val]'(by have := i.isLt; lia)) : ℕ) : ℝ≥0∞)) := by
+  rw [PMF.expectation_uniformOfFintype]
+  simp only [Fintype.card_fin]
+  apply (ENNReal.mul_le_iff_le_inv (by simp) (by simp)).mp
+  rw [← Nat.cast_sum]
+  have he : (∑ i : Fin (n + 1), 4 * pivotWeight le xs (xs[i.val]'(by have := i.isLt; lia))) =
+      4 * ∑ i : Fin xs.size, pivotWeight le xs xs[i.val] := by
+    rw [← Finset.mul_sum]
+    congr 1
+    simpa using (Equiv.sum_comp (finCongr hn.symm)
+      (fun i : Fin xs.size => pivotWeight le xs xs[i.val]))
+  rw [he, ← hn, ← Nat.cast_mul]
+  exact_mod_cast sum_pivotWeight_lower le xs
+
+/-- Expected comparison cost is bounded by the harmonic potential
+for any total transitive ordering relation `le`. -/
+theorem randomQuicksort_expectedCost_le_potential (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
+    (xs : Array α) :
+    (randomQuicksort xs).expectedCost (randomQuicksortModel le UniformSample.pmfModel) ≤
+      ENNReal.ofReal (quicksortPotential xs.size) := by
+  induction xs using (measure (fun a : Array α => a.size)).wf.induction with
+  | h xs ih =>
+    by_cases hn : xs.size = 0
+    · rw [randomQuicksort, dif_pos hn]
+      simp
+    have hlocal (r : Fin xs.size) :
+        ((hoarePartition xs r).evalM (randomQuicksortModel le UniformSample.pmfModel)).expectation
+          (fun p => (randomQuicksort p.left.toArray).expectedCost
+              (randomQuicksortModel le UniformSample.pmfModel) +
+            (randomQuicksort p.right.toArray).expectedCost
+              (randomQuicksortModel le UniformSample.pmfModel)) +
+          ((4 * pivotWeight le xs xs[r.val] : ℕ) : ℝ≥0∞) ≤
+            ENNReal.ofReal (quicksortPotential xs.size) := by
+      rw [← PMF.expectation_const
+        ((hoarePartition xs r).evalM (randomQuicksortModel le UniformSample.pmfModel))
+        ((4 * pivotWeight le xs xs[r.val] : ℕ) : ℝ≥0∞), ← PMF.expectation_add]
+      apply le_trans (PMF.expectation_mono _ (g := fun _ =>
+        ENNReal.ofReal (quicksortPotential xs.size)) ?_) (by simp)
+      intro p hp
+      have hs := p.parts_perm.size_eq
+      simp only [Array.size_append, Array.size_singleton] at hs
+      have hl := ih p.left.toArray (by change p.left.toArray.size < xs.size; lia)
+      have hr := ih p.right.toArray (by change p.right.toArray.size < xs.size; lia)
+      have hpot := partition_potential_bound le xs r p hp
+      calc
+        _ ≤ ENNReal.ofReal (quicksortPotential p.left.toArray.size) +
+            ENNReal.ofReal (quicksortPotential p.right.toArray.size) +
+            ((4 * pivotWeight le xs xs[r.val] : ℕ) : ℝ≥0∞) :=
+          add_le_add (add_le_add hl hr) le_rfl
+        _ = ENNReal.ofReal (quicksortPotential p.left.toArray.size +
+            quicksortPotential p.right.toArray.size + 4 * pivotWeight le xs xs[r.val]) := by
+          rw [ENNReal.ofReal_add (add_nonneg (quicksortPotential_nonneg _)
+            (quicksortPotential_nonneg _)) (by positivity),
+            ENNReal.ofReal_add (quicksortPotential_nonneg _) (quicksortPotential_nonneg _)]
+          simp
+        _ ≤ _ := ENNReal.ofReal_le_ofReal hpot
+    rw [randomQuicksort, dif_neg hn]
+    simp only [Prog.expectedCost_bind, Prog.expectedCost_pure, PMF.expectation_const,
+      expectedCost_drawPivot, expectedCost_hoarePartition, evalM_drawPivot, add_zero, zero_add]
+    have havg := PMF.expectation_mono
+      (PMF.uniformOfFintype (Fin (xs.size - 1 + 1)))
+      (fun i _ => hlocal ⟨i.val, by have := i.isLt; lia⟩)
+    simp only [PMF.expectation_add, PMF.expectation_const] at havg ⊢
+    have hw := uniform_pivotWeight_bound le xs (xs.size - 1) (by lia)
+    have hc : ((xs.size - 1 : ℕ) : ℝ≥0∞) ≤ xs.size := by
+      exact_mod_cast Nat.sub_le xs.size 1
+    rw [add_comm] at havg
+    exact (add_le_add (hc.trans hw) le_rfl).trans havg
+
+/-- Uniform randomized quicksort uses at most
+`8 * n * log n + 16 * n` comparisons in expectation. -/
+theorem randomQuicksort_expectedCost_le (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
+    (xs : Array α) :
+    (randomQuicksort xs).expectedCost (randomQuicksortModel le UniformSample.pmfModel) ≤
+      ENNReal.ofReal (8 * xs.size * Real.log xs.size + 16 * xs.size) :=
+  (randomQuicksort_expectedCost_le_potential le xs).trans
+    (ENNReal.ofReal_le_ofReal (quicksortPotential_le xs.size))
+
+/-- The expected comparison cost is finite. -/
+theorem randomQuicksort_expectedCost_ne_top (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
+    (xs : Array α) :
+    (randomQuicksort xs).expectedCost (randomQuicksortModel le UniformSample.pmfModel) ≠ ⊤ :=
+  ne_of_lt ((randomQuicksort_expectedCost_le_potential le xs).trans_lt ENNReal.ofReal_lt_top)
+
+/-- Expected comparison cost is `O(n * log n)` uniformly over inputs of size `n`. -/
+theorem randomQuicksort_expectedCost_isBigO (le : α → α → Bool)
+    [Std.Total (fun a b => le a b = true)] [IsTrans α (fun a b => le a b = true)]
+    (inputs : ℕ → Array α) (hsize : ∀ n, (inputs n).size = n) :
+    (fun n => ((randomQuicksort (inputs n)).expectedCost
+      (randomQuicksortModel le UniformSample.pmfModel)).toReal)
+      =O[Filter.atTop] (fun n : ℕ => (n : ℝ) * Real.log n) := by
+  refine Asymptotics.isBigO_iff.mpr ⟨8 + 16 / Real.log 2, ?_⟩
+  filter_upwards [Filter.eventually_ge_atTop 2] with n hn
+  have hlog : 0 < Real.log (2 : ℝ) := Real.log_pos (by norm_num)
+  have hlogn : Real.log (2 : ℝ) ≤ Real.log (n : ℝ) :=
+    Real.log_le_log (by norm_num) (by exact_mod_cast hn)
+  have hlogn' : 0 ≤ Real.log (n : ℝ) := hlog.le.trans hlogn
+  have he := (ENNReal.toReal_le_of_le_ofReal (quicksortPotential_nonneg (inputs n).size)
+    (randomQuicksort_expectedCost_le_potential le (inputs n))).trans
+      (quicksortPotential_le (inputs n).size)
+  rw [hsize] at he
+  rw [Real.norm_eq_abs, abs_of_nonneg ENNReal.toReal_nonneg,
+    Real.norm_eq_abs, abs_of_nonneg (mul_nonneg (Nat.cast_nonneg _) hlogn')]
+  apply he.trans
+  have hc := (le_div_iff₀ hlog).mpr (show (16 : ℝ) * Real.log 2 ≤
+    16 * Real.log n by gcongr)
+  have hmul := mul_le_mul_of_nonneg_left hc (show (0 : ℝ) ≤ n by positivity)
+  calc
+    _ ≤ 8 * n * Real.log n + n * (16 * Real.log n / Real.log 2) := by
+      nlinarith only [hmul]
+    _ = _ := by ring
 
 end Complexity
 

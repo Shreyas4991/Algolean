@@ -16,6 +16,7 @@ public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.ExpectedCost
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.LowerBounds.ComparisonSort
