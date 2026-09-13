@@ -13,6 +13,7 @@ public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
+public import Algolean.Algorithms.WordRAMLinearSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
@@ -34,5 +35,6 @@ public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
+public import Algolean.Models.WordRAM
 public import Algolean.QueryComposition
 public import Algolean.QueryModel
