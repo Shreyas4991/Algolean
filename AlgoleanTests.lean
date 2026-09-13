@@ -9,3 +9,4 @@ public import AlgoleanTests.NaivePatternSearchExamples
 public import AlgoleanTests.ProgExamples
 public import AlgoleanTests.QueryExamples
 public import AlgoleanTests.RandomSampleExamples
+public import AlgoleanTests.WordRAMExamples
