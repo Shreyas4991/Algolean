@@ -185,6 +185,34 @@ def costM [Monad m] [AddZero Cost]
     costM (f <$> P) M = costM P M := by
   simp [costM]
 
+section State
+
+/-- Evaluate a pure program at a concrete initial state. -/
+@[simp] theorem evalM_pure_state (M : ModelM Q (StateM σ) Cost) (a : α) (s : σ) :
+    (pure a : Prog Q α).evalM M s = (a, s) := rfl
+
+/-- Evaluate a query and its continuation directly at a concrete state. -/
+@[simp] theorem evalM_liftBind_state (M : ModelM Q (StateM σ) Cost)
+    (q : Q α) (f : α → Prog Q β) (s : σ) :
+    evalM (FreeM.lift q >>= f) M s =
+      let result := M.evalQuery q s
+      (f result.1).evalM M result.2 := rfl
+
+/-- A pure program has zero cost and leaves the state unchanged. -/
+@[simp] theorem costM_pure_state [AddZero Cost]
+    (M : ModelM Q (StateM σ) Cost) (a : α) (s : σ) :
+    (pure a : Prog Q α).costM M s = ((0 : Cost), s) := rfl
+
+/-- Accumulate the cost of a query and its continuation at a concrete state. -/
+@[simp] theorem costM_liftBind_state [AddZero Cost] (M : ModelM Q (StateM σ) Cost)
+    (q : Q α) (f : α → Prog Q β) (s : σ) :
+    costM (FreeM.lift q >>= f) M s =
+      let result := M.evalQuery q s
+      let rest := (f result.1).costM M result.2
+      (M.cost q + rest.1, rest.2) := rfl
+
+end State
+
 section OfModel
 
 /-- Evaluating with `ofModel M` is the same as evaluating with `M`. -/

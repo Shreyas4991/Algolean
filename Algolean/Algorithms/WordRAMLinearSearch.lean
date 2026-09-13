@@ -104,22 +104,23 @@ private theorem linearSearch_eq_searchLoop (input : Array (BitVec w)) (key : Bit
   change searchFor key (List.range input.size) 0 = _
   rw [searchFor_eq_searchLoop, List.length_range]
 
+@[simp, grind =]
 private theorem searchLoop_eval_zero (key : Word w) (addr : Word w) (mem : Memory w) :
     (searchLoop key 0 addr).evalM timeAndSpaceCost mem = (none (α := Word w), mem) := rfl
 
+@[grind =]
 private theorem searchLoop_eval_succ (key : Word w) (n : Nat) (addr : Word w)
     (mem : Memory w) :
     (searchLoop key (n + 1) addr).evalM timeAndSpaceCost mem =
       if mem addr = key then (some addr, mem)
       else (searchLoop key n (addr + 1)).evalM timeAndSpaceCost mem := by
-  change Prog.evalM (if decide (mem addr = key) then pure (some addr) else do
-      let next : Word w ← binop .add addr 1
-      searchLoop key n next : Prog (WordRAM w) (Option (Word w))) timeAndSpaceCost mem = _
-  by_cases h : mem addr = key <;> simp only [h, decide_true, decide_false, ↓reduceIte] <;> rfl
+  by_cases h : mem addr = key <;> simp [searchLoop, CmpOp.eval, BinOp.eval, h]
 
+@[simp, grind =]
 private theorem searchLoop_cost_zero (key : Word w) (addr : Word w) (mem : Memory w) :
     (searchLoop key 0 addr).costM timeAndSpaceCost mem = ((0 : RAMCost w), mem) := rfl
 
+@[grind =]
 private theorem searchLoop_cost_succ (key : Word w) (n : Nat) (addr : Word w)
     (mem : Memory w) :
     (searchLoop key (n + 1) addr).costM timeAndSpaceCost mem =
@@ -127,66 +128,36 @@ private theorem searchLoop_cost_succ (key : Word w) (n : Nat) (addr : Word w)
       else
         let rest := (searchLoop key n (addr + 1)).costM timeAndSpaceCost mem
         (⟨3, {addr}⟩ + rest.1, rest.2) := by
-  change (let rest := Prog.costM (if decide (mem addr = key) then pure (some addr) else do
-      let next : Word w ← binop .add addr 1
-      searchLoop key n next : Prog (WordRAM w) (Option (Word w))) timeAndSpaceCost mem
-    ((⟨1, {addr}⟩ : RAMCost w) + (⟨1, ∅⟩ + rest.1), rest.2)) = _
-  by_cases h : mem addr = key
-  · simp only [h, decide_true, ↓reduceIte]
-    change ((⟨1, {addr}⟩ : RAMCost w) + (⟨1, ∅⟩ + 0), mem) = (⟨2, {addr}⟩, mem)
-    congr 1
-  · simp only [h, decide_false, Bool.false_eq_true, ↓reduceIte]
-    apply Prod.ext
-    · change (⟨1, {addr}⟩ + (⟨1, ∅⟩ + (⟨1, ∅⟩ +
-          ((searchLoop key n (addr + 1)).costM timeAndSpaceCost mem).1)) : RAMCost w) = _
-      ext <;> simp [← Nat.add_assoc]
-    · rfl
+  by_cases h : mem addr = key <;>
+    simp [searchLoop, CmpOp.eval, BinOp.eval, h, ← Nat.add_assoc]
 
 private theorem searchLoop_memory (key : Word w) (n : Nat) (addr : Word w) (mem : Memory w) :
     ((searchLoop key n addr).evalM timeAndSpaceCost mem).2 = mem := by
-  induction n generalizing addr with
-  | zero => rfl
-  | succ n ih =>
-    rw [searchLoop_eval_succ]
-    split_ifs
-    · rfl
-    · exact ih (addr + 1)
+  induction n generalizing addr <;> grind
 
 private theorem searchLoop_time_le (key : Word w) (n : Nat) (addr : Word w) (mem : Memory w) :
     ((searchLoop key n addr).costM timeAndSpaceCost mem).1.time ≤ 3 * n := by
-  induction n generalizing addr with
-  | zero => exact Nat.zero_le _
-  | succ n ih =>
-    rw [searchLoop_cost_succ]
-    split_ifs
-    · change 2 ≤ 3 * (n + 1)
-      omega
-    · change 3 + ((searchLoop key n (addr + 1)).costM timeAndSpaceCost mem).1.time ≤ _
-      have := ih (addr + 1)
-      omega
+  induction n generalizing addr <;> grind
 
 private theorem searchLoop_time_of_none (key : Word w) (n : Nat) (addr : Word w)
     (mem : Memory w) (hnone : ((searchLoop key n addr).evalM timeAndSpaceCost mem).1 = none) :
     ((searchLoop key n addr).costM timeAndSpaceCost mem).1.time = 3 * n := by
-  induction n generalizing addr with
-  | zero => rfl
-  | succ n ih =>
-    rw [searchLoop_eval_succ] at hnone
-    rw [searchLoop_cost_succ]
-    split_ifs with h
-    · simp [h] at hnone
-    · simp only [if_neg h] at hnone
-      change 3 + ((searchLoop key n (addr + 1)).costM timeAndSpaceCost mem).1.time = _
-      rw [ih (addr + 1) hnone]
-      omega
+  induction n generalizing addr <;> grind
 
+/-- An index within the address space survives conversion to a word without wrapping. -/
+@[grind =]
+private theorem wordAddress_toNat (i : Nat) (hi : i < 2 ^ w) :
+    (BitVec.ofNat w i).toNat = i := Nat.mod_eq_of_lt hi
+
+@[simp, grind =]
 private theorem arrayMemory_ofNat (input : Array (BitVec w)) (hfits : input.size ≤ 2 ^ w)
     (i : Nat) (hi : i < input.size) :
     arrayMemory input (BitVec.ofNat w i) = input[i] := by
   simp [arrayMemory, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (lt_of_lt_of_le hi hfits), hi]
 
+@[simp, grind =]
 private theorem wordAddress_succ (i : Nat) :
-    BitVec.ofNat w i + 1 = BitVec.ofNat w (i + 1) := by
+    BitVec.ofNat w i + 1#w = BitVec.ofNat w (i + 1) := by
   simp [BitVec.ofNat_add]
 
 /-- The returned address points to the key, and every earlier element differs from the key. -/
@@ -202,41 +173,7 @@ private theorem searchLoop_correct (input : Array (BitVec w)) (key : BitVec w)
     | some addr => start ≤ addr.toNat ∧ addr.toNat < start + n ∧
         input[addr.toNat]? = some key ∧
         ∀ i, start ≤ i → i < addr.toNat → input[i]? ≠ some key := by
-  induction n generalizing start with
-  | zero =>
-    simp only [searchLoop_eval_zero, Nat.add_zero]
-    intro i hlo hhi
-    omega
-  | succ n ih =>
-    have hi : start < input.size := by omega
-    have hw : start < 2 ^ w := lt_of_lt_of_le hi hfits
-    rw [searchLoop_eval_succ, arrayMemory_ofNat input hfits start hi]
-    by_cases h : input[start] = key
-    · simp only [if_pos h, BitVec.toNat_ofNat, Nat.mod_eq_of_lt hw]
-      refine ⟨le_rfl, by omega, ?_, ?_⟩
-      · simp [hi, h]
-      · intro i hlo hhi
-        omega
-    · simp only [if_neg h, wordAddress_succ]
-      have htail := ih (start + 1) (by omega)
-      cases he : ((searchLoop key n (BitVec.ofNat w (start + 1))).evalM timeAndSpaceCost
-          (arrayMemory input)).1 with
-      | none =>
-        simp only [he] at htail ⊢
-        intro i hlo hhi
-        by_cases heq : i = start
-        · subst i
-          simpa [hi] using h
-        · exact htail i (by omega) (by omega)
-      | some addr =>
-        simp only [he] at htail ⊢
-        obtain ⟨hlo, hhi, hkey, hfirst⟩ := htail
-        refine ⟨by omega, by omega, hkey, ?_⟩
-        intro i hil hih
-        by_cases heq : i = start
-        · subst i
-          simpa [hi] using h
-        · exact hfirst i (by omega) hih
+  induction n generalizing start <;> grind
 
 /-- Linear search returns the first match, or certifies that no array index contains the key. -/
 theorem linearSearch_correct (input : Array (BitVec w)) (key : BitVec w)
@@ -244,13 +181,9 @@ theorem linearSearch_correct (input : Array (BitVec w)) (key : BitVec w)
     match ((linearSearch input key hfits).evalM timeAndSpaceCost (arrayMemory input)).1 with
     | none => ∀ i, i < input.size → input[i]? ≠ some key
     | some addr => IsFirstMatch input key addr := by
-  have h := searchLoop_correct input key hfits input.size 0 (by omega)
   rw [linearSearch_eq_searchLoop]
-  split at h <;>
-    simp_all only [evalM_timeAndSpaceCost, zero_le, zero_add, ne_eq, forall_const, true_and,
-      BitVec.ofNat_eq_ofNat, IsFirstMatch, getElem?_pos, Option.some.injEq,
-      not_false_eq_true, implies_true, and_true]
-  exact (Array.getElem?_eq_some_iff.mp h.2.1).2
+  have h := searchLoop_correct input key hfits input.size 0 (by omega)
+  grind [IsFirstMatch]
 
 /-- Search preserves every memory cell. -/
 theorem linearSearch_memory (input : Array (BitVec w)) (key : BitVec w)
@@ -265,23 +198,7 @@ theorem linearSearch_some_iff (input : Array (BitVec w)) (key : BitVec w)
     ((linearSearch input key hfits).evalM timeAndSpaceCost (arrayMemory input)).1 = some addr ↔
       IsFirstMatch input key addr := by
   have hcorrect := linearSearch_correct input key hfits
-  constructor
-  · intro heq
-    simpa only [heq] using hcorrect
-  · intro hfirst
-    cases he : ((linearSearch input key hfits).evalM timeAndSpaceCost (arrayMemory input)).1 with
-    | none =>
-      rw [he] at hcorrect
-      exact False.elim (hcorrect addr.toNat hfirst.1 hfirst.2.1)
-    | some found =>
-      rw [he] at hcorrect
-      have hindex : found.toNat = addr.toNat := by
-        apply Nat.le_antisymm
-        · by_contra h
-          exact hcorrect.2.2 addr.toNat (by omega) hfirst.2.1
-        · by_contra h
-          exact hfirst.2.2 found.toNat (by omega) hcorrect.2.1
-      exact congrArg some (BitVec.eq_of_toNat_eq hindex)
+  grind [IsFirstMatch, BitVec.eq_of_toNat_eq]
 
 /-- Uniform linear time bound: at most three primitive queries per input element. -/
 theorem linearSearch_time_le (input : Array (BitVec w)) (key : BitVec w)
@@ -297,17 +214,7 @@ theorem linearSearch_none_iff (input : Array (BitVec w)) (key : BitVec w)
     ((linearSearch input key hfits).evalM timeAndSpaceCost (arrayMemory input)).1 = none ↔
       key ∉ input := by
   have hcorrect := linearSearch_correct input key hfits
-  constructor
-  · intro hnone hmem
-    rw [hnone] at hcorrect
-    obtain ⟨i, hi, hkey⟩ := Array.mem_iff_getElem.mp hmem
-    exact hcorrect i hi (by simp [hi, hkey])
-  · intro hnot
-    cases he : ((linearSearch input key hfits).evalM timeAndSpaceCost (arrayMemory input)).1 with
-    | none => rfl
-    | some addr =>
-      rw [he] at hcorrect
-      exact False.elim (hnot (Array.mem_of_getElem? hcorrect.2.1))
+  grind [IsFirstMatch, Array.mem_iff_getElem?]
 
 /-- An absent key forces exactly three queries per element, attaining the linear upper bound. -/
 theorem linearSearch_time_of_not_mem (input : Array (BitVec w)) (key : BitVec w)
@@ -325,25 +232,7 @@ private theorem searchLoop_time_of_some (input : Array (BitVec w)) (key : BitVec
       (arrayMemory input)).1 = some addr) :
     ((searchLoop key n (BitVec.ofNat w start)).costM timeAndSpaceCost
       (arrayMemory input)).1.time + 3 * start = 3 * addr.toNat + 2 := by
-  induction n generalizing start with
-  | zero => simp [searchLoop_eval_zero] at hfound
-  | succ n ih =>
-    have hi : start < input.size := by omega
-    have hw : start < 2 ^ w := lt_of_lt_of_le hi hfits
-    rw [searchLoop_eval_succ, arrayMemory_ofNat input hfits start hi] at hfound
-    rw [searchLoop_cost_succ, arrayMemory_ofNat input hfits start hi]
-    split_ifs with h
-    · simp only [if_pos h, Option.some.injEq] at hfound
-      subst addr
-      change 2 + 3 * start = 3 * (BitVec.ofNat w start).toNat + 2
-      rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hw]
-      omega
-    · simp only [if_neg h, wordAddress_succ] at hfound
-      change 3 + ((searchLoop key n (BitVec.ofNat w start + 1)).costM timeAndSpaceCost
-        (arrayMemory input)).1.time + 3 * start = _
-      rw [wordAddress_succ]
-      have htail := ih (start + 1) (by omega) hfound
-      omega
+  induction n generalizing start <;> grind
 
 /-- A match at address `i` takes exactly `3 * i + 2` queries. -/
 theorem linearSearch_time_of_some (input : Array (BitVec w)) (key : BitVec w)
@@ -359,23 +248,17 @@ theorem linearSearch_time_of_some (input : Array (BitVec w)) (key : BitVec w)
 def inputRegion (input : Array (BitVec w)) : Finset (Word w) :=
   (Finset.range input.size).image (BitVec.ofNat w)
 
+/-- Every valid array index belongs to the input's memory region. -/
+@[simp, grind ←]
+theorem ofNat_mem_inputRegion (input : Array (BitVec w)) (i : Nat) (hi : i < input.size) :
+    BitVec.ofNat w i ∈ inputRegion input :=
+  Finset.mem_image.mpr ⟨i, Finset.mem_range.mpr hi, rfl⟩
+
 private theorem searchLoop_addresses_subset (input : Array (BitVec w)) (key : BitVec w)
     (n start : Nat) (mem : Memory w) (hbound : start + n ≤ input.size) :
     ((searchLoop key n (BitVec.ofNat w start)).costM timeAndSpaceCost mem).1.addresses ⊆
       inputRegion input := by
-  induction n generalizing start with
-  | zero => exact Finset.empty_subset _
-  | succ n ih =>
-    have haddr : BitVec.ofNat w start ∈ inputRegion input :=
-      Finset.mem_image.mpr ⟨start, Finset.mem_range.mpr (by omega), rfl⟩
-    rw [searchLoop_cost_succ]
-    split_ifs
-    · exact Finset.singleton_subset_iff.mpr haddr
-    · change {BitVec.ofNat w start} ∪
-        ((searchLoop key n (BitVec.ofNat w start + 1)).costM timeAndSpaceCost mem).1.addresses ⊆ _
-      apply Finset.union_subset (Finset.singleton_subset_iff.mpr haddr)
-      rw [wordAddress_succ]
-      exact ih (start + 1) (by omega)
+  induction n generalizing start <;> grind
 
 /-- Every address accessed by the search lies in the input region. -/
 theorem linearSearch_addresses_subset (input : Array (BitVec w)) (key : BitVec w)
@@ -398,13 +281,10 @@ theorem linearSearch_auxiliarySpace (input : Array (BitVec w)) (key : BitVec w)
 theorem inputRegion_card (input : Array (BitVec w)) (hfits : input.size ≤ 2 ^ w) :
     (inputRegion input).card = input.size := by
   unfold inputRegion
-  have hinj : Set.InjOn (BitVec.ofNat w) (↑(Finset.range input.size) : Set Nat) := by
+  rw [Finset.card_image_of_injOn (by
     intro i hi j hj heq
-    have hiw := lt_of_lt_of_le (Finset.mem_range.mp hi) hfits
-    have hjw := lt_of_lt_of_le (Finset.mem_range.mp hj) hfits
-    have h := congrArg BitVec.toNat heq
-    simpa only [BitVec.toNat_ofNat, Nat.mod_eq_of_lt hiw, Nat.mod_eq_of_lt hjw] using h
-  rw [Finset.card_image_of_injOn hinj, Finset.card_range]
+    have := congrArg BitVec.toNat heq
+    grind), Finset.card_range]
 
 /-- Total space including the input is exactly its length, even after an early return. -/
 theorem linearSearch_totalSpace (input : Array (BitVec w)) (key : BitVec w)

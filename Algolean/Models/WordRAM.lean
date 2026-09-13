@@ -107,6 +107,16 @@ def natCost : ModelM (WordRAM w) (StateM (Memory w)) Nat where
     | .cmp op x y => pure (op.eval x y)
   cost _ := 1
 
+/-- Concrete-state semantics of each word-RAM query. -/
+@[simp] theorem natCost_evalQuery_state (q : WordRAM w α) (mem : Memory w) :
+    natCost.evalQuery q mem = match q with
+      | .load addr => (mem addr, mem)
+      | .store addr value => ((), Function.update mem addr value)
+      | .binop op x y => (op.eval x y, mem)
+      | .bnot x => (~~~x, mem)
+      | .cmp op x y => (op.eval x y, mem) := by
+  cases q <;> rfl
+
 /-- Time and the set of memory addresses accessed by an execution. -/
 @[ext]
 structure RAMCost (w : Nat) where
@@ -125,12 +135,18 @@ instance : Zero (RAMCost w) := ⟨0, ∅⟩
 instance : Add (RAMCost w) where
   add a b := ⟨a.time + b.time, a.addresses ∪ b.addresses⟩
 
+attribute [grind =] zero_time zero_addresses add_time add_addresses
+
 instance : AddCommMonoid (RAMCost w) where
   nsmul := nsmulRec
   zero_add a := by ext <;> simp
   add_zero a := by ext <;> simp
   add_assoc a b c := by ext <;> simp [Nat.add_assoc, Finset.union_assoc]
   add_comm a b := by ext <;> simp [Nat.add_comm, Finset.union_comm]
+
+/-- Normalize addition to the time sum and the union of accessed addresses. -/
+@[simp, grind =] theorem mk_add (time : Nat) (addresses : Finset (Word w)) (c : RAMCost w) :
+    (⟨time, addresses⟩ : RAMCost w) + c = ⟨time + c.time, addresses ∪ c.addresses⟩ := rfl
 
 /-- Memory footprint in words: each accessed address is counted once. -/
 def space (c : RAMCost w) : Nat := c.addresses.card
