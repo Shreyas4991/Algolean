@@ -211,6 +211,14 @@ section State
       let rest := (f result.1).costM M result.2
       (M.cost q + rest.1, rest.2) := rfl
 
+/-- Cost accounting preserves the final state of ordinary evaluation. -/
+@[simp] theorem costM_state [AddZero Cost] (P : Prog Q α)
+    (M : ModelM Q (StateM σ) Cost) (s : σ) :
+    (P.costM M s).2 = (P.evalM M s).2 := by
+  induction P generalizing s with
+  | pure a => rfl
+  | liftBind q f ih => exact ih (M.evalQuery q s).1 (M.evalQuery q s).2
+
 end State
 
 section OfModel
