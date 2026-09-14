@@ -110,8 +110,8 @@ private theorem loop_correct_found (input : Array (BitVec w)) (target : Word w)
   induction n generalizing start s with
   | zero => simp at hresult
   | succ n ih =>
-    have hi : start < input.size := by omega
-    have ht := ih (start + 1) (by omega)
+    have hi : start < input.size := by lia
+    have ht := ih (start + 1) (by lia)
       ((s.writeRegister value input[start]).writeRegister index (BitVec.ofNat w (start + 1)))
       (by simp [hmem]) (by simp) (by simp [hkey]) (by simp [hone])
     clear ih
@@ -126,10 +126,10 @@ private theorem loop_correct_not_found (input : Array (BitVec w)) (target : Word
     (hresult : (((loop n).runM timeAndSpaceCost).run s).fst.ret = none) :
     ∀ i, start ≤ i → i < start + n → input[i]? ≠ some target := by
   induction n generalizing start s with
-  | zero => omega
+  | zero => lia
   | succ n ih =>
-    have hi : start < input.size := by omega
-    have ht := ih (start + 1) (by omega)
+    have hi : start < input.size := by lia
+    have ht := ih (start + 1) (by lia)
       ((s.writeRegister value input[start]).writeRegister index (BitVec.ofNat w (start + 1)))
       (by simp [hmem]) (by simp) (by simp [hkey]) (by simp [hone])
     clear ih
@@ -145,7 +145,7 @@ private def initialized (s : RAMState w 4) : RAMState w 4 :=
       let rest := ((loop n).runM timeAndSpaceCost).run (initialized s)
       ((⟨rest.fst.ret, ⟨2, ∅⟩ + rest.fst.tell⟩ :
         AddWriter (RAMCost w 4) (Option (Register 4))), rest.snd) := by
-  simp [linearSearch, initialized, evalQuery, queryProbes, ← Nat.add_assoc]
+  simp [linearSearch, initialized, ← Nat.add_assoc]
 
 /-- The returned register holds the first match; failure certifies absence of the key. -/
 theorem linearSearch_correct (input : Array (BitVec w)) (target : Word w)
@@ -155,17 +155,16 @@ theorem linearSearch_correct (input : Array (BitVec w)) (target : Word w)
     match result.fst.ret with
     | none => target ∉ input
     | some r => r = index ∧ IsFirstMatch input target (result.snd.Registers r) := by
-  dsimp only
-  rw [linearSearch_run]
+  simp only [linearSearch_run]
   split
   · rename_i hresult
-    have h := loop_correct_not_found input target hfits input.size 0 (by omega)
+    have h := loop_correct_not_found input target hfits input.size 0 (by lia)
       (initialized (linearSearchState input target)) (by simp [initialized, linearSearchState])
       (by simp [initialized]) (by simp [initialized, linearSearchState])
       (by simp [initialized]) hresult
     grind [Array.mem_iff_getElem?]
   · rename_i r hresult
-    have h := loop_correct_found input target hfits input.size 0 (by omega)
+    have h := loop_correct_found input target hfits input.size 0 (by lia)
       (initialized (linearSearchState input target)) (by simp [initialized, linearSearchState])
       (by simp [initialized]) (by simp [initialized, linearSearchState])
       (by simp [initialized]) r hresult
@@ -191,29 +190,21 @@ theorem linearSearch_some_iff (input : Array (BitVec w)) (target : Word w)
 /-- Register operations and loads preserve the entire memory. -/
 theorem linearSearch_memory (n : Nat) (s : RAMState w 4) :
     (((linearSearch w n).runM timeAndSpaceCost).run s).snd.Memory = s.Memory := by
-  rw [linearSearch_run, loop_memory]
-  simp [initialized]
+  simpa [initialized] using loop_memory n (initialized s)
 
 /-- Two setup instructions and at most three queries per input element. -/
 theorem linearSearch_time_le (n : Nat) (s : RAMState w 4) :
     (((linearSearch w n).runM timeAndSpaceCost).run s).fst.tell.time ≤ 3 * n + 2 := by
-  have h := loop_time_le n (initialized s)
-  rw [linearSearch_run]
-  simp only [RAMCost.add_time] at *
-  omega
+  simpa [Nat.add_comm] using Nat.add_le_add_left (loop_time_le n (initialized s)) 2
 
 /-- A missing key forces all `n` iterations, in addition to two setup instructions. -/
 theorem linearSearch_time_of_not_mem (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) (hnot : target ∉ input) :
     (((linearSearch w input.size).runM timeAndSpaceCost).run
       (linearSearchState input target)).fst.tell.time = 3 * input.size + 2 := by
-  have hn := (linearSearch_none_iff input target hfits).mpr hnot
-  rw [linearSearch_run] at hn
   have ht := loop_time_of_none input.size (initialized (linearSearchState input target))
-    hn
-  rw [linearSearch_run]
-  simp only [RAMCost.add_time] at *
-  lia
+    (by simpa using (linearSearch_none_iff input target hfits).mpr hnot)
+  simp [ht, Nat.add_comm]
 
 private theorem loop_time_of_some (n start : Nat) (hbound : start + n ≤ 2 ^ w)
     (s : RAMState w 4) (hindex : s.Registers index = BitVec.ofNat w start)
@@ -224,7 +215,7 @@ private theorem loop_time_of_some (n start : Nat) (hbound : start + n ≤ 2 ^ w)
   induction n generalizing start s with
   | zero => simp at hfound
   | succ n ih =>
-    have ht := ih (start + 1) (by omega)
+    have ht := ih (start + 1) (by lia)
       ((s.writeRegister value (s.Memory (BitVec.ofNat w start))).writeRegister index
         (BitVec.ofNat w (start + 1))) (by simp) (by simp [hone])
     clear ih
@@ -236,16 +227,14 @@ theorem linearSearch_time_of_some (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) (r : Register 4)
     (hfound : (((linearSearch w input.size).runM timeAndSpaceCost).run
       (linearSearchState input target)).fst.ret = some r) :
-    (((linearSearch w input.size).runM timeAndSpaceCost).run
-      (linearSearchState input target)).fst.tell.time =
-      3 * ((((linearSearch w input.size).runM timeAndSpaceCost).run
-        (linearSearchState input target)).snd.Registers r).toNat + 4 := by
-  rw [linearSearch_run] at hfound
-  have ht := loop_time_of_some input.size 0 (by omega)
-    (initialized (linearSearchState input target)) (by simp [initialized, index, one])
-    (by simp [initialized]) r hfound
-  rw [linearSearch_run]
-  simp only [RAMCost.add_time] at *
+    let result := ((linearSearch w input.size).runM timeAndSpaceCost).run
+      (linearSearchState input target)
+    let address := result.snd.Registers r
+    result.fst.tell.time = 3 * address.toNat + 4 := by
+  have ht := loop_time_of_some input.size 0 (by lia)
+    (initialized (linearSearchState input target)) (by simp [initialized])
+    (by simp [initialized]) r (by simpa using hfound)
+  simp_all only [linearSearch_run, RAMCost.mk_add, Finset.empty_union, mul_zero, add_zero]
   lia
 
 /-- Memory cells occupied by the input array. -/
@@ -258,8 +247,7 @@ def inputRegion (input : Array (BitVec w)) : Finset (Word w) :=
 
 private theorem loop_addresses_subset (input : Array (BitVec w)) (n start : Nat)
     (hbound : start + n ≤ input.size) (s : RAMState w 4)
-    (hindex : s.Registers index = BitVec.ofNat w start) (hone : s.Registers one = 1)
-     :
+    (hindex : s.Registers index = BitVec.ofNat w start) (hone : s.Registers one = 1) :
     (((loop n).runM timeAndSpaceCost).run s).fst.tell.addresses ⊆ inputRegion input := by
   induction n generalizing start s with
   | zero => simp
@@ -276,20 +264,18 @@ private theorem loop_addresses_subset (input : Array (BitVec w)) (n start : Nat)
 theorem linearSearch_addresses_subset (input : Array (BitVec w)) (target : Word w) :
     (((linearSearch w input.size).runM timeAndSpaceCost).run
       (linearSearchState input target)).fst.tell.addresses ⊆ inputRegion input := by
-  have h := loop_addresses_subset input input.size 0 (by omega)
-    (initialized (linearSearchState input target)) (by simp [initialized, index, one])
+  simpa using loop_addresses_subset input input.size 0 (by lia)
+    (initialized (linearSearchState input target)) (by simp [initialized])
     (by simp [initialized])
-  rw [linearSearch_run]
-  simpa using h
 
 /-- Auxiliary space is four register words, with no memory probes outside the input. -/
 theorem linearSearch_auxiliarySpace (input : Array (BitVec w)) (target : Word w) :
     (((linearSearch w input.size).runM timeAndSpaceCost).run
       (linearSearchState input target)).fst.tell.auxiliarySpace
         (inputRegion input) = 4 := by
-  simp only [RAMCost.auxiliarySpace]
-  rw [Finset.sdiff_eq_empty_iff_subset.mpr (linearSearch_addresses_subset input target)]
-  rfl
+  simp only [RAMCost.auxiliarySpace,
+    Finset.sdiff_eq_empty_iff_subset.mpr (linearSearch_addresses_subset input target),
+    Finset.card_empty, Nat.add_zero]
 
 /-- A fitting array occupies exactly one distinct cell per element. -/
 theorem inputRegion_card (input : Array (BitVec w)) (hfits : input.size ≤ 2 ^ w) :
@@ -306,10 +292,9 @@ theorem linearSearch_totalSpace (input : Array (BitVec w)) (target : Word w)
     (((linearSearch w input.size).runM timeAndSpaceCost).run
       (linearSearchState input target)).fst.tell.totalSpace
         (inputRegion input) = input.size + 4 := by
-  simp only [RAMCost.totalSpace]
-  rw [Finset.union_eq_right.mpr (linearSearch_addresses_subset input target),
-    inputRegion_card input hfits]
-  omega
+  simp only [RAMCost.totalSpace,
+    Finset.union_eq_right.mpr (linearSearch_addresses_subset input target),
+    inputRegion_card input hfits, Nat.add_comm]
 
 /-- Every representable length has a worst-case instance, for a positive word width. -/
 theorem linearSearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :
