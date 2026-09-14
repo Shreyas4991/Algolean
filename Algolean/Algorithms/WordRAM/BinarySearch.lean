@@ -38,33 +38,33 @@ abbrev key : Register 6 := 4
 abbrev one : Register 6 := 5
 
 /-- Search a nonempty inclusive interval held in the endpoint registers. -/
-def loop (w : Nat) : Nat → Prog (WordRAM w 6) (Option (Register 6))
-  | 0 => pure none
+def loop (w : Nat) : Nat → Prog (WordRAM w 6) Unit
+  | 0 => pure ()
   | fuel + 1 => do
     binop (w := w) .sub middle upper lower
     binop (w := w) .shr middle middle one
     binop (w := w) .add middle lower middle
     load (w := w) value middle
-    let found : Bool ← cmp (w := w) .eq value key
-    if found then return some middle
-    let right : Bool ← cmp (w := w) .ult value key
-    if right then
-      let last : Bool ← cmp (w := w) .eq middle upper
-      if last then return none
-      binop (w := w) .add lower middle one
-      loop w fuel
-    else
-      let first : Bool ← cmp (w := w) .eq middle lower
-      if first then return none
-      binop (w := w) .sub upper middle one
-      loop w fuel
+    cmp (w := w) .eq value key
+    branch .eq (pure ()) (do
+      cmp (w := w) .ult value key
+      branch .ult (do
+        cmp (w := w) .ult middle upper
+        branch .ult (do
+          binop (w := w) .add lower middle one
+          loop w fuel) (pure ())) (do
+        cmp (w := w) .ult lower middle
+        branch .ult (do
+          binop (w := w) .sub upper middle one
+          loop w fuel) (pure ())))
 
 end BinarySearch
 
 /-- Search `n` cells, with the key preloaded in `BinarySearch.key`.
-Nonempty input requires three setup queries for the endpoints and constant one. -/
-def binarySearch (w n : Nat) : Prog (WordRAM w 6) (Option (Register 6)) := do
-  if n = 0 then return none
+The result flag is cleared first; nonempty input also initializes the endpoints and constant one. -/
+def binarySearch (w n : Nat) : Prog (WordRAM w 6) Unit := do
+  clearFlag (w := w) (k := 6) .eq
+  if n = 0 then return ()
   set (w := w) BinarySearch.lower 0
   set (w := w) BinarySearch.upper (BitVec.ofNat w (n - 1))
   set (w := w) BinarySearch.one 1
@@ -72,7 +72,7 @@ def binarySearch (w n : Nat) : Prog (WordRAM w 6) (Option (Register 6)) := do
 
 /-- Input memory and key register, supplied before the charged search starts. -/
 @[simps] def binarySearchState (input : Array (BitVec w)) (target : Word w) : RAMState w 6 :=
-  ⟨arrayMemory input, fun r => if r = BinarySearch.key then target else 0⟩
+  ⟨arrayMemory input, fun r => if r = BinarySearch.key then target else 0, fun _ => false⟩
 
 @[simp, grind =] theorem binarySearchState_memory (input : Array (BitVec w)) (target : Word w) :
     (binarySearchState input target).Memory = arrayMemory input := rfl
@@ -86,7 +86,7 @@ section CorrectnessAndComplexity
 
 open BinarySearch
 
-attribute [local simp] loop evalQuery queryProbes BinOp.eval CmpOp.eval
+attribute [local simp] loop runQuery BinOp.eval CmpOp.eval
   lower upper middle value key one
 
 /-- The word midpoint agrees with the natural midpoint, even when input fills memory. -/
@@ -104,6 +104,8 @@ attribute [local simp] loop evalQuery queryProbes BinOp.eval CmpOp.eval
     simp [BitVec.toNat_ushiftRight, Nat.shiftRight_eq_div_pow,
       Nat.mod_eq_of_lt hd, Nat.mod_eq_of_lt hh]
 
+attribute [local simp] wordAddress_mid wordAddress_toNat
+
 /-- Decrementing a positive representable address does not wrap. -/
 @[grind =] theorem wordAddress_pred (i : Nat) (hi : i < 2 ^ w) (hpos : 0 < i) :
     BitVec.ofNat w i - 1 = BitVec.ofNat w (i - 1) :=
@@ -119,8 +121,8 @@ attribute [local simp] loop evalQuery queryProbes BinOp.eval CmpOp.eval
   · exact congrArg (BitVec.ofNat w)
 
 @[simp] private def atMid (s : RAMState w 6) (pivot : Nat) : RAMState w 6 :=
-  (s.writeRegister middle (BitVec.ofNat w pivot)).writeRegister value
-    (s.Memory (BitVec.ofNat w pivot))
+  (((s.writeRegister middle (BitVec.ofNat w pivot)).writeRegister value
+    (s.Memory (BitVec.ofNat w pivot))).writeFlag .eq false).writeFlag .ult true
 
 private theorem loop_memory (fuel : Nat) (s : RAMState w 6) :
     (((loop w fuel).runM timeAndSpaceCost).run s).snd.Memory = s.Memory := by
@@ -132,26 +134,34 @@ private theorem loop_correct_found (input : Array (BitVec w)) (target : Word w)
     (hlo : lo ≤ hi) (hhi : hi < input.size) (s : RAMState w 6)
     (hmem : s.Memory = arrayMemory input) (hl : s.Registers lower = BitVec.ofNat w lo)
     (hh : s.Registers upper = BitVec.ofNat w hi) (hk : s.Registers key = target)
-    (h1 : s.Registers one = 1) (r : Register 6)
-    (hresult : (((loop w fuel).runM timeAndSpaceCost).run s).fst.ret = some r) :
+    (h1 : s.Registers one = 1) (hflag : s.Flags .eq = false)
+    (hresult : (((loop w fuel).runM timeAndSpaceCost).run s).snd.Flags .eq = true) :
     let result := ((loop w fuel).runM timeAndSpaceCost).run s
-    let addr := result.snd.Registers r
-    r = middle ∧ lo ≤ addr.toNat ∧ addr.toNat ≤ hi ∧ input[addr.toNat]? = some target := by
+    let addr := result.snd.Registers middle
+    lo ≤ addr.toNat ∧ addr.toNat ≤ hi ∧ input[addr.toNat]? = some target := by
   induction fuel generalizing lo hi s with
-  | zero => simp at hresult
+  | zero => simp_all
   | succ fuel ih =>
     let pivot := lo + (hi - lo) / 2
     have hp : lo ≤ pivot ∧ pivot ≤ hi := by dsimp [pivot]; lia
     have hpw : pivot < 2 ^ w := by lia
+    have hlw : lo < 2 ^ w := by lia
+    have hhw : hi < 2 ^ w := by lia
+    have hlmod := Nat.mod_eq_of_lt hlw
+    have hhmod := Nat.mod_eq_of_lt hhw
+    have hpmod := Nat.mod_eq_of_lt hpw
     have hm := wordAddress_mid lo hi hlo (lt_of_lt_of_le hhi hfits)
+    have hmnat := congrArg BitVec.toNat hm
+    simp only [BitVec.toNat_add, BitVec.toNat_ushiftRight, BitVec.toNat_sub,
+      BitVec.toNat_ofNat] at hmnat
     have hr (hn : pivot < hi) := ih (pivot + 1) hi (by lia) hhi
       ((atMid s pivot).writeRegister lower (BitVec.ofNat w (pivot + 1)))
       (by simp [hmem]) (by simp) (by simp [hh])
-      (by simp [hk]) (by simp [h1])
+      (by simp [hk]) (by simp [h1]) (by simp)
     have hleft (hn : lo < pivot) := ih lo (pivot - 1) (by lia) (by lia)
       ((atMid s pivot).writeRegister upper (BitVec.ofNat w (pivot - 1)))
       (by simp [hmem]) (by simp [hl]) (by simp)
-      (by simp [hk]) (by simp [h1])
+      (by simp [hk]) (by simp [h1]) (by simp)
     clear ih
     simp_all
     split_ifs at hresult ⊢ <;> simp_all <;>
@@ -165,7 +175,7 @@ private theorem loop_correct_not_found (input : Array (BitVec w)) (target : Word
     (hmem : s.Memory = arrayMemory input) (hl : s.Registers lower = BitVec.ofNat w lo)
     (hh : s.Registers upper = BitVec.ofNat w hi) (hk : s.Registers key = target)
     (h1 : s.Registers one = 1)
-    (hresult : (((loop w fuel).runM timeAndSpaceCost).run s).fst.ret = none) :
+    (hresult : (((loop w fuel).runM timeAndSpaceCost).run s).snd.Flags .eq = false) :
     ∀ i, lo ≤ i → i ≤ hi → input[i]? ≠ some target := by
   induction fuel generalizing lo hi s with
   | zero => lia
@@ -173,7 +183,15 @@ private theorem loop_correct_not_found (input : Array (BitVec w)) (target : Word
     let pivot := lo + (hi - lo) / 2
     have hp : lo ≤ pivot ∧ pivot ≤ hi := by dsimp [pivot]; lia
     have hpw : pivot < 2 ^ w := by lia
+    have hlw : lo < 2 ^ w := by lia
+    have hhw : hi < 2 ^ w := by lia
+    have hlmod := Nat.mod_eq_of_lt hlw
+    have hhmod := Nat.mod_eq_of_lt hhw
+    have hpmod := Nat.mod_eq_of_lt hpw
     have hm := wordAddress_mid lo hi hlo (lt_of_lt_of_le hhi hfits)
+    have hmnat := congrArg BitVec.toNat hm
+    simp only [BitVec.toNat_add, BitVec.toNat_ushiftRight, BitVec.toNat_sub,
+      BitVec.toNat_ofNat] at hmnat
     have hr (hn : pivot < hi) := ih (pivot + 1) hi (by lia) hhi (by lia)
       ((atMid s pivot).writeRegister lower (BitVec.ofNat w (pivot + 1)))
       (by simp [hmem]) (by simp) (by simp [hh])
@@ -193,30 +211,28 @@ private theorem loop_correct_not_found (input : Array (BitVec w)) (target : Word
         BitVec.eq_of_toNat_eq]
 
 private def initialized (s : RAMState w 6) (n : Nat) : RAMState w 6 :=
-  ((s.writeRegister lower 0).writeRegister upper (BitVec.ofNat w (n - 1))).writeRegister one 1
+  (((s.writeFlag .eq false).writeRegister lower 0).writeRegister upper
+    (BitVec.ofNat w (n - 1))).writeRegister one 1
 
 attribute [local simp] binarySearch initialized
 
-/-- Sorted input is searched correctly. Any matching position may be returned. -/
+/-- The equality flag records success and the middle register holds a matching address. -/
 theorem binarySearch_correct (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) (hsorted : SortedWords input) :
     let result := ((binarySearch w input.size).runM timeAndSpaceCost).run
       (binarySearchState input target)
-    match result.fst.ret with
-    | none => target ∉ input
-    | some r =>
-      let addr := result.snd.Registers r
-      r = middle ∧ addr.toNat < input.size ∧ input[addr.toNat]? = some target := by
+    let addr := result.snd.Registers middle
+    if result.snd.Flags .eq then
+      addr.toNat < input.size ∧ input[addr.toNat]? = some target
+    else target ∉ input := by
   by_cases hn : input.size = 0
   · simp [Array.eq_empty_of_size_eq_zero hn]
   · have hnot := loop_correct_not_found input target hfits hsorted input.size 0 (input.size - 1)
       (by lia) (by lia) (by lia) (initialized (binarySearchState input target) input.size)
-      (by simp) (by simp) (by simp)
-      (by simp) (by simp)
+      (by simp) (by simp) (by simp) (by simp) (by simp)
     have hfound := loop_correct_found input target hfits input.size 0 (input.size - 1)
       (by lia) (by lia) (initialized (binarySearchState input target) input.size)
-      (by simp) (by simp) (by simp)
-      (by simp) (by simp)
+      (by simp) (by simp) (by simp) (by simp) (by simp) (by simp)
     simp only [initialized] at hnot hfound
     simp [hn]
     split <;> grind [Array.mem_iff_getElem?]
@@ -226,19 +242,19 @@ theorem binarySearch_none_iff (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) (hsorted : SortedWords input) :
     let result := ((binarySearch w input.size).runM timeAndSpaceCost).run
       (binarySearchState input target)
-    result.fst.ret = none ↔ target ∉ input := by
+    result.snd.Flags .eq = false ↔ target ∉ input := by
   have h := binarySearch_correct input target hfits hsorted
   grind [Array.mem_iff_getElem?]
 
-/-- A successful result register holds an in-bounds matching address. -/
+/-- A successful search leaves an in-bounds matching address in the middle register. -/
 theorem binarySearch_of_some (input : Array (BitVec w)) (target : Word w)
-    (hfits : input.size ≤ 2 ^ w) (hsorted : SortedWords input) (r : Register 6)
+    (hfits : input.size ≤ 2 ^ w) (hsorted : SortedWords input)
     (hfound : (((binarySearch w input.size).runM timeAndSpaceCost).run
-      (binarySearchState input target)).fst.ret = some r) :
+      (binarySearchState input target)).snd.Flags .eq = true) :
     let result := ((binarySearch w input.size).runM timeAndSpaceCost).run
       (binarySearchState input target)
-    let addr := result.snd.Registers r
-    r = middle ∧ addr.toNat < input.size ∧ input[addr.toNat]? = some target := by
+    let addr := result.snd.Registers middle
+    addr.toNat < input.size ∧ input[addr.toNat]? = some target := by
   have h := binarySearch_correct input target hfits hsorted
   grind
 
@@ -268,7 +284,15 @@ private theorem loop_time_le (fuel lo hi : Nat) (hlo : lo ≤ hi) (hhi : hi < 2 
     let pivot := lo + (hi - lo) / 2
     have hp : lo ≤ pivot ∧ pivot ≤ hi := by dsimp [pivot]; lia
     have hpw : pivot < 2 ^ w := by lia
+    have hlw : lo < 2 ^ w := by lia
+    have hhw : hi < 2 ^ w := by lia
+    have hlmod := Nat.mod_eq_of_lt hlw
+    have hhmod := Nat.mod_eq_of_lt hhw
+    have hpmod := Nat.mod_eq_of_lt hpw
     have hm := wordAddress_mid lo hi hlo hhi
+    have hmnat := congrArg BitVec.toNat hm
+    simp only [BitVec.toNat_add, BitVec.toNat_ushiftRight, BitVec.toNat_sub,
+      BitVec.toNat_ofNat] at hmnat
     have hr (hn : pivot < hi) := ih (pivot + 1) hi (by lia) hhi
       ((atMid s pivot).writeRegister lower (BitVec.ofNat w (pivot + 1)))
       (by simp) (by simp [hh]) (by simp [h1])
@@ -284,8 +308,8 @@ private theorem loop_time_le (fuel lo hi : Nat) (hlo : lo ≤ hi) (hhi : hi < 2 
     split_ifs <;> simp_all <;>
       grind only [wordAddress_eq_iff, = wordAddress_pred, = wordAddress_succ]
 
-/-- Exact worst-case query count: three setup queries, then up to eight per halving step. -/
-def binarySearchTime (n : Nat) : Nat := if n = 0 then 0 else 8 * n.log2 + 10
+/-- Exact worst-case query count: four setup queries, then up to eight per halving step. -/
+def binarySearchTime (n : Nat) : Nat := if n = 0 then 1 else 8 * n.log2 + 11
 
 /-- The logarithmic time bound holds without sortedness, including a full address space. -/
 theorem binarySearch_time_le (n : Nat) (hfits : n ≤ 2 ^ w) (s : RAMState w 6) :
@@ -310,7 +334,15 @@ private theorem loop_addresses_subset (input : Array (BitVec w))
     let pivot := lo + (hi - lo) / 2
     have hp : lo ≤ pivot ∧ pivot ≤ hi := by dsimp [pivot]; lia
     have hpw : pivot < 2 ^ w := by lia
+    have hlw : lo < 2 ^ w := by lia
+    have hhw : hi < 2 ^ w := by lia
+    have hlmod := Nat.mod_eq_of_lt hlw
+    have hhmod := Nat.mod_eq_of_lt hhw
+    have hpmod := Nat.mod_eq_of_lt hpw
     have hm := wordAddress_mid lo hi hlo (lt_of_lt_of_le hhi hfits)
+    have hmnat := congrArg BitVec.toNat hm
+    simp only [BitVec.toNat_add, BitVec.toNat_ushiftRight, BitVec.toNat_sub,
+      BitVec.toNat_ofNat] at hmnat
     have hmem := ofNat_mem_inputRegion input pivot (by lia)
     have hr (hn : pivot < hi) := ih (pivot + 1) hi (by lia) hhi
       ((atMid s pivot).writeRegister lower (BitVec.ofNat w (pivot + 1)))
@@ -371,7 +403,15 @@ private theorem loop_worstCase (hw : 0 < w) (fuel lo hi : Nat)
     let pivot := lo + (hi - lo) / 2
     have hp : lo ≤ pivot ∧ pivot ≤ hi := by dsimp [pivot]; lia
     have hpw : pivot < 2 ^ w := by lia
+    have hlw : lo < 2 ^ w := by lia
+    have hhw : hi < 2 ^ w := by lia
+    have hlmod := Nat.mod_eq_of_lt hlw
+    have hhmod := Nat.mod_eq_of_lt hhw
+    have hpmod := Nat.mod_eq_of_lt hpw
     have hm := wordAddress_mid lo hi hlo hhi
+    have hmnat := congrArg BitVec.toNat hm
+    simp only [BitVec.toNat_add, BitVec.toNat_ushiftRight, BitVec.toNat_sub,
+      BitVec.toNat_ofNat] at hmnat
     have hr (hn : pivot < hi) := ih (pivot + 1) hi (by lia) hhi (by lia)
       ((atMid s pivot).writeRegister lower (BitVec.ofNat w (pivot + 1)))
       (by simp [hmem]) (by simp) (by simp [hh])

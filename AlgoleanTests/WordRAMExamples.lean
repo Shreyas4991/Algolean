@@ -68,7 +68,7 @@ def followPointer : Prog (WordRAM 8 4) Unit := do
 
 /-- The pointer cell at zero chooses the next cell to probe. -/
 def pointerState (ptr : Word 8) : RAMState 8 4 :=
-  ⟨fun addr => if addr = 0 then ptr else 42, fun _ => 0⟩
+  ⟨fun addr => if addr = 0 then ptr else 42, fun _ => 0, fun _ => false⟩
 
 -- The first load probes the old r0 (zero), even though it overwrites r0 with nine.
 example : ((followPointer.runM timeAndSpaceCost).run
@@ -118,42 +118,39 @@ def repeatIncrement (w : Nat) : Nat → Prog (WordRAM w 4) Unit
     repeatIncrement w n
 
 def incrementState : RAMState 8 4 :=
-  ⟨fun _ => 0, fun r => if r = r0 then 7 else if r = r3 then 1 else 0⟩
+  ⟨fun _ => 0, fun r => if r = r0 then 7 else if r = r3 then 1 else 0, fun _ => false⟩
 
 example : (((repeatIncrement 8 4).runM timeAndSpaceCost).run
     incrementState).snd.Memory 7 = 4 := by
-  simp [repeatIncrement, increment, evalQuery, queryProbes,
+  simp [repeatIncrement, increment, runQuery,
     incrementState, r0, r1, r3, BinOp.eval]
 
 example : (((repeatIncrement 8 4).runM timeAndSpaceCost).run
     incrementState).fst.tell.time = 12 := by
-  simp [repeatIncrement, increment, evalQuery, queryProbes, incrementState, r0, r1, r3,
+  simp [repeatIncrement, increment, runQuery, incrementState, r0, r1, r3,
     BinOp.eval]
 
 example : (((repeatIncrement 8 4).runM timeAndSpaceCost).run
     incrementState).fst.tell.space = 5 := by
-  simp [repeatIncrement, increment, evalQuery, queryProbes,
+  simp [repeatIncrement, increment, runQuery,
     incrementState, r0, r1, r3, BinOp.eval, RAMCost.space]
 
 /-- Compare through registers and perform the store only on the true branch. -/
-def raiseTo : Prog (WordRAM 8 4) Bool := do
+def raiseTo : Prog (WordRAM 8 4) Unit := do
   load (w := 8) r1 r0
-  let below : Bool ← cmp (w := 8) .ult r1 r2
-  if below then
-    store (w := 8) r0 r2
-    return true
-  else return false
+  cmp (w := 8) .ult r1 r2
+  branch .ult (do store (w := 8) r0 r2) (pure ())
 
 def raiseState (value : Word 8) : RAMState 8 4 :=
-  ⟨fun _ => value, fun r => if r = r0 then 4 else if r = r2 then 10 else 0⟩
+  ⟨fun _ => value, fun r => if r = r0 then 4 else if r = r2 then 10 else 0, fun _ => false⟩
 
-example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 0)).fst.ret = true := by decide
+example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 0)).snd.Flags .ult = true := by decide
 
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 0)).fst.tell.time = 3 := by decide
 
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 0)).snd.Memory 4 = 10 := by decide
 
-example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 255)).fst.ret = false := by decide
+example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 255)).snd.Flags .ult = false := by decide
 
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 255)).fst.tell.time = 2 := by decide
 
@@ -163,7 +160,8 @@ example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 255)).snd.Memory 4 = 
 The destination aliases a source, exercising reads from the old register file. -/
 def byteBinop (op : BinOp) (x y : Word 8) : Word 8 :=
   ((Prog.runM (binop (w := 8) op r0 r0 r1 : Prog (WordRAM 8 4) Unit) timeAndSpaceCost).run
-    (⟨fun _ => 0, fun r => if r = r0 then x else y⟩ : RAMState 8 4)).snd.Registers r0
+    (⟨fun _ => 0, fun r => if r = r0 then x else y, fun _ => false⟩ :
+      RAMState 8 4)).snd.Registers r0
 
 example : byteBinop .sub 0 1 = 255 := by decide
 
@@ -186,7 +184,7 @@ example : byteBinop .shl 255 9 = 0 := by decide
 example : byteBinop .shr 255 255 = 0 := by decide
 
 /-- Arithmetic and complement use registers without probing memory. -/
-def wordOnly : Prog (WordRAM 8 4) Bool := do
+def wordOnly : Prog (WordRAM 8 4) Unit := do
   binop (w := 8) .add r2 r0 r1
   bnot (w := 8) r2 r2
   cmp (w := 8) .eq r2 r0
@@ -212,25 +210,126 @@ example :
     ⦃fun cost s => ⌜cost = 0 ∧ s = pointerState 9⌝⦄ followPointer
       ⦃⇓ _ cost s => ⌜cost.time = 2 ∧ cost.addresses = {0, 9} ∧ s.Registers r1 = 42⌝⦄ := by
   mvcgen [followPointer]
-  simp_all [HasHandler.handler, evalQuery, queryProbes, pointerState, r0, r1, Finset.pair_comm]
+  simp_all [HasHandler.handler, runQuery, pointerState, r0, r1, Finset.pair_comm]
 
 end WeakestPreconditions
+
+namespace Branches
+
+/-- Existing word instructions can be used directly inside either branch. -/
+def choose : Prog (WordRAM 8 4) Unit := do
+  WordRAM.cmp (w := 8) .ult r0 r1
+  branch .ult (do
+    set (w := 8) r2 42
+    store (w := 8) r3 r2) (do
+    set (w := 8) r2 99)
+
+/-- Input words and the destination address are supplied in machine registers. -/
+def initial (x y : Word 8) : RAMState 8 4 :=
+  ⟨fun _ => 0, fun r =>
+    if r = r0 then x else if r = r1 then y else if r = r3 then 9 else 0, fun _ => false⟩
+
+example : ((choose.runM timeAndSpaceCost).run (initial 3 7)).snd.Memory 9 = 42 := by
+  decide +kernel
+
+example : ((choose.runM timeAndSpaceCost).run (initial 7 3)).snd.Memory 9 = 0 := by
+  decide +kernel
+
+example : ((choose.runM timeAndSpaceCost).run (initial 7 3)).snd.Registers r2 = 99 := by
+  decide +kernel
+
+-- One comparison and just the selected body's instructions are charged.
+example : ((choose.runM timeAndSpaceCost).run (initial 3 7)).fst.tell.time = 3 := by
+  decide +kernel
+
+example : ((choose.runM timeAndSpaceCost).run (initial 7 3)).fst.tell.time = 2 := by
+  decide +kernel
+
+example : ((choose.runM timeAndSpaceCost).run (initial 3 7)).fst.tell.addresses = {9} := by
+  decide +kernel
+
+example : ((choose.runM timeAndSpaceCost).run (initial 7 3)).fst.tell.addresses = ∅ := by
+  decide +kernel
+
+example : ((choose.runM timeAndSpaceCost).run (initial 3 7)).fst.tell.auxiliarySpace ∅ = 5 := by
+  decide +kernel
+
+-- The comparison changes its own flag; word instructions leave that flag intact.
+example : ((choose.runM timeAndSpaceCost).run (initial 3 7)).snd.Flags .ult = true := by
+  decide +kernel
+
+example : ((choose.runM timeAndSpaceCost).run (initial 3 7)).snd.Flags .eq = false := by
+  decide +kernel
+
+/-- Branch on equality after a later less-than comparison: the flags are independent. -/
+def independentFlags : Prog (WordRAM 8 4) Unit := do
+  WordRAM.cmp (w := 8) .eq r0 r1
+  WordRAM.cmp (w := 8) .ult r0 r1
+  branch .eq (do set (w := 8) r2 42) (do set (w := 8) r2 99)
+
+example : ((independentFlags.runM timeAndSpaceCost).run
+    (initial 7 7)).snd.Registers r2 = 42 := by decide +kernel
+
+example : ((independentFlags.runM timeAndSpaceCost).run
+    (initial 7 7)).snd.Flags .ult = false := by decide +kernel
+
+/-- Repeating a comparison overwrites a stale flag, and nested branches remain compositional. -/
+def nested : Prog (WordRAM 8 4) Unit := do
+  WordRAM.cmp (w := 8) .eq r0 r0
+  branch .eq (do
+    WordRAM.cmp (w := 8) .eq r0 r1
+    branch .eq (do set (w := 8) r2 42) (do set (w := 8) r2 99)) (pure ())
+  store (w := 8) r3 r2
+
+example : ((nested.runM timeAndSpaceCost).run (initial 3 7)).snd.Memory 9 = 99 := by
+  decide +kernel
+
+example : ((nested.runM timeAndSpaceCost).run (initial 3 7)).fst.tell.time = 4 := by
+  decide +kernel
+
+-- Arbitrary Lean return types are allowed, but their values cannot depend on machine data.
+example (p : Prog (WordRAM w k) (List Bool)) (s t : RAMState w k) :
+    let left := (p.runM timeAndSpaceCost).run s
+    let right := (p.runM timeAndSpaceCost).run t
+    left.fst.ret = right.fst.ret := runM_ret_independent p s t
+
+section WeakestPreconditions
+
+open Cslib.FreeM Std.Do
+
+local instance : HasHandler (WordRAM 8 4) (.arg (RAMCost 8 4) (.arg (RAMState 8 4) .pure)) :=
+  timeAndSpaceCost.hasCostHandler
+
+-- The existing cost-aware WP machinery also sees the selected branch's final state and cost.
+set_option mvcgen.warning false in
+example :
+    ⦃fun cost s => ⌜cost = 0 ∧ s = initial 3 7⌝⦄ choose
+      ⦃⇓ _ cost s => ⌜cost.time = 3 ∧ cost.addresses = {9} ∧ s.Memory 9 = 42⌝⦄ := by
+  mvcgen [choose, branch]
+  simp_all [HasHandler.handler, runQuery, initial,
+    CmpOp.eval, r0, r1, r2, r3]
+
+end WeakestPreconditions
+
+
+end Branches
 
 section LinearSearch
 
 def searchInput : Array (BitVec 8) := #[12, 7, 42, 7, 99]
 
-def searchExample : Prog (WordRAM 8 4) (Option (Register 4)) :=
+def searchExample : Prog (WordRAM 8 4) Unit :=
   linearSearch 8 searchInput.size
 
 attribute [local simp] searchExample searchInput linearSearch LinearSearch.loop
-  evalQuery queryProbes Finset.pair_comm
+  runQuery Finset.pair_comm
   linearSearchState arrayMemory LinearSearch.index LinearSearch.key
-  LinearSearch.one LinearSearch.value BinOp.eval CmpOp.eval timeAndSpaceCost
+  LinearSearch.one LinearSearch.value BinOp.eval CmpOp.eval
 
--- The key is supplied in the initial register file; the answer remains in the final register file.
-example : ((searchExample.runM timeAndSpaceCost).run (linearSearchState searchInput 7)).fst.ret =
-    some LinearSearch.index := by
+-- The key starts in a register; the result flag and address remain in machine state.
+example : ((searchExample.runM timeAndSpaceCost).run
+    (linearSearchState searchInput 7)).snd.Flags .eq =
+    true := by
   simp
 
 example : ((searchExample.runM timeAndSpaceCost).run
@@ -244,24 +343,24 @@ example : ((searchExample.runM timeAndSpaceCost).run
   simp
 
 example : ((searchExample.runM timeAndSpaceCost).run
-    (linearSearchState searchInput 18)).fst.ret = none := by
+    (linearSearchState searchInput 18)).snd.Flags .eq = false := by
   simp
 
--- Two initialization queries are included in all time counts.
+-- Three initialization queries are included in all time counts.
 example : ((searchExample.runM timeAndSpaceCost).run
-    (linearSearchState searchInput 12)).fst.tell.time = 4 := by
-  simp
-
-example : ((searchExample.runM timeAndSpaceCost).run
-    (linearSearchState searchInput 7)).fst.tell.time = 7 := by
+    (linearSearchState searchInput 12)).fst.tell.time = 5 := by
   simp
 
 example : ((searchExample.runM timeAndSpaceCost).run
-    (linearSearchState searchInput 99)).fst.tell.time = 16 := by
+    (linearSearchState searchInput 7)).fst.tell.time = 8 := by
   simp
 
 example : ((searchExample.runM timeAndSpaceCost).run
-    (linearSearchState searchInput 18)).fst.tell.time = 17 := by
+    (linearSearchState searchInput 99)).fst.tell.time = 17 := by
+  simp
+
+example : ((searchExample.runM timeAndSpaceCost).run
+    (linearSearchState searchInput 18)).fst.tell.time = 18 := by
   simp
 
 example : ((searchExample.runM timeAndSpaceCost).run
@@ -279,11 +378,11 @@ example (target : Word 8) : ((searchExample.runM timeAndSpaceCost).run
   linearSearch_totalSpace searchInput target (by decide)
 
 example : (((linearSearch 8 0).runM timeAndSpaceCost).run
-    (linearSearchState #[] 7)).fst.ret = none := by
+    (linearSearchState #[] 7)).snd.Flags .eq = false := by
   simp
 
 example : (((linearSearch 8 0).runM timeAndSpaceCost).run
-    (linearSearchState #[] 7)).fst.tell.time = 2 := by
+    (linearSearchState #[] 7)).fst.tell.time = 3 := by
   simp
 
 -- All cells of a two-bit-addressed memory are searchable, including the last cell.
@@ -292,9 +391,15 @@ example : (((linearSearch 2 4).runM timeAndSpaceCost).run
     LinearSearch.index = 3 := by
   simp
 
-example : (((linearSearch 0 1).runM timeAndSpaceCost).run (linearSearchState #[0] 0)).fst.ret =
-    some LinearSearch.index := by
+example : (((linearSearch 0 1).runM timeAndSpaceCost).run
+    (linearSearchState #[0] 0)).snd.Flags .eq =
+    true := by
   simp
+
+-- Empty searches clear a stale success flag even in a caller-supplied state.
+example : (((linearSearch 8 0).runM timeAndSpaceCost).run
+    { RAMState.zero with Flags := fun _ => true }).snd.Flags .eq = false := by
+  decide +kernel
 
 end LinearSearch
 
