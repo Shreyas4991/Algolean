@@ -24,9 +24,10 @@ Words and addresses have the same fixed width. Arithmetic wraps modulo `2 ^ w`;
 - all `2 ^ w` memory cells are available;
 - allocation and input encoding specify the initial state.
 
-`natCost` charges one per primitive query. `timeAndSpaceCost` additionally records the actual
-memory addresses accessed, reading address registers before each instruction executes. Its state is
-`RAMState w k × Finset (Word w)`. Both models use `ModelM` and its `evalM`, `runM`, and `costM` API.
+`timeAndSpaceCost` interprets each query jointly in
+`AddWriterT (RAMCost w k) (StateM (RAMState w k))`.
+Time adds and probe sets union across queries. `runM` retains the result, cost, and final state;
+`evalM` and `costM` project evaluation and resource usage from this semantics.
 
 `RAMCost.space`, `auxiliarySpace`, and `totalSpace` include the fixed `k` register words.
 The memory component counts distinct accessed cells. Auxiliary space excludes input memory;
@@ -136,11 +137,6 @@ def evalQuery : WordRAM w k α → StateM (RAMState w k) α
   | .bnot dst src, s => ((), s.writeRegister dst (~~~s.Registers src))
   | .cmp op x y, s => (op.eval (s.Registers x) (s.Registers y), s)
 
-/-- One unit of time for each instruction, including literal loads and register copies. -/
-@[simps] def natCost : ModelM (WordRAM w k) (StateM (RAMState w k)) Nat where
-  evalQuery := evalQuery
-  cost _ := 1
-
 /-- Time and the set of memory addresses accessed by an execution. -/
 @[ext]
 structure RAMCost (w k : Nat) where
@@ -191,38 +187,19 @@ def queryProbes : WordRAM w k α → RAMState w k → Finset (Word w)
   | .store addr _, s => {s.Registers addr}
   | _, _ => ∅
 
-/-- Unit query time, with the probed-cell set accumulated in the existing state monad.
-The extra component is interpreter bookkeeping, not additional machine storage. -/
+/-- Each instruction returns its result and actual resource cost in the same state transition.
+Addresses are resolved from the incoming registers, before executing the instruction. -/
 @[simps]
-def timeAndSpaceCost : ModelM (WordRAM w k)
-    (StateM (RAMState w k × Finset (Word w))) Nat where
-  evalQuery q := fun (s, probed) =>
+def timeAndSpaceCost : ModelM (WordRAM w k) (StateM (RAMState w k)) (RAMCost w k) where
+  runQuery q := AddWriterT.mk fun s =>
     let result := evalQuery q s
-    (result.1, (result.2, probed ∪ queryProbes q s))
-  cost _ := 1
+    ((⟨result.fst, ⟨1, queryProbes q s⟩⟩ : AddWriter (RAMCost w k) _), result.snd)
 
-/-- Read the resource summary from a `costM` execution begun with an empty probe set. -/
-def RAMCost.ofRun (result : Nat × (RAMState w k × Finset (Word w))) : RAMCost w k :=
-  ⟨result.1, result.2.2⟩
-
-/-- Recording probes preserves both the return value and the physical machine state. -/
-theorem evalM_timeAndSpaceCost (P : Prog (WordRAM w k) α) (s : RAMState w k)
-    (probed : Finset (Word w)) :
-    (P.evalM timeAndSpaceCost (s, probed)).1 = (P.evalM natCost s).1 ∧
-    (P.evalM timeAndSpaceCost (s, probed)).2.1 = (P.evalM natCost s).2 := by
-  induction P generalizing s probed with
-  | pure a => exact ⟨rfl, rfl⟩
-  | liftBind q f ih =>
-    exact ih (evalQuery q s).1 (evalQuery q s).2 (probed ∪ queryProbes q s)
-
-/-- Probe bookkeeping does not introduce extra time charges. -/
-@[simp] theorem costM_timeAndSpaceCost (P : Prog (WordRAM w k) α) (s : RAMState w k)
-    (probed : Finset (Word w)) :
-    (P.costM timeAndSpaceCost (s, probed)).1 = (P.costM natCost s).1 := by
-  induction P generalizing s probed with
-  | pure a => rfl
-  | liftBind q f ih =>
-    exact congrArg (1 + ·) (ih (evalQuery q s).1 (evalQuery q s).2 (probed ∪ queryProbes q s))
+/-- Forgetting the resource cost recovers the physical instruction semantics. -/
+@[simp, grind =] theorem timeAndSpaceCost_evalQuery (q : WordRAM w k α) :
+    timeAndSpaceCost.evalQuery q = evalQuery q := by
+  funext s
+  rfl
 
 end WordRAM
 
