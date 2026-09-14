@@ -13,6 +13,7 @@ public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
+public import Algolean.Algorithms.WordRAM.Basic
 public import Algolean.Algorithms.WordRAM.BinarySearch
 public import Algolean.Algorithms.WordRAM.LinearSearch
 public import Algolean.Complexity.Basic
