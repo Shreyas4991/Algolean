@@ -78,6 +78,13 @@ def RAMState.writeRegister (s : RAMState w k) (r : Register k) (value : Word w) 
     (s.writeRegister r value).Registers r' = if r' = r then value else s.Registers r' := by
   simp [RAMState.writeRegister, Function.update_apply]
 
+/-- A second write to the same register replaces the first. -/
+@[simp, grind =] theorem RAMState.writeRegister_overwrite (s : RAMState w k)
+    (r : Register k) (a b : Word w) :
+    (s.writeRegister r a).writeRegister r b = s.writeRegister r b := by
+  cases s
+  simp [RAMState.writeRegister, Function.update_idem]
+
 /-- Binary word operations in the basic instruction set. -/
 inductive BinOp where
   | add | sub

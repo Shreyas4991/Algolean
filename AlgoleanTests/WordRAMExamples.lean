@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.WordRAMLinearSearch
+public import Algolean.Algorithms.WordRAM.LinearSearch
 
 /-!
 # Register-based word-RAM examples
@@ -42,8 +42,11 @@ def overflow : Prog (WordRAM 8 4) Unit := do
   increment 8
 
 example : ((overflow.runM timeAndSpaceCost).run RAMState.zero).snd.Memory 7 = 0 := by decide
+
 example : ((overflow.runM timeAndSpaceCost).run RAMState.zero).snd.Registers r1 = 0 := by decide
+
 example : ((overflow.runM timeAndSpaceCost).run RAMState.zero).fst.tell.time = 7 := by decide
+
 example : ((overflow.runM timeAndSpaceCost).run RAMState.zero).fst.tell.addresses =
     {7} := by decide
 
@@ -55,6 +58,7 @@ def copyExample : Prog (WordRAM 8 4) Unit := do
 
 example : ((copyExample.runM timeAndSpaceCost).run
     RAMState.zero).snd.Registers r1 = 42 := by decide
+
 example : ((copyExample.runM timeAndSpaceCost).run RAMState.zero).fst.tell.time = 3 := by decide
 
 /-- An address register can itself be overwritten by a load of a pointer. -/
@@ -69,10 +73,13 @@ def pointerState (ptr : Word 8) : RAMState 8 4 :=
 -- The first load probes the old r0 (zero), even though it overwrites r0 with nine.
 example : ((followPointer.runM timeAndSpaceCost).run
     (pointerState 9)).snd.Registers r1 = 42 := by decide
+
 example : ((followPointer.runM timeAndSpaceCost).run (pointerState 9)).fst.tell.addresses =
     {0, 9} := by decide
+
 example : ((followPointer.runM timeAndSpaceCost).run (pointerState 0)).fst.tell.addresses =
     {0} := by decide
+
 example : ((followPointer.runM timeAndSpaceCost).run
     (pointerState 9)).fst.tell.time = 2 := by decide
 
@@ -85,8 +92,10 @@ example :
 -- Register words are counted in addition to the distinct probed cells.
 example : ((followPointer.runM timeAndSpaceCost).run (pointerState 9)).fst.tell.space =
     6 := by decide
+
 example : ((followPointer.runM timeAndSpaceCost).run
     (pointerState 9)).fst.tell.auxiliarySpace {0, 1} = 5 := by decide
+
 example : ((followPointer.runM timeAndSpaceCost).run
     (pointerState 9)).fst.tell.totalSpace {0, 1} = 7 := by decide
 
@@ -97,6 +106,7 @@ def storeThroughPointer : Prog (WordRAM 8 4) Unit := do
 
 example : ((storeThroughPointer.runM timeAndSpaceCost).run
     (pointerState 9)).snd.Memory 9 = 9 := by decide
+
 example : ((storeThroughPointer.runM timeAndSpaceCost).run
     (pointerState 9)).fst.tell.addresses = {0, 9} := by decide
 
@@ -114,10 +124,12 @@ example : (((repeatIncrement 8 4).runM timeAndSpaceCost).run
     incrementState).snd.Memory 7 = 4 := by
   simp [repeatIncrement, increment, evalQuery, queryProbes,
     incrementState, r0, r1, r3, BinOp.eval]
+
 example : (((repeatIncrement 8 4).runM timeAndSpaceCost).run
     incrementState).fst.tell.time = 12 := by
   simp [repeatIncrement, increment, evalQuery, queryProbes, incrementState, r0, r1, r3,
     BinOp.eval]
+
 example : (((repeatIncrement 8 4).runM timeAndSpaceCost).run
     incrementState).fst.tell.space = 5 := by
   simp [repeatIncrement, increment, evalQuery, queryProbes,
@@ -136,10 +148,15 @@ def raiseState (value : Word 8) : RAMState 8 4 :=
   ⟨fun _ => value, fun r => if r = r0 then 4 else if r = r2 then 10 else 0⟩
 
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 0)).fst.ret = true := by decide
+
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 0)).fst.tell.time = 3 := by decide
+
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 0)).snd.Memory 4 = 10 := by decide
+
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 255)).fst.ret = false := by decide
+
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 255)).fst.tell.time = 2 := by decide
+
 example : ((raiseTo.runM timeAndSpaceCost).run (raiseState 255)).snd.Memory 4 = 255 := by decide
 
 /-- Inspect a destination register after executing a single arithmetic instruction.
@@ -149,14 +166,23 @@ def byteBinop (op : BinOp) (x y : Word 8) : Word 8 :=
     (⟨fun _ => 0, fun r => if r = r0 then x else y⟩ : RAMState 8 4)).snd.Registers r0
 
 example : byteBinop .sub 0 1 = 255 := by decide
+
 example : byteBinop .band 170 204 = 136 := by decide
+
 example : byteBinop .bor 170 204 = 238 := by decide
+
 example : byteBinop .bxor 170 204 = 102 := by decide
+
 example : byteBinop .shl 129 1 = 2 := by decide
+
 example : byteBinop .shr 128 1 = 64 := by decide
+
 example : byteBinop .shl 255 8 = 0 := by decide
+
 example : byteBinop .shr 255 8 = 0 := by decide
+
 example : byteBinop .shl 255 9 = 0 := by decide
+
 example : byteBinop .shr 255 255 = 0 := by decide
 
 /-- Arithmetic and complement use registers without probing memory. -/
@@ -167,8 +193,10 @@ def wordOnly : Prog (WordRAM 8 4) Bool := do
 
 example : ((wordOnly.runM timeAndSpaceCost).run RAMState.zero).fst.tell.addresses =
     ∅ := by decide
+
 example : ((wordOnly.runM timeAndSpaceCost).run RAMState.zero).fst.tell.space = 4 := by
   decide
+
 example : ((wordOnly.runM timeAndSpaceCost).run RAMState.zero).fst.tell.time = 3 := by decide
 
 section WeakestPreconditions
@@ -204,14 +232,17 @@ attribute [local simp] searchExample searchInput linearSearch LinearSearch.loop
 example : ((searchExample.runM timeAndSpaceCost).run (linearSearchState searchInput 7)).fst.ret =
     some LinearSearch.index := by
   simp
+
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 7)).snd.Registers
     LinearSearch.index = 1 := by
   simp
+
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 99)).snd.Registers
     LinearSearch.index = 4 := by
   simp
+
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 18)).fst.ret = none := by
   simp
@@ -220,12 +251,15 @@ example : ((searchExample.runM timeAndSpaceCost).run
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 12)).fst.tell.time = 4 := by
   simp
+
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 7)).fst.tell.time = 7 := by
   simp
+
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 99)).fst.tell.time = 16 := by
   simp
+
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 18)).fst.tell.time = 17 := by
   simp
@@ -233,10 +267,12 @@ example : ((searchExample.runM timeAndSpaceCost).run
 example : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput 7)).fst.tell.addresses = {0, 1} := by
   simp
+
 example (target : Word 8) : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput target)).fst.tell.auxiliarySpace
       (inputRegion searchInput) = 4 :=
   linearSearch_auxiliarySpace searchInput target
+
 example (target : Word 8) : ((searchExample.runM timeAndSpaceCost).run
     (linearSearchState searchInput target)).fst.tell.totalSpace
       (inputRegion searchInput) = 9 :=
@@ -245,6 +281,7 @@ example (target : Word 8) : ((searchExample.runM timeAndSpaceCost).run
 example : (((linearSearch 8 0).runM timeAndSpaceCost).run
     (linearSearchState #[] 7)).fst.ret = none := by
   simp
+
 example : (((linearSearch 8 0).runM timeAndSpaceCost).run
     (linearSearchState #[] 7)).fst.tell.time = 2 := by
   simp
@@ -254,6 +291,7 @@ example : (((linearSearch 2 4).runM timeAndSpaceCost).run
     (linearSearchState #[0, 1, 2, 3] 3)).snd.Registers
     LinearSearch.index = 3 := by
   simp
+
 example : (((linearSearch 0 1).runM timeAndSpaceCost).run (linearSearchState #[0] 0)).fst.ret =
     some LinearSearch.index := by
   simp
