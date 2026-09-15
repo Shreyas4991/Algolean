@@ -8,6 +8,13 @@ module
 
 public import Algolean.Problems.Search
 
+/-!
+# Problem specification and resource contract tests
+
+Examples for abstract search specifications and the termination, correctness, and resource
+guarantees required by `Problem.Solves` and `Problem.RunsWithin`.
+-/
+
 @[expose] public section
 
 namespace AlgoleanTests.Problems
