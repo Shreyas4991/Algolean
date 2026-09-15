@@ -34,10 +34,20 @@ Time adds and probe sets union across queries.
 `runStateM` retains the result, cost, and final state;
 `evalStateM` and `costStateM` project evaluation and resource usage from this semantics.
 
-`RAMCost.space`, `auxiliarySpace`, and `totalSpace` include the fixed `k` register words.
-The memory component counts distinct accessed cells. Auxiliary space excludes input memory;
-total space includes input memory even if some cells were never read. Two fixed Boolean flags
-are additional control storage. Program size and host-language construction costs are excluded.
+`RAMCost.space`, `auxiliarySpace`, and `totalSpace` count memory words only.
+The fixed register file and comparison flags are excluded from space accounting.
+Space counts distinct accessed cells. Auxiliary space excludes input memory; total space
+includes input memory even if some cells were never read. Program size and host-language
+construction costs are excluded.
+
+## Fuelled execution
+
+`execute fuel program state` runs through `fuelledModel`, an instance of `ModelStateM`.
+Each executed instruction consumes one unit of interpreter fuel, including branch selection.
+Branch bodies and continuations share the remaining budget; unselected bodies consume none.
+Fuel is not RAM time. Exhaustion returns `none`; success returns the result, `RAMCost`, final
+RAM state, and remaining fuel. Pure programs require no fuel. Additional fuel preserves any
+successful execution, changing only the unused budget.
 
 ## Control-flow sugar
 
@@ -303,16 +313,16 @@ instance : AddCommMonoid (RAMCost w k) where
 @[simp, grind =] theorem mk_add (time : Nat) (addresses : Finset (Word w)) (c : RAMCost w k) :
     (⟨time, addresses⟩ : RAMCost w k) + c = ⟨time + c.time, addresses ∪ c.addresses⟩ := rfl
 
-/-- Register storage plus memory footprint, in words. -/
-def space (c : RAMCost w k) : Nat := k + c.addresses.card
+/-- Distinct accessed memory cells, in words. -/
+def space (c : RAMCost w k) : Nat := c.addresses.card
 
-/-- Register storage plus accessed memory outside the designated input region. -/
+/-- Accessed memory outside the designated input region. -/
 def auxiliarySpace (c : RAMCost w k) (inputRegion : Finset (Word w)) : Nat :=
-  k + (c.addresses \ inputRegion).card
+  (c.addresses \ inputRegion).card
 
-/-- Registers and all words in the footprint or input region, including unread input cells. -/
+/-- All words in the footprint or input region, including unread input cells. -/
 def totalSpace (c : RAMCost w k) (inputRegion : Finset (Word w)) : Nat :=
-  k + (c.addresses ∪ inputRegion).card
+  (c.addresses ∪ inputRegion).card
 
 end RAMCost
 
@@ -404,6 +414,175 @@ theorem runStateM_ret_independent (p : Prog (WordRAM w k) α) (s t : RAMState w 
     let left := (p.runStateM timeAndSpaceCost).run s
     let right := (p.runStateM timeAndSpaceCost).run t
     left.fst.ret = right.fst.ret := by simp only [runStateM_ret]
+
+section FuelledExecution
+
+/-- Interpreter fuel is separate from the machine state and its resource cost. -/
+@[ext]
+structure ExecutionState (w k : Nat) where
+  /-- The physical memory, registers, and comparison flags. -/
+  ram : RAMState w k
+  /-- Remaining interpreter steps, excluded from RAM resource costs. -/
+  fuel : Nat
+
+/-- Exhaustion returns `none`, never a successful partial execution. -/
+abbrev ExecutionM (w k : Nat) := StateT (ExecutionState w k) Option
+
+mutual
+
+/-- Consume one unit of interpreter fuel per instruction, including branch selection.
+Primitive RAM costs are unchanged; branches consume fuel but no RAM time. -/
+def runQueryWithFuel (q : WordRAM w k α) :
+    AddWriterT (RAMCost w k) (ExecutionM w k) α := AddWriterT.mk fun s =>
+  match s.fuel with
+  | 0 => none
+  | fuel + 1 =>
+    match q with
+    | .branchCode op yes no =>
+      if s.ram.Flags op then (runBlockWithFuel yes).run { s with fuel }
+      else (runBlockWithFuel no).run { s with fuel }
+    | q =>
+      let result := (runQuery q).run s.ram
+      some (result.fst, ⟨result.snd, fuel⟩)
+
+/-- Branch bodies share the remaining fuel with their enclosing program. -/
+def runBlockWithFuel : List (WordRAM w k Unit) →
+    AddWriterT (RAMCost w k) (ExecutionM w k) Unit
+  | [] => pure ()
+  | q :: qs => runQueryWithFuel q >>= fun _ => runBlockWithFuel qs
+
+end
+
+/-- Fuelled execution uses the existing joint model interface. -/
+def fuelledModel : ModelStateM (WordRAM w k) (ExecutionM w k) (RAMCost w k) where
+  runQuery := runQueryWithFuel
+
+@[simp, grind =] theorem fuelledModel_runQuery (q : WordRAM w k α) :
+    fuelledModel.runQuery q = runQueryWithFuel q := rfl
+
+@[simp, grind =] theorem runQueryWithFuel_zero (q : WordRAM w k α) (s : RAMState w k) :
+    (runQueryWithFuel q).run ⟨s, 0⟩ = none := by
+  cases q <;> rfl
+
+@[simp] theorem runBlockWithFuel_nil :
+    runBlockWithFuel ([] : List (WordRAM w k Unit)) = pure () := by
+  rw [runBlockWithFuel]
+
+@[simp] theorem runBlockWithFuel_cons (q : WordRAM w k Unit) (qs : List (WordRAM w k Unit)) :
+    runBlockWithFuel (q :: qs) =
+      (runQueryWithFuel q >>= fun _ => runBlockWithFuel qs) := by
+  rw [runBlockWithFuel]
+
+@[simp] theorem runBlockWithFuel_instructions (p : Prog (WordRAM w k) Unit) :
+    runBlockWithFuel (instructions p) = p.runStateM fuelledModel := by
+  induction p with
+  | pure a => cases a; simp
+  | liftBind q cont ih =>
+    cases q <;> simp [instructions, Prog.runStateM, Cslib.FreeM.liftM, ih]
+
+/-- Run a program with a shared fuel budget, retaining unused fuel on success. -/
+def execute (fuel : Nat) (p : Prog (WordRAM w k) α) (s : RAMState w k) :
+    Option (AddWriter (RAMCost w k) α × ExecutionState w k) :=
+  (p.runStateM fuelledModel).run ⟨s, fuel⟩
+
+@[simp, grind =] theorem execute_pure (fuel : Nat) (a : α) (s : RAMState w k) :
+    execute fuel (pure a) s = some (⟨a, 0⟩, ⟨s, fuel⟩) := rfl
+
+@[simp] theorem execute_branch_succ (fuel : Nat) (op : CmpOp)
+    (yes no : Prog (WordRAM w k) Unit) (s : RAMState w k) :
+    execute (fuel + 1) (branch op yes no) s =
+      if s.Flags op then execute fuel yes s else execute fuel no s := by
+  simp [execute, branch, Prog.runStateM, runQueryWithFuel]
+
+/-- Sequence fuelled actions, threading both the RAM state and the remaining budget. -/
+@[simp] theorem run_bind_execution
+    (action : AddWriterT (RAMCost w k) (ExecutionM w k) α)
+    (next : α → AddWriterT (RAMCost w k) (ExecutionM w k) β) (s : ExecutionState w k) :
+    (action >>= next).run s = (do
+      let (a, t) ← action.run s
+      let (b, u) ← (next a.ret).run t
+      pure (⟨b.ret, a.tell + b.tell⟩, u)) := rfl
+
+/-- Extra fuel preserves a successful result and is left unused. -/
+def FuelStable (action : AddWriterT (RAMCost w k) (ExecutionM w k) α) : Prop :=
+  ∀ (s : RAMState w k) fuel extra result final,
+    action.run ⟨s, fuel⟩ = some (result, final) →
+    action.run ⟨s, fuel + extra⟩ = some (result, { final with fuel := final.fuel + extra })
+
+private theorem fuelStable_pure (a : α) :
+    FuelStable (pure a : AddWriterT (RAMCost w k) (ExecutionM w k) α) := by
+  intro s fuel extra result final h
+  cases h
+  rfl
+
+private theorem fuelStable_bind
+    (action : AddWriterT (RAMCost w k) (ExecutionM w k) α)
+    (next : α → AddWriterT (RAMCost w k) (ExecutionM w k) β)
+    (ha : FuelStable action) (hn : ∀ a, FuelStable (next a)) :
+    FuelStable (action >>= next) := by
+  intro s fuel extra result final h
+  simp only [run_bind_execution] at h ⊢
+  cases hf : action.run ⟨s, fuel⟩ with
+  | none => simp [hf] at h
+  | some first =>
+    obtain ⟨a, t⟩ := first
+    cases hs : (next a.ret).run t with
+    | none => simp [hf, hs] at h
+    | some second =>
+      obtain ⟨b, u⟩ := second
+      simp only [hf, Option.pure_def, Option.bind_eq_bind, Option.bind_some, hs,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      rw [ha s fuel extra a t hf]
+      simp only [Option.bind_eq_bind, Option.bind_some]
+      rw [hn a.ret t.ram t.fuel extra b u hs]
+      rfl
+
+mutual
+
+private theorem runQueryWithFuel_stable (q : WordRAM w k α) :
+    FuelStable (runQueryWithFuel q) := by
+  intro s fuel extra result final h
+  cases fuel with
+  | zero => simp at h
+  | succ fuel =>
+    cases q with
+    | branchCode op yes no =>
+      simp only [runQueryWithFuel, AddWriterT.run_mk, Nat.succ_add] at h ⊢
+      split at h
+      · simpa only [if_pos ‹s.Flags op = true›] using
+          runBlockWithFuel_stable yes s fuel extra result final h
+      · simpa only [if_neg ‹¬s.Flags op = true›] using
+          runBlockWithFuel_stable no s fuel extra result final h
+    | _ =>
+      simp only [runQueryWithFuel, AddWriterT.run_mk, Nat.succ_add,
+        Option.some.injEq, Prod.mk.injEq] at h ⊢
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨rfl, rfl⟩
+
+private theorem runBlockWithFuel_stable (qs : List (WordRAM w k Unit)) :
+    FuelStable (runBlockWithFuel qs) := by
+  cases qs with
+  | nil => exact fuelStable_pure ()
+  | cons q qs =>
+    exact fuelStable_bind _ _ (runQueryWithFuel_stable q) (fun _ => runBlockWithFuel_stable qs)
+
+end
+
+/-- Once execution succeeds, additional fuel changes only the remaining fuel. -/
+theorem execute_add_fuel (p : Prog (WordRAM w k) α) (s : RAMState w k)
+    (fuel extra : Nat) (result : AddWriter (RAMCost w k) α) (final : ExecutionState w k)
+    (h : execute fuel p s = some (result, final)) :
+    execute (fuel + extra) p s = some (result, { final with fuel := final.fuel + extra }) := by
+  have stable : ∀ (p : Prog (WordRAM w k) α), FuelStable (p.runStateM fuelledModel) := by
+    intro p
+    induction p with
+    | pure a => exact fuelStable_pure a
+    | liftBind q cont ih =>
+      exact fuelStable_bind _ _ (runQueryWithFuel_stable q) ih
+  exact stable p s fuel extra result final h
+
+end FuelledExecution
 
 end WordRAM
 

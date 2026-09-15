@@ -366,23 +366,23 @@ theorem binarySearch_addresses_subset (input : Array (BitVec w))
   · simpa [hn] using loop_addresses_subset input hfits input.size 0 (input.size - 1)
       (by lia) (by lia) (initialized s input.size) (by simp) (by simp) (by simp)
 
-/-- Six register words suffice; no memory outside the input is accessed. -/
+/-- Auxiliary memory usage is zero: no cells outside the input are probed or written to -/
 theorem binarySearch_auxiliarySpace (input : Array (BitVec w))
     (hfits : input.size ≤ 2 ^ w) (s : RAMState w 6) :
     let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run s
-    result.fst.tell.auxiliarySpace (inputRegion input) = 6 := by
+    result.fst.tell.auxiliarySpace (inputRegion input) = 0 := by
   simp only [RAMCost.auxiliarySpace,
     Finset.sdiff_eq_empty_iff_subset.mpr (binarySearch_addresses_subset input hfits s),
-    Finset.card_empty, Nat.add_zero]
+    Finset.card_empty]
 
-/-- Total storage includes the input and the six registers. -/
+/-- Total memory usage is the size of the input array. -/
 theorem binarySearch_totalSpace (input : Array (BitVec w))
     (hfits : input.size ≤ 2 ^ w) (s : RAMState w 6) :
     let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run s
-    result.fst.tell.totalSpace (inputRegion input) = input.size + 6 := by
+    result.fst.tell.totalSpace (inputRegion input) = input.size := by
   simp only [RAMCost.totalSpace,
     Finset.union_eq_right.mpr (binarySearch_addresses_subset input hfits s),
-    inputRegion_card input hfits, Nat.add_comm]
+    inputRegion_card input hfits]
 
 private theorem arrayMemory_replicate_zero (n : Nat) :
     arrayMemory (Array.replicate n (0 : BitVec w)) = fun _ => 0 := by

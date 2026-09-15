@@ -13,7 +13,7 @@ public import Algolean.Algorithms.WordRAM.LinearSearch
 
 Instructions operate on register identifiers. Values are inspected only in the final machine
 state, outside the program. Joint execution tracks time and distinct probed cells in
-`runStateM`; its `RAMCost` output also counts the fixed register storage.
+`runStateM`; its `RAMCost` output counts distinct accessed memory cells.
 -/
 
 @[expose] public section
@@ -93,16 +93,16 @@ example :
       (pointerState 0)).fst.tell = ⟨4, {0}⟩ := by
   apply RAMCost.ext <;> decide
 
--- Register words are counted in addition to the distinct probed cells.
+-- Space counts distinct probed cells; registers are excluded.
 
 example : ((followPointer.runStateM timeAndSpaceCost).run (pointerState 9)).fst.tell.space =
-    6 := by decide
+    2 := by decide
 
 example : ((followPointer.runStateM timeAndSpaceCost).run
-    (pointerState 9)).fst.tell.auxiliarySpace {0, 1} = 5 := by decide
+    (pointerState 9)).fst.tell.auxiliarySpace {0, 1} = 1 := by decide
 
 example : ((followPointer.runStateM timeAndSpaceCost).run
-    (pointerState 9)).fst.tell.totalSpace {0, 1} = 7 := by decide
+    (pointerState 9)).fst.tell.totalSpace {0, 1} = 3 := by decide
 
 /-- Store through the pointer just loaded into r0. -/
 def storeThroughPointer : Prog (WordRAM 8 4) Unit := do
@@ -115,7 +115,7 @@ example : ((storeThroughPointer.runStateM timeAndSpaceCost).run
 example : ((storeThroughPointer.runStateM timeAndSpaceCost).run
     (pointerState 9)).fst.tell.addresses = {0, 9} := by decide
 
-/-- Repeat probes without allocating additional register slots. -/
+/-- Repeated probes of the same cell do not increase the memory footprint. -/
 def repeatIncrement (w : Nat) : Nat → Prog (WordRAM w 4) Unit
   | 0 => pure ()
   | n + 1 => do
@@ -136,7 +136,7 @@ example : (((repeatIncrement 8 4).runStateM timeAndSpaceCost).run
     BinOp.eval]
 
 example : (((repeatIncrement 8 4).runStateM timeAndSpaceCost).run
-    incrementState).fst.tell.space = 5 := by
+    incrementState).fst.tell.space = 1 := by
   simp [repeatIncrement, increment, runQuery,
     incrementState, r0, r1, r3, BinOp.eval, RAMCost.space]
 
@@ -200,7 +200,7 @@ def wordOnly : Prog (WordRAM 8 4) Unit := do
 example : ((wordOnly.runStateM timeAndSpaceCost).run RAMState.zero).fst.tell.addresses =
     ∅ := by decide
 
-example : ((wordOnly.runStateM timeAndSpaceCost).run RAMState.zero).fst.tell.space = 4 := by
+example : ((wordOnly.runStateM timeAndSpaceCost).run RAMState.zero).fst.tell.space = 0 := by
   decide
 
 example : ((wordOnly.runStateM timeAndSpaceCost).run RAMState.zero).fst.tell.time = 3 := by decide
@@ -262,7 +262,7 @@ example : ((choose.runStateM timeAndSpaceCost).run (initial 7 3)).fst.tell.addre
   decide +kernel
 
 example :
-    ((choose.runStateM timeAndSpaceCost).run (initial 3 7)).fst.tell.auxiliarySpace ∅ = 5 := by
+    ((choose.runStateM timeAndSpaceCost).run (initial 3 7)).fst.tell.auxiliarySpace ∅ = 1 := by
   decide +kernel
 
 -- The comparison changes its own flag; word instructions leave that flag intact.
@@ -407,6 +407,56 @@ end WeakestPreconditions
 
 end ControlFlow
 
+namespace Fuelled
+
+/-- Two nested branches and a continuation use one shared budget. -/
+def nested : Prog (WordRAM 8 4) Unit := do
+  cmp (w := 8) .ult r0 r1
+  branch .ult
+    (branch .ult (set (w := 8) r2 42) (set (w := 8) r2 99))
+    (do
+      set (w := 8) r2 0
+      set (w := 8) r2 1
+      set (w := 8) r2 2
+      set (w := 8) r2 3)
+  store (w := 8) r3 r2
+
+-- Zero fuel suffices for a pure program, but not for an instruction.
+example : execute 0 (pure () : Prog (WordRAM 8 4) Unit) RAMState.zero =
+    some (⟨(), 0⟩, ⟨RAMState.zero, 0⟩) := rfl
+
+example : execute 0 (set (w := 8) r0 1 : Prog (WordRAM 8 4) Unit) RAMState.zero = none := rfl
+
+-- The continuation must also fit: four units stop before the store.
+example : execute 4 nested (Branches.initial 3 7) = none := rfl
+
+-- Only selected branches consume fuel; two branch selections have zero RAM cost.
+example : (execute 5 nested (Branches.initial 3 7)).map
+    (fun result => (result.fst.tell.time, result.fst.tell.addresses,
+      result.snd.ram.Memory 9, result.snd.fuel)) = some (3, {9}, 42, 0) := by
+  decide +kernel
+
+-- Erasing interpreter bookkeeping recovers the existing joint execution.
+example : (execute 5 nested (Branches.initial 3 7)).map
+    (fun result => (result.fst, result.snd.ram)) =
+      some ((nested.runStateM timeAndSpaceCost).run (Branches.initial 3 7)) := rfl
+
+example : (execute 8 nested (Branches.initial 3 7)).map
+    (fun result => (result.fst.tell.time, result.snd.ram.Memory 9, result.snd.fuel)) =
+      some (3, 42, 3) := by decide +kernel
+
+-- The other branch needs seven fuel units in total.
+example : execute 6 nested (Branches.initial 7 3) = none := rfl
+
+example : (execute 7 nested (Branches.initial 7 3)).map
+    (fun result => (result.fst.tell.time, result.snd.ram.Memory 9, result.snd.fuel)) =
+      some (6, 3, 0) := by decide +kernel
+
+example : (execute 7 overflow RAMState.zero).map (fun result => (result.fst, result.snd.ram)) =
+    some ((overflow.runStateM timeAndSpaceCost).run RAMState.zero) := rfl
+
+end Fuelled
+
 section LinearSearch
 
 def searchInput : Array (BitVec 8) := #[12, 7, 42, 7, 99]
@@ -464,12 +514,12 @@ example : ((searchExample.runStateM timeAndSpaceCost).run
 
 example (target : Word 8) : ((searchExample.runStateM timeAndSpaceCost).run
     (linearSearchState searchInput target)).fst.tell.auxiliarySpace
-      (inputRegion searchInput) = 4 :=
+      (inputRegion searchInput) = 0 :=
   linearSearch_auxiliarySpace searchInput target
 
 example (target : Word 8) : ((searchExample.runStateM timeAndSpaceCost).run
     (linearSearchState searchInput target)).fst.tell.totalSpace
-      (inputRegion searchInput) = 9 :=
+      (inputRegion searchInput) = 5 :=
   linearSearch_totalSpace searchInput target (by decide)
 
 example : (((linearSearch 8 0).runStateM timeAndSpaceCost).run

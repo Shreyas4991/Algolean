@@ -35,7 +35,7 @@ example : (search input 7).fst.tell.time = 9 := by decide +kernel
 
 example : (search input 7).fst.tell.addresses = {3} := by decide +kernel
 
-example : (search input 7).fst.tell.space = 7 := by decide +kernel
+example : (search input 7).fst.tell.space = 1 := by decide +kernel
 
 -- Both directions recurse; searches can reach either endpoint or miss beyond it.
 example : (search input 1).snd.Registers BinarySearch.middle = 0 := by decide +kernel
@@ -83,16 +83,16 @@ example : (search (Array.replicate 8 (0 : BitVec 4)) 1).fst.tell.time = 35 := by
 example : (search (Array.replicate 8 (0 : BitVec 4)) 1).fst.tell.addresses =
     {3, 5, 6, 7} := by decide +kernel
 
--- The general theorems apply to arbitrary keys and account for all six registers.
+-- The general theorems apply to arbitrary keys and count only memory usage.
 example (target : Word 8) : (search input target).fst.tell.time ≤ 27 :=
   binarySearch_time_le input.size (by decide +kernel) (binarySearchState input target)
 
 example (target : Word 8) : (search input target).fst.tell.auxiliarySpace
-    (inputRegion input) = 6 :=
+    (inputRegion input) = 0 :=
   binarySearch_auxiliarySpace input (by decide +kernel) (binarySearchState input target)
 
 example (target : Word 8) : (search input target).fst.tell.totalSpace
-    (inputRegion input) = 13 :=
+    (inputRegion input) = 7 :=
   binarySearch_totalSpace input (by decide +kernel) (binarySearchState input target)
 
 example (target : Word 8) : (search input target).snd.Flags .eq = false ↔ target ∉ input :=

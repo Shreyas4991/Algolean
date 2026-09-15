@@ -251,24 +251,24 @@ theorem linearSearch_addresses_subset (input : Array (BitVec w)) (target : Word 
     (initialized (linearSearchState input target)) (by simp [initialized])
     (by simp [initialized])
 
-/-- Auxiliary space is four register words, with no memory probes outside the input. -/
+/-- Auxiliary memory usage is zero: no cells outside the input are probed or written to. -/
 theorem linearSearch_auxiliarySpace (input : Array (BitVec w)) (target : Word w) :
     (((linearSearch w input.size).runStateM timeAndSpaceCost).run
       (linearSearchState input target)).fst.tell.auxiliarySpace
-        (inputRegion input) = 4 := by
+        (inputRegion input) = 0 := by
   simp only [RAMCost.auxiliarySpace,
     Finset.sdiff_eq_empty_iff_subset.mpr (linearSearch_addresses_subset input target),
-    Finset.card_empty, Nat.add_zero]
+    Finset.card_empty]
 
-/-- Total space comprises the array and four register words. -/
+/-- Total memory usage is the size of the input array. -/
 theorem linearSearch_totalSpace (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) :
     (((linearSearch w input.size).runStateM timeAndSpaceCost).run
       (linearSearchState input target)).fst.tell.totalSpace
-        (inputRegion input) = input.size + 4 := by
+        (inputRegion input) = input.size := by
   simp only [RAMCost.totalSpace,
     Finset.union_eq_right.mpr (linearSearch_addresses_subset input target),
-    inputRegion_card input hfits, Nat.add_comm]
+    inputRegion_card input hfits]
 
 /-- Every representable length has a worst-case instance, for a positive word width. -/
 theorem linearSearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :
