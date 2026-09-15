@@ -6,229 +6,348 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.WordRAMLinearSearch
+public import Algolean.Algorithms.WordRAM.LinearSearch
 
-/-!
-# Word-RAM examples
-
-Programs demonstrating mutable memory, indirect addressing, arithmetic overflow, bitwise operations,
-and branch-dependent query costs. Every runtime word operation in these examples is a query.
-Queries use Algolean's existing coercion into `Prog`; typed bindings fix the result type, and
-explicit widths disambiguate queries whose operands are all literals.
--/
+/-! # Register operations, structured control, and uniform linear search -/
 
 @[expose] public section
 
 namespace AlgoleanTests.WordRAMExamples
 
-open Algolean.Algorithms Algolean.Algorithms.WordRAM
+open Algolean Algolean.Algorithms Algolean.Algorithms.WordRAM
+open scoped Prog WordRAM
 
-/-- Increment a memory cell using a load, a word addition, and a store. -/
-def increment (addr : Word w) : Prog (WordRAM w) Unit := do
-  let x : Word w ← load addr
-  let y : Word w ← binop .add x 1
-  store addr y
+abbrev r0 : Register 4 := 0
+abbrev r1 : Register 4 := 1
+abbrev r2 : Register 4 := 2
+abbrev r3 : Register 4 := 3
 
--- The increment works for arbitrary initial memory and preserves every other cell.
-example (mem : Memory w) (addr : Word w) :
-    ((increment addr).evalM natCost mem).2 addr = mem addr + 1 := by
-  change Function.update mem addr (mem addr + 1) addr = _
-  simp
+def increment (w : Nat) : Prog (WordRAM w 4) Unit := do
+  load (w := w) r1 r0
+  binop (w := w) .add r1 r1 r3
+  store (w := w) r0 r1
 
-example (mem : Memory w) (addr other : Word w) (h : other ≠ addr) :
-    ((increment addr).evalM natCost mem).2 other = mem other := by
-  change Function.update mem addr (mem addr + 1) other = _
-  simp [h]
+def overflow : Prog (WordRAM 8 4) Unit := do
+  set (w := 8) r0 7
+  set (w := 8) r1 255
+  set (w := 8) r3 1
+  store (w := 8) r0 r1
+  increment 8
 
-example (mem : Memory w) (addr : Word w) :
-    ((increment addr).costM natCost mem).1 = 3 := rfl
+example : (execute 7 overflow RAMState.zero).map (fun r =>
+    (r.snd.ram.Memory 7, r.snd.ram.Registers r1, r.fst.tell.time, r.fst.tell.addresses)) =
+      some (0, 0, 7, {7}) := by decide
 
-/-- Write the largest byte, increment it, and read the wrapped result. -/
-def overflow : Prog (WordRAM 8) (Word 8) := do
-  store (w := 8) 7 255
-  increment 7
-  load (w := 8) 7
+example : execute 6 overflow RAMState.zero = none := rfl
 
--- Evaluation returns the word and final memory; cost evaluation counts the queries.
-example : (overflow.evalM natCost Memory.zero).1 = 0 := by decide
-example : (overflow.costM natCost Memory.zero).1 = 5 := rfl
-example : (overflow.evalM natCost Memory.zero).2 7 = 0 := by decide
+def copyExample : Prog (WordRAM 8 4) Unit := do
+  set (w := 8) r0 42
+  copy (w := 8) r1 r0
+  set (w := 8) r0 7
 
-/-- A pointer stored in one cell selects the cell to increment. -/
-def indirectIncrement : Prog (WordRAM 8) (Word 8) := do
-  store (w := 8) 0 42
-  store (w := 8) 42 9
-  let addr : Word 8 ← load (w := 8) 0
-  increment addr
-  load addr
+example : (execute 3 copyExample RAMState.zero).map
+    (fun r => (r.snd.ram.Registers r1, r.fst.tell.time)) = some (42, 3) := by decide
 
-example : (indirectIncrement.evalM natCost Memory.zero).1 = 10 := by decide
-example : (indirectIncrement.costM natCost Memory.zero).1 = 7 := rfl
-example : (indirectIncrement.evalM natCost Memory.zero).2 0 = 42 := by decide
+def followPointer : Prog (WordRAM 8 4) Unit := do
+  load (w := 8) r0 r0
+  load (w := 8) r1 r0
 
-/-- Replace a cell only if its unsigned value is below a threshold; return whether it changed.
-The load and comparison cost two queries, with one additional query if the store is executed. -/
-def raiseTo (addr threshold : Word w) : Prog (WordRAM w) Bool := do
-  let x : Word w ← load addr
-  let below : Bool ← cmp .ult x threshold
-  if below then
-    store addr threshold
-    return true
+def pointerState (ptr : Word 8) : RAMState 8 4 :=
+  ⟨fun addr => if addr = 0 then ptr else 42, fun _ => 0, fun _ => false⟩
+
+example : (execute 2 followPointer (pointerState 9)).map (fun r =>
+    (r.snd.ram.Registers r1, r.fst.tell.time, r.fst.tell.addresses, r.fst.tell.space)) =
+      some (42, 2, {0, 9}, 2) := by decide
+
+example : (execute 2 followPointer (pointerState 0)).map
+    (fun r => r.fst.tell.addresses) = some {0} := by decide
+
+example : (execute 4 (followPointer *> followPointer) (pointerState 0)).map
+    (fun r => r.fst.tell) = some ⟨4, {0}⟩ := by decide
+
+example : (execute 2 followPointer (pointerState 9)).map (fun r =>
+    (r.fst.tell.auxiliarySpace {0}, r.fst.tell.totalSpace {0, 1})) = some (1, 3) := by decide
+
+def storeThroughPointer : Prog (WordRAM 8 4) Unit := do
+  load (w := 8) r0 r0
+  store (w := 8) r0 r0
+
+example : (execute 2 storeThroughPointer (pointerState 9)).map
+    (fun r => (r.snd.ram.Memory 9, r.fst.tell.addresses)) = some (9, {0, 9}) := by decide
+
+def byteBinop (op : BinOp) (x y : Word 8) : Option (Word 8) :=
+  (execute 1 (do binop (w := 8) op r2 r0 r1 : Prog (WordRAM 8 4) Unit)
+    ⟨fun _ => 0, fun r => if r = r0 then x else y, fun _ => false⟩).map
+      (fun r => r.snd.ram.Registers r2)
+
+example : byteBinop .sub 0 1 = some 255 := by decide
+
+example : byteBinop .band 170 204 = some 136 := by decide
+
+example : byteBinop .bor 170 204 = some 238 := by decide
+
+example : byteBinop .bxor 170 204 = some 102 := by decide
+
+example : byteBinop .shl 129 1 = some 2 := by decide
+
+example : byteBinop .shr 128 1 = some 64 := by decide
+
+example : byteBinop .shl 255 8 = some 0 := by decide
+
+example : byteBinop .shr 255 8 = some 0 := by decide
+
+example : byteBinop .shl 255 9 = some 0 := by decide
+
+example : byteBinop .shr 255 255 = some 0 := by decide
+
+def wordOnly : Prog (WordRAM 8 4) Unit := do
+  set (w := 8) r0 170
+  bnot (w := 8) r1 r0
+  cmp (w := 8) .eq r0 r1
+
+example : (execute 3 wordOnly RAMState.zero).map (fun r =>
+    (r.snd.ram.Registers r1, r.snd.ram.Flags .eq, r.fst.tell.time, r.fst.tell.space)) =
+      some (85, false, 3, 0) := by decide
+
+namespace Branches
+
+def initial (x y : Word 8) : RAMState 8 4 :=
+  ⟨fun _ => 0, fun r => if r = r0 then x else if r = r1 then y else if r = r3 then 9 else 0,
+    fun _ => false⟩
+
+def choose : Prog (WordRAM 8 4) Unit := do
+  ifₚ test .ult r0 r1 then
+    set (w := 8) r2 42
+    store (w := 8) r3 r2
   else
-    return false
+    set (w := 8) r2 99
 
-example : ((raiseTo (w := 8) 4 10).evalM natCost Memory.zero).1 = true := by
-  decide
+example : (execute 4 choose (initial 3 7)).map (fun r =>
+    (r.snd.ram.Memory 9, r.fst.tell.time, r.fst.tell.addresses, r.snd.ram.Flags .ult)) =
+      some (42, 3, {9}, true) := by decide
 
-example : ((raiseTo (w := 8) 4 10).costM natCost Memory.zero).1 = 3 := rfl
+example : (execute 3 choose (initial 7 3)).map (fun r =>
+    (r.snd.ram.Memory 9, r.snd.ram.Registers r2, r.fst.tell.time, r.fst.tell.addresses)) =
+      some (0, 99, 2, ∅) := by decide
 
-example : ((raiseTo (w := 8) 4 10).evalM natCost Memory.zero).2 4 = 10 := by
-  decide
+def independentFlags : Prog (WordRAM 8 4) Unit := do
+  cmp (w := 8) .eq r0 r0
+  cmp (w := 8) .ult r0 r1
 
--- 255 is larger than 10 in the unsigned ordering, so this execution skips the store.
-example : ((raiseTo (w := 8) 4 10).evalM natCost (fun _ => 255)).1 = false := by
-  decide
+example : (execute 2 independentFlags (initial 3 7)).map
+    (fun r => (r.snd.ram.Flags .eq, r.snd.ram.Flags .ult)) = some (true, true) := by decide
 
-example : ((raiseTo (w := 8) 4 10).costM natCost (fun _ => 255)).1 = 2 := rfl
+def nested : Prog (WordRAM 8 4) Unit := do
+  cmp (w := 8) .ult r0 r1
+  branch .ult (do branch .ult (do set (w := 8) r2 42) (pure ())) (pure ())
+  store (w := 8) r3 r2
 
-example : ((raiseTo (w := 8) 4 10).evalM natCost (fun _ => 255)).2 4 = 255 := by
-  decide
+example : execute 4 nested (initial 3 7) = none := rfl
 
-/-- Evaluate one byte operation through the query interpreter. -/
-def byteBinop (op : BinOp) (x y : Word 8) : Word 8 :=
-  (Prog.evalM (binop op x y : Prog (WordRAM 8) (Word 8)) natCost Memory.zero).1
+example : (execute 5 nested (initial 3 7)).map
+    (fun r => (r.fst.tell.time, r.snd.ram.Memory 9, r.snd.fuel)) = some (3, 42, 0) := by decide
 
-example : byteBinop .sub 0 1 = 255 := by decide
-example : byteBinop .band 170 204 = 136 := by decide
-example : byteBinop .bor 170 204 = 238 := by decide
-example : byteBinop .bxor 170 204 = 102 := by decide
-example : byteBinop .shl 129 1 = 2 := by decide
-example : byteBinop .shr 128 1 = 64 := by decide
+example : (execute 8 nested (initial 3 7)).map
+    (fun r => (r.fst.tell.time, r.snd.ram.Memory 9, r.snd.fuel)) = some (3, 42, 3) := by decide
 
--- Shift counts are not masked modulo the word width, and right shifts do not extend the sign bit.
-example : byteBinop .shl 255 8 = 0 := by decide
-example : byteBinop .shr 255 8 = 0 := by decide
-example : byteBinop .shl 255 9 = 0 := by decide
-example : byteBinop .shr 255 255 = 0 := by decide
+end Branches
 
+namespace Loops
+
+def repeated (fuel : Nat) : Prog (WordRAM 8 4) Unit := do
+  set (w := 8) r2 1
+  repeat [fuel]
+    binop (w := 8) .add r0 r0 r2
+
+example : (execute 4 (repeated 3) RAMState.zero).map
+    (fun r => (r.snd.ram.Registers r0, r.fst.tell.time)) = some (3, 4) := by decide
+
+example : (execute 1 (repeated 0) RAMState.zero).map
+    (fun r => (r.snd.ram.Registers r0, r.fst.tell.time)) = some (0, 1) := by decide
+
+-- The indented flag loop and comparison loop use the same WordRAM query type as branches.
+def count : Prog (WordRAM 8 4) Unit := do
+  set (w := 8) r2 1
+  whileₚ .ult r0 r1 do
+    binop (w := 8) .add r0 r0 r2
+  store (w := 8) r3 r0
+
+example : execute 12 count (Branches.initial 0 3) = none := rfl
+
+example : (execute 13 count (Branches.initial 0 3)).map
+    (fun r => (r.fst.tell.time, r.snd.ram.Memory 9, r.snd.fuel)) = some (9, 3, 0) := by decide
+
+example : (execute 4 count (Branches.initial 3 3)).map
+    (fun r => (r.fst.tell.time, r.snd.ram.Memory 9)) = some (3, 3) := by decide
+
+def flagLoop : Prog (WordRAM 8 4) Unit := do
+  whileₚ .ult do
+    clearFlag (w := 8) (k := 4) .ult
+
+example : (execute 3 flagLoop (RAMState.zero.writeFlag .ult true)).map
+    (fun r => (r.fst.tell.time, r.snd.ram.Flags .ult, r.snd.fuel)) = some (1, false, 0) := by decide
+
+example : (execute 1 flagLoop RAMState.zero).map
+    (fun r => r.fst.tell.time) = some 0 := by decide
+
+def forever : Prog (WordRAM 8 4) Unit := do
+  cmp (w := 8) .eq r0 r0
+  whileₚ .eq do
+    pure ()
+
+example (fuel : Nat) (s : RAMState 8 4) : execute fuel forever s = none := by
+  have loops : ∀ fuel (s : RAMState 8 4), s.Flags .eq = true →
+      runCode fuel [.whileCode .eq []] s = none := by
+    intro fuel
+    induction fuel with
+    | zero => intro s h; rfl
+    | succ fuel ih => intro s h; simp [runCode, step, h, ih]
+  cases fuel <;> simp [execute_eq_runCode, forever, whileLoop, runCode, step, CmpOp.eval, loops]
+
+def nested : Prog (WordRAM 8 4) Unit := do
+  set (w := 8) r2 1
+  whileₚ .ult r0 r1 do
+    whileₚ .ult r0 r1 do
+      binop (w := 8) .add r0 r0 r2
+  store (w := 8) r3 r0
+
+example : execute 16 nested (Branches.initial 0 3) = none := rfl
+
+example : (execute 17 nested (Branches.initial 0 3)).map
+    (fun r => (r.fst.tell.time, r.snd.ram.Memory 9)) = some (11, 3) := by decide
+
+def skipped : Prog (WordRAM 8 4) Unit := do
+  cmp (w := 8) .ult r0 r1
+  branch .ult (do set (w := 8) r2 42) forever
+
+example : (execute 3 skipped (Branches.initial 0 3)).map
+    (fun r => (r.fst.tell.time, r.snd.ram.Registers r2)) = some (2, 42) := by decide
+
+end Loops
+
+example : execute 0 (pure () : Prog (WordRAM 8 4) Unit) RAMState.zero =
+    some (⟨(), 0⟩, ⟨RAMState.zero, 0⟩) := rfl
+
+example : execute 0 (set (w := 8) r0 1 : Prog (WordRAM 8 4) Unit) RAMState.zero = none := rfl
+
+section WeakestPreconditions
+
+open Cslib.FreeM Std.Do
+
+local instance : HasHandler (WordRAM 8 4)
+    (.arg (RAMCost 8 4) (.arg (ExecutionState 8 4) (.except PUnit .pure))) :=
+  timeAndSpaceCost.hasCostHandler
+
+set_option mvcgen.warning false in
 example :
-    (Prog.evalM (bnot (w := 8) 170 : Prog (WordRAM 8) (Word 8)) natCost Memory.zero).1 = 85 := by
-  decide
+    ⦃fun cost s => ⌜cost = 0 ∧ s = ⟨pointerState 9, 2⟩⌝⦄ followPointer
+      ⦃⇓ _ cost s => ⌜cost.time = 2 ∧ cost.addresses = {0, 9} ∧ s.ram.Registers r1 = 42⌝⦄ := by
+  mvcgen [followPointer]
+  simp_all [HasHandler.handler, ModelStateM.costHandler, timeAndSpaceCost,
+    runBlock, runCode, step, pointerState, r0, r1, Finset.pair_comm]
 
+set_option mvcgen.warning false in
 example :
-    (Prog.evalM (cmp .eq (w := 8) 42 42 : Prog (WordRAM 8) Bool) natCost Memory.zero).1 = true := by
-  decide
+    ⦃fun cost s => ⌜cost = 0 ∧ s = ⟨Branches.initial 3 7, 4⟩⌝⦄ Branches.choose
+      ⦃⇓ _ cost s => ⌜cost.time = 3 ∧ cost.addresses = {9} ∧ s.ram.Memory 9 = 42⌝⦄ := by
+  mvcgen [Branches.choose, Prog.ifThenElse, test, branch]
+  simp_all [HasHandler.handler, ModelStateM.costHandler, timeAndSpaceCost,
+    runBlock, runCode, step, Branches.initial, CmpOp.eval, r0, r1, r2, r3]
 
+set_option mvcgen.warning false in
 example :
-    (Prog.evalM (cmp .eq (w := 8) 42 43 : Prog (WordRAM 8) Bool) natCost Memory.zero).1 =
-      false := by
-  decide
+    ⦃fun cost s => ⌜cost = 0 ∧ s = ⟨RAMState.zero.writeFlag .ult true, 3⟩⌝⦄ Loops.flagLoop
+      ⦃⇓ _ cost s => ⌜cost.time = 1 ∧ s.ram.Flags .ult = false ∧ s.fuel = 0⌝⦄ := by
+  mvcgen [Loops.flagLoop, whileLoop]
+  simp_all [HasHandler.handler, ModelStateM.costHandler, timeAndSpaceCost,
+    runBlock, runCode, step, RAMState.zero]
 
--- Word-only operations leave arbitrary memory unchanged.
-example (mem : Memory w) (op : BinOp) (x y : Word w) :
-    (Prog.evalM (binop op x y : Prog (WordRAM w) (Word w)) natCost mem).2 = mem := rfl
+end WeakestPreconditions
 
--- The same programs can track time and footprint without changing their definitions.
-example (mem : Memory w) (addr : Word w) :
-    ((increment addr).costM timeAndSpaceCost mem).1 = ⟨3, {addr}⟩ := by
-  change (⟨1, {addr}⟩ : RAMCost w) + (⟨1, ∅⟩ + (⟨1, {addr}⟩ + 0)) = ⟨3, {addr}⟩
-  ext <;> simp
-
-/-- Reuse a cell across several increments. -/
-def repeatIncrement (addr : Word w) : Nat → Prog (WordRAM w) Unit
-  | 0 => pure ()
-  | n + 1 => do
-    increment addr
-    repeatIncrement addr n
-
-example : ((repeatIncrement (w := 8) 7 0).costM timeAndSpaceCost Memory.zero).1 = 0 := rfl
-
--- Twelve operations still access just one cell, even though it is read and written repeatedly.
-example : ((repeatIncrement (w := 8) 7 4).costM timeAndSpaceCost Memory.zero).1.time = 12 := rfl
-example : ((repeatIncrement (w := 8) 7 4).costM timeAndSpaceCost Memory.zero).1.space = 1 := by
-  decide
-
-example : (indirectIncrement.costM timeAndSpaceCost Memory.zero).1.addresses = {0, 42} := by
-  decide
-example : (indirectIncrement.costM timeAndSpaceCost Memory.zero).1.time = 7 := rfl
-example : (indirectIncrement.costM timeAndSpaceCost Memory.zero).1.space = 2 := by decide
-
--- Exclude the input cell at address 0; include an unread input cell at address 1 for total space.
-example : (indirectIncrement.costM timeAndSpaceCost Memory.zero).1.auxiliarySpace {0, 1} = 1 := by
-  decide
-example : (indirectIncrement.costM timeAndSpaceCost Memory.zero).1.totalSpace {0, 1} = 3 := by
-  decide
-
--- Both branches access the same cell, but only one branch writes it.
-example : ((raiseTo (w := 8) 4 10).costM timeAndSpaceCost Memory.zero).1 = ⟨3, {4}⟩ := by
-  decide
-example : ((raiseTo (w := 8) 4 10).costM timeAndSpaceCost (fun _ => 255)).1 = ⟨2, {4}⟩ := by
-  decide
-
-/-- Load a pointer from a cell and then read the pointed-to cell. -/
-def followPointer (slot : Word w) : Prog (WordRAM w) (Word w) := do
-  let addr : Word w ← load slot
-  load addr
-
--- The footprint depends on the address actually loaded, including when the pointer aliases itself.
-example : ((followPointer (w := 8) 0).costM timeAndSpaceCost Memory.zero).1 = ⟨2, {0}⟩ := by
-  decide
-example : ((followPointer (w := 8) 0).costM timeAndSpaceCost (fun _ => 9)).1 = ⟨2, {0, 9}⟩ := by
-  decide
-
-/-- Word arithmetic, complement, and comparison require no memory queries. -/
-def wordOnly (x y : Word w) : Prog (WordRAM w) Bool := do
-  let sum : Word w ← binop .add x y
-  let inverted : Word w ← bnot sum
-  cmp .eq inverted x
-
-example (mem : Memory w) (x y : Word w) :
-    ((wordOnly x y).costM timeAndSpaceCost mem).1 = ⟨3, ∅⟩ := by
-  change (⟨1, ∅⟩ : RAMCost w) + (⟨1, ∅⟩ + (⟨1, ∅⟩ + 0)) = ⟨3, ∅⟩
-  ext <;> simp
+example (p : Prog (WordRAM w k) (List Bool)) (s t : RAMState w k)
+    (fuel fuel' : Nat) (result result' : AddWriter (RAMCost w k) (List Bool))
+    (final final' : ExecutionState w k)
+    (h : execute fuel p s = some (result, final))
+    (h' : execute fuel' p t = some (result', final')) : result.ret = result'.ret :=
+  execute_ret_independent p s t h h'
 
 section LinearSearch
 
-/-- Example input, including a duplicate key to demonstrate returning the first match. -/
-def searchInput : Array (BitVec 8) := #[12, 7, 42, 7, 99]
+def searchInput : Array (Word 8) := #[12, 7, 42, 7, 99]
 
-/-- Choose a byte-sized key to search for in `searchInput`. -/
-def searchExample (key : BitVec 8) : Prog (WordRAM 8) (Option (Word 8)) :=
-  linearSearch searchInput key (by decide)
+def searchExample : Prog (WordRAM 8 5) Unit := linearSearch 8
 
--- The first 7 is at address 1: one failed comparison followed by a successful comparison.
-example : (searchExample 7 |>.evalM timeAndSpaceCost (arrayMemory searchInput)).1 = some 1 := by
-  decide
-example : (searchExample 7 |>.costM timeAndSpaceCost (arrayMemory searchInput)).1 =
-    ⟨5, {0, 1}⟩ := by decide
+example : (execute 50 searchExample (linearSearchState searchInput 7)).map (fun r =>
+    (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.addresses,
+      r.fst.tell.auxiliarySpace (inputRegion searchInput))) =
+      some (some 1, 10, {0, 1}, 0) := by decide
 
--- Finding the first element stops immediately; finding the last reads the entire array.
-example : (searchExample 12 |>.costM timeAndSpaceCost (arrayMemory searchInput)).1 =
-    ⟨2, {0}⟩ := by decide
-example : (searchExample 99 |>.evalM timeAndSpaceCost (arrayMemory searchInput)).1 = some 4 := by
-  decide
-example : (searchExample 99 |>.costM timeAndSpaceCost (arrayMemory searchInput)).1 =
-    ⟨14, {0, 1, 2, 3, 4}⟩ := by decide
+example : (execute 50 searchExample (linearSearchState searchInput 2)).map (fun r =>
+    (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.totalSpace
+      (inputRegion searchInput))) = some (none, 22, 5) := by decide
 
--- A missing key returns none after five loads, five comparisons, and five address increments.
-example : (searchExample 18 |>.evalM timeAndSpaceCost (arrayMemory searchInput)).1 = none := by
-  decide
-example : (searchExample 18 |>.costM timeAndSpaceCost (arrayMemory searchInput)).1 =
-    ⟨15, {0, 1, 2, 3, 4}⟩ := by decide
+example : (execute 30 (linearSearch 2) (linearSearchState #[0, 1, 2, 3] 3)).map
+    (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
+      some (some 3, 18) := by decide
 
--- Early termination touches only two input cells and uses no auxiliary RAM cells.
-example : (searchExample 7 |>.costM timeAndSpaceCost (arrayMemory searchInput)).1.space = 2 := by
-  decide
-example : (searchExample 7 |>.costM timeAndSpaceCost (arrayMemory searchInput)).1.auxiliarySpace
-    {0, 1, 2, 3, 4} = 0 := by decide
-example : (searchExample 7 |>.costM timeAndSpaceCost (arrayMemory searchInput)).1.totalSpace
-    {0, 1, 2, 3, 4} = 5 := by decide
+example : (execute 9 (linearSearch 0) (linearSearchState #[0] 0)).map
+    (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
+      some (some 0, 6) := by decide
 
--- The empty array performs no queries and returns none.
-example : ((linearSearch (#[] : Array (BitVec 8)) 7 (by decide)).evalM timeAndSpaceCost
-    (arrayMemory #[])).1 = none := by decide
-example : ((linearSearch (#[] : Array (BitVec 8)) 7 (by decide)).costM timeAndSpaceCost
-    (arrayMemory #[])).1 = 0 := by decide
+example : (execute 4 (linearSearch 0)
+    ((linearSearchState #[] 0).writeFlag .eq true)).map
+      (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
+        some (none, 3) := by decide
+
+def representingState (target junk : Word 8) : RAMState 8 5 :=
+  ⟨fun addr => if addr.toNat < searchInput.size then arrayMemory searchInput addr else junk,
+    fun r => if r = LinearSearch.key then target
+      else if r = LinearSearch.last then 4 else 255, fun _ => true⟩
+
+private theorem representingState_input (target junk : Word 8) :
+    RepresentsBoundedSearchInput ⟨searchInput, target⟩ LinearSearch.key LinearSearch.last
+      (representingState target junk) := by
+  have hfits : searchInput.size ≤ 2 ^ 8 := by decide
+  refine ⟨⟨⟨hfits, ?_⟩, by simp [representingState]⟩,
+    by simp [representingState, LinearSearch.last, LinearSearch.key, searchInput],
+    by simp [representingState, searchInput]⟩
+  intro i hi
+  have hiw : i < 2 ^ 8 := by have : searchInput.size = 5 := rfl; lia
+  simpa only [representingState, wordAddress_toNat i hiw, if_pos hi] using
+    arrayMemory_ofNat searchInput (by decide) i hi
+
+example (target junk : Word 8) :
+    ∃ fuel cost t, execute fuel searchExample (representingState target junk) =
+      some (⟨(), cost⟩, ⟨t, 0⟩) :=
+  linearSearch_terminates ⟨searchInput, target⟩ _ (representingState_input target junk)
+
+example (target junk : Word 8) (fuel : Nat) (result : AddWriter (RAMCost 8 5) Unit)
+    (final : ExecutionState 8 5)
+    (hr : execute fuel searchExample (representingState target junk) = some (result, final)) :
+    Search.linearSearch.spec ⟨searchInput, target⟩ (searchOutput LinearSearch.index final.ram) ∧
+      result.tell.auxiliarySpace (inputRegion searchInput) = 0 :=
+  ⟨linearSearch_correct_of_execute _ _ (representingState_input target junk) hr,
+    linearSearch_auxiliarySpace _ _ (representingState_input target junk) hr⟩
+
+example : (execute 50 searchExample (representingState 7 173)).map
+    (fun r => (searchOutput LinearSearch.index r.snd.ram, r.snd.ram.Memory 200)) =
+      some (some 1, 173) := by decide
+
 end LinearSearch
+
+-- The contracts provide termination, correctness and both resource guarantees together.
+example (target junk : Word 8) :
+    ∃ cost t output, Executes searchExample (representingState target junk) cost t ∧
+      RepresentsSearchOutput LinearSearch.index output t ∧
+      Search.linearSearch.spec ⟨searchInput, target⟩ output ∧
+      cost.time ≤ linearSearchTime searchInput.size ∧
+        cost.auxiliarySpace (inputRegion searchInput) = 0 := by
+  have hi := representingState_input target junk
+  have ha : Search.linearSearch.admissible ⟨searchInput, target⟩ := by
+    trivial
+  obtain ⟨cost, t, hr⟩ := (linearSearch_correct 8).terminates _ _ ha hi
+  obtain ⟨output, ho, hs⟩ := (linearSearch_correct 8).correct _ _ ha hi cost t hr
+  exact ⟨cost, t, output, hr, ho, hs,
+    (linearSearch_runsWithin 8).bounded _ _ trivial hi cost t hr⟩
 
 end AlgoleanTests.WordRAMExamples
