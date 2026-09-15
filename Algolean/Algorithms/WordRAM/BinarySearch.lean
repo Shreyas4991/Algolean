@@ -125,7 +125,7 @@ attribute [local simp] wordAddress_mid wordAddress_toNat
     (s.Memory (BitVec.ofNat w pivot))).writeFlag .eq false).writeFlag .ult true
 
 private theorem loop_memory (fuel : Nat) (s : RAMState w 6) :
-    (((loop w fuel).runM timeAndSpaceCost).run s).snd.Memory = s.Memory := by
+    (((loop w fuel).runStateM timeAndSpaceCost).run s).snd.Memory = s.Memory := by
   induction fuel generalizing s <;> simp_all
   split_ifs <;> simp_all
 
@@ -135,8 +135,8 @@ private theorem loop_correct_found (input : Array (BitVec w)) (target : Word w)
     (hmem : s.Memory = arrayMemory input) (hl : s.Registers lower = BitVec.ofNat w lo)
     (hh : s.Registers upper = BitVec.ofNat w hi) (hk : s.Registers key = target)
     (h1 : s.Registers one = 1) (hflag : s.Flags .eq = false)
-    (hresult : (((loop w fuel).runM timeAndSpaceCost).run s).snd.Flags .eq = true) :
-    let result := ((loop w fuel).runM timeAndSpaceCost).run s
+    (hresult : (((loop w fuel).runStateM timeAndSpaceCost).run s).snd.Flags .eq = true) :
+    let result := ((loop w fuel).runStateM timeAndSpaceCost).run s
     let addr := result.snd.Registers middle
     lo ≤ addr.toNat ∧ addr.toNat ≤ hi ∧ input[addr.toNat]? = some target := by
   induction fuel generalizing lo hi s with
@@ -175,7 +175,7 @@ private theorem loop_correct_not_found (input : Array (BitVec w)) (target : Word
     (hmem : s.Memory = arrayMemory input) (hl : s.Registers lower = BitVec.ofNat w lo)
     (hh : s.Registers upper = BitVec.ofNat w hi) (hk : s.Registers key = target)
     (h1 : s.Registers one = 1)
-    (hresult : (((loop w fuel).runM timeAndSpaceCost).run s).snd.Flags .eq = false) :
+    (hresult : (((loop w fuel).runStateM timeAndSpaceCost).run s).snd.Flags .eq = false) :
     ∀ i, lo ≤ i → i ≤ hi → input[i]? ≠ some target := by
   induction fuel generalizing lo hi s with
   | zero => lia
@@ -219,7 +219,7 @@ attribute [local simp] binarySearch initialized
 /-- The equality flag records success and the middle register holds a matching address. -/
 theorem binarySearch_correct (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) (hsorted : SortedWords input) :
-    let result := ((binarySearch w input.size).runM timeAndSpaceCost).run
+    let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run
       (binarySearchState input target)
     let addr := result.snd.Registers middle
     if result.snd.Flags .eq then
@@ -240,7 +240,7 @@ theorem binarySearch_correct (input : Array (BitVec w)) (target : Word w)
 /-- Failure is equivalent to the key being absent from sorted input. -/
 theorem binarySearch_none_iff (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) (hsorted : SortedWords input) :
-    let result := ((binarySearch w input.size).runM timeAndSpaceCost).run
+    let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run
       (binarySearchState input target)
     result.snd.Flags .eq = false ↔ target ∉ input := by
   have h := binarySearch_correct input target hfits hsorted
@@ -249,9 +249,9 @@ theorem binarySearch_none_iff (input : Array (BitVec w)) (target : Word w)
 /-- A successful search leaves an in-bounds matching address in the middle register. -/
 theorem binarySearch_of_some (input : Array (BitVec w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) (hsorted : SortedWords input)
-    (hfound : (((binarySearch w input.size).runM timeAndSpaceCost).run
+    (hfound : (((binarySearch w input.size).runStateM timeAndSpaceCost).run
       (binarySearchState input target)).snd.Flags .eq = true) :
-    let result := ((binarySearch w input.size).runM timeAndSpaceCost).run
+    let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run
       (binarySearchState input target)
     let addr := result.snd.Registers middle
     addr.toNat < input.size ∧ input[addr.toNat]? = some target := by
@@ -260,7 +260,7 @@ theorem binarySearch_of_some (input : Array (BitVec w)) (target : Word w)
 
 /-- All input and non-input memory is preserved. -/
 theorem binarySearch_memory (n : Nat) (s : RAMState w 6) :
-    let result := ((binarySearch w n).runM timeAndSpaceCost).run s
+    let result := ((binarySearch w n).runStateM timeAndSpaceCost).run s
     result.snd.Memory = s.Memory := by
   by_cases hn : n = 0
   · simp [hn]
@@ -276,7 +276,7 @@ private theorem log2_half_bound (n k : Nat) (hn : 2 ≤ n) (hk : k ≤ n / 2) :
 private theorem loop_time_le (fuel lo hi : Nat) (hlo : lo ≤ hi) (hhi : hi < 2 ^ w)
     (s : RAMState w 6) (hl : s.Registers lower = BitVec.ofNat w lo)
     (hh : s.Registers upper = BitVec.ofNat w hi) (h1 : s.Registers one = 1) :
-    (((loop w fuel).runM timeAndSpaceCost).run s).fst.tell.time ≤
+    (((loop w fuel).runStateM timeAndSpaceCost).run s).fst.tell.time ≤
       8 * (hi - lo + 1).log2 + 7 := by
   induction fuel generalizing lo hi s with
   | zero => simp
@@ -313,7 +313,7 @@ def binarySearchTime (n : Nat) : Nat := if n = 0 then 1 else 8 * n.log2 + 11
 
 /-- The logarithmic time bound holds without sortedness, including a full address space. -/
 theorem binarySearch_time_le (n : Nat) (hfits : n ≤ 2 ^ w) (s : RAMState w 6) :
-    let result := ((binarySearch w n).runM timeAndSpaceCost).run s
+    let result := ((binarySearch w n).runStateM timeAndSpaceCost).run s
     result.fst.tell.time ≤ binarySearchTime n := by
   by_cases hn : n = 0
   · simp [hn, binarySearchTime]
@@ -327,7 +327,7 @@ private theorem loop_addresses_subset (input : Array (BitVec w))
     (hfits : input.size ≤ 2 ^ w) (fuel lo hi : Nat) (hlo : lo ≤ hi) (hhi : hi < input.size)
     (s : RAMState w 6) (hl : s.Registers lower = BitVec.ofNat w lo)
     (hh : s.Registers upper = BitVec.ofNat w hi) (h1 : s.Registers one = 1) :
-    (((loop w fuel).runM timeAndSpaceCost).run s).fst.tell.addresses ⊆ inputRegion input := by
+    (((loop w fuel).runStateM timeAndSpaceCost).run s).fst.tell.addresses ⊆ inputRegion input := by
   induction fuel generalizing lo hi s with
   | zero => simp
   | succ fuel ih =>
@@ -359,7 +359,7 @@ private theorem loop_addresses_subset (input : Array (BitVec w))
 /-- All probed cells belong to the input region. -/
 theorem binarySearch_addresses_subset (input : Array (BitVec w))
     (hfits : input.size ≤ 2 ^ w) (s : RAMState w 6) :
-    let result := ((binarySearch w input.size).runM timeAndSpaceCost).run s
+    let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run s
     result.fst.tell.addresses ⊆ inputRegion input := by
   by_cases hn : input.size = 0
   · simp [hn]
@@ -369,7 +369,7 @@ theorem binarySearch_addresses_subset (input : Array (BitVec w))
 /-- Six register words suffice; no memory outside the input is accessed. -/
 theorem binarySearch_auxiliarySpace (input : Array (BitVec w))
     (hfits : input.size ≤ 2 ^ w) (s : RAMState w 6) :
-    let result := ((binarySearch w input.size).runM timeAndSpaceCost).run s
+    let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run s
     result.fst.tell.auxiliarySpace (inputRegion input) = 6 := by
   simp only [RAMCost.auxiliarySpace,
     Finset.sdiff_eq_empty_iff_subset.mpr (binarySearch_addresses_subset input hfits s),
@@ -378,7 +378,7 @@ theorem binarySearch_auxiliarySpace (input : Array (BitVec w))
 /-- Total storage includes the input and the six registers. -/
 theorem binarySearch_totalSpace (input : Array (BitVec w))
     (hfits : input.size ≤ 2 ^ w) (s : RAMState w 6) :
-    let result := ((binarySearch w input.size).runM timeAndSpaceCost).run s
+    let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run s
     result.fst.tell.totalSpace (inputRegion input) = input.size + 6 := by
   simp only [RAMCost.totalSpace,
     Finset.union_eq_right.mpr (binarySearch_addresses_subset input hfits s),
@@ -395,7 +395,7 @@ private theorem loop_worstCase (hw : 0 < w) (fuel lo hi : Nat)
     (hmem : s.Memory = fun _ => 0) (hl : s.Registers lower = BitVec.ofNat w lo)
     (hh : s.Registers upper = BitVec.ofNat w hi) (hk : s.Registers key = 1)
     (h1 : s.Registers one = 1) :
-    (((loop w fuel).runM timeAndSpaceCost).run s).fst.tell.time =
+    (((loop w fuel).runStateM timeAndSpaceCost).run s).fst.tell.time =
       8 * (hi - lo + 1).log2 + 7 := by
   induction fuel generalizing lo hi s with
   | zero => lia
@@ -428,7 +428,7 @@ private theorem loop_worstCase (hw : 0 < w) (fuel lo hi : Nat)
 positive word width. Every unsuccessful iteration follows the larger, right half. -/
 theorem binarySearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :
     let input := Array.replicate n (0 : BitVec w)
-    let result := ((binarySearch w n).runM timeAndSpaceCost).run (binarySearchState input 1)
+    let result := ((binarySearch w n).runStateM timeAndSpaceCost).run (binarySearchState input 1)
     result.fst.tell.time = binarySearchTime n := by
   by_cases hzero : n = 0
   · simp [hzero, binarySearchTime]
@@ -443,7 +443,7 @@ theorem binarySearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :
 /-- A sorted worst-case instance exists at every length fitting in positive-width memory. -/
 theorem binarySearch_exists_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :
     ∃ (input : Array (BitVec w)) (target : Word w),
-      let result := ((binarySearch w input.size).runM timeAndSpaceCost).run
+      let result := ((binarySearch w input.size).runStateM timeAndSpaceCost).run
         (binarySearchState input target)
       input.size = n ∧ input.size ≤ 2 ^ w ∧ SortedWords input ∧ target ∉ input ∧
         result.fst.tell.time = binarySearchTime n := by

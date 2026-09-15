@@ -100,16 +100,16 @@ def draw (dist : PMF α) : Prog RandomSample α :=
   FreeM.lift (.sample dist)
 
 /-- PMF semantics with a caller-chosen cost for each draw. -/
-def model (sampleCost : Cost) : ModelM RandomSample PMF Cost :=
-  ModelM.ofCost (fun | .sample dist => dist) (fun _ => sampleCost)
+def model (sampleCost : Cost) : ModelM RandomSample PMF Cost where
+  evalQuery
+    | .sample dist => dist
+  cost _ := sampleCost
 
 @[simp] theorem model_evalQuery_sample (sampleCost : Cost) (dist : PMF α) :
-    (model sampleCost).evalQuery (.sample dist) = dist := by
-  simp [model]
+    (model sampleCost).evalQuery (.sample dist) = dist := rfl
 
-@[simp] theorem model_runQuery_sample (sampleCost : Cost) (dist : PMF α) :
-    ((model sampleCost).runQuery (.sample dist)).run =
-      (fun a => (⟨a, sampleCost⟩ : AddWriter Cost α)) <$> dist := rfl
+@[simp] theorem model_cost (sampleCost : Cost) (q : RandomSample α) :
+    (model sampleCost).cost q = sampleCost := rfl
 
 /-- Standard randomized-query semantics in which internal sampling is free. -/
 abbrev free [Zero Cost] : ModelM RandomSample PMF Cost :=
@@ -125,7 +125,7 @@ abbrev sampleCount : ModelM RandomSample PMF ℕ :=
 
 @[simp] theorem costM_draw [AddMonoid Cost] (dist : PMF α) (sampleCost : Cost) :
     (draw dist).costM (model sampleCost) = pure sampleCost := by
-  simp [draw, AddWriterT.cost]
+  simp [draw]
 
 end RandomSample
 
@@ -171,7 +171,9 @@ This is the standard randomized-query construction: the original queries retain 
 random choices only determine which queries execute.
 -/
 abbrev ofModel [Zero Cost] (M : Model Q Cost) : RandomizeModel Q Cost :=
-  ofModelM (ModelM.ofCost (fun q => PMF.pure (M.evalQuery q)) M.cost)
+  ofModelM
+    { evalQuery := fun q => PMF.pure (M.evalQuery q)
+      cost := M.cost }
 
 end RandomizeModel
 

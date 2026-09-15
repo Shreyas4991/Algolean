@@ -22,7 +22,7 @@ open Algolean Algolean.Algorithms Algolean.Algorithms.WordRAM
 
 /-- Execute a search and expose the joint result to the test harness. -/
 def search (input : Array (BitVec w)) (target : Word w) :=
-  ((binarySearch w input.size).runM timeAndSpaceCost).run (binarySearchState input target)
+  ((binarySearch w input.size).runStateM timeAndSpaceCost).run (binarySearchState input target)
 
 def input : Array (BitVec 8) := #[1, 3, 5, 7, 9, 11, 13]
 

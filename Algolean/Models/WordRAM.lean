@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.ModelM
+public import Algolean.ModelStateM
 public import Mathlib.Data.Finset.Card
 
 /-!
@@ -17,7 +17,7 @@ Registers are identifiers (`Fin k`), and data instructions write their result in
 register and return `Unit`. Comparisons write flags indexed by `CmpOp`; structured branches
 check those flags inside the model and return `Unit`. Branch bodies use ordinary `Prog` syntax;
 `instructions` converts them to finite blocks before execution. The unselected body has no effects
-or resource cost. `runM_ret_independent` proves that Lean return values cannot depend on
+or resource cost. `runStateM_ret_independent` proves that Lean return values cannot depend on
 machine data.
 Literals are introduced by the charged `set` instruction; input values can also be supplied in
 `RAMState`. The program observes computed words only through register-based instructions.
@@ -30,8 +30,9 @@ Words and addresses have the same fixed width. Arithmetic wraps modulo `2 ^ w`;
 
 `timeAndSpaceCost` interprets each query jointly in
 `AddWriterT (RAMCost w k) (StateM (RAMState w k))`.
-Time adds and probe sets union across queries. `runM` retains the result, cost, and final state;
-`evalM` and `costM` project evaluation and resource usage from this semantics.
+Time adds and probe sets union across queries.
+`runStateM` retains the result, cost, and final state;
+`evalStateM` and `costStateM` project evaluation and resource usage from this semantics.
 
 `RAMCost.space`, `auxiliarySpace`, and `totalSpace` include the fixed `k` register words.
 The memory component counts distinct accessed cells. Auxiliary space excludes input memory;
@@ -346,7 +347,7 @@ def runBlock : List (WordRAM w k Unit) → AddWriterT (RAMCost w k) (StateM (RAM
 end
 
 /-- The existing model machinery supplies joint execution, evaluation, costs, and WP. -/
-def timeAndSpaceCost : ModelM (WordRAM w k) (StateM (RAMState w k)) (RAMCost w k) where
+def timeAndSpaceCost : ModelStateM (WordRAM w k) (StateM (RAMState w k)) (RAMCost w k) where
   runQuery := runQuery
 
 @[simp, grind =] theorem timeAndSpaceCost_runQuery (q : WordRAM w k α) :
@@ -371,17 +372,18 @@ def queryProbes (q : WordRAM w k α) (s : RAMState w k) : Finset (Word w) :=
 
 /-- Compiling a branch body preserves its joint execution. -/
 @[simp] theorem runBlock_instructions (p : Prog (WordRAM w k) Unit) :
-    runBlock (instructions p) = p.runM timeAndSpaceCost := by
+    runBlock (instructions p) = p.runStateM timeAndSpaceCost := by
   induction p with
   | pure a => cases a; simp
   | liftBind q cont ih =>
-    cases q <;> simp [instructions, Prog.runM, Cslib.FreeM.liftM, ih]
+    cases q <;> simp [instructions, Prog.runStateM, Cslib.FreeM.liftM, ih]
 
 /-- Branch on the incoming flag; charge only the executed body. -/
-@[simp] theorem runM_branch (op : CmpOp) (yes no : Prog (WordRAM w k) Unit) (s : RAMState w k) :
-    ((branch op yes no).runM timeAndSpaceCost).run s =
-      if s.Flags op then (yes.runM timeAndSpaceCost).run s
-      else (no.runM timeAndSpaceCost).run s := by
+@[simp] theorem runStateM_branch (op : CmpOp) (yes no : Prog (WordRAM w k) Unit)
+    (s : RAMState w k) :
+    ((branch op yes no).runStateM timeAndSpaceCost).run s =
+      if s.Flags op then (yes.runStateM timeAndSpaceCost).run s
+      else (no.runStateM timeAndSpaceCost).run s := by
   simp [branch, runQuery]
 
 /-- Program syntax determines the Lean return value independently of machine data. -/
@@ -390,18 +392,18 @@ def returnValue : Prog (WordRAM w k) α → α
   | .liftBind q cont => returnValue (cont ((result_type q).symm ▸ ()))
 
 /-- Input-dependent results must remain in machine state. -/
-@[simp] theorem runM_ret (p : Prog (WordRAM w k) α) (s : RAMState w k) :
-    let result := (p.runM timeAndSpaceCost).run s
+@[simp] theorem runStateM_ret (p : Prog (WordRAM w k) α) (s : RAMState w k) :
+    let result := (p.runStateM timeAndSpaceCost).run s
     result.fst.ret = returnValue p := by
   induction p generalizing s with
   | pure a => rfl
   | liftBind q cont ih => cases q <;> simp [returnValue, ih]
 
 /-- No program can recover a machine flag into a Lean return value. -/
-theorem runM_ret_independent (p : Prog (WordRAM w k) α) (s t : RAMState w k) :
-    let left := (p.runM timeAndSpaceCost).run s
-    let right := (p.runM timeAndSpaceCost).run t
-    left.fst.ret = right.fst.ret := by simp only [runM_ret]
+theorem runStateM_ret_independent (p : Prog (WordRAM w k) α) (s t : RAMState w k) :
+    let left := (p.runStateM timeAndSpaceCost).run s
+    let right := (p.runStateM timeAndSpaceCost).run t
+    left.fst.ret = right.fst.ret := by simp only [runStateM_ret]
 
 end WordRAM
 

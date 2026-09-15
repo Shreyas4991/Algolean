@@ -6,7 +6,7 @@ Authors: Tanner Duve
 
 module
 
-public import Algolean.ModelM
+public import Algolean.ModelStateM
 
 /-!
 # Tests for monadic query models
@@ -16,7 +16,7 @@ This file tests branch-dependent cost accumulation and cost-preserving query red
 
 @[expose] public section
 
-namespace AlgoleanTests.ModelM
+namespace AlgoleanTests.ModelStateM
 
 open Algolean Algolean.Algorithms Cslib
 
@@ -26,20 +26,29 @@ inductive ChoiceQ : Type → Type where
   | tick : ChoiceQ Unit
 
 /-- Interpret `ChoiceQ` in the list monad. -/
-def choiceModel : ModelM ChoiceQ List Nat where
-  evalQuery
-    | .choose => [false, true]
-    | .tick => [()]
-  cost _ := 1
+def choiceModel : ModelStateM ChoiceQ List Nat :=
+  ModelStateM.ofCost (fun | .choose => [false, true] | .tick => [()]) (fun _ => 1)
 
 /-- Perform an additional query on the `true` branch. -/
 def branch : Prog ChoiceQ Unit := do
   if ← FreeM.lift .choose then
     FreeM.lift .tick
 
-example : (branch.runM choiceModel).run = [⟨(), 1⟩, ⟨(), 2⟩] := rfl
+example : (branch.runStateM choiceModel).run = [⟨(), 1⟩, ⟨(), 2⟩] := rfl
 
-example : branch.costM choiceModel = [1, 2] := rfl
+example : branch.costStateM choiceModel = [1, 2] := rfl
+
+/-- The cost of a choice can depend on that very choice's result. -/
+def correlatedChoice : ModelStateM ChoiceQ List Nat where
+  runQuery
+    | .choose => AddWriterT.mk [⟨false, 3⟩, ⟨true, 7⟩]
+    | .tick => AddWriterT.mk [⟨(), 1⟩]
+
+example : (branch.runStateM correlatedChoice).run = [⟨(), 3⟩, ⟨(), 8⟩] := rfl
+
+example : branch.costStateM correlatedChoice = [3, 8] := rfl
+
+example : branch.evalStateM correlatedChoice = [(), ()] := rfl
 
 /-- A unit-cost state increment. -/
 inductive TickQ : Type → Type where
@@ -50,16 +59,12 @@ inductive DoubleTickQ : Type → Type where
   | tickTwice : DoubleTickQ Unit
 
 /-- Interpret `TickQ` as a state increment. -/
-def tickModel : ModelM TickQ (StateM Nat) Nat where
-  evalQuery
-    | .tick => modify (· + 1)
-  cost _ := 1
+def tickModel : ModelStateM TickQ (StateM Nat) Nat :=
+  ModelStateM.ofCost (fun | .tick => modify (· + 1)) (fun _ => 1)
 
 /-- Interpret `DoubleTickQ` as a state increment of two. -/
-def doubleTickModel : ModelM DoubleTickQ (StateM Nat) Nat where
-  evalQuery
-    | .tickTwice => modify (· + 2)
-  cost _ := 2
+def doubleTickModel : ModelStateM DoubleTickQ (StateM Nat) Nat :=
+  ModelStateM.ofCost (fun | .tickTwice => modify (· + 2)) (fun _ => 2)
 
 /-- Implement one double increment using two unit increments. -/
 def doubleTickReduction : Reduction DoubleTickQ TickQ where
@@ -69,10 +74,10 @@ def doubleTickReduction : Reduction DoubleTickQ TickQ where
       FreeM.lift .tick
 
 example (P : Prog DoubleTickQ α) :
-    (P.reduceProg doubleTickReduction).runM tickModel = P.runM doubleTickModel := by
-  apply Prog.reduceProg_runM
+    (P.reduceProg doubleTickReduction).runStateM tickModel = P.runStateM doubleTickModel := by
+  apply Prog.reduceProg_runStateM
   intro _ q
   cases q
   rfl
 
-end AlgoleanTests.ModelM
+end AlgoleanTests.ModelStateM

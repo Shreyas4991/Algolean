@@ -63,11 +63,11 @@ theorem costM_branchWithExtraDraw (coin : PMF Bool) (extra : PMF α) :
     (branchWithExtraDraw coin extra).costM sampleCount =
       (fun b => if b then 1 else 2) <$> coin := by
   simp only [branchWithExtraDraw, draw, Prog.costM_liftBind,
-    model_runQuery_sample, bind_map_left]
+    model_evalQuery_sample, model_cost]
   rw [← bind_pure_comp]
   apply bind_congr
   intro b
-  cases b <;> simp [AddWriterT.cost]
+  cases b <;> simp
 
 -- Almost-sure reasoning through the support interpretation. `mvcgen` discharges the triple that a
 -- drawn value always lies in the distribution's support, using `free`'s handler as the selected
