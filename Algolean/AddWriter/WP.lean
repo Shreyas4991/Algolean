@@ -72,4 +72,16 @@ theorem wp_eq_wp_toStateT [Functor m] [Add Cost] [WP m ps]
     (wp x).apply Q initial s =
       Q.fst (x.run s).fst.ret (initial + (x.run s).fst.tell) (x.run s).snd := rfl
 
+/-- Optional state execution exposes either the exact joint result or its failure postcondition. -/
+@[simp] theorem wp_apply_state_option [Add Cost] (x : AddWriterT Cost (StateT σ Option) α)
+    (Q : PostCond α (.arg Cost (.arg σ (.except PUnit .pure)))) (initial : Cost) (s : σ) :
+    (wp x).apply Q initial s =
+      match x.run s with
+      | none => Q.snd.fst PUnit.unit
+      | some (result, final) => Q.fst result.ret (initial + result.tell) final := by
+  dsimp [wp_eq_wp_toStateT, wp, toStateT, PredTrans.apply]
+  simp only [StateT.run_map]
+  dsimp only [StateT.run]
+  cases x.run s <;> rfl
+
 end Algolean.AddWriterT

@@ -8,11 +8,7 @@ module
 
 public import Algolean.Algorithms.WordRAM.BinarySearch
 
-/-!
-# Register-based binary search examples
-
-The key starts in its designated register. Only the test harness reads the resulting address.
--/
+/-! # Uniform binary search on runtime-represented arrays -/
 
 @[expose] public section
 
@@ -20,86 +16,93 @@ namespace AlgoleanTests.WordRAMBinarySearchExamples
 
 open Algolean Algolean.Algorithms Algolean.Algorithms.WordRAM
 
-/-- Execute a search and expose the joint result to the test harness. -/
-def search (input : Array (BitVec w)) (target : Word w) :=
-  ((binarySearch w input.size).runStateM timeAndSpaceCost).run (binarySearchState input target)
+def input : Array (Word 8) := #[1, 3, 5, 7, 9, 11, 13]
 
-def input : Array (BitVec 8) := #[1, 3, 5, 7, 9, 11, 13]
+private theorem input_sorted : SortedWords input := by
+  intro i j hi hj hij
+  have hi' : i < 7 := hi
+  have hj' : j < 7 := hj
+  interval_cases i <;> interval_cases j <;> simp_all [input]
 
--- A midpoint hit takes the four setup instructions and five loop instructions.
-example : (search input 7).snd.Flags .eq = true := by decide +kernel
+def searchExample : Prog (WordRAM 8 6) Unit := binarySearch 8
 
-example : (search input 7).snd.Registers BinarySearch.middle = 3 := by decide +kernel
+example : (execute 50 searchExample (binarySearchState input 7)).map (fun r =>
+    (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time, r.fst.tell.addresses)) =
+      some (some 3, 9, {3}) := by decide
 
-example : (search input 7).fst.tell.time = 9 := by decide +kernel
+example : (execute 50 searchExample (binarySearchState input 13)).map (fun r =>
+    (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time, r.fst.tell.addresses)) =
+      some (some 6, 25, {3, 5, 6}) := by decide
 
-example : (search input 7).fst.tell.addresses = {3} := by decide +kernel
+example : (execute 50 searchExample (binarySearchState input 0)).map (fun r =>
+    (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time, r.fst.tell.addresses)) =
+      some (none, 26, {0, 1, 3}) := by decide
 
-example : (search input 7).fst.tell.space = 1 := by decide +kernel
+example : (execute 50 searchExample (binarySearchState input 20)).map (fun r =>
+    (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time,
+      r.fst.tell.auxiliarySpace (inputRegion input), r.fst.tell.totalSpace (inputRegion input))) =
+      some (none, 26, 0, 7) := by decide
 
--- Both directions recurse; searches can reach either endpoint or miss beyond it.
-example : (search input 1).snd.Registers BinarySearch.middle = 0 := by decide +kernel
+-- Every address is available: no sentinel cell is reserved.
+example : (execute 50 (binarySearch 2) (binarySearchState #[0, 1, 2, 3] 3)).map
+    (fun r => searchOutput BinarySearch.middle r.snd.ram) = some (some 3) := by decide
 
-example : (search input 13).snd.Registers BinarySearch.middle = 6 := by decide +kernel
+example : (execute 50 (binarySearch 2) (binarySearchState (Array.replicate 4 0) 1)).map
+    (fun r => (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time)) =
+      some (none, binarySearchTime 4) := by decide
 
-example : (search input 0).snd.Flags .eq = false := by decide +kernel
+-- The nonempty flag distinguishes the two possible input lengths at word width zero.
+example : (execute 13 (binarySearch 0) (binarySearchState #[0] 0)).map
+    (fun r => (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time)) =
+      some (some 0, 9) := by decide
 
-example : (search input 14).snd.Flags .eq = false := by decide +kernel
+example : (execute 2 (binarySearch 0) ((binarySearchState #[] 0).writeFlag .eq true)).map
+    (fun r => (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time)) =
+      some (none, 1) := by decide
 
-example : (search input 6).snd.Flags .eq = false := by decide +kernel
+example : execute 12 (binarySearch 0) (binarySearchState #[0] 0) = none := rfl
 
--- Duplicates are allowed: correctness does not require the first matching position.
-example : (search (#[2, 2, 2, 4] : Array (BitVec 3)) 2).snd.Flags .eq =
-    true := by decide +kernel
+def representingState (target junk : Word 8) : RAMState 8 6 :=
+  ⟨fun addr => if addr.toNat < input.size then arrayMemory input addr else junk,
+    fun r => if r = BinarySearch.key then target
+      else if r = BinarySearch.upper then 6 else 255, fun _ => true⟩
 
-example : (search (#[2, 2, 2, 4] : Array (BitVec 3)) 2).snd.Registers
-    BinarySearch.middle = 1 := by decide +kernel
+private theorem representingState_input (target junk : Word 8) :
+    RepresentsBoundedSearchInput ⟨input, target⟩ BinarySearch.key BinarySearch.upper
+      (representingState target junk) := by
+  have hfits : input.size ≤ 2 ^ 8 := by decide
+  refine ⟨⟨⟨hfits, ?_⟩, by simp [representingState]⟩,
+    by simp [representingState, BinarySearch.upper, BinarySearch.key, input],
+    by simp [representingState, input]⟩
+  intro i hi
+  have hiw : i < 2 ^ 8 := by have : input.size = 7 := rfl; lia
+  simpa only [representingState, wordAddress_toNat i hiw, if_pos hi] using
+    arrayMemory_ofNat input (by decide) i hi
 
--- An empty input only clears the result flag; it performs no memory probes.
-example : (search (#[] : Array (BitVec 8)) 42).snd.Flags .eq = false := by decide +kernel
+example (target junk : Word 8) :
+    ∃ fuel cost t, execute fuel searchExample (representingState target junk) =
+      some (⟨(), cost⟩, ⟨t, 0⟩) :=
+  binarySearch_terminates ⟨input, target⟩ _ (representingState_input target junk)
 
-example : (search (#[] : Array (BitVec 8)) 42).fst.tell.time = 1 := by decide +kernel
+example (target junk : Word 8) (fuel : Nat) (result : AddWriter (RAMCost 8 6) Unit)
+    (final : ExecutionState 8 6)
+    (hr : execute fuel searchExample (representingState target junk) = some (result, final)) :
+    Search.search.spec ⟨input, target⟩ (searchOutput BinarySearch.middle final.ram) ∧
+      result.tell.time ≤ binarySearchTime input.size ∧
+      result.tell.auxiliarySpace (inputRegion input) = 0 :=
+  ⟨binarySearch_correct _ _ (representingState_input target junk) hr (by simpa using input_sorted),
+    binarySearch_time_le _ _ (representingState_input target junk) hr,
+    binarySearch_auxiliarySpace _ _ (representingState_input target junk) hr⟩
 
-example : (search (#[] : Array (BitVec 8)) 42).fst.tell.addresses = ∅ := by decide +kernel
+example : (execute 50 searchExample (representingState 7 173)).map
+    (fun r => (searchOutput BinarySearch.middle r.snd.ram, r.snd.ram.Memory 200)) =
+      some (some 3, 173) := by decide
 
--- Inclusive bounds allow an input occupying every addressable cell.
-example : (search (#[0, 1, 2, 3] : Array (BitVec 2)) 3).snd.Flags .eq =
-    true := by decide +kernel
-
-example : (search (#[0, 1, 2, 3] : Array (BitVec 2)) 3).snd.Registers
-    BinarySearch.middle = 3 := by decide +kernel
-
-example : (search (#[0, 1, 2, 3] : Array (BitVec 2)) 0).snd.Registers
-    BinarySearch.middle = 0 := by decide +kernel
-
-example : (search (#[0] : Array (BitVec 0)) 0).snd.Flags .eq =
-    true := by decide +kernel
-
-example : (search (#[0] : Array (BitVec 0)) 0).fst.tell.time = 9 := by decide +kernel
-
--- Worst-case execution follows the right half, including the final singleton.
-example : (search (Array.replicate 8 (0 : BitVec 4)) 1).fst.tell.time = 35 := by decide +kernel
-
-example : (search (Array.replicate 8 (0 : BitVec 4)) 1).fst.tell.addresses =
-    {3, 5, 6, 7} := by decide +kernel
-
--- The general theorems apply to arbitrary keys and count only memory usage.
-example (target : Word 8) : (search input target).fst.tell.time ≤ 27 :=
-  binarySearch_time_le input.size (by decide +kernel) (binarySearchState input target)
-
-example (target : Word 8) : (search input target).fst.tell.auxiliarySpace
-    (inputRegion input) = 0 :=
-  binarySearch_auxiliarySpace input (by decide +kernel) (binarySearchState input target)
-
-example (target : Word 8) : (search input target).fst.tell.totalSpace
-    (inputRegion input) = 7 :=
-  binarySearch_totalSpace input (by decide +kernel) (binarySearchState input target)
-
-example (target : Word 8) : (search input target).snd.Flags .eq = false ↔ target ∉ input :=
-  binarySearch_none_iff input target (by decide +kernel) (by
-    intro i j hi hj hij
-    have hi' : i < 7 := hi
-    have hj' : j < 7 := hj
-    interval_cases i <;> interval_cases j <;> simp_all [input])
+example (n : Nat) (hn : n ≤ 2 ^ 8) :
+    ∃ (data : Array (Word 8)) (target : Word 8),
+      data.size = n ∧ data.size ≤ 2 ^ 8 ∧ SortedWords data ∧ target ∉ data ∧
+      ∃ fuel cost t, execute fuel searchExample (binarySearchState data target) =
+        some (⟨(), cost⟩, ⟨t, 0⟩) ∧ cost.time = binarySearchTime n :=
+  binarySearch_exists_worstCase 8 n (by decide) hn
 
 end AlgoleanTests.WordRAMBinarySearchExamples
