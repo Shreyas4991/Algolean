@@ -314,6 +314,84 @@ end WeakestPreconditions
 
 end Branches
 
+namespace ControlFlow
+
+open scoped Prog
+
+/-- Both alternatives use ordinary `do` syntax, and execution continues after the conditional. -/
+def conditional : Prog (WordRAM 8 4) Unit := do
+  ifₚ test .ult r0 r1 then
+    set (w := 8) r2 42
+  else
+    set (w := 8) r2 99
+  store (w := 8) r3 r2
+
+example : ((conditional.runM timeAndSpaceCost).run
+    (Branches.initial 3 7)).snd.Memory 9 = 42 := by decide +kernel
+
+example : ((conditional.runM timeAndSpaceCost).run
+    (Branches.initial 7 3)).snd.Memory 9 = 99 := by decide +kernel
+
+example : ((conditional.runM timeAndSpaceCost).run
+    (Branches.initial 3 7)).fst.tell.time = 3 := by decide +kernel
+
+/-- A negated flag condition does not perform a fresh comparison. -/
+def negatedFlag : Prog (WordRAM 8 4) Unit := do
+  cmp (w := 8) .eq r0 r1
+  ifₚ (flag .eq).not then
+    set (w := 8) r2 42
+  else
+    set (w := 8) r2 99
+
+example : ((negatedFlag.runM timeAndSpaceCost).run
+    (Branches.initial 3 7)).snd.Registers r2 = 42 := by decide +kernel
+
+example : ((negatedFlag.runM timeAndSpaceCost).run
+    (Branches.initial 3 7)).fst.tell.time = 2 := by decide +kernel
+
+/-- The final store is outside the repeated block. -/
+def repeated (fuel : Nat) : Prog (WordRAM 8 4) Unit := do
+  set (w := 8) r0 0
+  set (w := 8) r1 1
+  repeat [fuel]
+    binop (w := 8) .add r0 r0 r1
+    copy (w := 8) r2 r0
+  store (w := 8) r3 r2
+
+example : (((repeated 3).runM timeAndSpaceCost).run
+    (Branches.initial 0 0)).snd.Memory 9 = 3 := by decide +kernel
+
+example : (((repeated 3).runM timeAndSpaceCost).run
+    (Branches.initial 0 0)).fst.tell.time = 9 := by decide +kernel
+
+example : (((repeated 0).runM timeAndSpaceCost).run
+    (Branches.initial 0 0)).fst.tell.time = 3 := by decide +kernel
+
+example (body : Prog (WordRAM 8 4) Unit) :
+    (do
+      repeat [2]
+        repeat [3]
+          body) = Prog.repeatLoop (fun yes _ => yes)
+      (Prog.repeatLoop (fun yes _ => yes) body 3) 2 := rfl
+
+section WeakestPreconditions
+
+open Cslib.FreeM Std.Do
+
+local instance : HasHandler (WordRAM 8 4) (.arg (RAMCost 8 4) (.arg (RAMState 8 4) .pure)) :=
+  timeAndSpaceCost.hasCostHandler
+
+set_option mvcgen.warning false in
+example :
+    ⦃fun cost s => ⌜cost = 0 ∧ s = Branches.initial 3 7⌝⦄ conditional
+      ⦃⇓ _ cost s => ⌜cost.time = 3 ∧ cost.addresses = {9} ∧ s.Memory 9 = 42⌝⦄ := by
+  mvcgen [conditional, Prog.ifThenElse, test, branch]
+  simp_all [HasHandler.handler, runQuery, Branches.initial, CmpOp.eval, r0, r1, r2, r3]
+
+end WeakestPreconditions
+
+end ControlFlow
+
 section LinearSearch
 
 def searchInput : Array (BitVec 8) := #[12, 7, 42, 7, 99]

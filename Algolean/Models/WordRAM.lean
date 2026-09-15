@@ -38,6 +38,14 @@ The memory component counts distinct accessed cells. Auxiliary space excludes in
 total space includes input memory even if some cells were never read. Two fixed Boolean flags
 are additional control storage. Program size and host-language construction costs are excluded.
 
+## Control-flow sugar
+
+`open scoped Prog` enables `ifₚ condition then ... else ...` and `repeat [fuel]`
+with an indented body. Repetition executes the body exactly `fuel` times.
+Use `flag op` to inspect an existing flag, or `test op x y` to compare registers afresh.
+Both bodies return `Unit`. These definitions expand into the existing programs and do not
+change instruction costs.
+
 ## References
 
 * Pat Morin, *Open Data Structures*, §1.4:
@@ -49,6 +57,69 @@ are additional control storage. Program size and host-language construction cost
 @[expose] public section
 
 namespace Algolean.Algorithms
+
+namespace Prog
+
+section ControlFlowDefinitions
+
+/-- A model-controlled condition. Choosing a branch never returns its decision to Lean.
+The condition may execute queries before selecting a `Unit` body. -/
+abbrev Condition (Q : Type u → Type v) :=
+  Prog Q Unit → Prog Q Unit → Prog Q Unit
+
+/-- Execute the body selected by a model-controlled condition. -/
+def ifThenElse (condition : Condition Q) (yes no : Prog Q Unit) : Prog Q Unit :=
+  condition yes no
+
+/-- Execute a body only when the model-controlled condition holds. -/
+def when (condition : Condition Q) (body : Prog Q Unit) : Prog Q Unit :=
+  ifThenElse condition body (pure ())
+
+/-- Execute a body only when the model-controlled condition does not hold. -/
+def unlessDo (condition : Condition Q) (body : Prog Q Unit) : Prog Q Unit :=
+  ifThenElse condition (pure ()) body
+
+/-- Negate a condition without exposing its decision. -/
+def Condition.not (condition : Condition Q) : Condition Q :=
+  fun yes no => condition no yes
+
+@[simp, grind =] theorem ifThenElse_not (condition : Condition Q) (yes no : Prog Q Unit) :
+    ifThenElse condition.not yes no = ifThenElse condition no yes := rfl
+
+@[simp] theorem Condition.not_not (condition : Condition Q) : condition.not.not = condition := rfl
+
+/-- Run at most `fuel` iterations, testing before each body. Zero fuel performs no test.
+A condition that performs queries executes those queries anew on every test. -/
+def repeatLoop (condition : Condition Q) (body : Prog Q Unit) : Nat → Prog Q Unit
+  | 0 => pure ()
+  | fuel + 1 => ifThenElse condition (do body; repeatLoop condition body fuel) (pure ())
+
+@[simp, grind =] theorem repeatLoop_zero (condition : Condition Q) (body : Prog Q Unit) :
+    repeatLoop condition body 0 = pure () := rfl
+
+@[simp, grind =] theorem repeatLoop_succ
+    (condition : Condition Q) (body : Prog Q Unit) (fuel : Nat) :
+    repeatLoop condition body (fuel + 1) =
+      ifThenElse condition (do body; repeatLoop condition body fuel) (pure ()) := rfl
+
+end ControlFlowDefinitions
+
+section ControlFlowNotation
+
+/-- Model-controlled `if` inside a `do` block; enable with `open scoped Prog`. -/
+scoped syntax "ifₚ " term " then " doSeq " else " doSeq : doElem
+
+scoped macro_rules
+  | `(doElem| ifₚ $condition then $yes else $no) =>
+    `(doElem| Prog.ifThenElse $condition (do $yes) (do $no))
+
+/-- Repeat an indented `Unit` body a fixed number of times; enable with `open scoped Prog`. -/
+scoped macro "repeat " "[" fuel:term "]" ppLine body:doSeq : doElem =>
+  `(doElem| Prog.repeatLoop (fun yes _ => yes) (do $body) $fuel)
+
+end ControlFlowNotation
+
+end Prog
 
 namespace WordRAM
 
@@ -180,6 +251,25 @@ def instructions : Prog (WordRAM w k) Unit → List (WordRAM w k Unit)
 /-- Branch on the flag indexed by `op`, without exposing it as a Lean Boolean. -/
 def branch (op : CmpOp) (yes no : Prog (WordRAM w k) Unit) : Prog (WordRAM w k) Unit :=
   .liftBind (.branchCode op (instructions yes) (instructions no)) pure
+
+section ControlFlowConditions
+
+/-- Use an existing comparison flag as a condition, without running another comparison. -/
+def flag (op : CmpOp) : Prog.Condition (WordRAM w k) := branch op
+
+/-- Compare two registers anew whenever this condition is tested. -/
+def test (op : CmpOp) (x y : Register k) : Prog.Condition (WordRAM w k) := fun yes no => do
+  cmp (w := w) op x y
+  branch op yes no
+
+@[simp, grind =] theorem ifThenElse_flag (op : CmpOp) (yes no : Prog (WordRAM w k) Unit) :
+    Prog.ifThenElse (flag op) yes no = branch op yes no := rfl
+
+@[simp, grind =] theorem ifThenElse_test (op : CmpOp) (x y : Register k)
+    (yes no : Prog (WordRAM w k) Unit) :
+    Prog.ifThenElse (test op x y) yes no = (do cmp (w := w) op x y; branch op yes no) := rfl
+
+end ControlFlowConditions
 
 /-- Time and the set of memory addresses accessed by an execution. -/
 @[ext]
@@ -314,5 +404,6 @@ theorem runM_ret_independent (p : Prog (WordRAM w k) α) (s t : RAMState w k) :
     left.fst.ret = right.fst.ret := by simp only [runM_ret]
 
 end WordRAM
+
 
 end Algolean.Algorithms
