@@ -326,7 +326,7 @@ example (target junk : Word 8) (fuel : Nat) (result : AddWriter (RAMCost 8 5) Un
     (hr : execute fuel searchExample (representingState target junk) = some (result, final)) :
     Search.linearSearch.spec ⟨searchInput, target⟩ (searchOutput LinearSearch.index final.ram) ∧
       result.tell.auxiliarySpace (inputRegion searchInput) = 0 :=
-  ⟨linearSearch_correct _ _ (representingState_input target junk) hr,
+  ⟨linearSearch_correct_of_execute _ _ (representingState_input target junk) hr,
     linearSearch_auxiliarySpace _ _ (representingState_input target junk) hr⟩
 
 example : (execute 50 searchExample (representingState 7 173)).map
@@ -334,5 +334,20 @@ example : (execute 50 searchExample (representingState 7 173)).map
       some (some 1, 173) := by decide
 
 end LinearSearch
+
+-- The contracts provide termination, correctness and both resource guarantees together.
+example (target junk : Word 8) :
+    ∃ cost t output, Executes searchExample (representingState target junk) cost t ∧
+      RepresentsSearchOutput LinearSearch.index output t ∧
+      Search.linearSearch.spec ⟨searchInput, target⟩ output ∧
+      cost.time ≤ linearSearchTime searchInput.size ∧
+        cost.auxiliarySpace (inputRegion searchInput) = 0 := by
+  have hi := representingState_input target junk
+  have ha : Search.linearSearch.admissible ⟨searchInput, target⟩ := by
+    trivial
+  obtain ⟨cost, t, hr⟩ := (linearSearch_correct 8).terminates _ _ ha hi
+  obtain ⟨output, ho, hs⟩ := (linearSearch_correct 8).correct _ _ ha hi cost t hr
+  exact ⟨cost, t, output, hr, ho, hs,
+    (linearSearch_runsWithin 8).bounded _ _ trivial hi cost t hr⟩
 
 end AlgoleanTests.WordRAMExamples

@@ -69,4 +69,45 @@ example (data : Array α) (key : α) (i j : Nat)
     (hi : Search.IsFirstMatch data key i) (hj : Search.IsFirstMatch data key j) : i = j :=
   hi.unique hj
 
+-- A fixed program is verified directly; the input is supplied only to its execution relation.
+private def identityRun (_ : Unit) (s cost t : Nat) : Prop := cost = 1 ∧ t = s
+
+private theorem identity_solves :
+    positiveWitness.Solves () identityRun Eq Eq := by
+  constructor
+  · intro input s _ _
+    exact ⟨1, s, rfl, rfl⟩
+  · intro input s ha hi cost t hr
+    obtain ⟨_, rfl⟩ := hr
+    exact ⟨t, rfl, hi ▸ ha, Nat.le_of_eq hi.symm⟩
+
+example : positiveWitness.RunsWithin () identityRun Eq (fun _ cost => cost ≤ 1) := by
+  refine ⟨identity_solves.terminates, ?_⟩
+  intro input s _ _ cost t hr
+  exact hr.left ▸ Nat.le_refl 1
+
+-- A relation with no completed executions satisfies neither predicate.
+example : ¬positiveWitness.Solves () (fun _ _ (_ : Nat) _ => False) Eq Eq := by
+  intro h
+  obtain ⟨cost, t, hr⟩ := h.terminates 1 1 (by simp [positiveWitness]) rfl
+  exact hr
+
+example : ¬positiveWitness.RunsWithin () (fun _ _ (_ : Nat) _ => False) Eq
+    (fun _ _ => True) := by
+  intro h
+  obtain ⟨cost, t, hr⟩ := h.terminates 1 1 (by simp [positiveWitness]) rfl
+  exact hr
+
+-- One good outcome does not excuse another execution with an invalid answer.
+example : ¬positiveWitness.Solves () (fun _ (_ : Nat) (_ : Nat) (_ : Nat) => True) Eq Eq := by
+  intro h
+  obtain ⟨output, rfl, hs⟩ := h.correct 1 1 (by simp [positiveWitness]) rfl 1 0 trivial
+  exact Nat.lt_irrefl 0 hs.left
+
+-- Resource bounds cover every completed execution, not just a cheap witness.
+example : ¬positiveWitness.RunsWithin ()
+    (fun _ (s : Nat) (_ : Nat) t => t = s) Eq (fun _ cost => cost ≤ 1) := by
+  intro h
+  exact (by decide : ¬2 ≤ 1) (h.bounded 1 1 (by simp [positiveWitness]) rfl 2 1 rfl)
+
 end AlgoleanTests.Problems

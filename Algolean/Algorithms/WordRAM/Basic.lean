@@ -135,4 +135,16 @@ theorem SortedWords.exclude_right {input : Array (Word w)} (h : SortedWords inpu
   rw [heq'] at hs
   lia
 
+/-- Completed execution in the time-and-space model, hiding interpreter fuel.
+Unused fuel is allowed and is not charged as time. -/
+def Executes (program : Prog (WordRAM w k) Unit) (s : RAMState w k)
+    (cost : RAMCost w k) (t : RAMState w k) : Prop :=
+  ∃ fuel remaining, execute fuel program s = some (⟨(), cost⟩, ⟨t, remaining⟩)
+
+/-- An internal completion witness supplies a completed model execution. -/
+theorem Completes.executes {program : Prog (WordRAM w k) Unit}
+    (h : Completes (instructions program) s cost t) : Executes program s cost t := by
+  obtain ⟨fuel, hr⟩ := h.execute
+  exact ⟨fuel, 0, hr⟩
+
 end Algolean.Algorithms.WordRAM

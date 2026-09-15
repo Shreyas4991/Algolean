@@ -90,7 +90,8 @@ example (target junk : Word 8) (fuel : Nat) (result : AddWriter (RAMCost 8 6) Un
     Search.search.spec ⟨input, target⟩ (searchOutput BinarySearch.middle final.ram) ∧
       result.tell.time ≤ binarySearchTime input.size ∧
       result.tell.auxiliarySpace (inputRegion input) = 0 :=
-  ⟨binarySearch_correct _ _ (representingState_input target junk) hr (by simpa using input_sorted),
+  ⟨binarySearch_correct_of_execute _ _ (representingState_input target junk) hr
+      (by simpa using input_sorted),
     binarySearch_time_le _ _ (representingState_input target junk) hr,
     binarySearch_auxiliarySpace _ _ (representingState_input target junk) hr⟩
 
@@ -104,5 +105,21 @@ example (n : Nat) (hn : n ≤ 2 ^ 8) :
       ∃ fuel cost t, execute fuel searchExample (binarySearchState data target) =
         some (⟨(), cost⟩, ⟨t, 0⟩) ∧ cost.time = binarySearchTime n :=
   binarySearch_exists_worstCase 8 n (by decide) hn
+
+-- The contracts provide termination, correctness and both resource guarantees together.
+example (target junk : Word 8) :
+    ∃ cost t output, Executes searchExample (representingState target junk) cost t ∧
+      RepresentsSearchOutput BinarySearch.middle output t ∧
+      (Search.binarySearch (fun a b : Word 8 => a.toNat ≤ b.toNat)).spec
+        ⟨input, target⟩ output ∧
+      cost.time ≤ binarySearchTime input.size ∧ cost.auxiliarySpace (inputRegion input) = 0 := by
+  have hi := representingState_input target junk
+  have ha : (Search.binarySearch (fun a b : Word 8 => a.toNat ≤ b.toNat)).admissible
+      ⟨input, target⟩ := by
+    simpa using input_sorted
+  obtain ⟨cost, t, hr⟩ := (binarySearch_correct 8).terminates _ _ ha hi
+  obtain ⟨output, ho, hs⟩ := (binarySearch_correct 8).correct _ _ ha hi cost t hr
+  exact ⟨cost, t, output, hr, ho, hs,
+    (binarySearch_runsWithin 8).bounded _ _ trivial hi cost t hr⟩
 
 end AlgoleanTests.WordRAMBinarySearchExamples

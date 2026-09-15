@@ -261,7 +261,7 @@ theorem linearSearch_run_spec (input : Search.Input (Word w)) (s : RAMState w 5)
   simpa only [hcost, hstate] using hs
 
 /-- Uniform linear search returns the first match, or certifies absence. -/
-theorem linearSearch_correct (input : Search.Input (Word w)) (s : RAMState w 5)
+theorem linearSearch_correct_of_execute (input : Search.Input (Word w)) (s : RAMState w 5)
     (hinput : RepresentsBoundedSearchInput input key last s)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
@@ -274,7 +274,7 @@ theorem linearSearch_none_iff (input : Search.Input (Word w)) (s : RAMState w 5)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
     final.ram.Flags .eq = false ↔ input.key ∉ input.data := by
-  have h := linearSearch_correct input s hinput hrun
+  have h := linearSearch_correct_of_execute input s hinput hrun
   simpa [searchOutput] using Search.search_none_iff (Search.linearSearch_spec_search _ _ h)
 
 /-- A set equality flag identifies the first matching address. -/
@@ -285,7 +285,7 @@ theorem linearSearch_some_iff (input : Search.Input (Word w)) (s : RAMState w 5)
     final.ram.Flags .eq = true ↔
       Search.IsFirstMatch input.data input.key (final.ram.Registers index).toNat := by
   simpa [searchOutput] using Search.linearSearch_some_iff
-    (linearSearch_correct input s hinput hrun) (final.ram.Registers index).toNat
+    (linearSearch_correct_of_execute input s hinput hrun) (final.ram.Registers index).toNat
 
 /-- Loads and register operations preserve the entire input and background memory. -/
 theorem linearSearch_memory (input : Search.Input (Word w)) (s : RAMState w 5)
@@ -308,7 +308,7 @@ theorem linearSearch_time_le (input : Search.Input (Word w)) (s : RAMState w 5)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
     result.tell.time ≤ linearSearchTime input.data.size := by
-  have hs := linearSearch_correct input s hinput hrun
+  have hs := linearSearch_correct_of_execute input s hinput hrun
   rw [linearSearch_time input s hinput hrun]
   cases ho : searchOutput index final.ram with
   | none => exact Nat.le_refl _
@@ -360,6 +360,37 @@ theorem linearSearch_totalSpace (input : Search.Input (Word w)) (s : RAMState w 
     result.tell.totalSpace (inputRegion input.data) = input.data.size := by
   simp only [RAMCost.totalSpace, Finset.union_eq_right.mpr
     (linearSearch_addresses_subset input s hinput hrun), inputRegion_card input.data hinput.fits]
+
+/-- Total correctness of this fixed, runtime-size-independent program on every representing
+state. The output remains in the machine's registers and flags. -/
+theorem linearSearch_correct (w : Nat) :
+    let problem := Search.linearSearch
+    let repInput := fun input => RepresentsBoundedSearchInput input key last
+    problem.Solves (linearSearch w) Executes repInput (RepresentsSearchOutput index) := by
+  constructor
+  · intro input s _ hi
+    obtain ⟨cost, t, hc, _⟩ := search_spec input s hi
+    exact ⟨cost, t, hc.executes⟩
+  · intro input s ha hi cost t hr
+    obtain ⟨fuel, remaining, hr⟩ := hr
+    exact ⟨searchOutput index t, representsSearchOutput_searchOutput index t,
+      linearSearch_correct_of_execute input s hi hr⟩
+
+/-- Termination, the worst-case time bound, and zero auxiliary memory for every represented
+input. Resource guarantees do not require sortedness. -/
+theorem linearSearch_runsWithin (w : Nat) :
+    let repInput := fun input => RepresentsBoundedSearchInput input key last
+    let bound := fun (input : Search.Input (Word w)) (cost : RAMCost w 5) =>
+      cost.time ≤ linearSearchTime input.data.size ∧
+        cost.auxiliarySpace (inputRegion input.data) = 0
+    Search.RunsWithin (linearSearch w) Executes repInput bound := by
+  constructor
+  · intro input s _ hi
+    obtain ⟨cost, t, hc, _⟩ := search_spec input s hi
+    exact ⟨cost, t, hc.executes⟩
+  · intro input s _ hi cost t hr
+    obtain ⟨fuel, remaining, hr⟩ := hr
+    exact ⟨linearSearch_time_le input s hi hr, linearSearch_auxiliarySpace input s hi hr⟩
 
 /-- Every fitting length has a worst-case instance at positive word width. -/
 theorem linearSearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :

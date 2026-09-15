@@ -57,6 +57,12 @@ def linearSearch : Problem (Input α) (Option Nat) where
 def binarySearch (le : α → α → Prop) : Problem (Input α) (Option Nat) :=
   search.restrict (fun input => SortedBy le input.data)
 
+/-- Resource guarantees for search on all represented arrays, including unsorted arrays.
+Correctness can separately use the more restrictive binary-search problem. -/
+abbrev RunsWithin (program : Program) (run : Program → State → Cost → State → Prop)
+    (repInput : Input α → State → Prop) (bound : Input α → Cost → Prop) : Prop :=
+  search.RunsWithin program run repInput bound
+
 @[simp] theorem search_admissible (input : Input α) : search.admissible input := trivial
 
 @[simp] theorem linearSearch_admissible (input : Input α) :
