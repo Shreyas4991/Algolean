@@ -37,7 +37,7 @@ A completed run returns the program's result, cost, final state, and unused fuel
 
 ## Time and space
 
-Each load, store, register operation, and comparison costs one time unit.
+Each load, store, register operation, comparison, and `nop` costs one time unit.
 Choosing a branch or testing an existing flag costs no time.
 Fuel is counted separately from time.
 
@@ -200,6 +200,8 @@ end WordRAM
 /-- Register-based instructions with machine-local comparison flags and structured branches.
 All instructions return `Unit`, including comparisons and branches. -/
 inductive WordRAM (w k : Nat) : Type → Type where
+  /-- Leave the machine state unchanged, costing one time unit. -/
+  | nop : WordRAM w k Unit
   | set (dst : WordRAM.Register k) (value : WordRAM.Word w) : WordRAM w k Unit
   | copy (dst src : WordRAM.Register k) : WordRAM w k Unit
   | load (dst addr : WordRAM.Register k) : WordRAM w k Unit
@@ -365,6 +367,7 @@ structure Step (w k : Nat) where
 def step (q : WordRAM w k Unit) (rest : List (WordRAM w k Unit))
     (s : RAMState w k) : Step w k :=
   match q with
+  | .nop => ⟨⟨1, ∅⟩, s, rest⟩
   | .set dst value => ⟨⟨1, ∅⟩, s.writeRegister dst value, rest⟩
   | .copy dst src => ⟨⟨1, ∅⟩, s.writeRegister dst (s.Registers src), rest⟩
   | .load dst addr =>
@@ -514,6 +517,9 @@ def Completes (code : List (WordRAM w k Unit)) (s : RAMState w k)
 
 @[simp] theorem completes_nil (s : RAMState w k) : Completes [] s 0 s := ⟨0, rfl⟩
 
+@[simp, grind ←] theorem completes_nop (s : RAMState w k) :
+    Completes [.nop] s ⟨1, ∅⟩ s := ⟨1, rfl⟩
+
 theorem Completes.step {q : WordRAM w k Unit} {rest : List (WordRAM w k Unit)}
     {s t : RAMState w k} {cost : RAMCost w k}
     (h : Completes (step q rest s).code (step q rest s).ram cost t) :
@@ -554,6 +560,15 @@ theorem execute_eq_runCode (fuel : Nat) (p : Prog (WordRAM w k) Unit) (s : RAMSt
 
 @[simp] theorem instructions_lift (q : WordRAM w k Unit) :
     instructions (Cslib.FreeM.lift q) = [q] := rfl
+
+/-- A no-op uses one time unit and one fuel unit, and preserves the machine state. -/
+@[simp, grind =] theorem execute_nop_succ (fuel : Nat) (s : RAMState w k) :
+    execute (fuel + 1) (Cslib.FreeM.lift (.nop : WordRAM w k Unit)) s =
+      some (⟨(), ⟨1, ∅⟩⟩, ⟨s, fuel⟩) := by
+  simp [execute_eq_runCode, runCode, step]
+
+@[simp, grind =] theorem execute_nop_zero (s : RAMState w k) :
+    execute 0 (Cslib.FreeM.lift (.nop : WordRAM w k Unit)) s = none := rfl
 
 theorem completes_branch {op : CmpOp} {yes no : Prog (WordRAM w k) Unit}
     {s t : RAMState w k} {cost : RAMCost w k}

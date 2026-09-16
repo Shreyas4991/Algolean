@@ -27,6 +27,7 @@ The names below refer to registers. In `mem[addr]`, the address is held in regis
 - `dst ←ᵣ mem[addr]`: load a memory cell into a register.
 - `mem[addr] ←ᵣ src`: store a register in a memory cell.
 - `reset op`: set the selected comparison flag to false.
+- `nop`: leave the machine state unchanged and charge one time unit.
 
 Write each word operation as a separate instruction. Parenthesize compound Lean
 expressions used as register arguments. Assignment has precedence 10.
@@ -128,6 +129,9 @@ scoped notation:10 (name := ramLoad) dst:max " ←ᵣ " "mem[" addr "]" =>
 scoped notation:10 (name := ramStore) "mem[" addr "]" " ←ᵣ " src:max =>
   WordRAM.store addr src
 
+/-- Do nothing for one time unit. -/
+scoped notation (name := ramNop) "nop" => WordRAM.nop
+
 /-- Reset the selected comparison flag to false, leaving other flags unchanged. -/
 scoped notation (name := ramReset) "reset " op:max => WordRAM.clearFlag op
 
@@ -146,7 +150,8 @@ private meta partial def annotateInstructions (queryType : Term)
       pure (.node info kind args)
     | other => pure other
   if [``ramAdd, ``ramSub, ``ramAnd, ``ramOr, ``ramXor, ``ramShl, ``ramShr,
-      ``ramNot, ``ramCopy, ``ramSet, ``ramLoad, ``ramStore, ``ramReset].contains stx.getKind then
+      ``ramNop, ``ramNot, ``ramCopy, ``ramSet, ``ramLoad, ``ramStore,
+      ``ramReset].contains stx.getKind then
     let instruction : Term := ⟨stx⟩
     return ← `(($instruction : $queryType Unit))
   return stx
@@ -263,7 +268,7 @@ private def sumEvenWords (w : Nat) : Prog (WordRAM w 7) Unit := do [WordRAM w 7]
     ifₚ test .eq lowBit zero then
       evenSum ←ᵣ evenSum + inputValue
     else
-      pure ()
+      nop
 
 /-- Five input bytes: the even ones sum to `250 + 8 + 4 = 262`, or 6 modulo 256. -/
 private def evenSumInputMemory : Memory 8 :=
@@ -279,7 +284,7 @@ example : (execute 100 (sumEvenWords 8) evenSumInitialState).map
 -- The header and input cells are the entire memory footprint.
 example : (execute 100 (sumEvenWords 8) evenSumInitialState).map
     (fun result => (result.fst.tell.time, result.fst.tell.auxiliarySpace {0, 1, 2, 3, 4, 5})) =
-      some (34, 0) := by decide
+      some (36, 0) := by decide
 
 -- An empty input clears a stale result and does not read any payload cells.
 example :

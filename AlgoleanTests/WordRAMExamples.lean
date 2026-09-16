@@ -35,6 +35,14 @@ section InstructionNotation
 
 variable (dst x y : Register k)
 
+example : (nop : WordRAM w k Unit) = .nop := rfl
+
+example (fuel : Nat) (s : RAMState w k) :
+    execute (fuel + 1) (do [WordRAM w k] nop) s =
+      some (⟨(), ⟨1, ∅⟩⟩, ⟨s, fuel⟩) := by simp
+
+example (s : RAMState w k) : execute 0 (do [WordRAM w k] nop) s = none := by simp
+
 example : (dst ←ᵣ x + y : WordRAM w k Unit) = .binop .add dst x y := rfl
 
 example : (dst ←ᵣ x - y : WordRAM w k Unit) = .binop .sub dst x y := rfl
@@ -230,7 +238,9 @@ example : (execute 2 independentFlags (initial 3 7)).map
 
 def nested : Prog (WordRAM 8 4) Unit := do
   cmp (w := 8) .ult r0 r1
-  branch .ult (do branch .ult (do set (w := 8) r2 42) (pure ())) (pure ())
+  branch .ult
+    (do branch .ult (do set (w := 8) r2 42) (do [WordRAM 8 4] nop))
+    (do [WordRAM 8 4] nop)
   store (w := 8) r3 r2
 
 example : execute 4 nested (initial 3 7) = none := rfl
@@ -281,18 +291,24 @@ example : (execute 3 flagLoop (RAMState.zero.writeFlag .ult true)).map
 example : (execute 1 flagLoop RAMState.zero).map
     (fun r => r.fst.tell.time) = some 0 := by decide
 
-def forever : Prog (WordRAM 8 4) Unit := do
+def forever : Prog (WordRAM 8 4) Unit := do [WordRAM 8 4]
   cmp (w := 8) .eq r0 r0
   whileₚ .eq do
-    pure ()
+    nop
 
 example (fuel : Nat) (s : RAMState 8 4) : execute fuel forever s = none := by
   have loops : ∀ fuel (s : RAMState 8 4), s.Flags .eq = true →
-      runCode fuel [.whileCode .eq []] s = none := by
+      runCode fuel [.whileCode .eq [.nop]] s = none := by
     intro fuel
-    induction fuel with
-    | zero => intro s h; rfl
-    | succ fuel ih => intro s h; simp [runCode, step, h, ih]
+    induction fuel using Nat.strong_induction_on with
+    | h fuel ih =>
+      intro s h
+      cases fuel with
+      | zero => rfl
+      | succ fuel =>
+        cases fuel with
+        | zero => simp [runCode, step, h]
+        | succ fuel => simp [runCode, step, h, ih fuel (by lia) s h]
   cases fuel <;> simp [execute_eq_runCode, forever, whileLoop, runCode, step, CmpOp.eval, loops]
 
 def nested : Prog (WordRAM 8 4) Unit := do
@@ -375,7 +391,7 @@ example : (execute 50 searchExample (linearSearchState searchInput 7)).map (fun 
 
 example : (execute 50 searchExample (linearSearchState searchInput 2)).map (fun r =>
     (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.totalSpace
-      (inputRegion searchInput))) = some (none, 22, 5) := by decide
+      (inputRegion searchInput))) = some (none, 23, 5) := by decide
 
 example : (execute 30 (linearSearch 2) (linearSearchState #[0, 1, 2, 3] 3)).map
     (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =

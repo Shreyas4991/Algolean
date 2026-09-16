@@ -65,8 +65,8 @@ private theorem body_advance (s : RAMState w 5)
 private theorem body_last (s : RAMState w 5)
     (h : s.Memory (s.Registers index) ≠ s.Registers key)
     (hlt : ¬(s.Registers index).toNat < (s.Registers last).toNat) :
-    Completes (instructions (body w)) s ⟨3, {s.Registers index}⟩ (checked s false false) :=
-  ⟨5, by simp [body, checked, branch, runCode, step, h, hlt]⟩
+    Completes (instructions (body w)) s ⟨4, {s.Registers index}⟩ (checked s false false) :=
+  ⟨6, by simp [body, checked, branch, runCode, step, h, hlt]⟩
 
 /-- The invariant describes the remaining suffix and the exact cost from its first address. -/
 private def Summary (input : Array (Word w)) (target : Word w) (start n : Nat)
@@ -79,7 +79,7 @@ private def Summary (input : Array (Word w)) (target : Word w) (start n : Nat)
         cost.time = 4 * (i - start) + 3
     else
       (∀ j, start ≤ j → j < start + n → input[j]? ≠ some target) ∧
-        cost.time = 4 * n - 1
+        cost.time = 4 * n
 
 private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : Nat)
     (hn : 0 < n) (hsize : start + n = input.size) (s : RAMState w 5)
@@ -127,7 +127,7 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : 
         split_ifs at hs ⊢ <;> grind only
 
 /-- Maximum time, attained by a missing key when the word width is positive. -/
-def linearSearchTime (n : Nat) : Nat := if n = 0 then 3 else 4 * n + 2
+def linearSearchTime (n : Nat) : Nat := if n = 0 then 3 else 4 * n + 3
 
 /-- Exact charged time as a function of the represented output. -/
 def linearSearchCost (n : Nat) : Option Nat → Nat

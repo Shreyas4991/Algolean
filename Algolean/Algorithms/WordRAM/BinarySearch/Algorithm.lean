@@ -56,12 +56,12 @@ def body (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
       ifₚ test .ult middle upper then
         lower ←ᵣ middle + one
       else
-        pure ()
+        nop
     else
       ifₚ test .ult lower middle then
         upper ←ᵣ middle - one
       else
-        pure ()
+        nop
 
 /-- Initialize the lower endpoint and increment constant; the upper endpoint is runtime input. -/
 def setup (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
@@ -79,9 +79,9 @@ def binarySearch (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
     whileₚ .ult do
       BinarySearch.body w
   else
-    pure ()
+    nop
 
-/-- A canonical runtime input witness; proofs also apply to arbitrary representing states. -/
+/-- Store the input array and search key, and initialize the bounds and flags for binary search. -/
 def binarySearchState (input : Array (Word w)) (target : Word w) : RAMState w 6 :=
   ⟨arrayMemory input,
     fun r => if r = BinarySearch.key then target

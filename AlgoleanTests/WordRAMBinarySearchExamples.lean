@@ -37,12 +37,12 @@ example : (execute 50 searchExample (binarySearchState input 13)).map (fun r =>
 
 example : (execute 50 searchExample (binarySearchState input 0)).map (fun r =>
     (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time, r.fst.tell.addresses)) =
-      some (none, 26, {0, 1, 3}) := by decide
+      some (none, 27, {0, 1, 3}) := by decide
 
 example : (execute 50 searchExample (binarySearchState input 20)).map (fun r =>
     (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time,
       r.fst.tell.auxiliarySpace (inputRegion input), r.fst.tell.totalSpace (inputRegion input))) =
-      some (none, 26, 0, 7) := by decide
+      some (none, 27, 0, 7) := by decide
 
 -- Every address is available: no sentinel cell is reserved.
 example : (execute 50 (binarySearch 2) (binarySearchState #[0, 1, 2, 3] 3)).map
@@ -57,9 +57,9 @@ example : (execute 13 (binarySearch 0) (binarySearchState #[0] 0)).map
     (fun r => (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time)) =
       some (some 0, 9) := by decide
 
-example : (execute 2 (binarySearch 0) ((binarySearchState #[] 0).writeFlag .eq true)).map
+example : (execute 3 (binarySearch 0) ((binarySearchState #[] 0).writeFlag .eq true)).map
     (fun r => (searchOutput BinarySearch.middle r.snd.ram, r.fst.tell.time)) =
-      some (none, 1) := by decide
+      some (none, 2) := by decide
 
 example : execute 12 (binarySearch 0) (binarySearchState #[0] 0) = none := rfl
 

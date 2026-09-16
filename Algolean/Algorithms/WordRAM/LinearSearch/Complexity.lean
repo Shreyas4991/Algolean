@@ -20,7 +20,7 @@ Time counts charged operations. Space counts memory cells, excluding registers.
 - `linearSearch_time`: the exact time is `linearSearchCost n` applied to the
   decoded output.
 - `linearSearch_time_le`: time is at most `linearSearchTime n`, which is
-  `3` for empty input and `4 * n + 2` otherwise.
+  `3` for empty input and `4 * n + 3` otherwise.
 - `linearSearch_time_of_not_mem`: an absent key takes exactly `linearSearchTime n`.
 - `linearSearch_time_of_some`: finding the first match at index `i` takes
   exactly `4 * i + 6` operations.

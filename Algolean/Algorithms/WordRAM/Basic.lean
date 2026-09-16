@@ -124,7 +124,7 @@ def arrayMemory (input : Array (BitVec w)) : Memory w :=
     arrayMemory input (BitVec.ofNat w i) = input[i] := by
   simp [arrayMemory, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (lt_of_lt_of_le hi hfits), hi]
 
-/-- The canonical zero-filled layout is one witness of the array representation relation. -/
+/-- If the array fits in memory, `arrayMemory` stores each element at its index. -/
 @[simp] theorem arrayMemory_represents (input : Array (Word w)) (hfits : input.size ≤ 2 ^ w) :
     RepresentsArray input (arrayMemory input) :=
   ⟨hfits, fun i hi => arrayMemory_ofNat input hfits i hi⟩
@@ -178,7 +178,8 @@ def Executes (program : Prog (WordRAM w k) Unit) (s : RAMState w k)
     (cost : RAMCost w k) (t : RAMState w k) : Prop :=
   ∃ fuel remaining, execute fuel program s = some (⟨(), cost⟩, ⟨t, remaining⟩)
 
-/-- An internal completion witness supplies a completed model execution. -/
+/-- If a program's instructions finish with the stated cost and final state,
+the program satisfies `Executes` with that same cost and state. -/
 theorem Completes.executes {program : Prog (WordRAM w k) Unit}
     (h : Completes (instructions program) s cost t) : Executes program s cost t := by
   obtain ⟨fuel, hr⟩ := h.execute

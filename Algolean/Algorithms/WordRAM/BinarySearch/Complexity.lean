@@ -18,7 +18,7 @@ Let `n` be the input size. Time counts charged operations.
 Space counts memory cells, excluding registers.
 
 - `binarySearch_time_le`: time is at most `binarySearchTime n`, which is
-  `1` for empty input and `8 * n.log2 + 10` otherwise.
+  `2` for empty input and `8 * n.log2 + 11` otherwise.
 - `binarySearch_addresses_subset`: every accessed cell belongs to the input array.
 - `binarySearch_auxiliarySpace`: no memory outside the input array is used.
 - `binarySearch_totalSpace`: total space is `n`, including unread input cells.

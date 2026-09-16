@@ -108,12 +108,12 @@ private theorem body_stop_right (s : RAMState w 6)
     (h : s.Memory (midpoint s) ≠ s.Registers key)
     (hlt : (s.Memory (midpoint s)).toNat < (s.Registers key).toNat)
     (hb : ¬(midpoint s).toNat < (s.Registers upper).toNat) :
-    Completes (instructions (body w)) s ⟨7, {midpoint s}⟩
+    Completes (instructions (body w)) s ⟨8, {midpoint s}⟩
       (checked s false false) :=
 by
   simp only [midpoint, lower, upper, key, one,
     BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ushiftRight] at h hlt hb
-  exact ⟨10, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
+  exact ⟨11, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
 
 private theorem body_left (s : RAMState w 6)
     (h : s.Memory (midpoint s) ≠ s.Registers key)
@@ -130,12 +130,12 @@ private theorem body_stop_left (s : RAMState w 6)
     (h : s.Memory (midpoint s) ≠ s.Registers key)
     (hlt : ¬(s.Memory (midpoint s)).toNat < (s.Registers key).toNat)
     (hb : ¬(s.Registers lower).toNat < (midpoint s).toNat) :
-    Completes (instructions (body w)) s ⟨7, {midpoint s}⟩
+    Completes (instructions (body w)) s ⟨8, {midpoint s}⟩
       (checked s false false) :=
 by
   simp only [midpoint, lower, upper, key, one,
     BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ushiftRight] at h hlt hb
-  exact ⟨10, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
+  exact ⟨11, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
 
 
 private theorem log2_half_bound (n k : Nat) (hn : 2 ≤ n) (hk : k ≤ n / 2) :
@@ -147,8 +147,8 @@ private theorem log2_half_bound (n k : Nat) (hn : 2 ≤ n) (hk : k ≤ n / 2) :
 
 /-- One charged iteration plus a half-sized recursive search preserves the logarithmic bound. -/
 private theorem step_time_bound {time size remaining : Nat}
-    (ht : time ≤ 8 * remaining.log2 + 7) (hsize : 2 ≤ size) (hhalf : remaining ≤ size / 2) :
-    8 + time ≤ 8 * size.log2 + 7 := by
+    (ht : time ≤ 8 * remaining.log2 + 8) (hsize : 2 ≤ size) (hhalf : remaining ≤ size / 2) :
+    8 + time ≤ 8 * size.log2 + 8 := by
   have := log2_half_bound size remaining hsize hhalf
   lia
 
@@ -166,8 +166,8 @@ private theorem pivot_bounds {lo hi : Nat} (h : lo ≤ hi) :
 /-- On a nonempty right half, exactly one logarithmic level has been consumed. -/
 private theorem right_log {lo hi : Nat}
     (h : lo + (hi - lo) / 2 < hi) :
-    8 + (8 * (hi - (lo + (hi - lo) / 2 + 1) + 1).log2 + 7) =
-      8 * (hi - lo + 1).log2 + 7 := by
+    8 + (8 * (hi - (lo + (hi - lo) / 2 + 1) + 1).log2 + 8) =
+      8 * (hi - lo + 1).log2 + 8 := by
   rw [right_length h, Nat.log2_def (hi - lo + 1), if_pos (by lia : 2 ≤ hi - lo + 1)]
   lia
 
@@ -180,9 +180,9 @@ private structure Summary (input : Array (Word w)) (target : Word w) (lo hi : Na
     lo ≤ i ∧ i ≤ hi ∧ input[i]? = some target
   not_found : t.Flags .eq = false → SortedWords input →
     ∀ i, lo ≤ i → i ≤ hi → input[i]? ≠ some target
-  time : cost.time ≤ 8 * (hi - lo + 1).log2 + 7
+  time : cost.time ≤ 8 * (hi - lo + 1).log2 + 8
   worst : 0 < w → s.Memory = (fun _ => 0) → s.Registers key = 1 →
-    cost.time = 8 * (hi - lo + 1).log2 + 7
+    cost.time = 8 * (hi - lo + 1).log2 + 8
 
 private theorem loop_spec (input : Array (Word w)) (target : Word w) (n lo hi : Nat)
     (hlo : lo ≤ hi) (hhi : hi < input.size) (hn : hi - lo < n) (s : RAMState w 6)
@@ -298,7 +298,7 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n lo hi : 
             simp [hz, hk1, BitVec.toNat_one hw] at hcmp
 
 /-- Exact worst-case primitive count, including interval initialization. -/
-def binarySearchTime (n : Nat) : Nat := if n = 0 then 1 else 8 * n.log2 + 10
+def binarySearchTime (n : Nat) : Nat := if n = 0 then 2 else 8 * n.log2 + 11
 
 @[simp] private def initialized (s : RAMState w 6) : RAMState w 6 :=
   (s.writeRegister lower 0).writeRegister one 1
@@ -327,10 +327,11 @@ private theorem search_spec (input : Search.Input (Word w)) (s : RAMState w 6)
   have hlast := hinput.last_eq
   have hkey := hinput.key_eq
   by_cases hn : input.data.size = 0
-  · have hb : Completes (instructions (branch .ult rest (pure ()))) start 0 start :=
+  · have hb : Completes (instructions (branch .ult rest (do [WordRAM w 6] nop)))
+        start ⟨1, ∅⟩ start :=
       completes_branch (by simp [start, hactive, hn])
     have hc := hclear.append hb
-    refine ⟨⟨1, ∅⟩ + 0, start, ?_, ?_⟩
+    refine ⟨⟨1, ∅⟩ + ⟨1, ∅⟩, start, ?_, ?_⟩
     · simpa only [binarySearch, ifThenElse_flag, rest, instructions_lift_bind,
       List.singleton_append] using hc
     constructor
@@ -347,7 +348,8 @@ private theorem search_spec (input : Search.Input (Word w)) (s : RAMState w 6)
       (by simpa [start] using hinput.toRepresentsSearchInput.toRepresentsArray)
       (by simp) (by simp [start, hlast]) (by simp [start, hkey])
       (by simp) (by simp [start, hactive, hn])
-    have hb : Completes (instructions (branch .ult rest (pure ()))) start (⟨2, ∅⟩ + cost) t :=
+    have hb : Completes (instructions (branch .ult rest (do [WordRAM w 6] nop)))
+        start (⟨2, ∅⟩ + cost) t :=
       completes_branch (by simpa [rest, start, hactive, hn] using (setup_completes start).append hr)
     have hc := hclear.append hb
     refine ⟨⟨1, ∅⟩ + (⟨2, ∅⟩ + cost), t, ?_, ?_⟩

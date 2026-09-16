@@ -45,7 +45,7 @@ def body (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
     ifₚ test .ult index last then
       index ←ᵣ index + one
     else
-      pure ()
+      nop
 
 /-- Initialize scratch registers without inspecting runtime input. -/
 def setup (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
@@ -61,7 +61,7 @@ def linearSearch (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   whileₚ .ult do
     LinearSearch.body w
 
-/-- A canonical witness of the runtime input representation, used in examples. -/
+/-- Store the input array and search key, and initialize the bounds and flags for linear search. -/
 def linearSearchState (input : Array (Word w)) (target : Word w) : RAMState w 5 :=
   ⟨arrayMemory input,
     fun r => if r = LinearSearch.key then target
