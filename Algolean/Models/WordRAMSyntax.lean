@@ -72,6 +72,12 @@ end Algolean.Algorithms.Prog
 
 namespace Algolean.Algorithms.WordRAM
 
+/-- Compare the contents of two registers for equality. -/
+scoped infix:50 " =ᵣ " => WordRAM.test CmpOp.eq
+
+/-- Compare the contents of two registers as unsigned words. -/
+scoped infix:50 " <ᵣ " => WordRAM.test CmpOp.ult
+
 /-- Indented looping syntax over an existing machine comparison flag. -/
 scoped macro "whileₚ " op:term:max " do " body:doSeq : doElem =>
   `(doElem| WordRAM.whileLoop $op (do $body))

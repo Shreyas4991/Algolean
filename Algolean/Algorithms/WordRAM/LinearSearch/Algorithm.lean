@@ -31,7 +31,7 @@ abbrev index : Register 5 := 0
 abbrev key : Register 5 := 1
 /-- Scratch register for the loaded input word. -/
 abbrev value : Register 5 := 2
-/-- Constant one used to advance the index. -/
+/-- Register holding the constant one. -/
 abbrev one : Register 5 := 3
 /-- Inclusive last input address, supplied at runtime. -/
 abbrev last : Register 5 := 4
@@ -39,10 +39,10 @@ abbrev last : Register 5 := 4
 /-- Inspect one cell, stopping at the first match or the inclusive last address. -/
 def body (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   value ←ᵣ mem[index]
-  ifₚ test .eq value key then
+  ifₚ value =ᵣ key then
     reset .ult
   else
-    ifₚ test .ult index last then
+    ifₚ index <ᵣ last then
       index ←ᵣ index + one
     else
       nop
@@ -51,7 +51,7 @@ def body (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
 def setup (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   reset .eq
   index ←ᵣ imm[0]
-  one ←ᵣ imm[1]
+  one ←ᵣ imm[1] -- immediate values
 
 end LinearSearch
 

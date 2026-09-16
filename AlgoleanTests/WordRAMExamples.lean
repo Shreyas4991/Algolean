@@ -35,6 +35,24 @@ section InstructionNotation
 
 variable (dst x y : Register k)
 
+example : (x =ᵣ y : Prog.Condition (WordRAM w k)) = test .eq x y := rfl
+
+example : (x <ᵣ y : Prog.Condition (WordRAM w k)) = test .ult x y := rfl
+
+example : (do [WordRAM w k]
+    ifₚ x =ᵣ y then
+      dst ←ᵣ x
+    else
+      ifₚ x <ᵣ y then
+        dst ←ᵣ y
+      else
+        nop) =
+    (do
+      cmp (w := w) .eq x y
+      branch .eq (do [WordRAM w k] dst ←ᵣ x) (do
+        cmp (w := w) .ult x y
+        branch .ult (do [WordRAM w k] dst ←ᵣ y) (do [WordRAM w k] nop))) := rfl
+
 example : (nop : WordRAM w k Unit) = .nop := rfl
 
 example (fuel : Nat) (s : RAMState w k) :

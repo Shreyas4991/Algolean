@@ -30,17 +30,17 @@ open scoped WordRAM Prog
 
 namespace BinarySearch
 
-/-- Inclusive lower endpoint. -/
+/-- Register holding the first address still to search. -/
 abbrev lower : Register 6 := 0
-/-- Inclusive upper endpoint, supplied by the initial machine state. -/
+/-- Register holding the last address still to search. -/
 abbrev upper : Register 6 := 1
-/-- Midpoint, and result register on success. -/
+/-- Register holding the midpoint address, or a matching address when found. -/
 abbrev middle : Register 6 := 2
-/-- Word loaded at the midpoint. -/
+/-- Register holding the word loaded from the midpoint address. -/
 abbrev value : Register 6 := 3
-/-- Search key supplied in the initial state. -/
+/-- Register holding the search key. -/
 abbrev key : Register 6 := 4
-/-- Constant one for shifts and endpoint updates. -/
+/-- Register holding the constant one. -/
 abbrev one : Register 6 := 5
 
 /-- One machine iteration, with its continuation indicated by the less-than flag. -/
@@ -49,16 +49,16 @@ def body (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
   middle ←ᵣ middle >>> one
   middle ←ᵣ lower + middle
   value ←ᵣ mem[middle]
-  ifₚ test .eq value key then
+  ifₚ value =ᵣ key then
     reset .ult
   else
-    ifₚ test .ult value key then
-      ifₚ test .ult middle upper then
+    ifₚ value <ᵣ key then
+      ifₚ middle <ᵣ upper then
         lower ←ᵣ middle + one
       else
         nop
     else
-      ifₚ test .ult lower middle then
+      ifₚ lower <ᵣ middle then
         upper ←ᵣ middle - one
       else
         nop
