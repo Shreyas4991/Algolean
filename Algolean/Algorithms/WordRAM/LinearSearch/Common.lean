@@ -9,7 +9,10 @@ module
 public import Algolean.Algorithms.WordRAM.LinearSearch.Algorithm
 
 /-!
-# Internal lemmas and execution specifications for word-RAM linear search
+# Shared proofs for linear search
+
+Lemmas about each loop iteration and the complete search, used by the correctness
+and complexity proofs.
 -/
 
 @[expose] public section

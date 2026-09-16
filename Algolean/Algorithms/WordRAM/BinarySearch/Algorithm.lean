@@ -10,13 +10,16 @@ public import Algolean.Algorithms.WordRAM.Basic
 public import Algolean.Models.WordRAMSyntax
 
 /-!
-# Binary search with six word-RAM registers
+# Binary search in the word-RAM model
 
-Adapted from https://github.com/Shreyas4991/Algolean/pull/89 to the register-only model.
-Inclusive bounds support all `2 ^ w` input cells. The midpoint is `lo + (hi - lo) / 2`;
-boundary comparisons prevent either endpoint from wrapping. All word computations are queries.
-The program reads its bound from the initial upper register and loops on a machine flag.
-Interpreter fuel is supplied only when executing the program.
+The program searches a sorted array using six registers and no extra memory.
+The initial state supplies the search key, the last array address, and a flag indicating
+whether the array is nonempty. The same program handles every input size that fits in
+memory at word width `w`, including arrays that use all `2 ^ w` cells.
+
+The midpoint is `lo + (hi - lo) / 2`. Bounds checks prevent address arithmetic from wrapping.
+
+Adapted from https://github.com/Shreyas4991/Algolean/pull/89.
 -/
 
 @[expose] public section

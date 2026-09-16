@@ -11,7 +11,26 @@ import all Algolean.Algorithms.WordRAM.LinearSearch.Common
 public import Algolean.Algorithms.WordRAM.LinearSearch.Correctness
 
 /-!
-# Complexity for word-RAM linear search
+# Time and space used by linear search
+
+The execution bounds assume that the initial state satisfies
+`RepresentsBoundedSearchInput` and execution finishes. Let `n` be the input size.
+Time counts charged operations. Space counts memory cells, excluding registers.
+
+- `linearSearch_time`: the exact time is `linearSearchCost n` applied to the
+  decoded output.
+- `linearSearch_time_le`: time is at most `linearSearchTime n`, which is
+  `3` for empty input and `4 * n + 2` otherwise.
+- `linearSearch_time_of_not_mem`: an absent key takes exactly `linearSearchTime n`.
+- `linearSearch_time_of_some`: finding the first match at index `i` takes
+  exactly `4 * i + 6` operations.
+- `linearSearch_addresses_subset`: every accessed cell belongs to the input array.
+- `linearSearch_auxiliarySpace`: no memory outside the input array is used.
+- `linearSearch_totalSpace`: total space is `n`, including unread input cells.
+- `linearSearch_runsWithin`: the program terminates on every valid input state,
+  and every completed execution meets the time bound and uses no auxiliary memory.
+- `linearSearch_worstCase`: for `0 < w` and `n ≤ 2 ^ w`, searching for `1` in
+  an array of `n` zeros takes exactly `linearSearchTime n`.
 -/
 
 @[expose] public section

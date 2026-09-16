@@ -9,27 +9,76 @@ module
 public import Algolean.Models.WordRAM
 
 /-!
-# Word-RAM instruction notation
+# Notation for Word-RAM programs
 
-Open the `WordRAM` scope to write `dst ←ᵣ x + y`, `dst ←ᵣ ~~~x`, and the other
-arithmetic and bitwise instructions. Each form denotes one existing `WordRAM` query;
-operands are register identifiers, and the destination is explicit.
+Use `open scoped WordRAM Prog` to enable the notation in this file.
+Start a program with `do [WordRAM w k]` to specify its word width and register count
+once for the whole block.
 
-Use `dst ←ᵣ src` for copying, `dst ←ᵣ imm[value]` for constants,
-`dst ←ᵣ mem[addr]` for loads, and `mem[addr] ←ᵣ src` for stores.
-`reset op` sets the selected comparison flag to false.
-Assignment has precedence 10. Register operands have maximum precedence: compound Lean terms
-must be parenthesized, and nested word computations must be written as separate instructions.
-The ordinary notation declarations also support Lean's pretty-printer.
+## Instructions
 
-`do [WordRAM w k]` fixes the query type for a block and inserts the instruction type
-annotations before the existing coercion lifts queries into `Prog`. Ordinary local bindings
-and structured control remain available inside the block.
+The names below refer to registers. In `mem[addr]`, the address is held in register `addr`.
+
+- `dst ←ᵣ x + y`: add two registers and store the result in `dst`.
+  Subtraction and bitwise operations use the same form.
+- `dst ←ᵣ ~~~src`: flip every bit of `src` and store the result in `dst`.
+- `dst ←ᵣ src`: copy a register.
+- `dst ←ᵣ imm[value]`: set a register to a constant.
+- `dst ←ᵣ mem[addr]`: load a memory cell into a register.
+- `mem[addr] ←ᵣ src`: store a register in a memory cell.
+- `reset op`: set the selected comparison flag to false.
+
+Write each word operation as a separate instruction. Parenthesize compound Lean
+expressions used as register arguments. Assignment has precedence 10.
+
+## Branches and loops
+
+- `ifₚ condition then ... else ...`: run the selected body.
+  Use `flag op` to check an existing flag, or `test op x y` to compare two registers.
+- `whileₚ op do ...`: repeat while the selected flag is true.
+  The body must update the flag if the loop is to stop.
+- `whileₚ op x y do ...`: compare registers before each iteration and stop when
+  the comparison is false.
+- `repeat [n]`: run an indented body `n` times.
+
+Branch and loop bodies return `Unit`. Comparisons cost one time unit; checking an
+existing flag costs no time. The notation expands to the definitions in `WordRAM.lean`
+and adds no operations of its own.
+
+The examples swap two memory cells and sum the even words in an input array.
 -/
 
 @[expose] public section
 
+namespace Algolean.Algorithms.Prog
+
+section ControlFlowNotation
+
+/-- Model-controlled `if` inside a `do` block; enable with `open scoped Prog`. -/
+scoped syntax "ifₚ " term " then " doSeq " else " doSeq : doElem
+
+scoped macro_rules
+  | `(doElem| ifₚ $condition then $yes else $no) =>
+    `(doElem| Prog.ifThenElse $condition (do $yes) (do $no))
+
+/-- Repeat an indented `Unit` body a fixed number of times; enable with `open scoped Prog`. -/
+scoped macro "repeat " "[" fuel:term "]" ppLine body:doSeq : doElem =>
+  `(doElem| Prog.repeatLoop (fun yes _ => yes) (do $body) $fuel)
+
+end ControlFlowNotation
+
+end Algolean.Algorithms.Prog
+
 namespace Algolean.Algorithms.WordRAM
+
+/-- Indented looping syntax over an existing machine comparison flag. -/
+scoped macro "whileₚ " op:term:max " do " body:doSeq : doElem =>
+  `(doElem| WordRAM.whileLoop $op (do $body))
+
+/-- Indented looping syntax that performs a fresh register comparison each time. -/
+scoped macro "whileₚ " op:term:max x:term:max y:term:max " do " body:doSeq : doElem =>
+  `(doElem| WordRAM.whileCompare $op $x $y (do $body))
+
 
 /-- Add two source registers into the destination. -/
 scoped notation:10 (name := ramAdd) dst:max " ←ᵣ " x:max " + " y:max =>

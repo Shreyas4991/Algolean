@@ -9,15 +9,21 @@ module
 public import Mathlib.Logic.Basic
 
 /-!
-# Model-independent computational problems
+# Problems and program guarantees
 
-`Problem Input Output` specifies admissible inputs and the outputs allowed for each input.
-The specification is relational: an input may admit several outputs. No representation,
-algorithm, execution model, or resource bound is part of the problem itself.
+`Problem Input Output` specifies which inputs are allowed and which outputs are
+correct for each input. An input may have several correct outputs.
 
-Correctness will require the specification only on admissible inputs. The structure does not
-assert existence or uniqueness of valid outputs, or the existence of an algorithm.
-`Problem.restrict` strengthens the input precondition without changing the output relation.
+- `Problem.Solves`: a given program terminates on every allowed input state,
+  and every completed execution produces a correct output.
+- `Problem.RunsWithin`: a given program terminates on every allowed input state,
+  and every completed execution meets the supplied cost bound.
+- `Problem.RunsWithin.mono`: a cost guarantee also implies any weaker bound.
+- `Problem.restrict`: adds an input condition without changing which outputs
+  are correct.
+
+`Solves` and `RunsWithin` take the execution rules and the way inputs are stored
+in states as arguments. `Solves` also takes the way outputs are stored.
 -/
 
 @[expose] public section

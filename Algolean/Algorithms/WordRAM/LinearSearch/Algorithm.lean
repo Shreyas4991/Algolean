@@ -10,10 +10,11 @@ public import Algolean.Algorithms.WordRAM.Basic
 public import Algolean.Models.WordRAMSyntax
 
 /-!
-# Uniform word-RAM linear search
+# Linear search in the word-RAM model
 
-The program depends only on word width. The key, inclusive last address, and nonempty flag
-are supplied in the initial machine state. Five registers suffice, with no auxiliary memory.
+The program uses five registers and no extra memory. The initial state supplies the search
+key, the last array address, and a flag indicating whether the array is nonempty.
+The same program handles every input size that fits in memory at word width `w`.
 -/
 
 @[expose] public section

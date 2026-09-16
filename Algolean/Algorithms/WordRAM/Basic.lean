@@ -9,7 +9,22 @@ module
 public import Algolean.Models.WordRAM
 public import Algolean.Problems.Search
 
-/-! # Shared array layout and address lemmas for word-RAM algorithms -/
+/-!
+# Arrays and search results in word-RAM states
+
+- `RepresentsArray`: the array fits in memory and occupies consecutive cells starting at zero.
+- `RepresentsSearchInput`: also specifies the register holding the search key.
+- `RepresentsBoundedSearchInput`: also specifies the last array address and a flag
+  indicating whether the array is nonempty.
+- `searchOutput`: reads an optional result index from a register and the equality flag.
+- `RepresentsSearchOutput`: specifies how an optional result index is stored.
+- `arrayMemory`: stores the array in memory and fills the remaining cells with zero.
+- `inputRegion`: the set of cells occupied by the array.
+- `Executes`: the program finishes with the stated cost and final state for some fuel amount.
+
+The lemmas show how to read array elements through word addresses, count input cells,
+and rule out parts of a sorted array during binary search.
+-/
 
 @[expose] public section
 

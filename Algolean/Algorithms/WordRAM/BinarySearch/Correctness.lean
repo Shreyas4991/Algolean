@@ -10,7 +10,24 @@ public import Algolean.Algorithms.WordRAM.BinarySearch.Common
 import all Algolean.Algorithms.WordRAM.BinarySearch.Common
 
 /-!
-# Correctness for word-RAM binary search
+# Correctness of binary search
+
+These theorems assume that the initial machine state stores the input array, key,
+and array bounds as specified by `RepresentsBoundedSearchInput`.
+
+- `binarySearch_terminates`: there is enough fuel for the search to finish,
+  even if the array is not sorted.
+- `binarySearch_correct_of_execute`: if the array is sorted and execution finishes,
+  the decoded output identifies a match, or is `none` if the key is absent.
+- `binarySearch_none_iff`: on sorted input, after execution finishes, the equality
+  flag is false exactly when the key is absent.
+- `binarySearch_of_some`: on sorted input, if execution finishes with the equality
+  flag true, the middle register holds a valid array index containing the key.
+- `binarySearch_memory`: execution preserves every memory cell, even if the
+  array is not sorted.
+- `binarySearch_correct`: `binarySearch w` satisfies `Problem.Solves` for
+  `Search.binarySearch`: it terminates on every valid sorted input state, and
+  every completed execution gives a correct answer.
 -/
 
 @[expose] public section

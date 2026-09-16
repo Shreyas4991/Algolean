@@ -10,66 +10,63 @@ public import Algolean.ModelStateM
 public import Mathlib.Data.Finset.Card
 
 /-!
-# Word-RAM queries
+# Word-RAM model
 
-`WordRAM w k` operates on `w`-bit words held in memory and exactly `k` registers.
-Registers are identifiers (`Fin k`), and data instructions write their result into a destination
-register and return `Unit`. Comparisons write flags indexed by `CmpOp`; structured branches
-check those flags inside the model and return `Unit`. Branch bodies use ordinary `Prog` syntax;
-`instructions` converts them to finite blocks before execution. The unselected body has no effects
-or resource cost. `execute_ret` proves that Lean return values cannot depend on
-machine data.
-Literals are introduced by the charged `set` instruction; input values can also be supplied in
-`RAMState`. The program observes computed words only through register-based instructions.
+`WordRAM w k` describes a machine with `k` registers and `2 ^ w` memory cells.
+Each register and memory cell holds a `w`-bit word.
 
-Words and addresses have the same fixed width. Arithmetic wraps modulo `2 ^ w`;
-- comparisons are unsigned;
-- shifts are logical and return zero when the shift amount is at least `w`;
-- all `2 ^ w` memory cells are available;
-- allocation and input encoding specify the initial state.
+Inputs are supplied in the initial machine state's memory and registers.
+A `Prog` cannot directly read or modify either: it must use WordRAM queries.
 
-`timeAndSpaceCost` interprets each query jointly in
-`AddWriterT (RAMCost w k) (ExecutionM w k)`.
-Time adds and probe sets union across queries.
-`runStateM` retains the result, cost, and final state;
-`evalStateM` and `costStateM` project evaluation and resource usage from this semantics.
+Instructions load and store words, set and copy registers, perform arithmetic and
+bitwise operations, and compare registers. Comparisons store their results in flags.
+Branches and loops check those flags. Every query returns `Unit`; computed words
+remain in the machine's registers and memory.
 
-`RAMCost.space`, `auxiliarySpace`, and `totalSpace` count memory words only.
-The fixed register file and comparison flags are excluded from space accounting.
-Space counts distinct accessed cells. Auxiliary space excludes input memory; total space
-includes input memory even if some cells were never read. Program size and host-language
-construction costs are excluded.
+Arithmetic wraps modulo `2 ^ w`. Comparisons treat words as unsigned numbers.
+Shifts fill with zeros and return zero when the shift amount is at least `w`.
 
-## Fuelled execution
+## Running programs
 
-`execute fuel program state` runs through `timeAndSpaceCost`, an instance of `ModelStateM`.
-Each executed instruction consumes one unit of interpreter fuel, including branch selection.
-Branch bodies and continuations share the remaining budget; unselected bodies consume none.
-Fuel is not RAM time. Exhaustion returns `none`; success returns the result, `RAMCost`, final
-RAM state, and remaining fuel. Pure programs require no fuel. Additional fuel preserves any
-successful execution, changing only the unused budget.
+`RAMState` holds the memory, registers, and flags.
+`execute fuel program state` runs a program using `timeAndSpaceCost`.
 
-Branches and loops are constructors of `WordRAM` itself. Loop tests inspect existing flags
-without charging RAM time. Comparisons in loop bodies are ordinary charged instructions.
-Empty true loops exhaust fuel. The pending-code list is interpreter bookkeeping, inaccessible
-to the machine. All execution uses the same fuelled model.
+Fuel limits the number of execution steps. Each instruction, branch selection,
+and loop test consumes one unit. Running out of fuel returns `none`.
+A completed run returns the program's result, cost, final state, and unused fuel.
 
-## Control-flow sugar
+## Time and space
 
-`open scoped Prog` enables `ifₚ condition then ... else ...` and `repeat [fuel]`
-with an indented body. Repetition executes the body exactly `fuel` times.
-Use `flag op` to inspect an existing flag, or `test op x y` to compare registers afresh.
-Both bodies return `Unit`. These definitions expand into the existing programs and do not
-change instruction costs. `open scoped WordRAM` enables `whileₚ op do` with an indented
-body, checking the flag selected by `op`. The form `whileₚ op x y do` also performs a charged
-comparison of registers `x` and `y` before each iteration and on exit. Neither form has a
-program-level fuel argument.
+Each load, store, register operation, and comparison costs one time unit.
+Choosing a branch or testing an existing flag costs no time.
+Fuel is counted separately from time.
+
+`RAMCost` records time and the set of memory cells accessed.
+
+- `space` counts distinct accessed cells.
+- `auxiliarySpace` counts accessed cells outside the input.
+- `totalSpace` counts input cells and accessed cells, including unread input cells.
+
+Registers and flags do not count toward space. Program size and the Lean
+computation used to construct a program are not counted.
+
+## Main theorems
+
+- `execute_eq_runCode`: running a program agrees with running its instruction list.
+- `execute_add_fuel`: adding fuel to a completed run preserves its final state and cost.
+- `Completes.unique`: completed runs of the same code from the same state agree
+  on the final state and cost.
+- `Completes.execute`: a proof of completion supplies enough fuel to run the program.
+- `execute_ret_independent`: completed runs of a fixed program return the same Lean
+  value, regardless of the initial machine state.
+
+Program notation is defined in `Algolean.Models.WordRAMSyntax`.
 
 ## References
 
 * Pat Morin, *Open Data Structures*, §1.4:
   https://opendatastructures.org/ods-java/1_4_Model_Computation.html
-* Harvard CS125, Lecture 6, §§6.6–6.7 (word-RAM instructions and modular arithmetic):
+* Harvard CS125, Lecture 6, §§6.6–6.7:
   https://people.seas.harvard.edu/~cs125/fall16/lec6.pdf
 -/
 
@@ -122,21 +119,6 @@ def repeatLoop (condition : Condition Q) (body : Prog Q Unit) : Nat → Prog Q U
       ifThenElse condition (do body; repeatLoop condition body fuel) (pure ()) := rfl
 
 end ControlFlowDefinitions
-
-section ControlFlowNotation
-
-/-- Model-controlled `if` inside a `do` block; enable with `open scoped Prog`. -/
-scoped syntax "ifₚ " term " then " doSeq " else " doSeq : doElem
-
-scoped macro_rules
-  | `(doElem| ifₚ $condition then $yes else $no) =>
-    `(doElem| Prog.ifThenElse $condition (do $yes) (do $no))
-
-/-- Repeat an indented `Unit` body a fixed number of times; enable with `open scoped Prog`. -/
-scoped macro "repeat " "[" fuel:term "]" ppLine body:doSeq : doElem =>
-  `(doElem| Prog.repeatLoop (fun yes _ => yes) (do $body) $fuel)
-
-end ControlFlowNotation
 
 end Prog
 
@@ -369,14 +351,6 @@ def whileCompare (op : CmpOp) (x y : Register k) (body : Prog (WordRAM w k) Unit
     Prog (WordRAM w k) Unit := do
   cmp (w := w) op x y
   whileLoop op (do body; cmp (w := w) op x y)
-
-/-- Indented looping syntax over an existing machine comparison flag. -/
-scoped macro "whileₚ " op:term:max " do " body:doSeq : doElem =>
-  `(doElem| WordRAM.whileLoop $op (do $body))
-
-/-- Indented looping syntax that performs a fresh register comparison each time. -/
-scoped macro "whileₚ " op:term:max x:term:max y:term:max " do " body:doSeq : doElem =>
-  `(doElem| WordRAM.whileCompare $op $x $y (do $body))
 
 /-- One interpreter step, including pending code. -/
 structure Step (w k : Nat) where

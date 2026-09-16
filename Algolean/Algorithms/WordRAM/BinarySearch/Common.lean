@@ -10,7 +10,10 @@ public import Algolean.Algorithms.WordRAM.BinarySearch.Algorithm
 public import Mathlib.Data.Nat.Log
 
 /-!
-# Internal lemmas and execution specifications for word-RAM binary search
+# Shared proofs for binary search
+
+Lemmas about address arithmetic, each loop iteration, and the complete search,
+used by the correctness and complexity proofs.
 -/
 
 @[expose] public section

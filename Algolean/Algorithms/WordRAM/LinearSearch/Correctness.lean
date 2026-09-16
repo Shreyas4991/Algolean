@@ -10,7 +10,22 @@ public import Algolean.Algorithms.WordRAM.LinearSearch.Common
 import all Algolean.Algorithms.WordRAM.LinearSearch.Common
 
 /-!
-# Correctness for word-RAM linear search
+# Correctness of linear search
+
+These theorems assume that the initial machine state stores the input array, key,
+and array bounds as specified by `RepresentsBoundedSearchInput`.
+
+- `linearSearch_terminates`: there is enough fuel for the search to finish.
+- `linearSearch_correct_of_execute`: if execution finishes, the decoded output
+  identifies the first match, or is `none` if the key is absent.
+- `linearSearch_none_iff`: after execution finishes, the equality flag is false
+  exactly when the key is absent.
+- `linearSearch_some_iff`: after execution finishes, the equality flag is true
+  exactly when the index register holds the position of the first match.
+- `linearSearch_memory`: execution preserves every memory cell.
+- `linearSearch_correct`: `linearSearch w` satisfies `Problem.Solves` for
+  `Search.linearSearch`: it terminates on every valid input state, and every
+  completed execution gives a correct answer.
 -/
 
 @[expose] public section

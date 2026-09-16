@@ -10,7 +10,25 @@ public import Algolean.Algorithms.WordRAM.BinarySearch.Common
 import all Algolean.Algorithms.WordRAM.BinarySearch.Common
 
 /-!
-# Complexity for word-RAM binary search
+# Time and space used by binary search
+
+The execution bounds assume that the initial state satisfies
+`RepresentsBoundedSearchInput` and execution finishes. The array need not be sorted.
+Let `n` be the input size. Time counts charged operations.
+Space counts memory cells, excluding registers.
+
+- `binarySearch_time_le`: time is at most `binarySearchTime n`, which is
+  `1` for empty input and `8 * n.log2 + 10` otherwise.
+- `binarySearch_addresses_subset`: every accessed cell belongs to the input array.
+- `binarySearch_auxiliarySpace`: no memory outside the input array is used.
+- `binarySearch_totalSpace`: total space is `n`, including unread input cells.
+- `binarySearch_runsWithin`: the program terminates on every valid input state,
+  and every completed execution meets the time bound and uses no auxiliary memory.
+- `binarySearch_worstCase`: for `0 < w` and `n ≤ 2 ^ w`, searching for `1` in
+  an array of `n` zeros takes exactly `binarySearchTime n`.
+- `binarySearch_exists_worstCase`: for `0 < w` and `n ≤ 2 ^ w`, there is a sorted
+  array of size `n` and an absent key for which execution takes exactly
+  `binarySearchTime n`.
 -/
 
 @[expose] public section

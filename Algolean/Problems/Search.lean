@@ -9,11 +9,25 @@ module
 public import Algolean.Problems.Basic
 
 /-!
-# Abstract array search problems
+# Array search problems
 
-Search inputs pair an array with a key. Outputs are natural indices, or `none` for absence.
-`linearSearch` requires the first match; `binarySearch` requires sorted input and permits any
-match. These specifications do not mention word widths, registers, memory, or programs.
+The input is an array and a key. The output is `some i` for a matching index,
+or `none` when the key is absent.
+
+- `search`: accepts any matching index.
+- `linearSearch`: requires the first matching index.
+- `binarySearch`: requires an array sorted by the supplied relation and accepts
+  any matching index.
+- `RunsWithin`: requires termination and a cost bound for every input state
+  storing the array and key as specified, including unsorted arrays.
+
+The main lemmas describe correct answers:
+
+- `IsFirstMatch.unique`: two first matches have the same index.
+- `linearSearch_spec_search`: a correct first-match answer is a correct search answer.
+- `search_none_iff`: a correct answer is `none` exactly when the key is absent.
+- `linearSearch_some_iff`: a correct first-match answer is `some i` exactly when
+  `i` is the first matching index.
 -/
 
 @[expose] public section
