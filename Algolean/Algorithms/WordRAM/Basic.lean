@@ -16,6 +16,9 @@ public import Algolean.Problems.Search
 - `RepresentsSearchInput`: also specifies the register holding the search key.
 - `RepresentsBoundedSearchInput`: also specifies the last array address and a flag
   indicating whether the array is nonempty.
+- `RepresentsSizedSearchInput`: stores the size in cell zero, the array after it,
+  and the key in a register. Other registers and flags are unconstrained.
+- `sizedArrayMemory` and `sizedInputRegion`: memory and input cells for this layout.
 - `searchOutput`: reads an optional result index from a register and the equality flag.
 - `RepresentsSearchOutput`: specifies how an optional result index is stored.
 - `arrayMemory`: stores the array in memory and fills the remaining cells with zero.
@@ -171,6 +174,86 @@ theorem inputRegion_card (input : Array (BitVec w)) (hfits : input.size ≤ 2 ^ 
   have heq' : input[i] = target := by simpa [hib] using heq
   rw [heq'] at hs
   lia
+
+section SizedInput
+
+/-- The size in cell zero, followed by the array elements. -/
+def withSize (input : Array (Word w)) : Array (Word w) :=
+  #[BitVec.ofNat w input.size] ++ input
+
+@[simp] theorem withSize_size (input : Array (Word w)) :
+    (withSize input).size = input.size + 1 := by
+  simp [withSize, Nat.add_comm]
+
+@[simp] theorem withSize_getElem_zero (input : Array (Word w)) :
+    (withSize input)[0] = BitVec.ofNat w input.size := by simp [withSize]
+
+@[simp] theorem withSize_getElem_succ (input : Array (Word w)) (i : Nat) (hi : i < input.size) :
+    (withSize input)[i + 1]' (by simp; lia) = input[i] := by simp [withSize]
+
+@[simp] theorem withSize_getElem?_succ (input : Array (Word w)) (i : Nat) :
+    (withSize input)[i + 1]? = input[i]? := by
+  simp [withSize, Array.getElem?_append]
+
+/-- The input size and elements are in memory; the key is in its register.
+Other registers and flags may initially contain any values. -/
+structure RepresentsSizedSearchInput (input : Search.Input (Word w)) (key : Register k)
+    (s : RAMState w k) : Prop extends RepresentsArray (withSize input.data) s.Memory where
+  key_eq : s.Registers key = input.key
+
+variable {input : Search.Input (Word w)} {key : Register k} {s : RAMState w k}
+
+theorem RepresentsSizedSearchInput.header
+    (h : RepresentsSizedSearchInput input key s) :
+    s.Memory (BitVec.ofNat w 0) = BitVec.ofNat w input.data.size := by
+  simpa using h.read 0 (by simp)
+
+@[grind →] theorem RepresentsSizedSearchInput.size_lt
+    (h : RepresentsSizedSearchInput input key s) : input.data.size < 2 ^ w := by
+  have := h.fits
+  simpa using this
+
+theorem RepresentsSizedSearchInput.header_toNat
+    (h : RepresentsSizedSearchInput input key s) :
+    (s.Memory (BitVec.ofNat w 0)).toNat = input.data.size := by
+  simpa [Word, BitVec.toNat_ofNat, Nat.mod_eq_of_lt h.size_lt] using
+    congrArg BitVec.toNat h.header
+
+/-- Array layout used by the initial machine state. -/
+def sizedArrayMemory (input : Array (BitVec w)) : Memory w :=
+  fun addr => (withSize input)[addr.toNat]?.getD 0
+
+@[grind =] theorem sizedArrayMemory_ofNat (input : Array (Word w))
+    (hfits : input.size < 2 ^ w) (i : Nat) (hi : i < (withSize input).size) :
+    sizedArrayMemory input (BitVec.ofNat w i) = (withSize input)[i] := by
+  have h : i < 2 ^ w := by simp only [withSize_size] at hi; lia
+  simp [sizedArrayMemory, BitVec.toNat_ofNat, Nat.mod_eq_of_lt h, Array.getElem?_eq_getElem hi]
+
+/-- The memory builder stores the size header followed by every array element. -/
+@[simp] theorem sizedArrayMemory_represents (input : Array (Word w)) (hfits : input.size < 2 ^ w) :
+    RepresentsArray (withSize input) (sizedArrayMemory input) :=
+  ⟨by simpa using hfits, fun i hi => sizedArrayMemory_ofNat input hfits i hi⟩
+
+/-- All input cells, including the size header. -/
+def sizedInputRegion (input : Array (Word w)) : Finset (Word w) := inputRegion (withSize input)
+
+@[simp] theorem zero_mem_sizedInputRegion (input : Array (Word w)) :
+    BitVec.ofNat w 0 ∈ sizedInputRegion input := by
+  simp only [sizedInputRegion, inputRegion, Finset.mem_image]
+  exact ⟨0, by simp, rfl⟩
+
+@[simp] theorem sizedInputRegion_card (input : Array (Word w)) (hfits : input.size < 2 ^ w) :
+    (sizedInputRegion input).card = input.size + 1 := by
+  simpa [sizedInputRegion] using inputRegion_card (withSize input) (by simpa using hfits)
+
+/-- Subtracting one converts a positive address to the preceding index without wrapping. -/
+theorem word_pred_toNat (x : BitVec w) (hx : 0 < x.toNat) :
+    (x - 1).toNat = x.toNat - 1 := by
+  have h := BitVec.ofNat_sub_ofNat_of_le (w := w) x.toNat 1 (by have := x.isLt; lia) hx
+  have h' := congrArg BitVec.toNat h
+  simpa [Nat.mod_eq_of_lt (show x.toNat - 1 < 2 ^ w by have := x.isLt; lia)] using h'
+
+end SizedInput
 
 /-- Completed execution in the time-and-space model, hiding interpreter fuel.
 Unused fuel is allowed and is not charged as time. -/

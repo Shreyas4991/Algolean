@@ -22,12 +22,9 @@ namespace Algolean.Algorithms.WordRAM
 open scoped WordRAM Prog
 
 @[simp] theorem linearSearchState_represents (input : Array (Word w)) (target : Word w)
-    (hfits : input.size ≤ 2 ^ w) :
-    RepresentsBoundedSearchInput ⟨input, target⟩ LinearSearch.key LinearSearch.last
-      (linearSearchState input target) :=
-  ⟨⟨arrayMemory_represents input hfits, by simp [linearSearchState]⟩,
-    by simp [linearSearchState, LinearSearch.last, LinearSearch.key],
-    by simp [linearSearchState]⟩
+    (hfits : input.size < 2 ^ w) :
+    RepresentsSizedSearchInput ⟨input, target⟩ LinearSearch.key (linearSearchState input target) :=
+  ⟨sizedArrayMemory_represents input hfits, by simp [linearSearchState]⟩
 
 open LinearSearch
 
@@ -88,7 +85,7 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : 
     (hk : s.Registers key = target) (h1 : s.Registers one = 1)
     (hl : s.Registers last = BitVec.ofNat w (input.size - 1)) (ha : s.Flags .ult = true) :
     ∃ cost t, Completes (instructions (whileLoop .ult (body w))) s cost t ∧
-      Summary input target start n s t cost := by
+      Summary input target start n s t cost ∧ t.Registers one = 1 := by
   induction n generalizing start s with
   | zero => lia
   | succ n ih =>
@@ -97,7 +94,7 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : 
     have hprobe := ofNat_mem_inputRegion input start hstart
     by_cases heq : input[start] = target
     · have hb := body_found s (by simpa [hread, hk] using heq)
-      refine ⟨_, _, hb.while_stop ha (by simp), ?_⟩
+      refine ⟨_, _, hb.while_stop ha (by simp), ?_, by simp [h1]⟩
       suffices ∀ j, start ≤ j → j < start → input[j]? ≠ some target by
         simpa [Summary, hi, Nat.mod_eq_of_lt (hmem.index_lt hstart), hprobe, heq, hstart] using this
       intro j hj hj'
@@ -107,7 +104,7 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : 
       · subst n
         have hb := body_last s (by simpa [hread, hk] using heq)
           (by grind only [RepresentsArray.fits, wordAddress_toNat])
-        refine ⟨_, _, hb.while_stop ha (by simp), ?_⟩
+        refine ⟨_, _, hb.while_stop ha (by simp), ?_, by simp [h1]⟩
         simp only [Summary, checked_memory, Finset.singleton_subset_iff, hi, hprobe,
           true_and, checked_flags]
         exact ⟨by grind only, trivial⟩
@@ -116,10 +113,10 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : 
           simpa only [next, hi, h1, wordAddress_succ] using body_advance s
             (by simpa [hread, hk] using heq)
             (by grind only [RepresentsArray.fits, wordAddress_toNat])
-        obtain ⟨cost, t, hr, hs⟩ := ih (start + 1) (by lia) (by lia) next
+        obtain ⟨cost, t, hr, hs, htone⟩ := ih (start + 1) (by lia) (by lia) next
           (by simpa [next] using hmem) (by simp [next]) (by simp [next, hk])
           (by simp [next, h1]) (by simp [next, hl]) (by simp [next])
-        refine ⟨_, t, completes_while_true .ult (body w) ha hb hr, ?_⟩
+        refine ⟨_, t, completes_while_true .ult (body w) ha hb hr, ?_, htone⟩
         simp only [Summary, next, RAMState.writeRegister_memory, checked_memory,
           RAMCost.mk_add] at hs ⊢
         obtain ⟨hm, hp, hs⟩ := hs
@@ -127,75 +124,139 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : 
         split_ifs at hs ⊢ <;> grind only
 
 /-- Maximum time, attained by a missing key when the word width is positive. -/
-def linearSearchTime (n : Nat) : Nat := if n = 0 then 3 else 4 * n + 3
+def linearSearchTime (n : Nat) : Nat := 4 * n + 7
 
-/-- Exact charged time as a function of the represented output. -/
+/-- Exact time, including setup and conversion to a zero-based result. -/
 def linearSearchCost (n : Nat) : Option Nat → Nat
   | none => linearSearchTime n
-  | some i => 4 * i + 6
+  | some i => 4 * i + 10
 
-@[simp] private def initialized (s : RAMState w 5) : RAMState w 5 :=
-  ((s.writeFlag .eq false).writeRegister index 0).writeRegister one 1
+private def initialized (n : Nat) (s : RAMState w 5) : RAMState w 5 :=
+  ⟨s.Memory, fun r => if r = index then 1 else if r = one then 1
+    else if r = last then BitVec.ofNat w n else s.Registers r,
+    fun op => if op = .ult then decide (n ≠ 0) else false⟩
 
-private theorem setup_completes (s : RAMState w 5) :
-    Completes (instructions (setup w)) s ⟨3, ∅⟩ (initialized s) :=
-  ⟨3, by simp [setup, runCode, step]⟩
+attribute [local simp] initialized
+
+private theorem setup_completes (input : Search.Input (Word w)) (s : RAMState w 5)
+    (hi : RepresentsSizedSearchInput input key s) :
+    Completes (instructions (setup w)) s ⟨6, {0}⟩ (initialized input.data.size s) := by
+  have hh := hi.header
+  have hn := hi.size_lt
+  refine ⟨6, ?_⟩
+  simp only [setup, index, Fin.isValue, BitVec.ofNat_eq_ofNat, last, one, instructions_bind,
+    instructions_lift,
+    List.cons_append, List.nil_append, runCode, step, RAMState.writeFlag,
+    RAMState.writeRegister, Function.update,
+    ↓reduceDIte, hh, CmpOp.eval, Fin.reduceEq, BitVec.toNat_ofNat, Nat.zero_mod,
+    Nat.mod_eq_of_lt hn,
+    Nat.pos_iff_ne_zero, ne_eq, Array.size_eq_zero_iff, decide_not, runCode_nil,
+    RAMCost.mk_add, Finset.empty_union,
+    Option.pure_def, Option.bind_eq_bind, Option.bind_some, RAMCost.zero_time, add_zero,
+    RAMCost.zero_addresses,
+    Nat.reduceAdd, Finset.singleton_union, insert_empty_eq, initialized, Bool.if_false_right,
+    Option.some.injEq,
+    Prod.mk.injEq, ExecutionState.mk.injEq, RAMState.mk.injEq, true_and, and_true]
+  constructor
+  · funext r
+    simp only [Function.update_apply]
+    split_ifs <;> simp_all only [Fin.reduceEq]
+  · funext op
+    cases op <;> simp
+
+private def finished (s : RAMState w 5) : RAMState w 5 :=
+  if s.Flags .eq then s.writeRegister index (s.Registers index - 1) else s
+
+private theorem finish_completes (s : RAMState w 5) (h1 : s.Registers one = 1) :
+    Completes (instructions (finish w)) s ⟨1, ∅⟩ (finished s) := by
+  refine ⟨2, ?_⟩
+  cases hf : s.Flags .eq <;> simp [finish, finished, branch, runCode, step, hf, h1]
+
+@[simp] private theorem finished_memory (s : RAMState w 5) : (finished s).Memory = s.Memory := by
+  simp [finished]; split <;> rfl
+
+@[simp] private theorem finished_flags (s : RAMState w 5) (op : CmpOp) :
+    (finished s).Flags op = s.Flags op := by
+  simp [finished]; split <;> rfl
+
+private theorem finished_output (s : RAMState w 5) (hf : s.Flags .eq = true)
+    (hp : 0 < (s.Registers index).toNat) :
+    searchOutput index (finished s) = some ((s.Registers index).toNat - 1) := by
+  simp only [finished, hf, ↓reduceIte, searchOutput, RAMState.writeRegister_flags,
+    RAMState.writeRegister_registers]
+  rw [word_pred_toNat _ hp]
 
 private theorem search_spec (input : Search.Input (Word w)) (s : RAMState w 5)
-    (hinput : RepresentsBoundedSearchInput input key last s) :
+    (hinput : RepresentsSizedSearchInput input key s) :
     ∃ cost t, Completes (instructions (linearSearch w)) s cost t ∧
       Search.linearSearch.spec input (searchOutput index t) ∧ t.Memory = s.Memory ∧
-      cost.addresses ⊆ inputRegion input.data ∧
+      cost.addresses ⊆ sizedInputRegion input.data ∧
       cost.time = linearSearchCost input.data.size (searchOutput index t) := by
   have hkey := hinput.key_eq
-  have hlast := hinput.last_eq
-  have hactive := hinput.nonempty_eq
   by_cases hn : input.data.size = 0
-  · have hr := completes_while_false .ult (body w) (initialized s) (by simp [hactive, hn])
-    have hc := (setup_completes s).append hr
-    refine ⟨⟨3, ∅⟩ + 0, initialized s, ?_, ?_, ?_, ?_, ?_⟩
+  · have hr := completes_while_false .ult (body w) (initialized input.data.size s) (by simp [hn])
+    have hc := (setup_completes input s hinput).append
+      (hr.append (finish_completes _ (by simp)))
+    refine ⟨⟨6, {0}⟩ + (0 + ⟨1, ∅⟩), finished (initialized input.data.size s),
+      ?_, ?_, ?_, ?_, ?_⟩
     · simpa only [linearSearch, instructions_bind] using hc
-    · simp only [searchOutput, initialized, RAMState.writeRegister_flags,
-        RAMState.writeFlag_flags, ↓reduceIte, Bool.false_eq_true,
-        Search.linearSearch_spec_none]
-      grind [Array.mem_iff_getElem?]
+    · simp [finished, searchOutput, Search.linearSearch_spec_none,
+        Array.eq_empty_of_size_eq_zero hn]
     · simp
-    · simp
-    · simp [linearSearchCost, linearSearchTime, searchOutput, hn]
-  · obtain ⟨cost, t, hr, hs⟩ := loop_spec input.data input.key input.data.size 0
-      (by lia) (by simp) (initialized s)
-      (by simpa using hinput.toRepresentsSearchInput.toRepresentsArray)
-      (by simp) (by simp [hkey]) (by simp) (by simp [hlast]) (by simp [hactive, hn])
-    have hc := (setup_completes s).append hr
-    refine ⟨⟨3, ∅⟩ + cost, t, ?_, ?_, ?_, ?_, ?_⟩
+    · simp [RAMCost.mk_add]
+    · simp [finished, searchOutput, linearSearchCost, linearSearchTime, hn, RAMCost.mk_add]
+  · obtain ⟨cost, t, hr, hs, htone⟩ := loop_spec (withSize input.data) input.key input.data.size 1
+      (by lia) (by simp [Nat.add_comm]) (initialized input.data.size s)
+      (by simpa using hinput.toRepresentsArray)
+      (by simp) (by simp [hkey]) (by simp) (by simp) (by simp [hn])
+    have hc := (setup_completes input s hinput).append (hr.append (finish_completes t htone))
+    refine ⟨⟨6, {0}⟩ + (cost + ⟨1, ∅⟩), finished t, ?_, ?_, ?_, ?_, ?_⟩
     · simpa only [linearSearch, instructions_bind] using hc
-    all_goals simp only [Summary, initialized, RAMState.writeRegister_memory,
-      RAMState.writeFlag_memory, zero_add, Nat.sub_zero] at hs
-    · rcases hs with ⟨_, _, hs⟩
-      simp only [searchOutput]
-      split_ifs at hs ⊢
-      · exact ⟨hs.right.left, hs.right.right.left,
-          fun j hj => hs.right.right.right.left j (Nat.zero_le j) hj⟩
-      · simp only [Search.linearSearch_spec_none]
-        grind [Array.mem_iff_getElem?]
-    · exact hs.left
-    · simpa using hs.right.left
-    · rcases hs with ⟨_, _, hs⟩
-      simp only [searchOutput, RAMCost.mk_add]
-      split_ifs at hs ⊢ <;> simp only [linearSearchCost, linearSearchTime, if_neg hn]
-      · lia
-      · lia
+    all_goals simp only [Summary, initialized] at hs
+    · obtain ⟨_, _, hs⟩ := hs
+      cases hf : t.Flags .eq with
+      | false =>
+        simp only [hf, Bool.false_eq_true, ↓reduceIte] at hs
+        simp only [searchOutput, finished_flags, hf, Bool.false_eq_true, ↓reduceIte,
+          Search.linearSearch_spec_none]
+        rw [Array.mem_iff_getElem?]
+        rintro ⟨i, hi⟩
+        have hib : i < input.data.size := by
+          exact Array.getElem?_eq_some_iff.mp hi |>.choose
+        exact hs.left (i + 1) (by lia) (by lia) (by simpa using hi)
+      | true =>
+        simp only [hf, ↓reduceIte] at hs
+        rw [finished_output t hf (by lia)]
+        refine ⟨by lia, ?_, ?_⟩
+        · rw [← withSize_getElem?_succ, Nat.sub_add_cancel (by lia : 1 ≤ (t.Registers index).toNat)]
+          exact hs.right.right.left
+        · intro j hj
+          simpa using hs.right.right.right.left (j + 1) (by lia) (by lia)
+    · simpa using hs.left
+    · simpa [RAMCost.add_addresses, sizedInputRegion] using
+        Finset.insert_subset (zero_mem_sizedInputRegion input.data) hs.right.left
+    · obtain ⟨_, _, hs⟩ := hs
+      cases hf : t.Flags .eq with
+      | false =>
+        simp only [hf, Bool.false_eq_true, ↓reduceIte] at hs
+        simp [searchOutput, hf, linearSearchCost, linearSearchTime, RAMCost.mk_add, hs.right]
+        lia
+      | true =>
+        simp only [hf, ↓reduceIte] at hs
+        rw [finished_output t hf (by lia)]
+        simp only [linearSearchCost, RAMCost.add_time]
+        lia
 
 /-- A successful fuelled execution satisfies the specification, exact time formula, and
 memory footprint on every representing state. -/
 theorem linearSearch_run_spec (input : Search.Input (Word w)) (s : RAMState w 5)
-    (hinput : RepresentsBoundedSearchInput input key last s)
+    (hinput : RepresentsSizedSearchInput input key s)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
     let t := final.ram
     let cost := result.tell
     Search.linearSearch.spec input (searchOutput index t) ∧ t.Memory = s.Memory ∧
-      cost.addresses ⊆ inputRegion input.data ∧
+      cost.addresses ⊆ sizedInputRegion input.data ∧
       cost.time = linearSearchCost input.data.size (searchOutput index t) := by
   obtain ⟨cost, t, hc, hs⟩ := search_spec input s hinput
   obtain ⟨hcost, hstate⟩ := hc.unique (by simpa only [execute_eq_runCode] using hrun)

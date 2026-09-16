@@ -12,8 +12,10 @@ public import Algolean.Models.WordRAMSyntax
 /-!
 # Linear search in the word-RAM model
 
-The program uses five registers and no extra memory. The initial state supplies the search
-key, the last array address, and a flag indicating whether the array is nonempty.
+The program uses five registers and no extra memory. Memory cell `0` stores the array size
+`n`, and cells `1` through `n` store its elements. The initial state supplies the search key
+in its register. The program initializes the other registers and flags, starts searching
+at address `1`, and converts a found address to a zero-based array index.
 The same program handles every input size that fits in memory at word width `w`.
 -/
 
@@ -33,7 +35,7 @@ abbrev key : Register 5 := 1
 abbrev value : Register 5 := 2
 /-- Register holding the constant one. -/
 abbrev one : Register 5 := 3
-/-- Inclusive last input address, supplied at runtime. -/
+/-- Inclusive last input address, loaded from the size header. -/
 abbrev last : Register 5 := 4
 
 /-- Inspect one cell, stopping at the first match or the inclusive last address. -/
@@ -47,11 +49,21 @@ def body (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
     else
       nop
 
-/-- Initialize scratch registers without inspecting runtime input. -/
+/-- Read the size header and initialize the search at address one. -/
 def setup (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   reset .eq
   index ←ᵣ imm[0]
-  one ←ᵣ imm[1] -- immediate values
+  last ←ᵣ mem[index]
+  cmp (w := w) .ult index last
+  one ←ᵣ imm[1]
+  index ←ᵣ imm[1]
+
+/-- Convert a found memory address to a zero-based array index. -/
+def finish (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
+  ifₚ flag .eq then
+    index ←ᵣ index - one
+  else
+    nop
 
 end LinearSearch
 
@@ -60,12 +72,10 @@ def linearSearch (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   LinearSearch.setup w
   whileₚ .ult do
     LinearSearch.body w
+  LinearSearch.finish w
 
-/-- Store the input array and search key, and initialize the bounds and flags for linear search. -/
+/-- Store the size header, array, and search key. The program initializes its other registers. -/
 def linearSearchState (input : Array (Word w)) (target : Word w) : RAMState w 5 :=
-  ⟨arrayMemory input,
-    fun r => if r = LinearSearch.key then target
-      else if r = LinearSearch.last then BitVec.ofNat w (input.size - 1) else 0,
-    fun op => if op = .ult then decide (input.size ≠ 0) else false⟩
+  ⟨sizedArrayMemory input, fun r => if r = LinearSearch.key then target else 0, fun _ => false⟩
 
 end Algolean.Algorithms.WordRAM

@@ -404,42 +404,48 @@ def searchExample : Prog (WordRAM 8 5) Unit := linearSearch 8
 
 example : (execute 50 searchExample (linearSearchState searchInput 7)).map (fun r =>
     (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.addresses,
-      r.fst.tell.auxiliarySpace (inputRegion searchInput))) =
-      some (some 1, 10, {0, 1}, 0) := by decide
+      r.fst.tell.auxiliarySpace (sizedInputRegion searchInput))) =
+      some (some 1, 14, {0, 1, 2}, 0) := by decide
 
 example : (execute 50 searchExample (linearSearchState searchInput 2)).map (fun r =>
     (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.totalSpace
-      (inputRegion searchInput))) = some (none, 23, 5) := by decide
+      (sizedInputRegion searchInput))) = some (none, 27, 6) := by decide
 
-example : (execute 30 (linearSearch 2) (linearSearchState #[0, 1, 2, 3] 3)).map
+example : (execute 30 (linearSearch 2) (linearSearchState #[0, 1, 2] 2)).map
     (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
-      some (some 3, 18) := by decide
+      some (some 2, 18) := by decide
 
-example : (execute 9 (linearSearch 0) (linearSearchState #[0] 0)).map
+-- The key equals the size header, but no array element matches it.
+example : (execute 30 (linearSearch 2) (linearSearchState #[1, 2, 1] 3)).map
+    (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time,
+      r.fst.tell.addresses)) = some (none, 19, {0, 1, 2, 3}) := by decide
+
+example : (execute 14 (linearSearch 1) (linearSearchState #[0] 0)).map
     (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
-      some (some 0, 6) := by decide
+      some (some 0, 10) := by decide
 
-example : (execute 4 (linearSearch 0)
+example : (execute 9 (linearSearch 0)
     ((linearSearchState #[] 0).writeFlag .eq true)).map
       (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
-        some (none, 3) := by decide
+        some (none, 7) := by decide
 
 def representingState (target junk : Word 8) : RAMState 8 5 :=
-  ⟨fun addr => if addr.toNat < searchInput.size then arrayMemory searchInput addr else junk,
-    fun r => if r = LinearSearch.key then target
-      else if r = LinearSearch.last then 4 else 255, fun _ => true⟩
+  ⟨fun addr => if addr.toNat < searchInput.size + 1
+      then sizedArrayMemory searchInput addr else junk,
+    fun r => if r = LinearSearch.key then target else 255, fun _ => true⟩
 
 private theorem representingState_input (target junk : Word 8) :
-    RepresentsBoundedSearchInput ⟨searchInput, target⟩ LinearSearch.key LinearSearch.last
+    RepresentsSizedSearchInput ⟨searchInput, target⟩ LinearSearch.key
       (representingState target junk) := by
-  have hfits : searchInput.size ≤ 2 ^ 8 := by decide
-  refine ⟨⟨⟨hfits, ?_⟩, by simp [representingState]⟩,
-    by simp [representingState, LinearSearch.last, LinearSearch.key, searchInput],
-    by simp [representingState, searchInput]⟩
+  refine ⟨⟨by simp [withSize, searchInput], ?_⟩, by simp [representingState]⟩
   intro i hi
-  have hiw : i < 2 ^ 8 := by have : searchInput.size = 5 := rfl; lia
-  simpa only [representingState, wordAddress_toNat i hiw, if_pos hi] using
-    arrayMemory_ofNat searchInput (by decide) i hi
+  have hiw : i < 2 ^ 8 := by simp [withSize, searchInput] at hi; lia
+  simpa only [representingState, wordAddress_toNat i hiw, withSize_size] using
+    (show (if i < searchInput.size + 1 then sizedArrayMemory searchInput (BitVec.ofNat 8 i)
+      else junk) = (withSize searchInput)[i] from
+        by
+          rw [if_pos (by simpa using hi)]
+          exact sizedArrayMemory_ofNat searchInput (by decide) i hi)
 
 example (target junk : Word 8) :
     ∃ fuel cost t, execute fuel searchExample (representingState target junk) =
@@ -450,7 +456,7 @@ example (target junk : Word 8) (fuel : Nat) (result : AddWriter (RAMCost 8 5) Un
     (final : ExecutionState 8 5)
     (hr : execute fuel searchExample (representingState target junk) = some (result, final)) :
     Search.linearSearch.spec ⟨searchInput, target⟩ (searchOutput LinearSearch.index final.ram) ∧
-      result.tell.auxiliarySpace (inputRegion searchInput) = 0 :=
+      result.tell.auxiliarySpace (sizedInputRegion searchInput) = 0 :=
   ⟨linearSearch_correct_of_execute _ _ (representingState_input target junk) hr,
     linearSearch_auxiliarySpace _ _ (representingState_input target junk) hr⟩
 
@@ -466,7 +472,7 @@ example (target junk : Word 8) :
       RepresentsSearchOutput LinearSearch.index output t ∧
       Search.linearSearch.spec ⟨searchInput, target⟩ output ∧
       cost.time ≤ linearSearchTime searchInput.size ∧
-        cost.auxiliarySpace (inputRegion searchInput) = 0 := by
+        cost.auxiliarySpace (sizedInputRegion searchInput) = 0 := by
   have hi := representingState_input target junk
   have ha : Search.linearSearch.admissible ⟨searchInput, target⟩ := by
     trivial

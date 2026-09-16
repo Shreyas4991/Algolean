@@ -12,8 +12,9 @@ import all Algolean.Algorithms.WordRAM.LinearSearch.Common
 /-!
 # Correctness of linear search
 
-These theorems assume that the initial machine state stores the input array, key,
-and array bounds as specified by `RepresentsBoundedSearchInput`.
+These theorems assume that memory stores the size followed by the array, and the key
+register holds the search key, as specified by `RepresentsSizedSearchInput`.
+The program initializes its own bounds and flags.
 
 - `linearSearch_terminates`: there is enough fuel for the search to finish.
 - `linearSearch_correct_of_execute`: if execution finishes, the decoded output
@@ -40,7 +41,7 @@ attribute [local simp] index key value one last CmpOp.eval BinOp.eval wordAddres
 
 /-- Every representing input state has sufficient interpreter fuel for termination. -/
 theorem linearSearch_terminates (input : Search.Input (Word w)) (s : RAMState w 5)
-    (hinput : RepresentsBoundedSearchInput input key last s) :
+    (hinput : RepresentsSizedSearchInput input key s) :
     ∃ fuel cost t, execute fuel (linearSearch w) s = some (⟨(), cost⟩, ⟨t, 0⟩) := by
   obtain ⟨cost, t, hc, _⟩ := search_spec input s hinput
   obtain ⟨fuel, hf⟩ := hc.execute
@@ -48,7 +49,7 @@ theorem linearSearch_terminates (input : Search.Input (Word w)) (s : RAMState w 
 
 /-- Uniform linear search returns the first match, or certifies absence. -/
 theorem linearSearch_correct_of_execute (input : Search.Input (Word w)) (s : RAMState w 5)
-    (hinput : RepresentsBoundedSearchInput input key last s)
+    (hinput : RepresentsSizedSearchInput input key s)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
     Search.linearSearch.spec input (searchOutput index final.ram) :=
@@ -56,7 +57,7 @@ theorem linearSearch_correct_of_execute (input : Search.Input (Word w)) (s : RAM
 
 /-- The equality flag is clear exactly when the key is absent. -/
 theorem linearSearch_none_iff (input : Search.Input (Word w)) (s : RAMState w 5)
-    (hinput : RepresentsBoundedSearchInput input key last s)
+    (hinput : RepresentsSizedSearchInput input key s)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
     final.ram.Flags .eq = false ↔ input.key ∉ input.data := by
@@ -65,7 +66,7 @@ theorem linearSearch_none_iff (input : Search.Input (Word w)) (s : RAMState w 5)
 
 /-- A set equality flag identifies the first matching address. -/
 theorem linearSearch_some_iff (input : Search.Input (Word w)) (s : RAMState w 5)
-    (hinput : RepresentsBoundedSearchInput input key last s)
+    (hinput : RepresentsSizedSearchInput input key s)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
     final.ram.Flags .eq = true ↔
@@ -75,7 +76,7 @@ theorem linearSearch_some_iff (input : Search.Input (Word w)) (s : RAMState w 5)
 
 /-- Loads and register operations preserve the entire input and background memory. -/
 theorem linearSearch_memory (input : Search.Input (Word w)) (s : RAMState w 5)
-    (hinput : RepresentsBoundedSearchInput input key last s)
+    (hinput : RepresentsSizedSearchInput input key s)
     {fuel : Nat} {result : AddWriter (RAMCost w 5) Unit} {final : ExecutionState w 5}
     (hrun : execute fuel (linearSearch w) s = some (result, final)) :
     final.ram.Memory = s.Memory := (linearSearch_run_spec input s hinput hrun).right.left
@@ -84,7 +85,7 @@ theorem linearSearch_memory (input : Search.Input (Word w)) (s : RAMState w 5)
 state. The output remains in the machine's registers and flags. -/
 theorem linearSearch_correct (w : Nat) :
     let problem := Search.linearSearch
-    let repInput := fun input => RepresentsBoundedSearchInput input key last
+    let repInput := fun input => RepresentsSizedSearchInput input key
     problem.Solves (linearSearch w) Executes repInput (RepresentsSearchOutput index) := by
   constructor
   · intro input s _ hi
