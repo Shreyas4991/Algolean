@@ -15,8 +15,14 @@ public import Algolean.Algorithms.NaivePatternSearch
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Algorithms.WordRAM.Basic
-public import Algolean.Algorithms.WordRAM.BinarySearch
-public import Algolean.Algorithms.WordRAM.LinearSearch
+public import Algolean.Algorithms.WordRAM.BinarySearch.Algorithm
+public import Algolean.Algorithms.WordRAM.BinarySearch.Common
+public import Algolean.Algorithms.WordRAM.BinarySearch.Complexity
+public import Algolean.Algorithms.WordRAM.BinarySearch.Correctness
+public import Algolean.Algorithms.WordRAM.LinearSearch.Algorithm
+public import Algolean.Algorithms.WordRAM.LinearSearch.Common
+public import Algolean.Algorithms.WordRAM.LinearSearch.Complexity
+public import Algolean.Algorithms.WordRAM.LinearSearch.Correctness
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects

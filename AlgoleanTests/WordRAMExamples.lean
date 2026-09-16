@@ -6,7 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.WordRAM.LinearSearch
+public import Algolean.Algorithms.WordRAM.LinearSearch.Correctness
+public import Algolean.Algorithms.WordRAM.LinearSearch.Complexity
 public import Algolean.Models.WordRAMSyntax
 
 /-! # Register operations, structured control, and uniform linear search -/

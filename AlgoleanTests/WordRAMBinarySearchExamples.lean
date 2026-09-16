@@ -6,7 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.WordRAM.BinarySearch
+public import Algolean.Algorithms.WordRAM.BinarySearch.Correctness
+public import Algolean.Algorithms.WordRAM.BinarySearch.Complexity
 
 /-! # Uniform binary search on runtime-represented arrays -/
 

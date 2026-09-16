@@ -6,18 +6,11 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.WordRAM.Basic
-public import Algolean.Models.WordRAMSyntax
+public import Algolean.Algorithms.WordRAM.BinarySearch.Algorithm
 public import Mathlib.Data.Nat.Log
 
 /-!
-# Binary search with six word-RAM registers
-
-Adapted from https://github.com/Shreyas4991/Algolean/pull/89 to the register-only model.
-Inclusive bounds support all `2 ^ w` input cells. The midpoint is `lo + (hi - lo) / 2`;
-boundary comparisons prevent either endpoint from wrapping. All word computations are queries.
-The program reads its bound from the initial upper register and loops on a machine flag.
-Interpreter fuel is supplied only when executing the program.
+# Internal lemmas and execution specifications for word-RAM binary search
 -/
 
 @[expose] public section
@@ -26,66 +19,6 @@ namespace Algolean.Algorithms.WordRAM
 
 open scoped WordRAM Prog
 
-namespace BinarySearch
-
-/-- Inclusive lower endpoint. -/
-abbrev lower : Register 6 := 0
-/-- Inclusive upper endpoint, supplied by the initial machine state. -/
-abbrev upper : Register 6 := 1
-/-- Midpoint, and result register on success. -/
-abbrev middle : Register 6 := 2
-/-- Word loaded at the midpoint. -/
-abbrev value : Register 6 := 3
-/-- Search key supplied in the initial state. -/
-abbrev key : Register 6 := 4
-/-- Constant one for shifts and endpoint updates. -/
-abbrev one : Register 6 := 5
-
-/-- One machine iteration, with its continuation indicated by the less-than flag. -/
-def body (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
-  middle ←ᵣ upper - lower
-  middle ←ᵣ middle >>> one
-  middle ←ᵣ lower + middle
-  value ←ᵣ mem[middle]
-  ifₚ test .eq value key then
-    reset .ult
-  else
-    ifₚ test .ult value key then
-      ifₚ test .ult middle upper then
-        lower ←ᵣ middle + one
-      else
-        pure ()
-    else
-      ifₚ test .ult lower middle then
-        upper ←ᵣ middle - one
-      else
-        pure ()
-
-/-- Initialize the lower endpoint and increment constant; the upper endpoint is runtime input. -/
-def setup (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
-  lower ←ᵣ imm[0]
-  one ←ᵣ imm[1]
-
-end BinarySearch
-
-/-- Uniform binary search: width determines code; memory, key, last address, and the
-nonempty flag supply the runtime input. -/
-def binarySearch (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
-  reset .eq
-  ifₚ flag .ult then
-    BinarySearch.setup w
-    whileₚ .ult do
-      BinarySearch.body w
-  else
-    pure ()
-
-/-- A canonical runtime input witness; proofs also apply to arbitrary representing states. -/
-def binarySearchState (input : Array (Word w)) (target : Word w) : RAMState w 6 :=
-  ⟨arrayMemory input,
-    fun r => if r = BinarySearch.key then target
-      else if r = BinarySearch.upper then BitVec.ofNat w (input.size - 1) else 0,
-    fun op => if op = .ult then decide (input.size ≠ 0) else false⟩
-
 @[simp] theorem binarySearchState_represents (input : Array (Word w)) (target : Word w)
     (hfits : input.size ≤ 2 ^ w) :
     RepresentsBoundedSearchInput ⟨input, target⟩ BinarySearch.key BinarySearch.upper
@@ -93,8 +26,6 @@ def binarySearchState (input : Array (Word w)) (target : Word w) : RAMState w 6 
   ⟨⟨arrayMemory_represents input hfits, by simp [binarySearchState]⟩,
     by simp [binarySearchState, BinarySearch.upper, BinarySearch.key],
     by simp [binarySearchState]⟩
-
-section CorrectnessAndComplexity
 
 open BinarySearch
 
@@ -264,9 +195,8 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n lo hi : 
     let pivot := lo + (hi - lo) / 2
     have hp := pivot_bounds hlo
     have hpi : pivot < input.size := by lia
-    have hhw := hmem.index_lt hhi
     have hm : midpoint s = BitVec.ofNat w pivot := by
-      simpa only [midpoint, hl, hh, h1] using wordAddress_mid lo hi hlo hhw
+      simpa only [midpoint, hl, hh, h1] using wordAddress_mid lo hi hlo (hmem.index_lt hhi)
     have hread := hmem.read_of_eq hpi hm
     have hprobe := ofNat_mem_inputRegion input pivot hpi
     have hpn := hmem.toNat_of_eq hpi hm
@@ -443,13 +373,11 @@ private theorem search_spec (input : Search.Input (Word w)) (s : RAMState w 6)
       rw [hlen] at ht
       lia
 
-/-- Binary search terminates on every representing state, even without sortedness. -/
-theorem binarySearch_terminates (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s) :
-    ∃ fuel cost t, execute fuel (binarySearch w) s = some (⟨(), cost⟩, ⟨t, 0⟩) := by
-  obtain ⟨cost, t, hc, _⟩ := search_spec input s hinput
-  obtain ⟨fuel, hf⟩ := hc.execute
-  exact ⟨fuel, cost, t, hf⟩
+private theorem arrayMemory_replicate_zero (n : Nat) :
+    arrayMemory (Array.replicate n (0 : Word w)) = fun _ => 0 := by
+  funext addr
+  simp only [arrayMemory, Array.getElem?_replicate]
+  split <;> rfl
 
 /-- Joint correctness and resource guarantees for a completed execution of the uniform program. -/
 theorem binarySearch_run_spec (input : Search.Input (Word w)) (s : RAMState w 6)
@@ -464,141 +392,5 @@ theorem binarySearch_run_spec (input : Search.Input (Word w)) (s : RAMState w 6)
   obtain ⟨cost, t, hc, hs⟩ := search_spec input s hinput
   obtain ⟨hcost, hstate⟩ := hc.unique (by simpa only [execute_eq_runCode] using hrun)
   simpa only [hcost, hstate] using ⟨hs.correct, hs.memory, hs.addresses, hs.time⟩
-
-/-- On sorted input, binary search implements the abstract search problem. -/
-theorem binarySearch_correct_of_execute (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final)) :
-    let problem := Search.binarySearch (fun a b : Word w => a.toNat ≤ b.toNat)
-    problem.admissible input → problem.spec input (searchOutput middle final.ram) := by
-  simpa using (binarySearch_run_spec input s hinput hrun).left
-
-/-- A cleared equality flag characterizes absence on sorted input. -/
-theorem binarySearch_none_iff (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s) (hsorted : SortedWords input.data)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final)) :
-    final.ram.Flags .eq = false ↔ input.key ∉ input.data := by
-  simpa [searchOutput] using Search.search_none_iff
-    (binarySearch_correct_of_execute input s hinput hrun (by simpa using hsorted))
-
-/-- The middle register holds an in-bounds matching address when equality is set. -/
-theorem binarySearch_of_some (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s) (hsorted : SortedWords input.data)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final))
-    (hfound : final.ram.Flags .eq = true) :
-    let i := (final.ram.Registers middle).toNat
-    i < input.data.size ∧ input.data[i]? = some input.key := by
-  simpa only [Search.binarySearch_spec, searchOutput_of_found middle _ hfound,
-    Search.search_spec_some, Search.IsMatch] using
-    binarySearch_correct_of_execute input s hinput hrun (by simpa using hsorted)
-
-/-- Binary search preserves every memory cell. -/
-theorem binarySearch_memory (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final)) :
-    final.ram.Memory = s.Memory := (binarySearch_run_spec input s hinput hrun).right.left
-
-/-- The logarithmic time bound does not require sortedness. -/
-theorem binarySearch_time_le (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final)) :
-    result.tell.time ≤ binarySearchTime input.data.size :=
-  (binarySearch_run_spec input s hinput hrun).right.right.right
-
-/-- All memory probes belong to the input array. -/
-theorem binarySearch_addresses_subset (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final)) :
-    result.tell.addresses ⊆ inputRegion input.data :=
-  (binarySearch_run_spec input s hinput hrun).right.right.left
-
-/-- The six registers use no auxiliary memory cells. -/
-theorem binarySearch_auxiliarySpace (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final)) :
-    result.tell.auxiliarySpace (inputRegion input.data) = 0 := by
-  simp only [RAMCost.auxiliarySpace, Finset.sdiff_eq_empty_iff_subset.mpr
-    (binarySearch_addresses_subset input s hinput hrun), Finset.card_empty]
-
-/-- The total footprint equals the input size, including unread input cells. -/
-theorem binarySearch_totalSpace (input : Search.Input (Word w)) (s : RAMState w 6)
-    (hinput : RepresentsBoundedSearchInput input key upper s)
-    {fuel : Nat} {result : AddWriter (RAMCost w 6) Unit} {final : ExecutionState w 6}
-    (hrun : execute fuel (binarySearch w) s = some (result, final)) :
-    result.tell.totalSpace (inputRegion input.data) = input.data.size := by
-  simp only [RAMCost.totalSpace, Finset.union_eq_right.mpr
-    (binarySearch_addresses_subset input s hinput hrun), inputRegion_card input.data hinput.fits]
-
-/-- Total correctness of this fixed, runtime-size-independent program on every representing
-state. The output remains in the machine's registers and flags. -/
-theorem binarySearch_correct (w : Nat) :
-    let problem := (Search.binarySearch (fun a b : Word w => a.toNat ≤ b.toNat))
-    let repInput := fun input => RepresentsBoundedSearchInput input key upper
-    problem.Solves (binarySearch w) Executes repInput (RepresentsSearchOutput middle) := by
-  constructor
-  · intro input s _ hi
-    obtain ⟨cost, t, hc, _⟩ := search_spec input s hi
-    exact ⟨cost, t, hc.executes⟩
-  · intro input s ha hi cost t hr
-    obtain ⟨fuel, remaining, hr⟩ := hr
-    exact ⟨searchOutput middle t, representsSearchOutput_searchOutput middle t,
-      binarySearch_correct_of_execute input s hi hr ha⟩
-
-/-- Termination, the worst-case time bound, and zero auxiliary memory for every represented
-input. Resource guarantees do not require sortedness. -/
-theorem binarySearch_runsWithin (w : Nat) :
-    let repInput := fun input => RepresentsBoundedSearchInput input key upper
-    let bound := fun (input : Search.Input (Word w)) (cost : RAMCost w 6) =>
-      cost.time ≤ binarySearchTime input.data.size ∧
-        cost.auxiliarySpace (inputRegion input.data) = 0
-    Search.RunsWithin (binarySearch w) Executes repInput bound := by
-  constructor
-  · intro input s _ hi
-    obtain ⟨cost, t, hc, _⟩ := search_spec input s hi
-    exact ⟨cost, t, hc.executes⟩
-  · intro input s _ hi cost t hr
-    obtain ⟨fuel, remaining, hr⟩ := hr
-    exact ⟨binarySearch_time_le input s hi hr, binarySearch_auxiliarySpace input s hi hr⟩
-
-private theorem arrayMemory_replicate_zero (n : Nat) :
-    arrayMemory (Array.replicate n (0 : Word w)) = fun _ => 0 := by
-  funext addr
-  simp only [arrayMemory, Array.getElem?_replicate]
-  split <;> rfl
-
-/-- Zeros searched for one attain the time bound at every fitting length and positive width. -/
-theorem binarySearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :
-    let input := Array.replicate n (0 : Word w)
-    let s := binarySearchState input 1
-    ∃ fuel cost t, execute fuel (binarySearch w) s = some (⟨(), cost⟩, ⟨t, 0⟩) ∧
-      cost.time = binarySearchTime n := by
-  let input := Array.replicate n (0 : Word w)
-  have hrep := binarySearchState_represents input 1 (by simpa [input] using hn)
-  obtain ⟨cost, t, hc, hs⟩ := search_spec ⟨input, 1⟩ _ hrep
-  obtain ⟨fuel, hf⟩ := hc.execute
-  refine ⟨fuel, cost, t, hf, ?_⟩
-  simpa [input] using hs.worst hw (arrayMemory_replicate_zero n)
-    (by simp [binarySearchState])
-
-/-- Every fitting length has a sorted worst-case input for this same uniform program. -/
-theorem binarySearch_exists_worstCase (w n : Nat) (hw : 0 < w) (hn : n ≤ 2 ^ w) :
-    ∃ (input : Array (Word w)) (target : Word w),
-      input.size = n ∧ input.size ≤ 2 ^ w ∧ SortedWords input ∧ target ∉ input ∧
-      ∃ fuel cost t,
-        execute fuel (binarySearch w) (binarySearchState input target) =
-          some (⟨(), cost⟩, ⟨t, 0⟩) ∧ cost.time = binarySearchTime n := by
-  refine ⟨Array.replicate n 0, 1, by simp, by simpa using hn, ?_, ?_, ?_⟩
-  · simp [SortedWords, Search.SortedBy]
-  · simp [ne_of_gt hw]
-  · exact binarySearch_worstCase w n hw hn
-
-end CorrectnessAndComplexity
 
 end Algolean.Algorithms.WordRAM
