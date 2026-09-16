@@ -607,6 +607,15 @@ theorem completes_while_true (op : CmpOp) (body : Prog (WordRAM w k) Unit)
     simpa [step, whileLoop, h] using joined
   simpa [step, whileLoop] using hs.step
 
+/-- A body that clears its loop flag is the final iteration; exiting adds no cost. -/
+theorem Completes.while_stop {op : CmpOp} {body : Prog (WordRAM w k) Unit}
+    {s t : RAMState w k} {cost : RAMCost w k}
+    (hb : Completes (instructions body) s cost t)
+    (hs : s.Flags op = true) (ht : t.Flags op = false) :
+    Completes (instructions (whileLoop op body)) s cost t := by
+  simpa only [add_zero] using
+    completes_while_true op body hs hb (completes_while_false op body t ht)
+
 /-- Completion supplies sufficient interpreter fuel. -/
 theorem Completes.execute {p : Prog (WordRAM w k) Unit} {s t : RAMState w k}
     {cost : RAMCost w k} (h : Completes (instructions p) s cost t) :

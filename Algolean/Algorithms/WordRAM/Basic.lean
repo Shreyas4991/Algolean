@@ -26,10 +26,32 @@ structure RepresentsArray (input : Array (Word w)) (memory : Memory w) : Prop wh
   /-- Only input cells have prescribed contents. -/
   read : ∀ i (hi : i < input.size), memory (BitVec.ofNat w i) = input[i]
 
+attribute [grind →] RepresentsArray.read
+
 /-- Reading an input cell from any representing RAM state returns the corresponding element. -/
-@[grind →] theorem RepresentsArray.read_state {s : RAMState w k}
+theorem RepresentsArray.read_state {s : RAMState w k}
     (h : RepresentsArray input s.Memory)
     (i : Nat) (hi : i < input.size) : s.Memory (BitVec.ofNat w i) = input[i] := h.read i hi
+
+/-- Every input index fits in a machine word. -/
+@[grind →] theorem RepresentsArray.index_lt (h : RepresentsArray input (w := w) memory)
+    (hi : i < input.size) : i < 2 ^ w := lt_of_lt_of_le hi h.fits
+
+/-- Converting a valid input index to a word and back preserves it.
+Use this lemma with a representation argument; `simp` cannot infer that argument from the LHS. -/
+@[grind →] theorem RepresentsArray.address_toNat (h : RepresentsArray input (w := w) memory)
+    (hi : i < input.size) : (BitVec.ofNat w i).toNat = i := Nat.mod_eq_of_lt (h.index_lt hi)
+
+/-- Decode a word known to address an input element, without repeating the range proof. -/
+theorem RepresentsArray.toNat_of_eq (h : RepresentsArray input (w := w) memory)
+    (hi : i < input.size) {addr : Word w} (ha : addr = BitVec.ofNat w i) : addr.toNat = i :=
+  ha ▸ h.address_toNat hi
+
+/-- Read an input element through any word known to contain its index.
+This is an explicit rewrite helper: `grind` uses `RepresentsArray.read` and congruence instead. -/
+theorem RepresentsArray.read_of_eq (h : RepresentsArray input (w := w) memory)
+    (hi : i < input.size) {addr : Word w} (ha : addr = BitVec.ofNat w i) : memory addr = input[i] :=
+  ha ▸ h.read i hi
 
 /-- Search inputs constrain the array and key register, not scratch registers or flags. -/
 structure RepresentsSearchInput (input : Search.Input (Word w)) (key : Register k)
@@ -113,7 +135,7 @@ theorem inputRegion_card (input : Array (BitVec w)) (hfits : input.size ≤ 2 ^ 
     grind), Finset.card_range]
 
 /-- In a sorted word array, words at or before a value below the key cannot match it. -/
-theorem SortedWords.exclude_left {input : Array (Word w)} (h : SortedWords input)
+@[grind →] theorem SortedWords.exclude_left {input : Array (Word w)} (h : SortedWords input)
     {target : Word w} {pivot : Nat} (hp : pivot < input.size)
     (hlt : input[pivot].toNat < target.toNat) (i : Nat) (hi : i ≤ pivot) :
     input[i]? ≠ some target := by
@@ -125,7 +147,7 @@ theorem SortedWords.exclude_left {input : Array (Word w)} (h : SortedWords input
   lia
 
 /-- In a sorted word array, words at or after a value above the key cannot match it. -/
-theorem SortedWords.exclude_right {input : Array (Word w)} (h : SortedWords input)
+@[grind →] theorem SortedWords.exclude_right {input : Array (Word w)} (h : SortedWords input)
     {target : Word w} {pivot : Nat} (hp : pivot < input.size)
     (hlt : target.toNat < input[pivot].toNat) (i : Nat) (hi : pivot ≤ i)
     (hib : i < input.size) : input[i]? ≠ some target := by

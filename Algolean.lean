@@ -40,6 +40,7 @@ public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
 public import Algolean.Models.WordRAM
+public import Algolean.Models.WordRAMSyntax
 public import Algolean.Problems.Basic
 public import Algolean.Problems.Search
 public import Algolean.QueryComposition

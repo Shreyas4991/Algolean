@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.WordRAM.Basic
+public import Algolean.Models.WordRAMSyntax
 public import Mathlib.Data.Nat.Log
 
 /-!
@@ -23,7 +24,7 @@ Interpreter fuel is supplied only when executing the program.
 
 namespace Algolean.Algorithms.WordRAM
 
-open scoped WordRAM
+open scoped WordRAM Prog
 
 namespace BinarySearch
 
@@ -41,39 +42,42 @@ abbrev key : Register 6 := 4
 abbrev one : Register 6 := 5
 
 /-- One machine iteration, with its continuation indicated by the less-than flag. -/
-def body (w : Nat) : Prog (WordRAM w 6) Unit := do
-    binop (w := w) .sub middle upper lower
-    binop (w := w) .shr middle middle one
-    binop (w := w) .add middle lower middle
-    load (w := w) value middle
-    cmp (w := w) .eq value key
-    branch .eq (do clearFlag (w := w) (k := 6) .ult) (do
-      cmp (w := w) .ult value key
-      branch .ult (do
-        cmp (w := w) .ult middle upper
-        branch .ult (do
-          binop (w := w) .add lower middle one
-          pure ()) (pure ())) (do
-        cmp (w := w) .ult lower middle
-        branch .ult (do
-          binop (w := w) .sub upper middle one
-          pure ()) (pure ())))
+def body (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
+  middle ←ᵣ upper - lower
+  middle ←ᵣ middle >>> one
+  middle ←ᵣ lower + middle
+  value ←ᵣ mem[middle]
+  ifₚ test .eq value key then
+    reset .ult
+  else
+    ifₚ test .ult value key then
+      ifₚ test .ult middle upper then
+        lower ←ᵣ middle + one
+      else
+        pure ()
+    else
+      ifₚ test .ult lower middle then
+        upper ←ᵣ middle - one
+      else
+        pure ()
 
 /-- Initialize the lower endpoint and increment constant; the upper endpoint is runtime input. -/
-def setup (w : Nat) : Prog (WordRAM w 6) Unit := do
-  set (w := w) lower 0
-  set (w := w) one 1
+def setup (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
+  lower ←ᵣ imm[0]
+  one ←ᵣ imm[1]
 
 end BinarySearch
 
 /-- Uniform binary search: width determines code; memory, key, last address, and the
 nonempty flag supply the runtime input. -/
-def binarySearch (w : Nat) : Prog (WordRAM w 6) Unit := do
-  clearFlag (w := w) (k := 6) .eq
-  branch .ult (do
+def binarySearch (w : Nat) : Prog (WordRAM w 6) Unit := do [WordRAM w 6]
+  reset .eq
+  ifₚ flag .ult then
     BinarySearch.setup w
     whileₚ .ult do
-      BinarySearch.body w) (pure ())
+      BinarySearch.body w
+  else
+    pure ()
 
 /-- A canonical runtime input witness; proofs also apply to arbitrary representing states. -/
 def binarySearchState (input : Array (Word w)) (target : Word w) : RAMState w 6 :=
@@ -130,16 +134,30 @@ attribute [local simp] wordAddress_mid wordAddress_toNat
 private def midpoint (s : RAMState w 6) : Word w :=
   s.Registers lower + ((s.Registers upper - s.Registers lower) >>> (s.Registers one).toNat)
 
-@[simp] private def checked (s : RAMState w 6) (found active : Bool) : RAMState w 6 :=
+private def checked (s : RAMState w 6) (found active : Bool) : RAMState w 6 :=
   (((s.writeRegister middle (midpoint s)).writeRegister value (s.Memory (midpoint s))).writeFlag
     .eq found).writeFlag .ult active
+
+@[simp, grind =] private theorem checked_memory (s : RAMState w 6) (found active : Bool) :
+    (checked s found active).Memory = s.Memory := rfl
+
+@[simp, grind =] private theorem checked_registers (s : RAMState w 6) (found active : Bool)
+    (r : Register 6) : (checked s found active).Registers r =
+      if r = value then s.Memory (midpoint s)
+      else if r = middle then midpoint s else s.Registers r := by
+  simp [checked]
+
+@[simp, grind =] private theorem checked_flags (s : RAMState w 6) (found active : Bool)
+    (op : CmpOp) : (checked s found active).Flags op =
+      if op = .ult then active else found := by
+  cases op <;> simp [checked]
 
 private theorem body_found (s : RAMState w 6)
     (h : s.Memory (midpoint s) = s.Registers key) :
     Completes (instructions (body w)) s ⟨6, {midpoint s}⟩ (checked s true false) :=
 by
   simp only [midpoint, lower, upper, key, one] at h
-  exact ⟨7, by simp [body, branch, runCode, step, midpoint, h]⟩
+  exact ⟨7, by simp [body, checked, branch, runCode, step, midpoint, h]⟩
 
 private theorem body_right (s : RAMState w 6)
     (h : s.Memory (midpoint s) ≠ s.Registers key)
@@ -150,7 +168,7 @@ private theorem body_right (s : RAMState w 6)
 by
   simp only [midpoint, lower, upper, key, one,
     BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ushiftRight] at h hlt hb
-  exact ⟨11, by simp [body, branch, runCode, step, midpoint, h, hlt, hb]⟩
+  exact ⟨11, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
 
 private theorem body_stop_right (s : RAMState w 6)
     (h : s.Memory (midpoint s) ≠ s.Registers key)
@@ -161,7 +179,7 @@ private theorem body_stop_right (s : RAMState w 6)
 by
   simp only [midpoint, lower, upper, key, one,
     BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ushiftRight] at h hlt hb
-  exact ⟨10, by simp [body, branch, runCode, step, midpoint, h, hlt, hb]⟩
+  exact ⟨10, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
 
 private theorem body_left (s : RAMState w 6)
     (h : s.Memory (midpoint s) ≠ s.Registers key)
@@ -172,7 +190,7 @@ private theorem body_left (s : RAMState w 6)
 by
   simp only [midpoint, lower, upper, key, one,
     BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ushiftRight] at h hlt hb
-  exact ⟨11, by simp [body, branch, runCode, step, midpoint, h, hlt, hb]⟩
+  exact ⟨11, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
 
 private theorem body_stop_left (s : RAMState w 6)
     (h : s.Memory (midpoint s) ≠ s.Registers key)
@@ -183,7 +201,7 @@ private theorem body_stop_left (s : RAMState w 6)
 by
   simp only [midpoint, lower, upper, key, one,
     BitVec.toNat_add, BitVec.toNat_sub, BitVec.toNat_ushiftRight] at h hlt hb
-  exact ⟨10, by simp [body, branch, runCode, step, midpoint, h, hlt, hb]⟩
+  exact ⟨10, by simp [body, checked, branch, runCode, step, midpoint, h, hlt, hb]⟩
 
 
 private theorem log2_half_bound (n k : Nat) (hn : 2 ≤ n) (hk : k ≤ n / 2) :
@@ -191,6 +209,32 @@ private theorem log2_half_bound (n k : Nat) (hn : 2 ≤ n) (hk : k ≤ n / 2) :
   have h : k.log2 ≤ (n / 2).log2 := by
     simpa only [Nat.log2_eq_log_two] using Nat.log_mono_right (b := 2) hk
   rw [Nat.log2_def n, if_pos hn]
+  lia
+
+/-- One charged iteration plus a half-sized recursive search preserves the logarithmic bound. -/
+private theorem step_time_bound {time size remaining : Nat}
+    (ht : time ≤ 8 * remaining.log2 + 7) (hsize : 2 ≤ size) (hhalf : remaining ≤ size / 2) :
+    8 + time ≤ 8 * size.log2 + 7 := by
+  have := log2_half_bound size remaining hsize hhalf
+  lia
+
+private theorem pivot_bounds {lo hi : Nat} (h : lo ≤ hi) :
+    lo ≤ lo + (hi - lo) / 2 ∧ lo + (hi - lo) / 2 ≤ hi := by lia
+
+@[simp, grind =] private theorem right_length {lo hi : Nat}
+    (h : lo + (hi - lo) / 2 < hi) :
+    hi - (lo + (hi - lo) / 2 + 1) + 1 = (hi - lo + 1) / 2 := by lia
+
+@[simp, grind =] private theorem left_length {lo hi : Nat}
+    (h : lo < lo + (hi - lo) / 2) :
+    lo + (hi - lo) / 2 - 1 - lo + 1 = (hi - lo) / 2 := by lia
+
+/-- On a nonempty right half, exactly one logarithmic level has been consumed. -/
+private theorem right_log {lo hi : Nat}
+    (h : lo + (hi - lo) / 2 < hi) :
+    8 + (8 * (hi - (lo + (hi - lo) / 2 + 1) + 1).log2 + 7) =
+      8 * (hi - lo + 1).log2 + 7 := by
+  rw [right_length h, Nat.log2_def (hi - lo + 1), if_pos (by lia : 2 ≤ hi - lo + 1)]
   lia
 
 private structure Summary (input : Array (Word w)) (target : Word w) (lo hi : Nat)
@@ -218,33 +262,27 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n lo hi : 
   | zero => lia
   | succ n ih =>
     let pivot := lo + (hi - lo) / 2
-    have hp : lo ≤ pivot ∧ pivot ≤ hi := by dsimp [pivot]; lia
+    have hp := pivot_bounds hlo
     have hpi : pivot < input.size := by lia
-    have hhw : hi < 2 ^ w := lt_of_lt_of_le hhi hmem.fits
-    have hlw : lo < 2 ^ w := by lia
-    have hpw : pivot < 2 ^ w := by lia
+    have hhw := hmem.index_lt hhi
     have hm : midpoint s = BitVec.ofNat w pivot := by
       simpa only [midpoint, hl, hh, h1] using wordAddress_mid lo hi hlo hhw
-    have hread : s.Memory (midpoint s) = input[pivot] := by rw [hm, hmem.read pivot hpi]
+    have hread := hmem.read_of_eq hpi hm
     have hprobe := ofNat_mem_inputRegion input pivot hpi
-    have hpn : (midpoint s).toNat = pivot := by rw [hm, wordAddress_toNat pivot hpw]
-    have hln : (s.Registers lower).toNat = lo := by rw [hl, wordAddress_toNat lo hlw]
-    have hhn : (s.Registers upper).toNat = hi := by rw [hh, wordAddress_toNat hi hhw]
+    have hpn := hmem.toNat_of_eq hpi hm
+    have hln := hmem.toNat_of_eq (by lia : lo < input.size) hl
+    have hhn := hmem.toNat_of_eq hhi hh
     by_cases heq : input[pivot] = target
     · have heq' : s.Memory (midpoint s) = s.Registers key := by simpa only [hread, hk] using heq
       have hb := body_found s heq'
-      have hr := completes_while_false .ult (body w) (checked s true false) (by simp)
-      refine ⟨_, _, completes_while_true .ult (body w) ha hb hr, ?_⟩
+      refine ⟨_, _, hb.while_stop ha (by simp), ?_⟩
       constructor
       · simp
       · simpa only [add_zero, Finset.singleton_subset_iff, hm] using hprobe
       · intro _
-        have hindex : ((checked s true false).Registers middle).toNat = pivot := by
-          simpa using hpn
-        simpa only [hindex] using (show lo ≤ pivot ∧ pivot ≤ hi ∧ input[pivot]? = some target from
-          ⟨hp.left, hp.right, by simpa [hpi] using heq⟩)
+        simpa [hpn, hpi, heq, pivot] using hp
       · simp
-      · simp only [add_zero]; lia
+      · dsimp; lia
       · intro hw hz hk1
         have hbad : (0 : Word w) = 1 := by simpa [hz, hk1] using heq'
         simp [ne_of_gt hw] at hbad
@@ -271,42 +309,29 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n lo hi : 
             by_cases hip : i ≤ pivot
             · exact hsorted.exclude_left hpi hlt i hip
             · exact hs.not_found hf hsorted i (by lia) hih
-          · have ht := hs.time
-            have hhlog := log2_half_bound (hi - lo + 1) (hi - (pivot + 1) + 1)
-              (by lia) (by dsimp [pivot]; lia)
-            simp only [RAMCost.mk_add]
-            lia
+          · exact step_time_bound hs.time (by lia) (by simp [pivot, right_length hright])
           · intro hw hz hk1
-            have ht := hs.worst hw (by simp [next, hz]) (by simp [next, hk1])
-            have hhalf : hi - (pivot + 1) + 1 = (hi - lo + 1) / 2 := by
-              dsimp [pivot]; lia
-            have hlog := Nat.log2_def (hi - lo + 1)
-            rw [if_pos (by lia : 2 ≤ hi - lo + 1)] at hlog
-            simp only [RAMCost.mk_add]
-            rw [ht, hhalf, hlog]
-            lia
+            simpa only [RAMCost.mk_add, hs.worst hw (by simp [next, hz])
+              (by simp [next, hk1])] using right_log hright
         · have hb := body_stop_right s hne hcmp (by simpa only [hpn, hhn] using hright)
-          have hr := completes_while_false .ult (body w) (checked s false false) (by simp)
-          refine ⟨_, _, completes_while_true .ult (body w) ha hb hr, ?_⟩
+          refine ⟨_, _, hb.while_stop ha (by simp), ?_⟩
           constructor
           · simp
           · simpa only [add_zero, Finset.singleton_subset_iff, hm] using hprobe
           · simp
           · intro _ hsorted i hil hih
             exact hsorted.exclude_left hpi hlt i (by lia)
-          · simp only [add_zero]; lia
+          · dsimp; lia
           · intro _ _ _
             have hlen : hi - lo + 1 = 1 := by dsimp [pivot] at *; lia
             simp [hlen, Nat.log2_def]
       · have hcmp : ¬(s.Memory (midpoint s)).toNat < (s.Registers key).toNat := by
           simpa only [hread, hk] using hlt
-        have hgt : target.toNat < input[pivot].toNat := by
-          have hneq : input[pivot].toNat ≠ target.toNat := fun h => heq (BitVec.eq_of_toNat_eq h)
-          lia
+        have hgt : target.toNat < input[pivot].toNat := by grind [BitVec.toNat_inj]
         by_cases hleft : lo < pivot
         · let next := (checked s false true).writeRegister upper (BitVec.ofNat w (pivot - 1))
           have hb : Completes (instructions (body w)) s ⟨8, {BitVec.ofNat w pivot}⟩ next := by
-            simpa only [next, hm, h1, wordAddress_pred pivot hpw (by lia)] using
+            simpa only [next, hm, h1, wordAddress_pred pivot (hmem.index_lt hpi) (by lia)] using
               body_left s hne hcmp (by simpa only [hln, hpn] using hleft)
           obtain ⟨cost, t, hr, hs⟩ := ih lo (pivot - 1) (by lia) (by lia) (by lia) next
             (by simpa [next] using hmem) (by simp [next, hl]) (by simp [next])
@@ -322,23 +347,20 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n lo hi : 
             by_cases hip : pivot ≤ i
             · exact hsorted.exclude_right hpi hgt i hip (by lia)
             · exact hs.not_found hf hsorted i hil (by lia)
-          · have ht := hs.time
-            have hhlog := log2_half_bound (hi - lo + 1) (pivot - 1 - lo + 1)
-              (by lia) (by dsimp [pivot]; lia)
-            simp only [RAMCost.mk_add]
-            lia
+          · apply step_time_bound hs.time (by lia)
+            simpa only [pivot, left_length hleft] using
+              Nat.div_le_div_right (by lia : hi - lo ≤ hi - lo + 1)
           · intro hw hz hk1
             simp [hz, hk1, BitVec.toNat_one hw] at hcmp
         · have hb := body_stop_left s hne hcmp (by simpa only [hln, hpn] using hleft)
-          have hr := completes_while_false .ult (body w) (checked s false false) (by simp)
-          refine ⟨_, _, completes_while_true .ult (body w) ha hb hr, ?_⟩
+          refine ⟨_, _, hb.while_stop ha (by simp), ?_⟩
           constructor
           · simp
           · simpa only [add_zero, Finset.singleton_subset_iff, hm] using hprobe
           · simp
           · intro _ hsorted i hil hih
             exact hsorted.exclude_right hpi hgt i (by lia) (by lia)
-          · simp only [add_zero]; lia
+          · dsimp; lia
           · intro hw hz hk1
             simp [hz, hk1, BitVec.toNat_one hw] at hcmp
 
@@ -376,7 +398,8 @@ private theorem search_spec (input : Search.Input (Word w)) (s : RAMState w 6)
       completes_branch (by simp [start, hactive, hn])
     have hc := hclear.append hb
     refine ⟨⟨1, ∅⟩ + 0, start, ?_, ?_⟩
-    · simpa only [binarySearch, rest, instructions_lift_bind, List.singleton_append] using hc
+    · simpa only [binarySearch, ifThenElse_flag, rest, instructions_lift_bind,
+      List.singleton_append] using hc
     constructor
     · intro _
       simp only [searchOutput, start, RAMState.writeFlag_flags, ↓reduceIte,
@@ -395,7 +418,8 @@ private theorem search_spec (input : Search.Input (Word w)) (s : RAMState w 6)
       completes_branch (by simpa [rest, start, hactive, hn] using (setup_completes start).append hr)
     have hc := hclear.append hb
     refine ⟨⟨1, ∅⟩ + (⟨2, ∅⟩ + cost), t, ?_, ?_⟩
-    · simpa only [binarySearch, rest, instructions_lift_bind, List.singleton_append] using hc
+    · simpa only [binarySearch, ifThenElse_flag, rest, instructions_lift_bind,
+      List.singleton_append] using hc
     constructor
     · intro hsorted
       simp only [searchOutput]

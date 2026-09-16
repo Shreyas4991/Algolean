@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.WordRAM.Basic
+public import Algolean.Models.WordRAMSyntax
 
 /-!
 # Uniform word-RAM linear search
@@ -19,7 +20,7 @@ are supplied in the initial machine state. Five registers suffice, with no auxil
 
 namespace Algolean.Algorithms.WordRAM
 
-open scoped WordRAM
+open scoped WordRAM Prog
 
 namespace LinearSearch
 
@@ -35,23 +36,26 @@ abbrev one : Register 5 := 3
 abbrev last : Register 5 := 4
 
 /-- Inspect one cell, stopping at the first match or the inclusive last address. -/
-def body (w : Nat) : Prog (WordRAM w 5) Unit := do
-  load (w := w) value index
-  cmp (w := w) .eq value key
-  branch .eq (do clearFlag (w := w) (k := 5) .ult) (do
-    cmp (w := w) .ult index last
-    branch .ult (do binop (w := w) .add index index one) (pure ()))
+def body (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
+  value ←ᵣ mem[index]
+  ifₚ test .eq value key then
+    reset .ult
+  else
+    ifₚ test .ult index last then
+      index ←ᵣ index + one
+    else
+      pure ()
 
 /-- Initialize scratch registers without inspecting runtime input. -/
-def setup (w : Nat) : Prog (WordRAM w 5) Unit := do
-  clearFlag (w := w) (k := 5) .eq
-  set (w := w) index 0
-  set (w := w) one 1
+def setup (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
+  reset .eq
+  index ←ᵣ imm[0]
+  one ←ᵣ imm[1]
 
 end LinearSearch
 
 /-- One fixed program for all representable input lengths at word width `w`. -/
-def linearSearch (w : Nat) : Prog (WordRAM w 5) Unit := do
+def linearSearch (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   LinearSearch.setup w
   whileₚ .ult do
     LinearSearch.body w
@@ -77,27 +81,40 @@ open LinearSearch
 
 attribute [local simp] index key value one last CmpOp.eval BinOp.eval wordAddress_toNat
 
-@[simp] private def checked (s : RAMState w 5) (found active : Bool) : RAMState w 5 :=
+private def checked (s : RAMState w 5) (found active : Bool) : RAMState w 5 :=
   ((s.writeRegister value (s.Memory (s.Registers index))).writeFlag .eq found).writeFlag
     .ult active
+
+@[simp, grind =] private theorem checked_memory (s : RAMState w 5) (found active : Bool) :
+    (checked s found active).Memory = s.Memory := rfl
+
+@[simp, grind =] private theorem checked_registers (s : RAMState w 5) (found active : Bool)
+    (r : Register 5) : (checked s found active).Registers r =
+      if r = value then s.Memory (s.Registers index) else s.Registers r := by
+  simp [checked]
+
+@[simp, grind =] private theorem checked_flags (s : RAMState w 5) (found active : Bool)
+    (op : CmpOp) : (checked s found active).Flags op =
+      if op = .ult then active else found := by
+  cases op <;> simp [checked]
 
 private theorem body_found (s : RAMState w 5)
     (h : s.Memory (s.Registers index) = s.Registers key) :
     Completes (instructions (body w)) s ⟨3, {s.Registers index}⟩ (checked s true false) :=
-  ⟨4, by simp [body, branch, runCode, step, h]⟩
+  ⟨4, by simp [body, checked, branch, runCode, step, h]⟩
 
 private theorem body_advance (s : RAMState w 5)
     (h : s.Memory (s.Registers index) ≠ s.Registers key)
     (hlt : (s.Registers index).toNat < (s.Registers last).toNat) :
     Completes (instructions (body w)) s ⟨4, {s.Registers index}⟩
       ((checked s false true).writeRegister index (s.Registers index + s.Registers one)) :=
-  ⟨6, by simp [body, branch, runCode, step, h, hlt]⟩
+  ⟨6, by simp [body, checked, branch, runCode, step, h, hlt]⟩
 
 private theorem body_last (s : RAMState w 5)
     (h : s.Memory (s.Registers index) ≠ s.Registers key)
     (hlt : ¬(s.Registers index).toNat < (s.Registers last).toNat) :
     Completes (instructions (body w)) s ⟨3, {s.Registers index}⟩ (checked s false false) :=
-  ⟨5, by simp [body, branch, runCode, step, h, hlt]⟩
+  ⟨5, by simp [body, checked, branch, runCode, step, h, hlt]⟩
 
 /-- The invariant describes the remaining suffix and the exact cost from its first address. -/
 private def Summary (input : Array (Word w)) (target : Word w) (start n : Nat)
@@ -124,58 +141,39 @@ private theorem loop_spec (input : Array (Word w)) (target : Word w) (n start : 
   | zero => lia
   | succ n ih =>
     have hstart : start < input.size := by lia
-    have hsw : start < 2 ^ w := lt_of_lt_of_le hstart hmem.fits
-    have hlw : input.size - 1 < 2 ^ w := by have := hmem.fits; lia
-    have hread : s.Memory (s.Registers index) = input[start] := by rw [hi, hmem.read start hstart]
+    have hsw := hmem.index_lt hstart
+    have hread := hmem.read_of_eq hstart hi
     have hprobe := ofNat_mem_inputRegion input start hstart
     by_cases heq : input[start] = target
     · have hb := body_found s (by simpa [hread, hk] using heq)
-      have hr := completes_while_false .ult (body w) (checked s true false) (by simp)
-      refine ⟨_, _, completes_while_true .ult (body w) ha hb hr, ?_⟩
+      refine ⟨_, _, hb.while_stop ha (by simp), ?_⟩
       suffices ∀ j, start ≤ j → j < start → input[j]? ≠ some target by
         simpa [Summary, hi, Nat.mod_eq_of_lt hsw, hprobe, heq, hstart] using this
       intro j hj hj'
       lia
-    · by_cases hn0 : n = 0
+    · have hmiss : input[start]? ≠ some target := by simpa [hstart] using heq
+      by_cases hn0 : n = 0
       · subst n
-        have hlt : ¬(s.Registers index).toNat < (s.Registers last).toNat := by
-          simp only [hi, hl, wordAddress_toNat start hsw,
-            wordAddress_toNat (input.size - 1) hlw]
-          lia
+        have hlt : ¬(s.Registers index).toNat < (s.Registers last).toNat := by grind
         have hb := body_last s (by simpa [hread, hk] using heq) hlt
-        have hr := completes_while_false .ult (body w) (checked s false false) (by simp)
-        refine ⟨_, _, completes_while_true .ult (body w) ha hb hr, ?_⟩
-        simp only [Summary, checked, RAMState.writeFlag_memory, RAMState.writeRegister_memory,
-          add_zero, Finset.singleton_subset_iff, hi, hprobe, true_and,
-          RAMState.writeFlag_flags, ↓reduceIte]
-        constructor
-        · intro j hj hj'
-          have : j = start := by lia
-          subst j
-          simpa [hstart] using heq
-        · trivial
+        refine ⟨_, _, hb.while_stop ha (by simp), ?_⟩
+        simp only [Summary, checked_memory, Finset.singleton_subset_iff, hi, hprobe,
+          true_and, checked_flags]
+        exact ⟨by grind only, trivial⟩
       · let next := (checked s false true).writeRegister index (BitVec.ofNat w (start + 1))
         have hb : Completes (instructions (body w)) s ⟨4, {BitVec.ofNat w start}⟩ next := by
           simpa only [next, hi, h1, wordAddress_succ] using body_advance s
             (by simpa [hread, hk] using heq)
-            (by simp only [hi, hl, wordAddress_toNat start hsw,
-                  wordAddress_toNat (input.size - 1) hlw]; lia)
+            (by grind only [RepresentsArray.fits, wordAddress_toNat])
         obtain ⟨cost, t, hr, hs⟩ := ih (start + 1) (by lia) (by lia) next
           (by simpa [next] using hmem) (by simp [next]) (by simp [next, hk])
           (by simp [next, h1]) (by simp [next, hl]) (by simp [next])
         refine ⟨_, t, completes_while_true .ult (body w) ha hb hr, ?_⟩
-        simp only [Summary, next, checked, RAMState.writeRegister_memory,
-          RAMState.writeFlag_memory, RAMCost.mk_add] at hs ⊢
+        simp only [Summary, next, RAMState.writeRegister_memory, checked_memory,
+          RAMCost.mk_add] at hs ⊢
         obtain ⟨hm, hp, hs⟩ := hs
         refine ⟨hm, Finset.union_subset (Finset.singleton_subset_iff.mpr hprobe) hp, ?_⟩
-        split_ifs at hs ⊢ <;> simp_all only
-        · grind
-        · constructor
-          · intro j hj hj'
-            by_cases hj0 : j = start
-            · subst j; simpa [hstart] using heq
-            · exact hs.left j (by lia) (by lia)
-          · have := hs.right; lia
+        split_ifs at hs ⊢ <;> grind only
 
 /-- Maximum time, attained by a missing key when the word width is positive. -/
 def linearSearchTime (n : Nat) : Nat := if n = 0 then 3 else 4 * n + 2

@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.WordRAM.LinearSearch
+public import Algolean.Models.WordRAMSyntax
 
 /-! # Register operations, structured control, and uniform linear search -/
 
@@ -15,12 +16,101 @@ public import Algolean.Algorithms.WordRAM.LinearSearch
 namespace AlgoleanTests.WordRAMExamples
 
 open Algolean Algolean.Algorithms Algolean.Algorithms.WordRAM
+
 open scoped Prog WordRAM
 
 abbrev r0 : Register 4 := 0
 abbrev r1 : Register 4 := 1
 abbrev r2 : Register 4 := 2
 abbrev r3 : Register 4 := 3
+
+-- Trigger the canonical read lemma, then transport it across an address equality.
+example (input : Array (Word w)) (memory : Memory w) (addr : Word w) (i : Nat)
+    (hmem : RepresentsArray input memory) (hi : i < input.size)
+    (ha : addr = BitVec.ofNat w i) : memory addr = input[i] := by
+  grind only [RepresentsArray.read]
+
+section InstructionNotation
+
+variable (dst x y : Register k)
+
+example : (dst ←ᵣ x + y : WordRAM w k Unit) = .binop .add dst x y := rfl
+
+example : (dst ←ᵣ x - y : WordRAM w k Unit) = .binop .sub dst x y := rfl
+
+example : (dst ←ᵣ x &&& y : WordRAM w k Unit) = .binop .band dst x y := rfl
+
+example : (dst ←ᵣ x ||| y : WordRAM w k Unit) = .binop .bor dst x y := rfl
+
+example : (dst ←ᵣ x ^^^ y : WordRAM w k Unit) = .binop .bxor dst x y := rfl
+
+example : (dst ←ᵣ x <<< y : WordRAM w k Unit) = .binop .shl dst x y := rfl
+
+example : (dst ←ᵣ x >>> y : WordRAM w k Unit) = .binop .shr dst x y := rfl
+
+example : (dst ←ᵣ ~~~x : WordRAM w k Unit) = .bnot dst x := rfl
+
+example : (dst ←ᵣ x : WordRAM w k Unit) = .copy dst x := rfl
+
+example (value : Word w) : (dst ←ᵣ imm[value] : WordRAM w k Unit) = .set dst value := rfl
+
+example : (dst ←ᵣ mem[x] : WordRAM w k Unit) = .load dst x := rfl
+
+example : (mem[dst] ←ᵣ x : WordRAM w k Unit) = .store dst x := rfl
+
+-- Queries use the existing coercion into programs, with one instruction per statement.
+example : instructions (do [WordRAM 8 4]
+    r0 ←ᵣ imm[7]
+    r1 ←ᵣ mem[r0]
+    r2 ←ᵣ r0 + r1
+    r3 ←ᵣ ~~~r2
+    mem[r0] ←ᵣ r3) =
+    [.set r0 7, .load r1 r0, .binop .add r2 r0 r1, .bnot r3 r2, .store r0 r3] := rfl
+
+-- Local bindings and nested control still use ordinary Lean syntax.
+example : (do [WordRAM 8 4]
+    let dst := r0
+    ifₚ flag .eq then
+      dst ←ᵣ r1 + r2
+    else
+      whileₚ .ult do
+        dst ←ᵣ ~~~r1) =
+    branch .eq (.binop .add r0 r1 r2 : WordRAM 8 4 Unit)
+      (whileLoop .ult (.bnot r0 r1 : WordRAM 8 4 Unit)) := rfl
+
+-- A nested quotation supplies its own query type.
+example : (do [WordRAM 8 4]
+    let q := do [WordRAM 2 1]
+      (0 : Register 1) ←ᵣ imm[1]
+    let _ := q
+    r0 ←ᵣ imm[7]) = ((.set r0 7 : WordRAM 8 4 Unit) : Prog (WordRAM 8 4) Unit) := rfl
+
+example (op : CmpOp) : (reset op : WordRAM w k Unit) = .clearFlag op := rfl
+
+example : (do [WordRAM 8 4]
+    reset .eq) = ((.clearFlag .eq : WordRAM 8 4 Unit) : Prog (WordRAM 8 4) Unit) := rfl
+
+-- Reset clears only its selected flag and costs one primitive operation.
+example :
+    let s : RAMState 8 4 := { RAMState.zero with Flags := fun _ => true }
+    (execute 1 (do [WordRAM 8 4] reset .ult) s).map (fun result =>
+      (result.snd.ram.Flags .ult, result.snd.ram.Flags .eq, result.fst.tell.time)) =
+        some (false, true, 1) := by decide
+
+/-- info: fun op ↦ reset op : CmpOp → WordRAM 8 4 Unit -/
+#guard_msgs in
+#check fun (op : CmpOp) => WordRAM.clearFlag (w := 8) (k := 4) op
+
+-- Standard notation declarations reconstruct the instruction when pretty-printing.
+/-- info: fun dst x y ↦ dst ←ᵣ x + y : Register 4 → Register 4 → Register 4 → WordRAM 8 4 Unit -/
+#guard_msgs in
+#check fun (dst x y : Register 4) => WordRAM.binop (w := 8) .add dst x y
+
+/-- info: fun dst x ↦ dst ←ᵣ ~~~x : Register 4 → Register 4 → WordRAM 8 4 Unit -/
+#guard_msgs in
+#check fun (dst x : Register 4) => WordRAM.bnot (w := 8) dst x
+
+end InstructionNotation
 
 def increment (w : Nat) : Prog (WordRAM w 4) Unit := do
   load (w := w) r1 r0
