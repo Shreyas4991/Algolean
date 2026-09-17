@@ -130,11 +130,11 @@ theorem linearSearch_runsWithin (w : Nat) :
 /-- Every fitting length has a worst-case instance at positive word width. -/
 theorem linearSearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n < 2 ^ w) :
     let input := Array.replicate n (0 : Word w)
-    let s := linearSearchState input 1
+    let s := linearSearchState input 1 key
     ∃ fuel cost t, execute fuel (linearSearch w) s = some (⟨(), cost⟩, ⟨t, 0⟩) ∧
       cost.time = linearSearchTime n := by
   let input := Array.replicate n (0 : Word w)
-  have hrep := linearSearchState_represents input 1 (by simpa [input] using hn)
+  have hrep := linearSearchState_represents input 1 key (by simpa [input] using hn)
   obtain ⟨fuel, cost, t, hr⟩ := linearSearch_terminates ⟨input, 1⟩ _ hrep
   refine ⟨fuel, cost, t, hr, ?_⟩
   simpa [input] using linearSearch_time_of_not_mem ⟨input, 1⟩ _ hrep

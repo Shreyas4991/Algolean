@@ -21,11 +21,6 @@ namespace Algolean.Algorithms.WordRAM
 
 open scoped WordRAM Prog
 
-@[simp] theorem linearSearchState_represents (input : Array (Word w)) (target : Word w)
-    (hfits : input.size < 2 ^ w) :
-    RepresentsSizedSearchInput ⟨input, target⟩ LinearSearch.key (linearSearchState input target) :=
-  ⟨sizedArrayMemory_represents input hfits, by simp [linearSearchState]⟩
-
 open LinearSearch
 
 attribute [local simp] index key value one last CmpOp.eval BinOp.eval wordAddress_toNat

@@ -402,30 +402,32 @@ def searchInput : Array (Word 8) := #[12, 7, 42, 7, 99]
 
 def searchExample : Prog (WordRAM 8 5) Unit := linearSearch 8
 
-example : (execute 50 searchExample (linearSearchState searchInput 7)).map (fun r =>
-    (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.addresses,
-      r.fst.tell.auxiliarySpace (sizedInputRegion searchInput))) =
+example : (execute 50 searchExample (linearSearchState searchInput 7 LinearSearch.key)).map
+    (fun r =>
+      (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.addresses,
+        r.fst.tell.auxiliarySpace (sizedInputRegion searchInput))) =
       some (some 1, 14, {0, 1, 2}, 0) := by decide
 
-example : (execute 50 searchExample (linearSearchState searchInput 2)).map (fun r =>
-    (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.totalSpace
-      (sizedInputRegion searchInput))) = some (none, 27, 6) := by decide
+example : (execute 50 searchExample (linearSearchState searchInput 2 LinearSearch.key)).map
+    (fun r =>
+      (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time, r.fst.tell.totalSpace
+        (sizedInputRegion searchInput))) = some (none, 27, 6) := by decide
 
-example : (execute 30 (linearSearch 2) (linearSearchState #[0, 1, 2] 2)).map
+example : (execute 30 (linearSearch 2) (linearSearchState #[0, 1, 2] 2 LinearSearch.key)).map
     (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
       some (some 2, 18) := by decide
 
 -- The key equals the size header, but no array element matches it.
-example : (execute 30 (linearSearch 2) (linearSearchState #[1, 2, 1] 3)).map
+example : (execute 30 (linearSearch 2) (linearSearchState #[1, 2, 1] 3 LinearSearch.key)).map
     (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time,
       r.fst.tell.addresses)) = some (none, 19, {0, 1, 2, 3}) := by decide
 
-example : (execute 14 (linearSearch 1) (linearSearchState #[0] 0)).map
+example : (execute 14 (linearSearch 1) (linearSearchState #[0] 0 LinearSearch.key)).map
     (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
       some (some 0, 10) := by decide
 
 example : (execute 9 (linearSearch 0)
-    ((linearSearchState #[] 0).writeFlag .eq true)).map
+    ((linearSearchState #[] 0 LinearSearch.key).writeFlag .eq true)).map
       (fun r => (searchOutput LinearSearch.index r.snd.ram, r.fst.tell.time)) =
         some (none, 7) := by decide
 

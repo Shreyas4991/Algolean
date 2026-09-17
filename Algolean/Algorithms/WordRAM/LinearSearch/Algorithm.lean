@@ -49,6 +49,31 @@ def body (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
     else
       nop
 
+namespace ForReview
+
+/-- The same search step as `body`, using ordinary `do` notation and explicit operations. -/
+def bodyExplicit (w : Nat) : Prog (WordRAM w 5) Unit := do
+  (.load value index : WordRAM w 5 Unit)
+  (.cmp .eq value key : WordRAM w 5 Unit)
+  branch .eq
+    (do
+      (.clearFlag .ult : WordRAM w 5 Unit)
+      pure ())
+    (do
+      (.cmp .ult index last : WordRAM w 5 Unit)
+      branch .ult
+        (do
+          (.binop .add index index one : WordRAM w 5 Unit)
+          pure ())
+        (do
+          (.nop : WordRAM w 5 Unit)
+          pure ()))
+
+/-- The explicit version is definitionally equal to the version written with notation. -/
+theorem bodyExplicit_eq_body (w : Nat) : bodyExplicit w = body w := rfl
+
+end ForReview
+
 /-- Read the size header and initialize the search at address one. -/
 def setup (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   reset .eq
@@ -73,9 +98,5 @@ def linearSearch (w : Nat) : Prog (WordRAM w 5) Unit := do [WordRAM w 5]
   whileₚ .ult do
     LinearSearch.body w
   LinearSearch.finish w
-
-/-- Store the size header, array, and search key. The program initializes its other registers. -/
-def linearSearchState (input : Array (Word w)) (target : Word w) : RAMState w 5 :=
-  ⟨sizedArrayMemory input, fun r => if r = LinearSearch.key then target else 0, fun _ => false⟩
 
 end Algolean.Algorithms.WordRAM
