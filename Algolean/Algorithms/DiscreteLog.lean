@@ -194,7 +194,7 @@ modulo the order of `g` lands in `1, …, addOrderOf g`, and Lagrange bounds tha
 the group. -/
 lemma exists_pos_le_card_nsmul_eq (g : G) (x : ℕ) :
     ∃ k, 0 < k ∧ k ≤ Fintype.card G ∧ k • g = x • g := by
-  haveI : Nonempty G := ⟨0⟩
+  have : Nonempty G := ⟨0⟩
   have hpos : 0 < addOrderOf g := addOrderOf_pos g
   have hle : addOrderOf g ≤ Fintype.card G := Nat.le_of_dvd Fintype.card_pos addOrderOf_dvd_card
   rcases Nat.eq_zero_or_pos (x % addOrderOf g) with h0 | hp
