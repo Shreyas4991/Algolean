@@ -2,6 +2,7 @@ module  -- shake: keep-all --deprecated_module: ignore
 
 public import Algolean.AddWriter.Basic
 public import Algolean.AddWriter.Transformer
+public import Algolean.AddWriter.WP
 public import Algolean.Algorithms.BoyerMooreMajorityVote
 public import Algolean.Algorithms.Circuits.FanInTwo.LogAnd
 public import Algolean.Algorithms.KMPPatternSearch
@@ -13,13 +14,22 @@ public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
-public import Algolean.Algorithms.WordRAMLinearSearch
+public import Algolean.Algorithms.WordRAM.Basic
+public import Algolean.Algorithms.WordRAM.BinarySearch.Algorithm
+public import Algolean.Algorithms.WordRAM.BinarySearch.Common
+public import Algolean.Algorithms.WordRAM.BinarySearch.Complexity
+public import Algolean.Algorithms.WordRAM.BinarySearch.Correctness
+public import Algolean.Algorithms.WordRAM.LinearSearch.Algorithm
+public import Algolean.Algorithms.WordRAM.LinearSearch.Common
+public import Algolean.Algorithms.WordRAM.LinearSearch.Complexity
+public import Algolean.Algorithms.WordRAM.LinearSearch.Correctness
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.LowerBounds.ComparisonSort
 public import Algolean.ModelM
+public import Algolean.ModelStateM
 public import Algolean.Models.Arithmetic
 public import Algolean.Models.Circuits
 public import Algolean.Models.Comparison
@@ -36,5 +46,8 @@ public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
 public import Algolean.Models.WordRAM
+public import Algolean.Models.WordRAMSyntax
+public import Algolean.Problems.Basic
+public import Algolean.Problems.Search
 public import Algolean.QueryComposition
 public import Algolean.QueryModel

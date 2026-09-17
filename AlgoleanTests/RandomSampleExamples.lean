@@ -22,7 +22,7 @@ noncomputable section
 
 namespace AlgoleanTests.RandomSampleExamples
 
-open Algolean.Algorithms Cslib RandomSample Std.Do
+open Algolean Algolean.Algorithms Cslib RandomSample Std.Do
 
 example (dist : PMF ℕ) : (draw dist).evalM (free (Cost := ℕ)) = dist := by
   simp
@@ -77,7 +77,8 @@ example {α : Type} (dist : PMF α) :
     letI := (free (Cost := ℕ)).hasHandler
     ⦃⌜True⌝⦄ draw dist ⦃⇓ a => ⌜a ∈ dist.support⌝⦄ := by
   let _inst := (free (Cost := ℕ)).hasHandler
-  mvcgen [draw]
-  exact fun a ha => ha
+  mvcgen [draw, ModelM.handler, ModelM.hasHandler]
+  simp [FreeM.HasHandler.handler, ModelM.handler,
+    FreeM.LHandler.ofInterp, WP.wp, PredTrans.apply]
 
 end AlgoleanTests.RandomSampleExamples
