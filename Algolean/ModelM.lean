@@ -175,6 +175,11 @@ def costM [Monad m] [AddZero Cost]
       (M.evalQuery q >>= fun a => (M.cost q + ·) <$> costM (f a) M) := by
   simp [costM, runM, ModelM.runQuery, AddWriterT.cost, AddWriterT.run_bind]
 
+@[simp] theorem costM_lift [Monad m] [LawfulMonad m] [AddMonoid Cost]
+    (q : Q α) (M : ModelM Q m Cost) :
+    costM (FreeM.lift q) M = (fun _ => M.cost q) <$> M.evalQuery q := by
+  simp [costM]
+
 @[simp] theorem costM_map [Monad m] [LawfulMonad m] [AddMonoid Cost]
     (f : α → β) (P : Prog Q α) (M : ModelM Q m Cost) :
     costM (f <$> P) M = costM P M := by
