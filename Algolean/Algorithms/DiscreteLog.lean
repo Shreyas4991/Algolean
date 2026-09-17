@@ -272,8 +272,8 @@ theorem bruteForceDLog_eval_zmod (hp : p.Prime) (hcard : Fintype.card G = p) {g 
     (x : ZMod p) :
     GroupProg.eval ((fun n : ℕ => (n : ZMod p)) <$> bruteForceDLog G p (dlogInputs g (x.val • g)))
       = x := by
-  haveI : NeZero p := ⟨hp.ne_zero⟩
-  haveI : Fact p.Prime := ⟨hp⟩
+  have : NeZero p := ⟨hp.ne_zero⟩
+  have : Fact p.Prime := ⟨hp⟩
   have hgen : addOrderOf g = p :=
     addOrderOf_eq_prime (by rw [← hcard]; exact card_nsmul_eq_zero) hg
   rw [bruteForceDLog_eval_natCast hcard hgen x.val, ZMod.natCast_val, ZMod.cast_id]
