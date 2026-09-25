@@ -8,4 +8,5 @@ public import AlgoleanTests.ModelMWP
 public import AlgoleanTests.NaivePatternSearchExamples
 public import AlgoleanTests.ProgExamples
 public import AlgoleanTests.QueryExamples
+public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
