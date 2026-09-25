@@ -6,6 +6,7 @@ Authors: Tanner Duve
 module
 
 public import Algolean.Algorithms.RandomQuicksort
+meta import Algolean.Algorithms.RandomQuicksort
 
 /-!
 # Executable randomized quicksort examples
@@ -15,6 +16,8 @@ exercise compiled execution: no `noncomputable` definitions are used in the exec
 -/
 
 @[expose] public section
+
+set_option linter.hashCommand false
 
 namespace AlgoleanTests.RandomQuicksortExamples
 
