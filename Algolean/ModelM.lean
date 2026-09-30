@@ -196,7 +196,7 @@ section State
     (q : Q α) (f : α → Prog Q β) (s : σ) :
     evalM (FreeM.lift q >>= f) M s =
       let result := M.evalQuery q s
-      (f result.1).evalM M result.2 := rfl
+      (f result.fst).evalM M result.snd := rfl
 
 /-- A pure program has zero cost and leaves the state unchanged. -/
 @[simp] theorem costM_pure_state [AddZero Cost]
@@ -208,8 +208,8 @@ section State
     (q : Q α) (f : α → Prog Q β) (s : σ) :
     costM (FreeM.lift q >>= f) M s =
       let result := M.evalQuery q s
-      let rest := (f result.1).costM M result.2
-      (M.cost q + rest.1, rest.2) := rfl
+      let rest := (f result.fst).costM M result.snd
+      (M.cost q + rest.fst, rest.snd) := rfl
 
 end State
 

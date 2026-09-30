@@ -120,6 +120,25 @@ theorem cost_bind [Monad m] [LawfulMonad m] [Add Cost]
       pure (a.tell + b.tell)) := by
   simp only [cost, run_bind, map_bind, map_pure]
 
+/-- Joint writer/state bind at a concrete state, without opaque intermediate pair matches. -/
+@[simp, grind =] theorem run_bind_state [Add Cost]
+    (x : AddWriterT Cost (StateM σ) α) (f : α → AddWriterT Cost (StateM σ) β) (s : σ) :
+    (x >>= f).run s =
+      let first := x.run s
+      let rest := (f first.fst.ret).run first.snd
+      ((⟨rest.fst.ret, first.fst.tell + rest.fst.tell⟩ : AddWriter Cost β), rest.snd) := rfl
+
+/-- Pure writer/state execution produces no cost. -/
+@[simp, grind =] theorem run_pure_state [Zero Cost] (a : α) (s : σ) :
+    (pure a : AddWriterT Cost (StateM σ) α).run s =
+      ((⟨a, 0⟩ : AddWriter Cost α), s) := rfl
+
+/-- Mapping changes the result while preserving the cost and state. -/
+@[simp, grind =] theorem run_map_state (f : α → β)
+    (x : AddWriterT Cost (StateM σ) α) (s : σ) :
+    (f <$> x).run s =
+      ((⟨f (x.run s).fst.ret, (x.run s).fst.tell⟩ : AddWriter Cost β), (x.run s).snd) := rfl
+
 @[ext] protected theorem ext
     (x y : AddWriterT Cost m α) (h : x.run = y.run) : x = y := h
 
