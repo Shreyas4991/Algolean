@@ -91,6 +91,75 @@ noncomputable def embedQubitGate :
       unitaryReindex (Fin.insertNthEquiv (fun _ => Qubit) q)
         (U ⊗ᵤ (1 : 𝐔[Fin _ → Qubit]))
 
+@[simp]
+theorem embedQubitGate_apply {n : ℕ} (q : Fin (n + 1)) (U : 𝐔[Qubit])
+    (x y : Fin (n + 1) → Fin 2) :
+    embedQubitGate q U x y =
+      if Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
+          Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q y then
+        U (x q) (y q)
+      else
+        0 := by
+  by_cases h :
+        Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q x =
+        Fin.removeNth (α := fun _ : Fin (n + 1) => Fin 2) q y <;>
+    simp [embedQubitGate, unitaryReindex, h]
+
+/-- Full-register Hadamard layer, recursively tensoring one `H` gate per
+qubit. This is a free non-oracle unitary in the query model. -/
+noncomputable def fullHadamardUnitary :
+    (n : ℕ) → 𝐔[Fin n → Fin 2]
+  | 0 => 1
+  | n + 1 =>
+      unitaryReindex (Fin.insertNthEquiv (fun _ => Qubit) (Fin.last n))
+        (Qubit.H ⊗ᵤ fullHadamardUnitary n)
+
+@[simp]
+theorem fullHadamardUnitary_zero_left (n : ℕ)
+    (x : Fin n → Fin 2) :
+    fullHadamardUnitary n 0 x =
+      (Real.sqrt (1 / 2 : ℝ) : ℂ) ^ n := by
+  induction n with
+  | zero =>
+      have hx : x = 0 := by
+        ext i
+        exact Fin.elim0 i
+      subst hx
+      simp [fullHadamardUnitary]
+  | succ n ih =>
+      have hinit0 : Fin.init (0 : Fin (n + 1) → Fin 2) = (0 : Fin n → Fin 2) := by
+        ext i
+        rfl
+      by_cases hxlast : x (Fin.last n) = 0
+      · simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast]
+      · have hxlast' := Fin.eq_one_of_ne_zero (x (Fin.last n)) hxlast
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast']
+
+@[simp]
+theorem fullHadamardUnitary_zero_right (n : ℕ)
+    (x : Fin n → Fin 2) :
+    fullHadamardUnitary n x 0 =
+      (Real.sqrt (1 / 2 : ℝ) : ℂ) ^ n := by
+  induction n with
+  | zero =>
+      have hx : x = 0 := by
+        ext i
+        exact Fin.elim0 i
+      subst hx
+      simp [fullHadamardUnitary]
+  | succ n ih =>
+      have hinit0 : Fin.init (0 : Fin (n + 1) → Fin 2) = (0 : Fin n → Fin 2) := by
+        ext i
+        rfl
+      by_cases hxlast : x (Fin.last n) = 0
+      · simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast]
+      · have hxlast' := Fin.eq_one_of_ne_zero (x (Fin.last n)) hxlast
+        simp [fullHadamardUnitary, unitaryReindex, hinit0, ih, Qubit.H, pow_succ,
+          mul_comm, hxlast']
+
 /-! ### CNOT unitary -/
 
 /-- In `Fin 2`, subtracting twice from `1` is the identity. -/
