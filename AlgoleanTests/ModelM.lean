@@ -26,11 +26,8 @@ inductive ChoiceQ : Type → Type where
   | tick : ChoiceQ Unit
 
 /-- Interpret `ChoiceQ` in the list monad. -/
-def choiceModel : ModelM ChoiceQ List Nat where
-  evalQuery
-    | .choose => [false, true]
-    | .tick => [()]
-  cost _ := 1
+def choiceModel : ModelM ChoiceQ List Nat :=
+  ModelM.ofCost (fun | .choose => [false, true] | .tick => [()]) (fun _ => 1)
 
 /-- Perform an additional query on the `true` branch. -/
 def branch : Prog ChoiceQ Unit := do
@@ -41,6 +38,16 @@ example : (branch.runM choiceModel).run = [⟨(), 1⟩, ⟨(), 2⟩] := rfl
 
 example : branch.costM choiceModel = [1, 2] := rfl
 
+/-- The cost of a choice can depend on that very choice's result. -/
+def correlatedChoice : ModelM ChoiceQ List Nat where
+  runQuery
+    | .choose => AddWriterT.mk [⟨false, 3⟩, ⟨true, 7⟩]
+    | .tick => AddWriterT.mk [⟨(), 1⟩]
+
+example : (branch.runM correlatedChoice).run = [⟨(), 3⟩, ⟨(), 8⟩] := rfl
+example : branch.costM correlatedChoice = [3, 8] := rfl
+example : branch.evalM correlatedChoice = [(), ()] := rfl
+
 /-- A unit-cost state increment. -/
 inductive TickQ : Type → Type where
   | tick : TickQ Unit
@@ -50,16 +57,12 @@ inductive DoubleTickQ : Type → Type where
   | tickTwice : DoubleTickQ Unit
 
 /-- Interpret `TickQ` as a state increment. -/
-def tickModel : ModelM TickQ (StateM Nat) Nat where
-  evalQuery
-    | .tick => modify (· + 1)
-  cost _ := 1
+def tickModel : ModelM TickQ (StateM Nat) Nat :=
+  ModelM.ofCost (fun | .tick => modify (· + 1)) (fun _ => 1)
 
 /-- Interpret `DoubleTickQ` as a state increment of two. -/
-def doubleTickModel : ModelM DoubleTickQ (StateM Nat) Nat where
-  evalQuery
-    | .tickTwice => modify (· + 2)
-  cost _ := 2
+def doubleTickModel : ModelM DoubleTickQ (StateM Nat) Nat :=
+  ModelM.ofCost (fun | .tickTwice => modify (· + 2)) (fun _ => 2)
 
 /-- Implement one double increment using two unit increments. -/
 def doubleTickReduction : Reduction DoubleTickQ TickQ where

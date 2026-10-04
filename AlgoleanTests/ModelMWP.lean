@@ -21,7 +21,7 @@ set_option mvcgen.warning false
 
 namespace AlgoleanTests.ModelMWP
 
-open Algolean.Algorithms Cslib Cslib.FreeM Std.Do
+open Algolean Algolean.Algorithms Cslib Cslib.FreeM Std.Do
 
 /-- Queries for incrementing and reading a counter. -/
 inductive CounterQ : Type → Type where
@@ -29,11 +29,10 @@ inductive CounterQ : Type → Type where
   | read : CounterQ Nat
 
 /-- Interpret counter queries in `StateM Nat`, with unit cost for each query. -/
-def counterModel : ModelM CounterQ (StateM Nat) Nat where
-  evalQuery
-    | .tick => modify (· + 1)
-    | .read => get
-  cost _ := 1
+def counterModel : ModelM CounterQ (StateM Nat) Nat :=
+  ModelM.ofCost (fun | .tick => modify (· + 1) | .read => get) (fun _ => 1)
+
+section Evaluation
 
 local instance : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
 
@@ -64,5 +63,47 @@ example (n : Nat) :
   mvcgen [tickThenRead, tick, read, counterModel, ModelM.handler]
   subst_vars
   exact ⟨rfl, rfl⟩
+
+end Evaluation
+
+section Costs
+
+local instance counterCostHandler : HasHandler CounterQ (.arg Nat (.arg Nat .pure)) :=
+  counterModel.hasCostHandler
+
+example (P : Prog CounterQ α) :
+    wpH counterModel.costHandler P = wp (P.runM counterModel) :=
+  counterModel.wp_eq_wp_runM P
+
+-- Both queries are charged, and an existing cost is retained.
+example (n c : Nat) :
+    ⦃fun cost s => ⌜cost = c ∧ s = n⌝⦄ tickThenRead
+      ⦃⇓ value cost s => ⌜value = n + 1 ∧ s = n + 1 ∧ cost = c + 2⌝⦄ := by
+  mvcgen [tickThenRead, tick, read]
+  simp_all only [HasHandler.handler, counterModel, wp_lift, ModelM.costHandler_apply_state,
+    ModelM.ofCost_runQuery_state, Nat.add_assoc, Nat.reduceAdd,
+    and_true, SPred.down_pure_nil]
+  exact ⟨rfl, rfl⟩
+
+/-- A query whose cost is determined by the incoming machine state. -/
+def stateCostModel : ModelM CounterQ (StateM Nat) Nat where
+  runQuery
+    | .tick => AddWriterT.mk fun s => (⟨(), s + 1⟩, s + 1)
+    | .read => AddWriterT.mk fun s => (⟨s, 1⟩, s)
+
+end Costs
+
+section StateCosts
+
+local instance : HasHandler CounterQ (.arg Nat (.arg Nat .pure)) :=
+  stateCostModel.hasCostHandler
+
+example (n c : Nat) :
+    ⦃fun cost s => ⌜cost = c ∧ s = n⌝⦄ tickThenRead
+      ⦃⇓ value cost s => ⌜value = n + 1 ∧ s = n + 1 ∧ cost = c + n + 2⌝⦄ := by
+  mvcgen [tickThenRead, tick, read]
+  simp_all [HasHandler.handler, stateCostModel, Nat.add_assoc]
+
+end StateCosts
 
 end AlgoleanTests.ModelMWP

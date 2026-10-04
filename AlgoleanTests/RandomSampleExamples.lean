@@ -22,7 +22,7 @@ noncomputable section
 
 namespace AlgoleanTests.RandomSampleExamples
 
-open Algolean.Algorithms Cslib RandomSample Std.Do
+open Algolean Algolean.Algorithms Cslib RandomSample Std.Do
 
 example (dist : PMF ℕ) : (draw dist).evalM (free (Cost := ℕ)) = dist := by
   simp
@@ -63,11 +63,11 @@ theorem costM_branchWithExtraDraw (coin : PMF Bool) (extra : PMF α) :
     (branchWithExtraDraw coin extra).costM sampleCount =
       (fun b => if b then 1 else 2) <$> coin := by
   simp only [branchWithExtraDraw, draw, Prog.costM_liftBind,
-    model_evalQuery_sample, model_cost]
+    model_runQuery_sample, bind_map_left]
   rw [← bind_pure_comp]
   apply bind_congr
   intro b
-  cases b <;> simp
+  cases b <;> simp [AddWriterT.cost]
 
 -- Almost-sure reasoning through the support interpretation. `mvcgen` discharges the triple that a
 -- drawn value always lies in the distribution's support, using `free`'s handler as the selected
@@ -77,7 +77,8 @@ example {α : Type} (dist : PMF α) :
     letI := (free (Cost := ℕ)).hasHandler
     ⦃⌜True⌝⦄ draw dist ⦃⇓ a => ⌜a ∈ dist.support⌝⦄ := by
   let _inst := (free (Cost := ℕ)).hasHandler
-  mvcgen [draw]
-  exact fun a ha => ha
+  mvcgen [draw, ModelM.handler, ModelM.hasHandler]
+  simp [FreeM.HasHandler.handler, ModelM.handler,
+    FreeM.LHandler.ofInterp, WP.wp, PredTrans.apply]
 
 end AlgoleanTests.RandomSampleExamples
