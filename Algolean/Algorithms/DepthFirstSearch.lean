@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2026 Johannes Tantow. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Johannes Tantow
+-/
 module
 
 public import Mathlib.Combinatorics.SimpleGraph.Connectivity.Finite
