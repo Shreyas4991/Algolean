@@ -5,10 +5,22 @@ Authors: Johannes Tantow
 -/
 module
 
-public import Mathlib.Combinatorics.SimpleGraph.Basic
 public import Mathlib.Combinatorics.SimpleGraph.Finite
 public import Mathlib.Data.Finset.Sort
 public import Algolean.QueryModel
+
+/-!
+# QueryType for graph algorithms
+
+This file contains queries and models to reason about graph algorithms. We assume that the vertices
+the graphs are natural numbers so that we can sort the neighbors.
+
+## Main definitions
+- `graphAccessQuery` : This query offers the operation of getting the i-th neighbor of a vertex
+    assuming that this neighbor exists.
+- `graphAccessModel`: This model returns the i-th neighbor based on the position in the neighbor
+    list for a cost of 1.
+-/
 
 @[expose] public section
 

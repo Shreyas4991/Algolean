@@ -6,10 +6,26 @@ Authors: Johannes Tantow
 module
 
 public import Mathlib.Combinatorics.SimpleGraph.Connectivity.Finite
-public import Mathlib.Data.Finset.Sort
-public import Mathlib.Data.Int.ConditionallyCompleteOrder
 public import Algolean.Models.Graphs
-public import Mathlib.Combinatorics.SimpleGraph.DegreeSum
+import Mathlib.Combinatorics.SimpleGraph.DegreeSum
+
+/-!
+
+# Depth first search
+
+This file defines depth first search on undirected graphs and proves correctness and time bounds
+under the graphAccessModel. We assume that the vertices of the graph are natural numbers.
+
+## Main definitions
+- `reachableVertices` : Given a vertex v all vertices u that are connected via a path to v.
+- `depthFirstSearch` : Depth first searching returning for a vertex all reachable vertices in
+    the graph.
+
+## Main results
+- `depthFirstSearch_eq_reachableVertices` : Dfs finds all reachable vertices given a vertex v.
+- `depthFirstSearchProg_time` : The number of steps is bounded by twice the number of edges.
+
+-/
 
 @[expose] public section
 
