@@ -6,6 +6,7 @@ Authors: Johannes Tantow
 module
 
 public import Mathlib.Combinatorics.SimpleGraph.Basic
+public import Mathlib.Combinatorics.SimpleGraph.Finite
 public import Mathlib.Data.Finset.Sort
 public import Algolean.QueryModel
 
@@ -16,12 +17,13 @@ namespace Algolean.Algorithms
 open Prog
 
 inductive graphAccessQuery {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] : Type → Type
-| getNeighbor (v : Fin n) (i : Fin ((G.neighborSet v).toFinset.card)) : graphAccessQuery G (Fin n)
+| getNeighbor (v : Fin n) (i : Fin (G.degree v)) : graphAccessQuery G (Fin n)
 
+@[simps]
 def graphAccessModel {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] :
     Model (graphAccessQuery G) ℕ where
   evalQuery
-  | .getNeighbor v i => (G.neighborSet v).toFinset.sort[i]
+  | .getNeighbor v i => (G.neighborFinset v).sort[i]
   cost _ := 1
 
 end Algolean.Algorithms

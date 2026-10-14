@@ -8,8 +8,12 @@ module
 public import Mathlib.Combinatorics.SimpleGraph.Connectivity.Finite
 public import Mathlib.Data.Finset.Sort
 public import Mathlib.Data.Int.ConditionallyCompleteOrder
+public import Algolean.Models.Graphs
+public import Mathlib.Combinatorics.SimpleGraph.DegreeSum
 
 @[expose] public section
+
+namespace Algolean.Algorithms
 
 def reachableVertices {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : Fin n) :
     Finset (Fin n) :=
@@ -22,7 +26,7 @@ def depthFirstSearch.helper {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.
   | .cons hd tl =>
     if h : hd ∈ visited
     then depthFirstSearch.helper G tl visited
-    else depthFirstSearch.helper G ((G.neighborSet hd).toFinset.sort ++ tl) (visited ∪ {hd})
+    else depthFirstSearch.helper G ((G.neighborFinset hd).sort ++ tl) (visited ∪ {hd})
 termination_by (n - visited.card, sizeOf stack)
 decreasing_by
   · grind
@@ -32,6 +36,8 @@ decreasing_by
 def depthFirstSearch {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : Fin n) :
     Finset (Fin n) :=
   depthFirstSearch.helper G [v] ∅
+
+section correctness
 
 variable {n : ℕ} {G : SimpleGraph (Fin n)} [DecidableRel G.Adj]
 
@@ -128,7 +134,7 @@ lemma depthFirstSearch.helper_contains_reachable_of_contains_reachable {v : Fin 
       · intro u hu
         apply ih' h₁ (by grind) h u hu
       · refine ih (by grind) ?_ (by grind)
-        simp only [List.mem_append, Finset.mem_sort, Set.mem_toFinset, SimpleGraph.mem_neighborSet]
+        simp only [List.mem_append, Finset.mem_sort, SimpleGraph.mem_neighborFinset]
         intro u hu
         cases hu with
         | inl hu =>
@@ -170,3 +176,159 @@ theorem depthFirstSearch_eq_reachableVertices {v : Fin n} :
     · simp
   · intro u w h₁ h₂
     apply depthFirstSearch.helper_closed_under_neighbor_of_closed_under_neighbor (by simp) w u h₁ h₂
+
+end correctness
+
+open Prog
+
+def getNeighborhood.helper {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : (Fin n))
+  (i : ℕ) (hi : i < G.degree v) :
+    Prog (graphAccessQuery G) (List (Fin n)) := do
+  let element ← (graphAccessQuery.getNeighbor v ⟨i, hi⟩)
+  if hi' : i + 1 < G.degree v
+  then
+    return element :: (← getNeighborhood.helper G v (i+1) hi')
+  else
+    return [element]
+termination_by G.degree v - i
+decreasing_by
+  lia
+
+def getNeighborhood {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : (Fin n)) :
+    Prog (graphAccessQuery G) (List (Fin n)) := do
+  if h : 0 < (G.neighborFinset v).card
+  then getNeighborhood.helper G v 0 h
+  else return []
+
+def depthFirstSearch.helperProg {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
+  (stack : List (Fin n)) (visited : Finset (Fin n)) :
+    Prog (graphAccessQuery G) (Finset (Fin n)) := do
+  match stack with
+  | .nil => return visited
+  | .cons hd tl =>
+    if hd ∈ visited
+    then depthFirstSearch.helperProg G tl visited
+    else depthFirstSearch.helperProg G ((← getNeighborhood G hd) ++ tl) (visited ∪ {hd})
+termination_by (n - visited.card, sizeOf stack)
+decreasing_by
+  · grind
+  · have := card_finset_fin_le (visited ∪ {hd})
+    grind
+
+def depthFirstSearchProg {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : Fin n) :
+    Prog (graphAccessQuery G) (Finset (Fin n)) :=
+  depthFirstSearch.helperProg G [v] ∅
+
+variable {n : ℕ} {G : SimpleGraph (Fin n)} [DecidableRel G.Adj]
+
+lemma getNeighborhood.helper_eval {v : Fin n} {i : ℕ} {hi : i < G.degree v} :
+    (getNeighborhood.helper G v i hi).eval (graphAccessModel G)
+      = (G.neighborFinset v).sort.drop i := by
+  induction h : G.degree v - i generalizing i with
+  | zero => grind
+  | succ m ih =>
+    unfold helper
+    simp only [bind_pure_comp, eval_bind, eval_lift, graphAccessModel_evalQuery, Fin.getElem_fin]
+    by_cases h' : i+1 < G.degree v
+    · simp only [h', ↓reduceDIte, eval_map]
+      rw [ih (by lia)]
+      simp
+    · have hi' : i = G.degree v - 1 := by lia
+      simp only [h', ↓reduceDIte, eval_pure]
+      apply List.ext_get
+      · simp [hi']
+        lia
+      · simp
+
+lemma getNeighborhood.helper_cost {v : Fin n} {i : ℕ} {hi : i < G.degree v} :
+    (getNeighborhood.helper G v i hi).time (graphAccessModel G) = G.degree v - i := by
+  induction h : G.degree v - i generalizing i with
+  | zero => grind
+  | succ m ih =>
+    unfold helper
+    simp only [bind_pure_comp, time_bind, time_lift, graphAccessModel_cost, eval_lift,
+      graphAccessModel_evalQuery, Fin.getElem_fin]
+    by_cases h' : i+1 < G.degree v
+    · simp only [h', ↓reduceDIte, time_map]
+      rw [ih, Nat.add_comm]
+      lia
+    · simp [h']
+      lia
+
+lemma getNeighborhood_eval {v : (Fin n)} :
+    (getNeighborhood G v).eval (graphAccessModel G) = (G.neighborFinset v).sort := by
+  simp [getNeighborhood]
+  by_cases h : 0 < G.degree v
+  · simp [h, getNeighborhood.helper_eval]
+  · simp [h]
+    simp only [← SimpleGraph.card_neighborFinset_eq_degree, Finset.card_pos,
+      Finset.not_nonempty_iff_eq_empty] at h
+    simp [h]
+
+lemma getNeighborhood_cost {v : (Fin n)} :
+    (getNeighborhood G v).time (graphAccessModel G) = G.degree v := by
+  simp [getNeighborhood]
+  by_cases h : 0 < G.degree v
+  · simp [h, getNeighborhood.helper_cost]
+  · simp [h]
+    lia
+
+lemma depthFirstSearch.helperProg_eval {stack : List (Fin n)} {visited : Finset (Fin n)} :
+    (depthFirstSearch.helperProg G stack visited).eval (graphAccessModel G) =
+      depthFirstSearch.helper G stack visited := by
+  induction h : n - visited.card generalizing stack visited with
+  | zero =>
+    induction stack generalizing visited with
+    | nil => simp [helperProg, helper]
+    | cons hd tl ih =>
+      simpa [helperProg, helper, finset_eq_univ_of_n_sub_card_eq_zero, h] using ih h
+  | succ m ih =>
+    induction stack generalizing visited with
+    | nil => simp [helperProg, helper]
+    | cons hd tl ih' =>
+      simp only [helperProg, Finset.union_singleton, helper, dite_eq_ite]
+      split
+      · apply ih' h
+      · simp only [eval_bind, getNeighborhood_eval]
+        apply ih
+        simp [Finset.card_insert_eq_ite]
+        lia
+
+lemma depthFirstSearch.helperProg_time {stack : List (Fin n)} {visited : Finset (Fin n)} :
+    (depthFirstSearch.helperProg G stack visited).time (graphAccessModel G) ≤
+      ∑ (v ∉ visited), G.degree v := by
+  induction h : n - visited.card generalizing stack visited with
+  | zero =>
+    induction stack with
+    | nil => simp [helperProg]
+    | cons hd tl ih =>
+      simp [finset_eq_univ_of_n_sub_card_eq_zero, h] at ih
+      simp [helperProg, finset_eq_univ_of_n_sub_card_eq_zero, h, ih]
+  | succ m ih =>
+    induction stack generalizing visited with
+    | nil => simp [helperProg]
+    | cons hd tl ih' =>
+      simp only [helperProg, Finset.union_singleton]
+      split
+      · apply ih' h
+      · simp only [time_bind, getNeighborhood_cost]
+        grw [ih]
+        · simp only [Finset.compl_insert]
+          rw [Finset.add_sum_erase (f := fun v => G.degree v)]
+          apply Finset.mem_compl.mpr
+          assumption
+        · simp [Finset.card_insert_eq_ite]
+          lia
+
+theorem depthFirstSearchProg_eval {v : Fin n} :
+    (depthFirstSearchProg G v).eval (graphAccessModel G) = reachableVertices G v := by
+  simp [← depthFirstSearch_eq_reachableVertices, depthFirstSearch, depthFirstSearchProg,
+    depthFirstSearch.helperProg_eval]
+
+theorem depthFirstSearchProg_time {v : Fin n} :
+    (depthFirstSearchProg G v).time (graphAccessModel G) ≤ 2 * G.edgeFinset.card := by
+  simp only [depthFirstSearchProg, ← SimpleGraph.sum_degrees_eq_twice_card_edges]
+  grw [depthFirstSearch.helperProg_time]
+  simp
+
+end Algolean.Algorithms
