@@ -167,6 +167,11 @@ instance instWPMonadFreeM [HasHandler F ps] : WPMonad (FreeM F) ps where
   wp_pure _ := rfl
   wp_bind x f := wpH_bind _ x f
 
+/-- The WP of a primitive query is the predicate transformer selected by its handler. -/
+@[simp] theorem wp_lift [HasHandler F ps] (op : F α) :
+    wp (lift op : FreeM F α) = HasHandler.handler op :=
+  wpH_lift _ op
+
 /-- The generic Hoare rule for a primitive `FreeM` operation. Its precondition is exactly the
 predicate transformer assigned by the selected logical handler. Its low `mvcgen` priority lets
 effect-specific rules expose more useful preconditions when available. -/
