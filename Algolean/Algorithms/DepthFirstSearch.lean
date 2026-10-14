@@ -17,7 +17,7 @@ def depthFirstSearch.helper {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.
   | .cons hd tl =>
     if h : hd ∈ visited
     then depthFirstSearch.helper G tl visited
-    else depthFirstSearch.helper G (tl ++ (G.neighborSet hd).toFinset.sort) (visited ∪ {hd})
+    else depthFirstSearch.helper G ((G.neighborSet hd).toFinset.sort ++ tl) (visited ∪ {hd})
 termination_by (n - visited.card, sizeOf stack)
 decreasing_by
   · grind
@@ -127,11 +127,11 @@ lemma depthFirstSearch.helper_contains_reachable_of_contains_reachable {v : Fin 
         intro u hu
         cases hu with
         | inl hu =>
-          apply h₂
-          simp [hu]
-        | inr hu =>
           specialize h₂ hd (by simp)
           apply SimpleGraph.Reachable.trans h₂ (SimpleGraph.Adj.reachable hu)
+        | inr hu =>
+          apply h₂
+          simp [hu]
 
 theorem depthFirstSearch_eq_reachableVertices {v : Fin n} :
     depthFirstSearch G v = reachableVertices G v := by
