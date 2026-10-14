@@ -133,6 +133,28 @@ lemma depthFirstSearch.helper_contains_reachable_of_contains_reachable {v : Fin 
           apply h₂
           simp [hu]
 
+lemma depthFirstSearch.helper_closed_under_neighbor_of_closed_under_neighbor {stack : List (Fin n)}
+  {visited : Finset (Fin n)} (h : ∀ u v, v ∈ visited → G.Adj v u → u ∈ visited ∨ u ∈ stack) :
+    ∀ u v, v ∈ depthFirstSearch.helper G stack visited → G.Adj v u
+      → u ∈ depthFirstSearch.helper G stack visited := by
+  induction h' : n - visited.card generalizing stack visited with
+  | zero =>
+    simp [finset_eq_univ_of_n_sub_card_eq_zero h', helper_univ_eq_univ]
+  | succ m ih =>
+    induction stack generalizing visited with
+    | nil =>
+      simp only [List.not_mem_nil, or_false] at h
+      simpa [helper]
+    | cons hd tl ih' =>
+      simp only [helper, Finset.union_singleton, dite_eq_ite]
+      split
+      · apply ih' _ h'
+        grind
+      · intro u v h₁ h₂
+        apply ih _ (by grind) u v h₁ h₂
+        simp
+        grind
+
 theorem depthFirstSearch_eq_reachableVertices {v : Fin n} :
     depthFirstSearch G v = reachableVertices G v := by
   simp only [depthFirstSearch, reachableVertices_eq_iff, List.mem_cons, List.not_mem_nil, or_false,
@@ -141,4 +163,5 @@ theorem depthFirstSearch_eq_reachableVertices {v : Fin n} :
   · apply depthFirstSearch.helper_contains_reachable_of_contains_reachable
     · simp
     · simp
-  sorry
+  · intro u w h₁ h₂
+    apply depthFirstSearch.helper_closed_under_neighbor_of_closed_under_neighbor (by simp) w u h₁ h₂
