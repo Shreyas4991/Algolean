@@ -28,9 +28,12 @@ namespace Algolean.Algorithms
 
 open Prog
 
+/-- A query for access counting in graph algorithms. -/
 inductive graphAccessQuery {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] : Type → Type
+/-- Returns the i-th neighbor of v in the sorted neighbor list as long as i < deg(v). -/
 | getNeighbor (v : Fin n) (i : Fin (G.degree v)) : graphAccessQuery G (Fin n)
 
+/-- A model for `graphAccessQuery`. -/
 @[simps]
 def graphAccessModel {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] :
     Model (graphAccessQuery G) ℕ where

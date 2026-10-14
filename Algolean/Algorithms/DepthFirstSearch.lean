@@ -31,10 +31,12 @@ under the graphAccessModel. We assume that the vertices of the graph are natural
 
 namespace Algolean.Algorithms
 
+/-- A vertices reachable from v. -/
 def reachableVertices {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : Fin n) :
     Finset (Fin n) :=
   {(u : Fin n) | G.Reachable v u}
 
+/-- A helper function that explores the graph in depth first way via the stack. -/
 def depthFirstSearch.helper {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
     (stack : List (Fin n)) (visited : Finset (Fin n)) : Finset (Fin n) :=
   match stack with
@@ -49,6 +51,7 @@ decreasing_by
   · have := card_finset_fin_le (visited ∪ {hd})
     grind
 
+/-- Performs depth first search. -/
 def depthFirstSearch {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : Fin n) :
     Finset (Fin n) :=
   depthFirstSearch.helper G [v] ∅
@@ -197,6 +200,7 @@ end correctness
 
 open Prog
 
+/-- A helper functions that returns all neighbors of v having an index ≥ i. -/
 def getNeighborhood.helper {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : (Fin n))
   (i : ℕ) (hi : i < G.degree v) :
     Prog (graphAccessQuery G) (List (Fin n)) := do
@@ -210,12 +214,14 @@ termination_by G.degree v - i
 decreasing_by
   lia
 
+/-- Returns the neighbors of a vertex v as a list in the prog monad in deg(v) time. -/
 def getNeighborhood {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : (Fin n)) :
     Prog (graphAccessQuery G) (List (Fin n)) := do
   if h : 0 < (G.neighborFinset v).card
   then getNeighborhood.helper G v 0 h
   else return []
 
+/-- The prog version of `depthFirstSearch.helper` -/
 def depthFirstSearch.helperProg {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
   (stack : List (Fin n)) (visited : Finset (Fin n)) :
     Prog (graphAccessQuery G) (Finset (Fin n)) := do
@@ -231,6 +237,7 @@ decreasing_by
   · have := card_finset_fin_le (visited ∪ {hd})
     grind
 
+/-- Performs depth first search on a graph in the prog monad. -/
 def depthFirstSearchProg {n : ℕ} (G : SimpleGraph (Fin n)) [DecidableRel G.Adj] (v : Fin n) :
     Prog (graphAccessQuery G) (Finset (Fin n)) :=
   depthFirstSearch.helperProg G [v] ∅
