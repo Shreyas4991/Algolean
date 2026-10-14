@@ -119,7 +119,7 @@ lemma bruteForceDLogAux_eval (g h : G) {k : ℕ} :
         exact hmin (i + 1) (by lia)
       have hk' : acc + g + k • g = h := by rw [add_add_nsmul]; exact hk
       simp only [bruteForceDLogAux, Prog.eval_bind, Prog.eval_lift, groupModel_evalQuery,
-        GroupQuery.answer, decide_eq_true_eq, hne, if_false]
+        GroupQuery.answer, decide_eq_true_eq, hne, ite_false]
       calc
         _ = exp + 1 + k := ih (acc + g) (exp + 1) remaining hmin' hk' (by lia)
         _ = exp + (k + 1) := by lia
@@ -155,9 +155,9 @@ lemma bruteForceDLogAux_cost_le (g h : G) :
       GroupQuery.charge, Prog.eval_lift, groupModel_evalQuery, GroupQuery.answer,
       decide_eq_true_eq]
     by_cases hb : acc = h
-    · rw [if_pos hb]
+    · rw [ite_eq_left hb]
       simp
-    · rw [if_neg hb]
+    · rw [ite_eq_right hb]
       simp only [Prog.time_bind, Prog.time_lift, groupModel_cost, GroupQuery.charge,
         Prog.eval_lift, groupModel_evalQuery, GroupQuery.answer]
       calc (⟨0, 0, 1⟩ : GroupCosts) + (⟨1, 0, 0⟩ + GroupProg.cost
