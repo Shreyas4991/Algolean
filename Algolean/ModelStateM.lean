@@ -13,10 +13,16 @@ public import Algolean.ModelM
 # Monadic query models with joint state and cost semantics
 
 `ModelStateM` interprets each query with its result and cost in the same monadic execution.
-Unlike `ModelM`, costs may depend on the state or on the query outcome. The monad remains generic:
-stateful and probabilistic interpretations both retain the correlation between results and costs.
-`Prog.evalStateM` evaluates a program, `Prog.runStateM` records its result and accumulated cost,
-and `Prog.costStateM` returns the accumulated cost.
+Unlike `ModelM`, costs may depend on the state or on the query outcome. In order to track 
+this, we lift the query into an `AddWriterT Cost m a` transformer which allows cost tracking 
+to depend on how the execution state, that is hidden in the model changes. For instance, 
+when the  memory and registers of the WordRAM model are hidden, we can still track the 
+cells that are written to, which allows us to assign space complexity. The monad 
+remains generic: stateful and probabilistic interpretations both retain the correlation 
+between results and costs. 
+- `Prog.evalStateM` evaluates a program, 
+- `Prog.runStateM` records its result and accumulated cost, and
+- `Prog.costStateM` returns the accumulated cost.
 
 `ModelStateM.handler` and `ModelStateM.hasHandler` provide weakest-precondition semantics
 for `mvcgen` when the monad has a `Std.Do.WPMonad` instance.
@@ -199,12 +205,12 @@ def costStateM [Monad m] [AddZero Cost]
 section State
 
 /-- Joint execution of a pure program preserves the state and records zero cost. -/
-@[simp, grind =] theorem runStateM_pure_state [AddZero Cost]
+@[grind =] theorem runStateM_pure_state [AddZero Cost]
     (M : ModelStateM Q (StateM σ) Cost) (a : α) (s : σ) :
     ((pure a : Prog Q α).runStateM M).run s = ((⟨a, 0⟩ : AddWriter Cost α), s) := rfl
 
 /-- Joint execution supplies the same query outcome to the continuation and the cost sum. -/
-@[simp, grind =] theorem runStateM_liftBind_state [AddZero Cost]
+@[grind =] theorem runStateM_liftBind_state [AddZero Cost]
     (M : ModelStateM Q (StateM σ) Cost) (q : Q α) (f : α → Prog Q β) (s : σ) :
     (runStateM (FreeM.liftBind q f) M).run s =
       let first := (M.runQuery q).run s
@@ -212,7 +218,7 @@ section State
       ((⟨rest.fst.ret, first.fst.tell + rest.fst.tell⟩ : AddWriter Cost β), rest.snd) := rfl
 
 /-- Joint execution rule for the lifted-query bind notation. -/
-@[simp, grind =] theorem runStateM_lift_bind_state [AddZero Cost]
+@[grind =] theorem runStateM_lift_bind_state [AddZero Cost]
     (M : ModelStateM Q (StateM σ) Cost) (q : Q α) (f : α → Prog Q β) (s : σ) :
     (runStateM (FreeM.lift q >>= f) M).run s =
       let first := (M.runQuery q).run s
