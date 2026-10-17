@@ -51,12 +51,12 @@ open Complex Cslib Polynomial
 
 /-! ### Syntax -/
 
-/-- Quantum circuit syntax tree. Leaves (`.gate`) wrap a single `QuantumQuery`;
+/-- Quantum circuit syntax tree. Leaves (`.gate`) wrap a single `QuantumGate`;
 `.seq` composes circuits sequentially on the same register; `.par` is
 tensor product on disjoint registers. -/
 inductive QuantumCircuit : ℕ → Type → Type where
   /-- Single gate leaf. -/
-  | gate {n : ℕ} (q : QuantumQuery n (𝐔[Fin n → Fin 2])) :
+  | gate {n : ℕ} (g : QuantumGate n) :
       QuantumCircuit n (CPTPMap (Fin n → Fin 2) (Fin n → Fin 2))
   /-- Sequential composition on the same register. -/
   | seq {n : ℕ} (c₁ c₂ : QuantumCircuit n
@@ -99,12 +99,12 @@ def oracleCount : {n : ℕ} → {ι : Type} → QuantumCircuit n ι → ℕ
 
 /-- Interpret a circuit tree into its `CPTPMap` semantics. The three
 clauses mirror the three syntactic constructors:
-- `.gate q` → `CPTPMap.ofUnitary (unitaryOf ...)`
+- `.gate g` → `CPTPMap.ofUnitary (unitaryOf ...)`
 - `.seq c₁ c₂` → `toCPTP c₂ ∘ₘ toCPTP c₁`
 - `.par c₁ c₂` → tensor via `⊗ᶜᵖ`, conjugated through `finFunSplitEquiv`. -/
 noncomputable def toCPTP (oracle : OracleFamily) :
     {n : ℕ} → {ι : Type} → QuantumCircuit n ι → ι
-  | _, _, .gate q => CPTPMap.ofUnitary (unitaryOf (oracle _) q)
+  | _, _, .gate g => CPTPMap.ofUnitary (unitaryOf (oracle _) g)
   | _, _, .seq c₁ c₂ => (toCPTP oracle c₂).compose (toCPTP oracle c₁)
   | _, _, @QuantumCircuit.par m k c₁ c₂ =>
       let e := finFunSplitEquiv m k (Fin 2)
