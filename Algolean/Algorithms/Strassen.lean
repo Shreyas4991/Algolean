@@ -103,53 +103,77 @@ lemma Nat.length_digits_mul {x y b : ℕ} (hb : 1 < b) :
 
 variable {n : ℕ} {R : Type}
 
-def Matrix.toPreBlockForm (M : Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R) :
-    Matrix (Fin (2 ^ n) ⊕ Fin (2 ^ n)) (Fin (2 ^ n) ⊕ Fin (2 ^ n)) R :=
+abbrev StrassenMatrix (n : ℕ) (R : Type) := Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R
+
+lemma helper_lt1 {i n : ℕ} (h : i < 2 ^ (n - 1)) (h' : 0 < n) : i < 2 ^ n := by
+  apply Nat.lt_trans h (Nat.two_pow_pred_lt_two_pow h')
+
+lemma helper_lt2 {i n : ℕ} (h : i < 2 ^ (n - 1)) (h' : 0 < n) : i + 2 ^ (n - 1) < 2 ^ n := by
+  apply Nat.lt_of_lt_of_eq (m := 2 ^ (n - 1) + 2 ^ (n - 1))
+  · exact Nat.add_lt_add_right h (2 ^ (n - 1))
+  · exact Nat.two_pow_pred_add_two_pow_pred h'
+
+def Matrix.toPreBlockForm (M : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) (h : 0 < n) :
+    Matrix (Fin (2 ^ (n - 1)) ⊕ Fin (2 ^ (n - 1))) (Fin (2 ^ (n - 1)) ⊕ Fin (2 ^ (n - 1))) R :=
   .of fun i j =>
     match i, j with
-    | .inl i, .inl j => M ⟨i.1, by lia⟩ ⟨j.1, by lia⟩
-    | .inl i, .inr j => M ⟨i.1, by lia⟩ ⟨j.1 + 2 ^ n, by lia⟩
-    | .inr i, .inl j => M ⟨i.1 + 2 ^ n, by lia⟩ ⟨j.1, by lia⟩
-    | .inr i, .inr j => M ⟨i.1 + 2 ^ n, by lia⟩ ⟨j.1 + 2 ^ n, by lia⟩
+    | .inl i, .inl j => M ⟨i.1, helper_lt1 i.2 h⟩ ⟨j.1, helper_lt1 j.2 h⟩
+    | .inl i, .inr j => M ⟨i.1, helper_lt1 i.2 h⟩ ⟨j.1 + 2 ^ (n - 1), helper_lt2 j.2 h⟩
+    | .inr i, .inl j => M ⟨i.1 + 2 ^ (n - 1), helper_lt2 i.2 h⟩ ⟨j.1, helper_lt1 j.2 h⟩
+    | .inr i, .inr j =>
+      M ⟨i.1 + 2 ^ (n - 1), helper_lt2 i.2 h⟩ ⟨j.1 + 2 ^ (n - 1), helper_lt2 j.2 h⟩
 
 @[simp, grind =]
-lemma Matrix.toPreBlockForm_inl_inr {M : Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R}
-  {i j : Fin (2 ^ n)} :
-    M.toPreBlockForm (.inl i) (.inr j) = M ⟨i.1, by lia⟩ ⟨j.1 + 2 ^ n, by lia⟩ := by rfl
+lemma Matrix.toPreBlockForm_inl_inr {M : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R}
+  {i j : Fin (2 ^ (n - 1))} (h : 0 < n) :
+    (M.toPreBlockForm h) (.inl i) (.inr j) =
+      M ⟨i.1, helper_lt1 i.2 h⟩ ⟨j.1 + 2 ^ (n - 1), helper_lt2 j.2 h⟩ := by rfl
 
 @[simp, grind =]
-lemma Matrix.toPreBlockForm_inr_inl {M : Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R}
-  {i j : Fin (2 ^ n)} :
-    M.toPreBlockForm (.inr i) (.inl j) = M ⟨i.1 + 2 ^ n, by lia⟩ ⟨j.1, by lia⟩ := by rfl
+lemma Matrix.toPreBlockForm_inr_inl {M : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R}
+  {i j : Fin (2 ^ (n - 1))} (h : 0 < n) :
+    (M.toPreBlockForm h) (.inr i) (.inl j) =
+      M ⟨i.1 + 2 ^ (n - 1), helper_lt2 i.2 h⟩ ⟨j.1, helper_lt1 j.2 h⟩ := by rfl
 
 @[simp, grind =]
-lemma Matrix.toPreBlockForm_inr_inr {M : Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R}
-  {i j : Fin (2 ^ n)} :
-    M.toPreBlockForm (.inr i) (.inr j) = M ⟨i.1 + 2 ^ n, by lia⟩ ⟨j.1 + 2 ^ n, by lia⟩ := by rfl
+lemma Matrix.toPreBlockForm_inr_inr {M : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R}
+  {i j : Fin (2 ^ (n - 1))} (h : 0 < n) :
+    (M.toPreBlockForm h) (.inr i) (.inr j) =
+      M ⟨i.1 + 2 ^ (n - 1), helper_lt2 i.2 h⟩ ⟨j.1 + 2 ^ (n - 1), helper_lt2 j.2 h⟩ := by rfl
 
 @[simp, grind =]
-lemma Matrix.toPreBlockForm_inl_inl {M : Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R}
-  {i j : Fin (2 ^ n)} :
-    M.toPreBlockForm (.inl i) (.inl j) = M ⟨i.1, by lia⟩ ⟨j.1, by lia⟩ := by rfl
+lemma Matrix.toPreBlockForm_inl_inl {M : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R}
+  {i j : Fin (2 ^ (n - 1))} (h : 0 < n) :
+    (M.toPreBlockForm h) (.inl i) (.inl j) =
+      M ⟨i.1, helper_lt1 i.2 h⟩ ⟨j.1, helper_lt1 j.2 h⟩ := by rfl
 
-def Matrix.ofPostBlockForm (M : Matrix (Fin (2 ^ n) ⊕ Fin (2 ^ n)) (Fin (2 ^ n) ⊕ Fin (2 ^ n)) R) :
-    Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R :=
+lemma helper_lt3 {i : ℕ} (hi₁ : ¬ i < 2 ^ (n - 1)) (hi₂ : i < 2 ^ n) (h : 0 < n) :
+    i - 2 ^ (n - 1) < 2 ^ (n - 1) := by
+  apply Nat.sub_lt_right_of_lt_add
+  · exact Nat.not_lt.mp hi₁
+  · rwa [← Nat.two_pow_succ, Nat.sub_one_add_one_eq_of_pos h]
+
+def Matrix.ofPostBlockForm
+  (M : Matrix (Fin (2 ^ (n - 1)) ⊕ Fin (2 ^ (n - 1))) (Fin (2 ^ (n - 1)) ⊕ Fin (2 ^ (n - 1))) R)
+  (h : 0 < n) :
+    Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R :=
   .of fun i j =>
-    if hi : i.1 < 2^n
+    if hi : i.1 < 2 ^ (n - 1)
     then
-      if hj : j.1 < 2^n
+      if hj : j.1 < 2 ^ (n - 1)
       then M (.inl ⟨i.1, hi⟩) (.inl ⟨j.1, hj⟩)
-      else M (.inl ⟨i.1, hi⟩) (.inr ⟨j.1 - 2^n, by lia⟩)
+      else M (.inl ⟨i.1, hi⟩) (.inr ⟨j.1 - 2^(n - 1), helper_lt3 hj j.2 h⟩)
     else
-      if hj : j.1 < 2^n
-      then M (.inr ⟨i.1 - 2^n, by lia⟩) (.inl ⟨j.1, hj⟩)
-      else M (.inr ⟨i.1 - 2^n, by lia⟩) (.inr ⟨j.1 - 2^n, by lia⟩)
+      if hj : j.1 < 2 ^ (n - 1)
+      then M (.inr ⟨i.1 - 2^(n - 1), helper_lt3 hi i.2 h⟩) (.inl ⟨j.1, hj⟩)
+      else M (.inr ⟨i.1 - 2^(n - 1), helper_lt3 hi i.2 h⟩)
+              (.inr ⟨j.1 - 2^(n - 1), helper_lt3 hj j.2 h⟩)
 
 lemma Matrix.transformationHelper1
-  {M : Matrix (Fin (2 ^ n) ⊕ Fin (2 ^ n)) (Fin (2 ^ n) ⊕ Fin (2 ^ n)) R}
-  {N : Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R} :
-    M.ofPostBlockForm = N ↔ M = N.toPreBlockForm := by
-  simp only [Nat.succ_eq_add_one, ofPostBlockForm, toPreBlockForm]
+  {M : Matrix (Fin (2 ^ (n - 1)) ⊕ Fin (2 ^ (n - 1))) (Fin (2 ^ (n - 1)) ⊕ Fin (2 ^ (n - 1))) R}
+  {N : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} (h : 0 < n) :
+    (M.ofPostBlockForm h) = N ↔ M = (N.toPreBlockForm h) := by
+  simp only [ofPostBlockForm, toPreBlockForm]
   constructor
   · intro h
     simp [← h, ← ext_iff]
@@ -187,8 +211,8 @@ lemma sum_helper (f : Fin (2 ^ (n + 1)) → R) [Ring R] :
   simp [this, Finset.sum_union dist, e₁, e₂, ← Function.Embedding.toFun_eq_coe]
 
 
-lemma Matrix.toPreBlockForm_mul [Ring R] {A B : Matrix (Fin (2 ^ n.succ)) (Fin (2 ^ n.succ)) R} :
-    (A * B).toPreBlockForm = A.toPreBlockForm * B.toPreBlockForm := by
+lemma Matrix.toPreBlockForm_mul [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} (h : 0 < n) :
+    (A * B).toPreBlockForm h = (A.toPreBlockForm h) * (B.toPreBlockForm h) := by
   simp only [Nat.succ_eq_add_one, ← ext_iff, mul_apply, Fintype.sum_sum_type, Sum.forall,
     toPreBlockForm_inl_inl, toPreBlockForm_inr_inl, toPreBlockForm_inl_inr, toPreBlockForm_inr_inr,
     ← forall_and]
@@ -204,13 +228,10 @@ namespace Algolean.Algorithms
 public def Strassen {n : ℕ} {R : Type} [Ring R]
   (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) (B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) :
     Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R :=
-  match n with
-  | .zero =>
-    let r := A 0 0 * B 0 0
-    .of fun _ _ => r
-  | .succ _ =>
-    let A := A.toPreBlockForm
-    let B := B.toPreBlockForm
+  if h : 0 < n
+  then
+    let A := A.toPreBlockForm h
+    let B := B.toPreBlockForm h
     -- block matrices
     let A₁₁ := A.toBlocks₁₁
     let A₁₂ := A.toBlocks₁₂
@@ -229,7 +250,11 @@ public def Strassen {n : ℕ} {R : Type} [Ring R]
     let M₆ := Strassen (A₂₁ - A₁₁) (B₁₁ + B₁₂)
     let M₇ := Strassen (A₁₂ - A₂₂) (B₂₁ + B₂₂)
     --final result
-    (Matrix.fromBlocks (M₁ + M₄ - M₅ + M₇) (M₃ + M₅) (M₂ + M₄) (M₁ - M₂ + M₃ + M₆)).ofPostBlockForm
+    let comb := (Matrix.fromBlocks (M₁ + M₄ - M₅ + M₇) (M₃ + M₅) (M₂ + M₄) (M₁ - M₂ + M₃ + M₆))
+    comb.ofPostBlockForm h
+  else
+    let r := A 0 0 * B 0 0
+    .of fun _ _ => r
 
 public theorem StrassenHelper_eq_matrixMul {n : ℕ} {R : Type} [Ring R]
   {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} {B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
@@ -253,10 +278,10 @@ def mulProg (x y : ℤ) : Prog unitArithmeticQuery ℤ := do
   then
     if y < 0
     then return prod
-    else return ( - (prod : ℤ))
+    else return (- (prod : ℤ))
   else
     if y < 0
-    then return ( - (prod : ℤ))
+    then return (- (prod : ℤ))
     else return prod
 
 lemma mulProd_eval_unit {x y : ℤ} : (mulProg x y).eval unitArithmeticModel = x * y := by
@@ -267,6 +292,36 @@ lemma mulProd_cost_unit {x y : ℤ} : (mulProg x y).time unitArithmeticModel = 1
   simp [mulProg]
   grind
 
+def StrassenProg {n : ℕ}
+  (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) (B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+    Prog unitArithmeticQuery (Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) := do
+  if h : 0 < n
+  then
+    let A := A.toPreBlockForm h
+    let B := B.toPreBlockForm h
+    -- block matrices
+    let A₁₁ := A.toBlocks₁₁
+    let A₁₂ := A.toBlocks₁₂
+    let A₂₁ := A.toBlocks₂₁
+    let A₂₂ := A.toBlocks₂₂
+    let B₁₁ := B.toBlocks₁₁
+    let B₁₂ := B.toBlocks₁₂
+    let B₂₁ := B.toBlocks₂₁
+    let B₂₂ := B.toBlocks₂₂
+    -- intermediate results
+    let M₁ ← StrassenProg (A₁₁ + A₂₂) (B₁₁ + B₂₂)
+    let M₂ ← StrassenProg (A₂₁ + A₂₂) B₁₁
+    let M₃ ← StrassenProg A₁₁ (B₁₂ - B₂₂)
+    let M₄ ← StrassenProg A₂₂ (B₂₁ - B₁₁)
+    let M₅ ← StrassenProg (A₁₁ + A₁₂) B₂₂
+    let M₆ ← StrassenProg (A₂₁ - A₁₁) (B₁₁ + B₁₂)
+    let M₇ ← StrassenProg (A₁₂ - A₂₂) (B₂₁ + B₂₂)
+    --final result
+    let comb := (Matrix.fromBlocks (M₁ + M₄ - M₅ + M₇) (M₃ + M₅) (M₂ + M₄) (M₁ - M₂ + M₃ + M₆))
+    return comb.ofPostBlockForm h
+  else
+    let r  ← mulProg (A 0 0) (B 0 0)
+    return .of fun _ _ => r
 
 
 end Algolean.Algorithms
