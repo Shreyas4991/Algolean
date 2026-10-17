@@ -229,7 +229,7 @@ lemma Matrix.toPreBlockForm_mul [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n
 namespace Algolean.Algorithms
 
 public def Strassen {n : ℕ} {R : Type} [Ring R]
-  (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) (B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) :
+  (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) :
     Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R :=
   if h : 0 < n
   then
@@ -279,8 +279,8 @@ theorem Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_3 {R : Type} [
       A₂₁ * B₁₂ + A₂₂ * B₂₂ := by
   grind
 
-public theorem StrassenHelper_eq_matrixMul {n : ℕ} {R : Type} [Ring R]
-  {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} {B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+public theorem Strassen_eq_matrixMul {n : ℕ} {R : Type} [Ring R]
+  {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
     Strassen A B = A * B := by
   induction n with
   | zero =>
@@ -330,7 +330,7 @@ lemma mulProd_cost_unit {x y : ℤ} : (mulProg x y).time unitArithmeticModel = 1
   grind
 
 public def StrassenProg {n : ℕ}
-  (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) (B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+  (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
     Prog unitArithmeticQuery (Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) := do
   if h : 0 < n
   then
@@ -360,5 +360,32 @@ public def StrassenProg {n : ℕ}
     let r  ← mulProg (A 0 0) (B 0 0)
     return .of fun _ _ => r
 
+public theorem StrassenProg_eval_unit_eq_Strassen
+  {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+    (StrassenProg A B).eval unitArithmeticModel = Strassen A B := by
+  unfold StrassenProg Strassen
+  by_cases h : 0 < n
+  · simp only [h, ↓reduceDIte, bind_pure_comp, Prog.eval_bind, Prog.eval_map]
+    congr
+    all_goals apply StrassenProg_eval_unit_eq_Strassen
+  · simp [h, mulProd_eval_unit]
+
+public theorem StrassenProg_eval_unit_eq_mul
+  {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+    (StrassenProg A B).eval unitArithmeticModel = A * B := by
+  simp [StrassenProg_eval_unit_eq_Strassen, Strassen_eq_matrixMul]
+
+public theorem StrassenProg_time_unit
+  {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+    (StrassenProg A B).time unitArithmeticModel = 7 ^ n := by
+  unfold StrassenProg
+  by_cases h : 0 < n
+  · simp only [h, ↓reduceDIte, bind_pure_comp, Prog.time_bind, Prog.time_map]
+    rw [StrassenProg_time_unit, StrassenProg_time_unit, StrassenProg_time_unit,
+      StrassenProg_time_unit,
+      StrassenProg_time_unit, StrassenProg_time_unit, StrassenProg_time_unit]
+    have : ∀ (x y : ℕ), x + y * x = (y + 1) * x := by grind
+    simp [← Nat.two_mul, this, ← Nat.pow_add_one', Nat.sub_add_cancel h]
+  · simp [mulProd_cost_unit, Nat.eq_zero_of_not_pos h]
 
 end Algolean.Algorithms
