@@ -6,7 +6,7 @@ Authors: Tanner Duve, Shreyas Srinivas
 
 module
 
-public import Cslib.Computability.Machines.SingleTapeTuring.Basic
+public import Cslib.Computability.Machines.Turing.SingleTape.Deterministic
 public import Mathlib.Algebra.Polynomial.Eval.Defs
 
 /-!
@@ -22,7 +22,7 @@ namespace Algolean
 
 namespace Algorithms
 
-open Turing SingleTapeTM Polynomial
+open Cslib.Turing.SingleTapeTM Polynomial
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 

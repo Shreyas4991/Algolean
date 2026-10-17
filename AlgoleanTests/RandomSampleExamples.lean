@@ -76,7 +76,7 @@ set_option mvcgen.warning false in
 example {α : Type} (dist : PMF α) :
     letI := (free (Cost := ℕ)).hasHandler
     ⦃⌜True⌝⦄ draw dist ⦃⇓ a => ⌜a ∈ dist.support⌝⦄ := by
-  letI := (free (Cost := ℕ)).hasHandler
+  let _inst := (free (Cost := ℕ)).hasHandler
   mvcgen [draw]
   exact fun a ha => ha
 

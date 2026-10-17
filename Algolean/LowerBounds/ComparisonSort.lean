@@ -26,9 +26,9 @@ the comparison sort lower bound.
 
 namespace Algolean
 
-namespace Algorithms
+namespace LowerBounds
 
-open Cslib Prog
+open Cslib Algorithms Prog
 
 /--
 Finite pigeonhole/cardinality step over an arbitrary finite domain.
@@ -627,6 +627,6 @@ theorem cmpSort_lower_bound_le_family
 
 end HiddenModelFamily
 
-end Algorithms
+end LowerBounds
 
 end Algolean

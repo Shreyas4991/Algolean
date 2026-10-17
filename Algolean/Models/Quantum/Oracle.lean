@@ -220,7 +220,7 @@ theorem U_conj_pure_basis_apply {d : Type*} [Fintype d] [DecidableEq d]
     (U : 𝐔[d]) (b i j : d) :
     (U ◃ MState.pure (Ket.basis b)).m i j =
       U i b * star (U j b) := by
-  simp only [MState.U_conj, MState.m, HermitianMat.conj_apply_mat]
+  simp only [MState.uConj, MState.m, HermitianMat.conj_apply_mat]
   simp only [Matrix.mul_apply, Matrix.conjTranspose_apply, MState.pure,
     HermitianMat.mat_mk, Matrix.vecMulVec_apply, Ket.basis, Bra.eq_conj]
   rw [Finset.sum_eq_single b]

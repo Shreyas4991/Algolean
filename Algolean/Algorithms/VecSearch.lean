@@ -46,9 +46,9 @@ open ReadOnlyVec in
 /-- Linear Search in Lists on top of the `ListSearch` query model. -/
 @[grind]
 def vecLinearSearch [BEq α] (v : Vector α n) (x : α) : Prog (ReadOnlyVec α) Bool := do
-  match n with
-  | 0 => return false
-  | _ + 1 =>
+  match n, v with
+  | 0, _ => return false
+  | _ + 1, v =>
     let topElem : α ← read v 0
     if topElem == x then
       return true
@@ -277,8 +277,7 @@ lemma one_add_log_le_log_of_two_mul_le {a b : Nat}
 
 private lemma listBinarySearch_time_complexity_upper_bound_aux
     [BEq α] [LawfulBEq α] (le : α → α → Bool)
-    [Std.Total (fun x y => le x y)] [IsTrans _ (fun x y => le x y)]
-    [Std.Antisymm (fun x y => le x y)] (v : Vector α n)
+    (v : Vector α n)
     (hSorted : v.toList.Pairwise (fun x y => le x y)) :
     (vecBinarySearch le v x).time ReadOnlyVec.natCost ≤ if n = 0 then 0 else 1 + Nat.log 2 n := by
   fun_induction vecBinarySearch with
@@ -311,8 +310,7 @@ private lemma listBinarySearch_time_complexity_upper_bound_aux
         simpa [Nat.succ_eq_add_one] using (Nat.succ_le_succ hrec)
 
 lemma listBinarySearch_time_complexity_upper_bound [BEq α] [LawfulBEq α] (le : α → α → Bool)
-    [Std.Total (fun x y => le x y)] [IsTrans _ (fun x y => le x y)]
-    [Std.Antisymm (fun x y => le x y)] (v : Vector α n)
+    (v : Vector α n)
     (hSorted : v.toList.Pairwise (fun x y => le x y)) :
     (vecBinarySearch le v x).time ReadOnlyVec.natCost ≤ 1 + Nat.log 2 (n + 1) := by
   by_cases hn : n = 0

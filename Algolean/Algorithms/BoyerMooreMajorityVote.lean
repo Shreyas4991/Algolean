@@ -162,7 +162,7 @@ private theorem VoteState.stepM_eval [BEq α] (state : VoteState α) (x : α) :
   · simp [VoteState.stepM, VoteState.step]
   · cases n <;> simp [VoteState.stepM, VoteState.step] <;> split <;> simp_all
 
-private lemma VoteState.balance_append_singleton [BEq α] [LawfulBEq α]
+private lemma VoteState.balance_append_singleton [BEq α]
     (a x : α) (xs : List α) :
     balance a (xs ++ [x]) = balance a xs + if x == a then 1 else -1 := by
   simp only [balance, List.count_append, List.count_cons, List.count_nil,
@@ -176,7 +176,7 @@ private lemma VoteState.score_step [BEq α] [LawfulBEq α]
   · simp [score, step]
   · cases n <;> simp [score, step] <;> grind
 
-private lemma VoteState.balance_pos_of_majority [BEq α] [LawfulBEq α]
+private lemma VoteState.balance_pos_of_majority [BEq α]
     (a : α) (xs : List α) (h : IsMajority a xs) : 0 < balance a xs := by
   simp only [IsMajority, balance] at h ⊢
   lia
@@ -196,7 +196,7 @@ theorem VoteState.stepM_spec [BEq α] [LawfulBEq α]
 
 set_option mvcgen.warning false in
 /-- One verification step increments precisely when the current element equals the candidate. -/
-theorem countStep_spec [BEq α] [LawfulBEq α]
+theorem countStep_spec [BEq α]
     (candidate x : α) (count : OccurrenceCount α) :
     ⦃⌜True⌝⦄ countStep candidate x count
       ⦃⇓result =>
