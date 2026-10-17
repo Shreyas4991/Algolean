@@ -7,6 +7,7 @@ module
 
 import Mathlib.Data.Matrix.Reflection
 public import Mathlib.Data.Matrix.Block
+public import Mathlib.LinearAlgebra.Matrix.Defs
 public import Algolean.Models.Arithmetic
 
 lemma Nat.length_digits_le_of_le {x y b : ℕ} (hxy : x ≤ y) (hb : 1 < b) :
@@ -181,28 +182,29 @@ lemma Matrix.transformationHelper1
     simp [h, ← ext_iff]
     grind
 
-lemma sum_helper (f : Fin (2 ^ (n + 1)) → R) [Ring R] :
-    ∑ (x : Fin (2 ^ n)), f ⟨x.1, by lia⟩ + ∑ (x : Fin (2 ^ n)), f ⟨x.1 + 2 ^ n, by lia⟩
+lemma sum_helper (f : Fin (2 ^ n) → R) [Ring R] (h : 0 < n) :
+    ∑ (x : Fin (2 ^ (n - 1))), f ⟨x.1, helper_lt1 x.2 h⟩
+    + ∑ (x : Fin (2 ^ (n - 1))), f ⟨x.1 + 2 ^ (n - 1), helper_lt2 x.2 h⟩
       = ∑ x, f x:= by
-  let e₁ : Function.Embedding (Fin (2 ^ n)) (Fin (2 ^ (n + 1))) := {
-    toFun := fun x => ⟨x.1, by lia⟩
+  let e₁ : Function.Embedding (Fin (2 ^ (n - 1))) (Fin (2 ^ n)) := {
+    toFun := fun x => ⟨x.1, helper_lt1 x.2 h⟩
     inj' := by simp [Function.Injective, Fin.val_inj]
   }
-  let e₂ : Function.Embedding (Fin (2 ^ n)) (Fin (2 ^ (n + 1))) := {
-    toFun := fun x => ⟨x.1 + 2 ^ n, by lia⟩
+  let e₂ : Function.Embedding (Fin (2 ^ (n - 1))) (Fin (2 ^ n)) := {
+    toFun := fun x => ⟨x.1 + 2 ^ (n - 1), helper_lt2 x.2 h⟩
     inj' := by simp [Function.Injective, Fin.val_inj]
   }
-  have : Finset.univ (α := Fin (2 ^ (n + 1))) = (Finset.univ (α := Fin (2 ^ n))).map e₁
-    ∪ (Finset.univ (α := Fin (2 ^ n))).map e₂ := by
+  have : Finset.univ (α := Fin (2 ^ n)) = (Finset.univ (α := Fin (2 ^ (n - 1)))).map e₁
+    ∪ (Finset.univ (α := Fin (2 ^ (n - 1)))).map e₂ := by
     simp only [Finset.ext_iff, Finset.mem_univ, Finset.mem_union, Finset.mem_map, true_and,
       true_iff]
     intro x
-    by_cases h : x.1 < 2 ^ n
+    by_cases h' : x.1 < 2 ^ (n - 1)
     · left
-      use ⟨x.1, h⟩
+      use ⟨x.1, h'⟩
       simp [e₁, ← Function.Embedding.toFun_eq_coe]
     · right
-      use ⟨x.1 - 2 ^ n , by lia⟩
+      use ⟨x.1 - 2 ^ (n - 1) , helper_lt3 h' x.2 h⟩
       simp [e₂, ← Function.Embedding.toFun_eq_coe]
       grind
   have dist : Disjoint (Finset.map e₁ Finset.univ) (Finset.map e₂ Finset.univ) := by
@@ -213,15 +215,16 @@ lemma sum_helper (f : Fin (2 ^ (n + 1)) → R) [Ring R] :
 
 lemma Matrix.toPreBlockForm_mul [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} (h : 0 < n) :
     (A * B).toPreBlockForm h = (A.toPreBlockForm h) * (B.toPreBlockForm h) := by
-  simp only [Nat.succ_eq_add_one, ← ext_iff, mul_apply, Fintype.sum_sum_type, Sum.forall,
+  simp only [← ext_iff, mul_apply, Fintype.sum_sum_type, Sum.forall,
     toPreBlockForm_inl_inl, toPreBlockForm_inr_inl, toPreBlockForm_inl_inr, toPreBlockForm_inr_inr,
     ← forall_and]
   intro i j
-  simp [sum_helper (f := fun k => A ⟨i, by lia⟩ k * B k ⟨j, by lia⟩),
-    sum_helper (f := fun k => A ⟨i + 2 ^ n, by lia⟩ k * B k ⟨j, by lia⟩),
-    sum_helper (f := fun k => A ⟨i, by lia⟩ k * B k ⟨j + 2 ^ n, by lia⟩),
-    sum_helper (f := fun k => A ⟨i + 2 ^ n, by lia⟩ k * B k ⟨j + 2 ^ n, by lia⟩)
-  ]
+  simp [sum_helper (fun k => A ⟨i, helper_lt1 i.2 h⟩ k * B k ⟨j, helper_lt1 j.2 h⟩) h,
+    sum_helper (fun k => A ⟨i, helper_lt1 i.2 h⟩ k * B k ⟨j + 2 ^ (n - 1), helper_lt2 j.2 h⟩) h,
+    sum_helper (fun k => A ⟨i + 2 ^ (n - 1), helper_lt2 i.2 h⟩ k * B k ⟨j, helper_lt1 j.2 h⟩) h,
+    sum_helper
+        (fun k => A ⟨i + 2 ^ (n - 1), helper_lt2 i.2 h⟩ k * B k ⟨j + 2 ^ (n - 1), helper_lt2 j.2 h⟩)
+        h]
 
 namespace Algolean.Algorithms
 
@@ -256,6 +259,26 @@ public def Strassen {n : ℕ} {R : Type} [Ring R]
     let r := A 0 0 * B 0 0
     .of fun _ _ => r
 
+-- for some reason grind does not directly work in the lemma, but only on the extracted goals.
+
+theorem Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_1 {R : Type} [Ring R] (m : ℕ)
+  (A₁₁ A₁₂ A₂₂ B₁₁ B₂₁ B₂₂ : Matrix (Fin (2 ^ (m + 1 - 1))) (Fin (2 ^ (m + 1 - 1))) R)
+  :
+    (A₁₁ + A₂₂) * (B₁₁ + B₂₂) + A₂₂ * (B₂₁ - B₁₁) - (A₁₁ + A₁₂) * B₂₂ + (A₁₂ - A₂₂) * (B₂₁ + B₂₂) =
+      A₁₁ * B₁₁ + A₁₂ * B₂₁ := by
+  grind
+
+theorem Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_2 {R : Type} [Ring R] (m : ℕ)
+  (A₁₁ A₁₂ B₁₂ B₂₂ : Matrix (Fin (2 ^ (m + 1 - 1))) (Fin (2 ^ (m + 1 - 1))) R) :
+    A₁₁ * (B₁₂ - B₂₂) + (A₁₁ + A₁₂) * B₂₂ = A₁₁ * B₁₂ + A₁₂ * B₂₂ := by
+  grind
+
+theorem Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_3 {R : Type} [Ring R] (m : ℕ)
+  (A₁₁ A₂₁ A₂₂ B₁₁ B₁₂ B₂₂ : Matrix (Fin (2 ^ (m + 1 - 1))) (Fin (2 ^ (m + 1 - 1))) R) :
+    (A₁₁ + A₂₂) * (B₁₁ + B₂₂) - (A₂₁ + A₂₂) * B₁₁ + A₁₁ * (B₁₂ - B₂₂) + (A₂₁ - A₁₁) * (B₁₁ + B₁₂) =
+      A₂₁ * B₁₂ + A₂₂ * B₂₂ := by
+  grind
+
 public theorem StrassenHelper_eq_matrixMul {n : ℕ} {R : Type} [Ring R]
   {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} {B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
     Strassen A B = A * B := by
@@ -263,14 +286,28 @@ public theorem StrassenHelper_eq_matrixMul {n : ℕ} {R : Type} [Ring R]
   | zero =>
     simp [Strassen, ← Matrix.ext_iff, Matrix.mul_apply]
   | succ m ih =>
-    simp only [Strassen, ih, Matrix.transformationHelper1 (N := A * B),
-      Matrix.toPreBlockForm_mul]
+    have h : 0 < m + 1 := by simp
+    simp only [Strassen, h, ↓reduceDIte, Nat.add_one_sub_one, ih,
+      Matrix.transformationHelper1 (N := A * B), Matrix.toPreBlockForm_mul]
+    let (eq := hA₁₁) A₁₁ := (A.toPreBlockForm h).toBlocks₁₁
+    let (eq := hA₁₂) A₁₂ := (A.toPreBlockForm h).toBlocks₁₂
+    let (eq := hA₂₁) A₂₁ := (A.toPreBlockForm h).toBlocks₂₁
+    let (eq := hA₂₂) A₂₂ := (A.toPreBlockForm h).toBlocks₂₂
+    let (eq := hB₁₁) B₁₁ := (B.toPreBlockForm h).toBlocks₁₁
+    let (eq := hB₁₂) B₁₂ := (B.toPreBlockForm h).toBlocks₁₂
+    let (eq := hB₂₁) B₂₁ := (B.toPreBlockForm h).toBlocks₂₁
+    let (eq := hB₂₂) B₂₂ := (B.toPreBlockForm h).toBlocks₂₂
     conv =>
       rhs
-      rw [← Matrix.fromBlocks_toBlocks (M := A.toPreBlockForm),
-        ← Matrix.fromBlocks_toBlocks (M:= B.toPreBlockForm), Matrix.fromBlocks_multiply]
+      rw [← Matrix.fromBlocks_toBlocks (M := A.toPreBlockForm h),
+        ← Matrix.fromBlocks_toBlocks (M:= B.toPreBlockForm h), Matrix.fromBlocks_multiply]
+    simp only [← hA₁₁, ← hA₂₂, ← hB₁₁, ← hB₂₂, ← hB₂₁, ← hA₁₂, ← hB₁₂, ← hA₂₁, Nat.add_one_sub_one]
     congr 1
-    all_goals grind
+    · apply Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_1
+    · apply Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_2
+    · simp [Matrix.add_mul, Matrix.mul_sub]
+    · apply Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_3
+
 
 def mulProg (x y : ℤ) : Prog unitArithmeticQuery ℤ := do
   let prod : ℕ ← unitArithmeticQuery.mul x.natAbs y.natAbs
@@ -292,7 +329,7 @@ lemma mulProd_cost_unit {x y : ℤ} : (mulProg x y).time unitArithmeticModel = 1
   simp [mulProg]
   grind
 
-def StrassenProg {n : ℕ}
+public def StrassenProg {n : ℕ}
   (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) (B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
     Prog unitArithmeticQuery (Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) := do
   if h : 0 < n
