@@ -499,7 +499,7 @@ theorem _root_.Nat.clog_le_add_one_log_base_two (n : ℕ) : Nat.clog 2 n ≤ 1 +
   rw [← Real.natFloor_logb_natCast, ← Real.natCeil_logb_natCast, add_comm]
   apply Nat.ceil_le_floor_add_one
 
-theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
+theorem Karatsuba_time {b x y : ℕ} (hb : 2 ≤ b) :
     (KaratsubaProg b x y hb).time (boundedArithmeticModel (b^3)) ≤
       3 * ((max (digits b x).length (digits b y).length) : ℝ) ^ Real.logb 2 3 := by
   simp only [KaratsubaProg]

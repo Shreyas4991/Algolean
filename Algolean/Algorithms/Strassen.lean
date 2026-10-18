@@ -101,8 +101,6 @@ lemma Nat.length_digits_mul {x y b : ℕ} (hb : 1 < b) :
 
 variable {n : ℕ} {R : Type}
 
-abbrev StrassenMatrix (n : ℕ) (R : Type) := Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R
-
 lemma helper_lt1 {i n : ℕ} (h : i < 2 ^ (n - 1)) (h' : 0 < n) : i < 2 ^ n := by
   apply Nat.lt_trans h (Nat.two_pow_pred_lt_two_pow h')
 
@@ -222,6 +220,24 @@ lemma Matrix.toPreBlockForm_mul [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n
     sum_helper
         (fun k => A ⟨i + 2 ^ (n - 1), helper_lt2 i.2 h⟩ k * B k ⟨j + 2 ^ (n - 1), helper_lt2 j.2 h⟩)
         h]
+
+public def Matrix.maxAbsEntry {I J : Type} [Fintype I] [Fintype J] [Nonempty I] [Nonempty J]
+  (A : Matrix I J ℤ) :
+    ℕ :=
+  Finset.univ (α := I × J) |>.image (fun x => (A x.1 x.2).natAbs) |>.max' (by simp)
+
+@[simp, grind =]
+public lemma Matrix.maxAbsEntry_fin_two_pow_zero
+  {A : Matrix (Fin (2 ^ 0)) (Fin (2 ^ 0)) ℤ} :
+    A.maxAbsEntry = (A 0 0).natAbs := by
+  simp [maxAbsEntry, Finset.max'_eq_iff]
+
+@[simp, grind =]
+public lemma Matrix.maxAbsEntry_fin_one
+  {A : Matrix (Fin 1) (Fin 1) ℤ} :
+    A.maxAbsEntry = (A 0 0).natAbs := by
+  simp [maxAbsEntry, Finset.max'_eq_iff]
+
 
 namespace Algolean.Algorithms
 
@@ -403,5 +419,30 @@ public theorem StrassenProg_eval_boundedArith_eq_mul
       = A * B := by
   rw [reduceProg_eval, StrassenProg_eval_unit_eq_mul]
   apply arithReduction_correct
+
+public theorem StrassenProg_time_boundedArithmetic
+  {n b : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) (hb : 2 ≤ b) :
+    let maxEntry := max (Matrix.maxAbsEntry A) (Matrix.maxAbsEntry B)
+    ((StrassenProg A B).reduceProg (arithReduction b hb) |>.time (boundedArithmeticModel (b ^ 3)))
+      ≤ 7 ^ n * (3 * ((max (b.digits (Matrix.maxAbsEntry A + n)).length (b.digits (Matrix.maxAbsEntry B + n)).length) : ℝ) ^ Real.logb 2 3) := by
+  simp
+  rw [reduceProg_time _ _ _ _ (arithReduction_correct hb)]
+  simp
+  by_cases hn : 0 < n
+  · sorry
+  · simp at hn
+    simp [StrassenProg, mulProg, arithReduction, hn]
+    split
+    · split
+      · simp
+        grw [Karatsuba_time b _ _ hb]
+        simp
+      · simp
+        grw [Karatsuba_time b _ _ hb]
+    · split
+      · simp
+        grw [Karatsuba_time b _ _ hb]
+      · simp
+        grw [Karatsuba_time b _ _ hb]
 
 end Algolean.Algorithms
