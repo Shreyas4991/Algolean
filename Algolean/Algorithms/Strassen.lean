@@ -5,10 +5,7 @@ Authors: Johannes Tantow
 -/
 module
 
-import Mathlib.Data.Matrix.Reflection
-public import Mathlib.Data.Matrix.Block
-public import Mathlib.LinearAlgebra.Matrix.Defs
-public import Algolean.Models.Arithmetic
+public import Algolean.Algorithms.Karatsuba
 
 lemma Nat.length_digits_le_of_le {x y b : ℕ} (hxy : x ≤ y) (hb : 1 < b) :
     (b.digits x).length ≤ (b.digits y).length := by
@@ -308,6 +305,7 @@ public theorem Strassen_eq_matrixMul {n : ℕ} {R : Type} [Ring R]
     · simp [Matrix.add_mul, Matrix.mul_sub]
     · apply Algolean.Algorithms.StrassenHelper_eq_matrixMul.extracted_3
 
+open Prog
 
 def mulProg (x y : ℤ) : Prog unitArithmeticQuery ℤ := do
   let prod : ℕ ← unitArithmeticQuery.mul x.natAbs y.natAbs
@@ -320,6 +318,17 @@ def mulProg (x y : ℤ) : Prog unitArithmeticQuery ℤ := do
     if y < 0
     then return (- (prod : ℤ))
     else return prod
+
+public def arithReduction (b : ℕ) (hb : 2 ≤ b) :
+    Reduction unitArithmeticQuery (boundedArithmeticQuery (b ^ 3)) where
+  reduce
+  | .mul x y => KaratsubaProg b x y hb
+
+public lemma arithReduction_correct {b : ℕ} (hb : 2 ≤ b) {ι : Type} (q : unitArithmeticQuery ι) :
+    ((arithReduction b hb).reduce q).eval (boundedArithmeticModel (b ^ 3))
+      = unitArithmeticModel.evalQuery q := by
+  cases q with
+  | mul x y => simp [arithReduction, KaratsubaProg_eval, Karatsuba_correct hb]
 
 lemma mulProd_eval_unit {x y : ℤ} : (mulProg x y).eval unitArithmeticModel = x * y := by
   simp [mulProg]
@@ -387,5 +396,12 @@ public theorem StrassenProg_time_unit
     have : ∀ (x y : ℕ), x + y * x = (y + 1) * x := by grind
     simp [← Nat.two_mul, this, ← Nat.pow_add_one', Nat.sub_add_cancel h]
   · simp [mulProd_cost_unit, Nat.eq_zero_of_not_pos h]
+
+public theorem StrassenProg_eval_boundedArith_eq_mul
+  {n b : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) (hb : 2 ≤ b) :
+    ((StrassenProg A B).reduceProg (arithReduction b hb) |>.eval (boundedArithmeticModel (b ^ 3)))
+      = A * B := by
+  rw [reduceProg_eval, StrassenProg_eval_unit_eq_mul]
+  apply arithReduction_correct
 
 end Algolean.Algorithms
