@@ -109,7 +109,7 @@ def height {R : Type} (A : StrassenMatrix R) : ℕ :=
   match A with
   | .base _ => 0
   | .combine A₁₁ A₁₂ A₂₁ A₂₂ =>
-    1 + (max (max A₁₁.height A₁₂.height) (max A₂₁.height A₂₂.height))
+    (max (max A₁₁.height A₁₂.height) (max A₂₁.height A₂₂.height)) + 1
 
 @[simp, grind =]
 lemma height_combine_base {R : Type} {r : R} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R} :
@@ -129,7 +129,7 @@ lemma height_base {R : Type} {r : R} :
 @[simp, grind =]
 lemma height_combine {R : Type} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R} :
     height (.combine A₁₁ A₁₂ A₂₁ A₂₂) =
-      1 + (max (max A₁₁.height A₁₂.height) (max A₂₁.height A₂₂.height)) := by rfl
+      (max (max A₁₁.height A₁₂.height) (max A₂₁.height A₂₂.height)) + 1 := by rfl
 
 def wellFormed {R : Type} (A : StrassenMatrix R) : Prop :=
   match A with
@@ -149,10 +149,39 @@ lemma wellFormed_combine {R : Type} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenM
     A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height := by
   simp [wellFormed]
 
+lemma height_combined_of_wellFormed {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix R}
+  (hA : (StrassenMatrix.combine A₁₁ A₁₂ A₂₁ A₂₂).wellFormed)
+  (hB : (StrassenMatrix.combine B₁₁ B₁₂ B₂₁ B₂₂).wellFormed)
+  (h : (StrassenMatrix.combine A₁₁ A₁₂ A₂₁ A₂₂).height =
+    (StrassenMatrix.combine B₁₁ B₁₂ B₂₁ B₂₂).height) :
+    A₁₁.height = B₁₁.height ∧ A₁₂.height = B₁₂.height ∧
+      A₂₁.height = B₂₁.height ∧ A₂₂.height = B₂₂.height := by
+  simp only [wellFormed_combine, height_combine, Nat.max_assoc, Nat.add_right_cancel_iff] at hA hB h
+  have h₁ := hA.2.2.2.2.1
+  have h₂ := hA.2.2.2.2.2.1
+  have h₃ := hA.2.2.2.2.2.2
+  have h₄ := hB.2.2.2.2.1
+  have h₅ := hB.2.2.2.2.2.1
+  have h₆ := hB.2.2.2.2.2.2
+  simp [h₁, h₂, h₃, h₄, h₅, h₆] at h
+  grind
+
 def zero [Zero R] (n : ℕ) : StrassenMatrix R :=
   match n with
   | .zero => .base 0
   | .succ m => .combine (zero m) (zero m) (zero m) (zero m)
+
+@[simp, grind =]
+lemma height_zero {R : Type} [Zero R] {n : ℕ} : (StrassenMatrix.zero n (R:= R)).height = n := by
+  induction n with
+  | zero => simp [zero]
+  | succ => simp [zero]; grind
+
+@[simp, grind .]
+lemma wellFormed_zero {R : Type} [Zero R] {n : ℕ} : (StrassenMatrix.zero n (R:= R)).wellFormed := by
+  induction n with
+  | zero => simp [zero]
+  | succ => simp [zero]; grind
 
 def add {R} [Add R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
   match A, B with
@@ -175,7 +204,7 @@ lemma add_combine_combine {R : Type} [Add R] [Zero R]
     (.combine A₁₁ A₁₂ A₂₁ A₂₂) + (.combine B₁₁ B₁₂ B₂₁ B₂₂) =
       StrassenMatrix.combine (A₁₁ + B₁₁) (A₁₂ + B₁₂) (A₂₁ + B₂₁) (A₂₂ + B₂₂) := by rfl
 
-@[grind =]
+@[simp, grind =]
 lemma height_add {R} [Add R] [Zero R] {A B : StrassenMatrix R}
   (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
     height (A + B) = height A := by
@@ -200,20 +229,109 @@ lemma wellFormed_add {R} [Add R] [Zero R] {A B : StrassenMatrix R}
     cases B with
     | base _ => simp
     | combine => simp only [height_base_combine] at h
-  | combine =>
+  | combine A₁₁ A₁₂ A₂₁ A₂₂ ih₁ ih₂ ih₃ ih₄ =>
     cases B with
     | base _ => simp only [height_combine_base] at h
-    | combine =>
-      simp at ⊢ h hA hB
+    | combine B₁₁ B₁₂ B₂₁ B₂₂ =>
+      have h := height_combined_of_wellFormed hA hB h
+      simp at ⊢ hA hB
       grind
+
+@[grind =]
+lemma add_assoc {R} [Ring R] {A B C : StrassenMatrix R}
+  (h : height A = height B) (h' : height B = height C)
+  (hA : A.wellFormed) (hB : B.wellFormed) (hC : C.wellFormed) :
+    A + B + C = A + (B + C) := by
+  induction A generalizing B C with
+  | base =>
+    cases B with
+    | base =>
+      cases C with
+      | base => simp [_root_.add_assoc]
+      | combine => simp only [height_base_combine] at h'
+    | combine => simp only [height_base_combine] at h
+  | combine =>
+    cases B with
+    | base => simp at h
+    | combine =>
+      cases C with
+      | base => simp at h'
+      | combine => grind
+
+@[grind =]
+lemma add_comm {R} [Ring R] {A B : StrassenMatrix R}
+  (h : height A = height B)
+  (hA : A.wellFormed) (hB : B.wellFormed) :
+    A + B = B + A:= by
+  induction A generalizing B with
+  | base =>
+    cases B with
+    | base => grind
+    | combine => simp only [height_base_combine] at h
+  | combine =>
+    cases B with
+    | base => simp at h
+    | combine => grind
+
+@[simp, grind =]
+lemma add_zero {R} [Ring R] {A : StrassenMatrix R} {n : ℕ}
+  (h : A.height = n) (hA : A.wellFormed) :
+    A + (StrassenMatrix.zero n) = A := by
+  induction A generalizing n with
+  | base =>
+    simp at h
+    simp [← h, zero]
+  | combine =>
+    simp only [height_combine, Nat.max_assoc] at h
+    simp [← h, zero]
+    grind
+
+@[simp, grind =]
+lemma zero_add {R} [Ring R] {A : StrassenMatrix R} {n : ℕ}
+  (h : A.height = n) (hA : A.wellFormed) :
+    (StrassenMatrix.zero n) + A = A := by
+  grind
 
 def neg {R : Type} [Neg R] (A : StrassenMatrix R) : StrassenMatrix R :=
   match A with
   | .base r => .base (- r)
   | .combine A₁₁ A₁₂ A₂₁ A₂₂ => .combine (neg A₁₁) (neg A₁₂) (neg A₂₁) (neg A₂₂)
 
-instance [Neg R] : Neg (StrassenMatrix R) where
+instance {R : Type} [Neg R] : Neg (StrassenMatrix R) where
   neg := neg
+
+@[simp, grind =]
+lemma neg_base {R : Type} [Neg R] {r : R} :
+  - (.base r) = (StrassenMatrix.base (- r)) := by rfl
+
+@[simp, grind =]
+lemma neg_combine {R : Type} [Neg R]
+  {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R} :
+    - (.combine A₁₁ A₁₂ A₂₁ A₂₂) = StrassenMatrix.combine (- A₁₁) (-A₁₂) (- A₂₁) (- A₂₂) := by
+  rfl
+
+@[simp, grind =]
+lemma height_neg {R : Type} [Neg R] {A : StrassenMatrix R} :
+    (- A).height = A.height := by
+  induction A with
+  | base => simp
+  | combine => grind
+
+@[simp, grind =]
+lemma wellFormed_neg {R : Type} [Neg R] {A : StrassenMatrix R} :
+    (- A).wellFormed ↔ A.wellFormed := by
+  induction A with
+  | base => simp
+  | combine => grind
+
+@[simp, grind =]
+lemma neg_add_cancel {R : Type} [Ring R] {A : StrassenMatrix R} (hA : A.wellFormed) :
+    (-A) + A = StrassenMatrix.zero (A.height) := by
+  induction A with
+  | base => simp [zero]
+  | combine =>
+    simp [zero] at hA ⊢
+    grind
 
 def sub {R} [Sub R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
   match A, B with
@@ -268,16 +386,109 @@ lemma wellFormed_sub {R} [Sub R] [Zero R] {A B : StrassenMatrix R}
       simp at ⊢ h hA hB
       grind
 
-def mul [Mul R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
+@[grind =]
+lemma sub_eq_add_neg {R : Type} [Ring R] {A B : StrassenMatrix R}
+  (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
+    A - B = A + (- B) := by
+  induction A generalizing B with
+  | base =>
+    cases B with
+    | base =>
+      simp only [sub_base_base, neg_base, add_base_base, base.injEq]
+      apply SubNegMonoid.sub_eq_add_neg
+    | combine => simp only [height_base_combine] at h
+  | combine =>
+    cases B with
+    | base => simp only [height_combine_base] at h
+    | combine =>
+      grind
+
+def mul [Mul R] [Add R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
   match A, B with
   | .base r_1, .base r_2 => StrassenMatrix.base (r_1 * r_2)
   | .base _, .combine _ _ _ _ => StrassenMatrix.zero 0
   | .combine _ _ _ _, .base _ => StrassenMatrix.zero 0
   | .combine A₁₁ A₁₂ A₂₁ A₂₂, .combine B₁₁ B₁₂ B₂₁ B₂₂ =>
-    StrassenMatrix.combine (mul A₁₁ B₁₁) (mul A₁₂ B₁₂) (mul A₂₁ B₂₁) (mul A₂₂ B₂₂)
+    StrassenMatrix.combine ((mul A₁₁ B₁₁) + (mul A₁₂ B₂₁)) ((mul A₁₁ B₁₂) + (mul A₁₂ B₂₂))
+        ((mul A₂₁ B₁₁) + (mul A₂₂ B₂₁)) ((mul A₂₁ B₁₂) + (mul A₂₂ B₂₂))
 
-instance [Zero R] [Mul R] : Mul (StrassenMatrix R) where
+instance [Zero R] [Add R] [Mul R] : Mul (StrassenMatrix R) where
   mul := StrassenMatrix.mul
+
+@[simp, grind =]
+lemma mul_base_base [Add R] [Mul R] [Zero R] {r s : R} :
+    (.base r) * (.base s) = (StrassenMatrix.base (r * s)) := by
+  rfl
+
+@[simp, grind =]
+lemma mul_combine_combine {R : Type} [Add R] [Mul R] [Zero R]
+  {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix R} :
+    (.combine A₁₁ A₁₂ A₂₁ A₂₂) * (.combine B₁₁ B₁₂ B₂₁ B₂₂) =
+      StrassenMatrix.combine (A₁₁ * B₁₁ + A₁₂ * B₂₁) (A₁₁ * B₁₂ + A₁₂ * B₂₂)
+        (A₂₁ * B₁₁ + A₂₂ * B₂₁) (A₂₁ * B₁₂ + A₂₂ * B₂₂) := by rfl
+
+lemma wellFormed_height_mul {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
+  (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
+    (A*B).wellFormed ∧ height (A * B) = height A := by
+  induction A generalizing B with
+  | base =>
+    cases B with
+    | base => simp
+    | combine => simp only [height_base_combine] at h
+  | combine =>
+    cases B with
+    | base => simp only [height_combine_base] at h
+    | combine =>
+      simp at ⊢ h hA hB
+      grind
+
+@[simp, grind =]
+lemma height_mul {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
+  (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
+    height (A * B) = height A := by
+  apply (wellFormed_height_mul h hA hB).2
+
+@[grind .]
+lemma wellFormed_mul {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
+  (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
+    (A * B).wellFormed := by
+  apply (wellFormed_height_mul h hA hB).1
+
+lemma left_distrib {R} [Ring R] {A B C : StrassenMatrix R}
+  (h : height A = height B) (h' : height B = height C)
+  (hA : A.wellFormed) (hB : B.wellFormed) (hC : C.wellFormed) :
+    A * (B + C) = A * B + A * C := by
+  induction A generalizing B C with
+  | base =>
+    cases B with
+    | base =>
+      cases C with
+      | base =>
+        simp only [add_base_base, mul_base_base, base.injEq]
+        apply Distrib.left_distrib
+      | combine => simp only [height_base_combine] at h'
+    | combine => simp only [height_base_combine] at h
+  | combine A₁₁ A₁₂ A₂₁ A₂₂ ih₁ ih₂ ih₃ ih₄ =>
+    cases B with
+    | base => simp at h
+    | combine B₁₁ B₁₂ B₂₁ B₂₂ =>
+      cases C with
+      | base => simp at h'
+      | combine C₁₁ C₁₂ C₂₁ C₂₂ =>
+        simp at hA hB hC h h' ⊢
+        rw [ih₁ (by grind) (by grind) (by grind) (by grind) (by grind),
+            ih₁ (by grind) (by grind) (by grind) (by grind) (by grind),
+            ih₂ (by grind) (by grind) (by grind) (by grind) (by grind),
+            ih₂ (by grind) (by grind) (by grind) (by grind) (by grind),
+            ih₃ (by grind) (by grind) (by grind) (by grind) (by grind),
+            ih₃ (by grind) (by grind) (by grind) (by grind) (by grind),
+            ih₄ (by grind) (by grind) (by grind) (by grind) (by grind),
+            ih₄ (by grind) (by grind) (by grind) (by grind) (by grind)]
+        split_ands
+        · rw [add_assoc, ← add_assoc (A := A₁₁ * C₁₁), add_comm (A := A₁₁ * C₁₁), add_assoc (A := A₁₂ * B₂₁), ← add_assoc (A := A₁₁ * B₁₁)]
+          · grind
+          ·
+        sorry
 
 def maxAbsEntry (A : StrassenMatrix ℤ) : ℕ :=
   match A with
@@ -289,19 +500,19 @@ def maxAbsEntry (A : StrassenMatrix ℤ) : ℕ :=
 lemma maxAbsEntry_base (z : ℤ) : maxAbsEntry (.base z) = z.natAbs := by rfl
 
 lemma maxAbsEntry_combine₁₁ (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ) :
-    A₁₁.maxAbsEntry ≤ (A₁₁.combine  A₁₂ A₂₁ A₂₂).maxAbsEntry := by
+    A₁₁.maxAbsEntry ≤ (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry := by
   simp [maxAbsEntry]
 
 lemma maxAbsEntry_combine₁₂ (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ) :
-    A₁₂.maxAbsEntry ≤ (A₁₁.combine  A₁₂ A₂₁ A₂₂).maxAbsEntry := by
+    A₁₂.maxAbsEntry ≤ (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry := by
   simp [maxAbsEntry]
 
 lemma maxAbsEntry_combine₂₁ (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ) :
-    A₂₁.maxAbsEntry ≤ (A₁₁.combine  A₁₂ A₂₁ A₂₂).maxAbsEntry := by
+    A₂₁.maxAbsEntry ≤ (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry := by
   simp [maxAbsEntry]
 
 lemma maxAbsEntry_combine₂₂ (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ) :
-    A₂₂.maxAbsEntry ≤ (A₁₁.combine  A₁₂ A₂₁ A₂₂).maxAbsEntry := by
+    A₂₂.maxAbsEntry ≤ (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry := by
   simp [maxAbsEntry]
 
 lemma maxAbsEntry_add {A B : StrassenMatrix ℤ} (h : A.height = B.height)
@@ -380,17 +591,16 @@ lemma mulProd_cost_unit {x y : ℤ} : (mulProg x y).time unitArithmeticModel = 1
   simp [mulProg]
   grind
 
-public def arithReduction (b : ℕ) (hb : 2 ≤ b) :
+def arithReduction (b : ℕ) (hb : 2 ≤ b) :
     Reduction unitArithmeticQuery (boundedArithmeticQuery (b ^ 3)) where
   reduce
   | .mul x y => KaratsubaProg b x y hb
 
-public lemma arithReduction_correct {b : ℕ} (hb : 2 ≤ b) {ι : Type} (q : unitArithmeticQuery ι) :
+lemma arithReduction_correct {b : ℕ} (hb : 2 ≤ b) {ι : Type} (q : unitArithmeticQuery ι) :
     ((arithReduction b hb).reduce q).eval (boundedArithmeticModel (b ^ 3))
       = unitArithmeticModel.evalQuery q := by
   cases q with
   | mul x y => simp [arithReduction, KaratsubaProg_eval, Karatsuba_correct hb]
-
 
 def StrassenProg (A B : StrassenMatrix ℤ) (h : A.height = B.height)
   (hA : A.wellFormed) (hB : B.wellFormed) :
@@ -398,11 +608,10 @@ def StrassenProg (A B : StrassenMatrix ℤ) (h : A.height = B.height)
   match h₁ : A, h₂ : B with
   | .base r, .base t =>
      return .base (← mulProg r t)
-  | .base _, .combine _ _ _ _ => by simp [h₁, h₂] at h; grind
+  | .base _, .combine _ _ _ _ => by simp [h₁, h₂] at h
   | .combine _ _ _ _, .base _ => by simp [h₁, h₂] at h;
   | .combine A₁₁ A₁₂ A₂₁ A₂₂, .combine B₁₁ B₁₂ B₂₁ B₂₂ =>
-    have h := by simp only [h₁, height_combine, Nat.max_assoc, h₂,
-      Nat.add_left_cancel_iff] at h; exact h
+    have h := by simp only [h₁, height_combine, Nat.max_assoc, h₂] at h; exact h
     have hA := by simp only [h₁, wellFormed] at hA; exact hA
     have hB := by simp only [h₂, wellFormed] at hB; exact hB
     let M₁ ← StrassenProg (A₁₁ + A₂₂) (B₁₁ + B₂₂) (by grind) (by grind) (by grind)
@@ -417,7 +626,32 @@ termination_by StrassenMatrix.height A
 decreasing_by
   all_goals grind
 
-lemma StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
+theorem StrassenProg_eval_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
+  (hA : A.wellFormed) (hB : B.wellFormed) :
+    (StrassenProg A B h hA hB).eval unitArithmeticModel = A * B := by
+  induction h' : A.height generalizing A B with
+  | zero =>
+    cases A with
+    | base =>
+      cases B with
+      | base => simp [StrassenProg, mulProd_eval_unit]
+      | combine => simp only [height_base_combine] at h
+    | combine => simp at h'
+  | succ m ih =>
+    cases A with
+    | base => simp at h'
+    | combine A₁₁ A₁₂ A₂₁ A₂₂ =>
+      cases B with
+      | base => simp at h
+      | combine B₁₁ B₁₂ B₂₁ B₂₂ =>
+        simp only [wellFormed_combine, height_combine, Nat.max_assoc, Nat.add_comm m 1] at hA hB h'
+        simp only [StrassenProg, bind_pure_comp, eval_bind, eval_map, mul_combine_combine,
+          combine.injEq]
+        rw [ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind),
+          ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind)]
+        sorry
+
+theorem StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
   (hA : A.wellFormed) (hB : B.wellFormed) :
     (StrassenProg A B h hA hB).time unitArithmeticModel = 7 ^ (A.height) := by
   induction h' : A.height generalizing A B with
@@ -426,11 +660,11 @@ lemma StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height
     | base =>
       cases B with
       | base => simp [StrassenProg, mulProd_cost_unit]
-      | combine => grind
-    | combine => grind
+      | combine => simp only [height_base_combine] at h
+    | combine => simp at h'
   | succ m ih =>
     cases A with
-    | base => grind
+    | base => simp at h'
     | combine =>
       cases B with
       | base => grind
@@ -691,8 +925,7 @@ theorem StrassenProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : Stra
           Cslib.FreeM.liftM_bind, Cslib.FreeM.liftM_map, AddWriter.tell_bind, AddWriter.tell_map,
           Nat.cast_add, ge_iff_le]
         simp only [unitArithmeticModel] at ih
-        simp only [wellFormed_combine, height_combine, Nat.max_assoc,
-          Nat.add_left_cancel_iff] at hA hB h
+        simp only [wellFormed_combine, height_combine, Nat.max_assoc] at hA hB h
         grw [ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind),
           ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind)]
         have h₁ := StrassenProg_Karatsuba_helper1 m hb' hA hB
