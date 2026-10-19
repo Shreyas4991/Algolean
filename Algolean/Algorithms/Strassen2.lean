@@ -441,18 +441,233 @@ lemma StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height
 
 noncomputable def KaratsubaTime (x y : ℕ) : ℝ := 3 * (max x y) ^ Real.logb 2 3
 
-lemma KaratsubaTime_mono (hx : x ≤ x') (hy : y ≤ y') : KaratsubaTime x y ≤ KaratsubaTime x' y' := by
+lemma KaratsubaTime_mono {x x' y y' : ℕ} (hx : x ≤ x') (hy : y ≤ y') :
+    KaratsubaTime x y ≤ KaratsubaTime x' y' := by
   simp only [KaratsubaTime, Nat.cast_max, Nat.ofNat_pos, mul_le_mul_iff_right₀]
   refine Real.rpow_le_rpow ?_ ?_ ?_
   · grind
   · refine sup_le_sup (Nat.cast_le.mpr hx) (Nat.cast_le.mpr hy)
   · refine (Real.logb_nonneg_iff (by grind) (by grind)).mpr (by grind)
 
+-- the following seven lemmas are used in the time complexity proof but moved out
+-- for a better overview and speed.
+
+private lemma StrassenProg_Karatsuba_helper1
+  {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (m : ℕ) (hb' : 1 < b)
+  (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
+     A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height)
+  (hB : B₁₁.wellFormed ∧ B₁₂.wellFormed ∧ B₂₁.wellFormed ∧ B₂₂.wellFormed
+    ∧ B₁₁.height = B₁₂.height ∧ B₁₂.height = B₂₁.height ∧ B₂₁.height = B₂₂.height) :
+    (KaratsubaTime ((b.digits (A₁₁ + A₂₂).maxAbsEntry).length + m)
+        ((b.digits (B₁₁ + B₂₂).maxAbsEntry).length + m))
+      ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+          ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))) := by
+  apply KaratsubaTime_mono
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := A₁₁.maxAbsEntry + A₂₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
+    · apply maxAbsEntry_add (by grind) (by grind) (by grind)
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := B₁₁.maxAbsEntry + B₂₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
+    · apply maxAbsEntry_add (by grind) (by grind) (by grind)
+
+private lemma StrassenProg_Karatsuba_helper2
+  {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ} (B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ)
+  (m : ℕ) (hb' : 1 < b)
+  (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
+     A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height) :
+    (KaratsubaTime ((b.digits (A₂₁ + A₂₂).maxAbsEntry).length + m)
+        ((b.digits B₁₁.maxAbsEntry).length + m))
+      ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+          ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))) := by
+  apply KaratsubaTime_mono
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := A₂₁.maxAbsEntry + A₂₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₁ A₁₁ A₁₂ A₂₁ A₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
+    · apply maxAbsEntry_add (by grind) (by grind) (by grind)
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    apply Nat.le_add_right_of_le
+    apply Nat.length_digits_le_of_le _ hb'
+    apply maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
+
+private lemma StrassenProg_Karatsuba_helper3
+  {b : ℕ} {B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ)
+  (m : ℕ) (hb' : 1 < b)
+  (hB : B₁₁.wellFormed ∧ B₁₂.wellFormed ∧ B₂₁.wellFormed ∧ B₂₂.wellFormed
+    ∧ B₁₁.height = B₁₂.height ∧ B₁₂.height = B₂₁.height ∧ B₂₁.height = B₂₂.height) :
+    (KaratsubaTime ((b.digits A₁₁.maxAbsEntry).length + m)
+        ((b.digits (B₁₂ - B₂₂).maxAbsEntry).length + m))
+      ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+          ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))) := by
+  apply KaratsubaTime_mono
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    apply Nat.le_add_right_of_le
+    apply Nat.length_digits_le_of_le _ hb'
+    apply maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := B₁₂.maxAbsEntry + B₂₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₂ B₁₁ B₁₂ B₂₁ B₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
+    · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
+
+private lemma StrassenProg_Karatsuba_helper4
+  {b : ℕ} {B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ)
+  (m : ℕ) (hb' : 1 < b)
+  (hB : B₁₁.wellFormed ∧ B₁₂.wellFormed ∧ B₂₁.wellFormed ∧ B₂₂.wellFormed
+    ∧ B₁₁.height = B₁₂.height ∧ B₁₂.height = B₂₁.height ∧ B₂₁.height = B₂₂.height) :
+    (KaratsubaTime ((b.digits A₂₂.maxAbsEntry).length + m)
+        ((b.digits (B₂₁ - B₁₁).maxAbsEntry).length + m))
+      ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+          ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))) := by
+  apply KaratsubaTime_mono
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    apply Nat.le_add_right_of_le
+    apply Nat.length_digits_le_of_le _ hb'
+    apply maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := B₂₁.maxAbsEntry + B₁₁.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₁ B₁₁ B₁₂ B₂₁ B₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
+    · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
+
+private lemma StrassenProg_Karatsuba_helper5
+  {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ} (B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ)
+  (m : ℕ) (hb' : 1 < b)
+  (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
+     A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height) :
+    (KaratsubaTime ((b.digits (A₁₁ + A₁₂).maxAbsEntry).length + m)
+        ((b.digits B₂₂.maxAbsEntry).length + m))
+      ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+        ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))) := by
+  apply KaratsubaTime_mono
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := A₁₁.maxAbsEntry + A₁₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₂ A₁₁ A₁₂ A₂₁ A₂₂
+    · apply maxAbsEntry_add (by grind) (by grind) (by grind)
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    apply Nat.le_add_right_of_le
+    apply Nat.length_digits_le_of_le _ hb'
+    apply maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
+
+private lemma StrassenProg_Karatsuba_helper6
+  {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (m : ℕ) (hb' : 1 < b)
+  (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
+     A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height)
+  (hB : B₁₁.wellFormed ∧ B₁₂.wellFormed ∧ B₂₁.wellFormed ∧ B₂₂.wellFormed
+    ∧ B₁₁.height = B₁₂.height ∧ B₁₂.height = B₂₁.height ∧ B₂₁.height = B₂₂.height) :
+    (KaratsubaTime ((b.digits (A₂₁ - A₁₁).maxAbsEntry).length + m)
+        ((b.digits (B₁₁ + B₁₂).maxAbsEntry).length + m))
+      ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+          ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))) := by
+  apply KaratsubaTime_mono
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := A₂₁.maxAbsEntry + A₁₁.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₁ A₁₁ A₁₂ A₂₁ A₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
+    · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := B₁₁.maxAbsEntry + B₁₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₂ B₁₁ B₁₂ B₂₁ B₂₂
+    · apply maxAbsEntry_add (by grind) (by grind) (by grind)
+
+private lemma StrassenProg_Karatsuba_helper7
+  {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (m : ℕ) (hb' : 1 < b)
+  (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
+     A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height)
+  (hB : B₁₁.wellFormed ∧ B₁₂.wellFormed ∧ B₂₁.wellFormed ∧ B₂₂.wellFormed
+    ∧ B₁₁.height = B₁₂.height ∧ B₁₂.height = B₂₁.height ∧ B₂₁.height = B₂₂.height) :
+    (KaratsubaTime ((b.digits (A₁₂ - A₂₂).maxAbsEntry).length + m)
+        ((b.digits (B₂₁ + B₂₂).maxAbsEntry).length + m))
+      ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+        ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))) := by
+  apply KaratsubaTime_mono
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := A₁₂.maxAbsEntry + A₂₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₁₂ A₁₁ A₁₂ A₂₁ A₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
+    · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
+  · rw [Nat.add_comm m 1, ← Nat.add_assoc]
+    refine Nat.add_le_add_right ?_ m
+    grw [Nat.length_digits_le_of_le (y := B₂₁.maxAbsEntry + B₂₂.maxAbsEntry) _ hb',
+      Nat.length_digits_add (by grind)]
+    · simp only [add_le_add_iff_right, sup_le_iff]
+      constructor
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₁ B₁₁ B₁₂ B₂₁ B₂₂
+      · apply Nat.length_digits_le_of_le _ hb'
+        exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
+    · apply maxAbsEntry_add (by grind) (by grind) (by grind)
+
 theorem StrassenProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : StrassenMatrix ℤ}
   (h : A.height = B.height) (hA : A.wellFormed) (hB : B.wellFormed) :
   (((StrassenProg A B h hA hB).reduceProg (arithReduction b hb)).time
       (boundedArithmeticModel (b ^ 3)))
-    ≤ 7 ^ A.height * KaratsubaTime ((b.digits A.maxAbsEntry).length + A.height) ((b.digits B.maxAbsEntry).length + A.height) := by
+    ≤ 7 ^ A.height * (KaratsubaTime ((b.digits A.maxAbsEntry).length + A.height)
+      ((b.digits B.maxAbsEntry).length + A.height)) := by
   rw [reduceProg_time _ _ _ _ (arithReduction_correct hb)]
   induction h' : A.height generalizing A B with
   | zero =>
@@ -472,183 +687,38 @@ theorem StrassenProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : Stra
       | base => simp only [height_combine_base] at h
       | combine B₁₁ B₁₂ B₂₁ B₂₂ =>
         have hb' : 1 < b := by grind
-        simp [StrassenProg]
-        simp [unitArithmeticModel] at ih
-        simp at hA hB h
+        simp only [unitArithmeticModel_evalQuery, StrassenProg, bind_pure_comp,
+          Cslib.FreeM.liftM_bind, Cslib.FreeM.liftM_map, AddWriter.tell_bind, AddWriter.tell_map,
+          Nat.cast_add, ge_iff_le]
+        simp only [unitArithmeticModel] at ih
+        simp only [wellFormed_combine, height_combine, Nat.max_assoc,
+          Nat.add_left_cancel_iff] at hA hB h
         grw [ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind),
           ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind)]
-        have h₁ : (KaratsubaTime ((b.digits (A₁₁ + A₂₂).maxAbsEntry).length + m) ((b.digits (B₁₁ + B₂₂).maxAbsEntry).length + m))
-            ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
-                ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1)))  := by
-          apply KaratsubaTime_mono
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := A₁₁.maxAbsEntry + A₂₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            simp
-            · constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
-            · apply maxAbsEntry_add (by grind) (by grind) (by grind)
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := B₁₁.maxAbsEntry + B₂₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            simp
-            · constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
-            · apply maxAbsEntry_add (by grind) (by grind) (by grind)
-        have h₂ : (KaratsubaTime ((b.digits (A₂₁ + A₂₂).maxAbsEntry).length + m) ((b.digits B₁₁.maxAbsEntry).length + m))
-            ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
-                ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1)))  := by
-          apply KaratsubaTime_mono
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := A₂₁.maxAbsEntry + A₂₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            simp
-            · constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₁ A₁₁ A₁₂ A₂₁ A₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
-            · apply maxAbsEntry_add (by grind) (by grind) (by grind)
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            apply Nat.le_add_right_of_le
-            apply Nat.length_digits_le_of_le _ hb'
-            apply maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
-        have h₃ : (KaratsubaTime ((b.digits A₁₁.maxAbsEntry).length + m) ((b.digits (B₁₂ - B₂₂).maxAbsEntry).length + m))
-            ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
-                ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1)))  := by
-          apply KaratsubaTime_mono
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            apply Nat.le_add_right_of_le
-            apply Nat.length_digits_le_of_le _ hb'
-            apply maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := B₁₂.maxAbsEntry + B₂₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            simp
-            · constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₂ B₁₁ B₁₂ B₂₁ B₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
-            · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
-        have h₄ : (KaratsubaTime ((b.digits A₂₂.maxAbsEntry).length + m) ((b.digits (B₂₁ - B₁₁).maxAbsEntry).length + m))
-            ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
-                ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1)))  := by
-          apply KaratsubaTime_mono
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            apply Nat.le_add_right_of_le
-            apply Nat.length_digits_le_of_le _ hb'
-            apply maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := B₂₁.maxAbsEntry + B₁₁.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            simp
-            · constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₁ B₁₁ B₁₂ B₂₁ B₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
-            · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
-        have h₅ : (KaratsubaTime ((b.digits (A₁₁ + A₁₂).maxAbsEntry).length + m) ((b.digits B₂₂.maxAbsEntry).length + m))
-            ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
-                ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1)))  := by
-          apply KaratsubaTime_mono
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := A₁₁.maxAbsEntry + A₁₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            · simp
-              constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₂ A₁₁ A₁₂ A₂₁ A₂₂
-            · apply maxAbsEntry_add (by grind) (by grind) (by grind)
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            apply Nat.le_add_right_of_le
-            apply Nat.length_digits_le_of_le _ hb'
-            apply maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
-        have h₆ : (KaratsubaTime ((b.digits (A₂₁ - A₁₁).maxAbsEntry).length + m) ((b.digits (B₁₁ + B₁₂).maxAbsEntry).length + m))
-            ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
-                ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1)))  := by
-          apply KaratsubaTime_mono
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := A₂₁.maxAbsEntry + A₁₁.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            · simp
-              constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₁ A₁₁ A₁₂ A₂₁ A₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂
-            · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := B₁₁.maxAbsEntry + B₁₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            simp
-            · constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₂ B₁₁ B₁₂ B₂₁ B₂₂
-            · apply maxAbsEntry_add (by grind) (by grind) (by grind)
-        have h₇ : (KaratsubaTime ((b.digits (A₁₂ - A₂₂).maxAbsEntry).length + m) ((b.digits (B₂₁ + B₂₂).maxAbsEntry).length + m))
-            ≤ (KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
-                ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1)))  := by
-          apply KaratsubaTime_mono
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := A₁₂.maxAbsEntry + A₂₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            · simp
-              constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₁₂ A₁₁ A₁₂ A₂₁ A₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂
-            · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
-          · rw [Nat.add_comm m 1, ← Nat.add_assoc]
-            refine Nat.add_le_add_right ?_ m
-            grw [Nat.length_digits_le_of_le (y := B₂₁.maxAbsEntry + B₂₂.maxAbsEntry) _ hb',
-              Nat.length_digits_add (by grind)]
-            simp
-            · constructor
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₁ B₁₁ B₁₂ B₂₁ B₂₂
-              · apply Nat.length_digits_le_of_le _ hb'
-                exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
-            · apply maxAbsEntry_add (by grind) (by grind) (by grind)
+        have h₁ := StrassenProg_Karatsuba_helper1 m hb' hA hB
+        have h₂ := StrassenProg_Karatsuba_helper2 B₁₁ B₁₂ B₂₁ B₂₂ m hb' hA
+        have h₃ := StrassenProg_Karatsuba_helper3 A₁₁ A₁₂ A₂₁ A₂₂ m hb' hB
+        have h₄ := StrassenProg_Karatsuba_helper4 A₁₁ A₁₂ A₂₁ A₂₂ m hb' hB
+        have h₅ := StrassenProg_Karatsuba_helper5 B₁₁ B₁₂ B₂₁ B₂₂ m hb' hA
+        have h₆ := StrassenProg_Karatsuba_helper6 m hb' hA hB
+        have h₇ := StrassenProg_Karatsuba_helper7 m hb' hA hB
         grw [h₁, h₂, h₃, h₄, h₅, h₆, h₇]
-        let (eq := h') x := KaratsubaTime ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1)) ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))
-        simp [← h']
+        let (eq := h') x := KaratsubaTime
+          ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
+          ((b.digits (B₁₁.combine B₁₂ B₂₁ B₂₂).maxAbsEntry).length + (m + 1))
+        simp only [← h', ge_iff_le]
         clear ih h₁ h₂ h₃ h₄ h₅ h₆ h₇ hA hB
         rw [← two_mul]
         have eq' : (2 : ℝ) = ↑(2 : ℕ) := by grind
         have : ∀ (x : ℝ) (y : ℕ) , x + y * x = ((Nat.add y 1) : ℝ) * x := by
           grind
         rw [eq']
-        rw [this (7 ^ m * x), this (7 ^ m * x), this (7 ^ m * x), this (7 ^ m * x), this (7 ^ m * x)]
-        simp
+        rw [this (7 ^ m * x), this (7 ^ m * x), this (7 ^ m * x), this (7 ^ m * x),
+          this (7 ^ m * x)]
+        simp only [Nat.add_eq, Nat.reduceAdd, Nat.cast_ofNat, ge_iff_le]
         have : (7 ^ (m + 1) : ℝ) = (7 ^ (m + 1) : ℕ) := by grind
         rw [this, Nat.pow_add', Nat.pow_one]
-        simp
-        grind
+        simp only [Nat.cast_mul, Nat.cast_ofNat, Nat.cast_pow, ge_iff_le]
+        rw [mul_assoc]
 
 end Algolean.Algorithms
