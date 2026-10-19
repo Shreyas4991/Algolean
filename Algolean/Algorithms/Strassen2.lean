@@ -7,6 +7,8 @@ module
 
 public import Algolean.Algorithms.Karatsuba
 
+section digits
+
 lemma Nat.length_digits_le_of_le {x y b : ℕ} (hxy : x ≤ y) (hb : 1 < b) :
     (b.digits x).length ≤ (b.digits y).length := by
   induction y using Nat.strongRec generalizing x with
@@ -99,6 +101,8 @@ lemma Nat.length_digits_mul {x y b : ℕ} (hb : 1 < b) :
   apply Nat.le_trans (length_digits_le_of_le hxy hb)
   simp [digits_pow_b_sub_one hb]
 
+end digits
+
 inductive StrassenMatrix (R : Type) : Type
 | base (r : R) : StrassenMatrix R
 | combine (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R) : StrassenMatrix R
@@ -131,7 +135,7 @@ lemma height_combine {R : Type} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatri
     height (.combine A₁₁ A₁₂ A₂₁ A₂₂) =
       (max (max A₁₁.height A₁₂.height) (max A₂₁.height A₂₂.height)) + 1 := by rfl
 
-def wellFormed {R : Type} (A : StrassenMatrix R) : Prop :=
+def wellFormed {R : Type} (A : StrassenMatrix R) : Bool :=
   match A with
   | .base _ => True
   | .combine A₁₁ A₁₂ A₂₁ A₂₂ =>
@@ -164,6 +168,18 @@ lemma height_combined_of_wellFormed {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B�
   have h₅ := hB.2.2.2.2.2.1
   have h₆ := hB.2.2.2.2.2.2
   simp [h₁, h₂, h₃, h₄, h₅, h₆] at h
+  grind
+
+lemma height_combined_of_wellFormed' {n : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R}
+  (hA : (StrassenMatrix.combine A₁₁ A₁₂ A₂₁ A₂₂).wellFormed)
+  (h : (StrassenMatrix.combine A₁₁ A₁₂ A₂₁ A₂₂).height = n) (hn : 0 < n) :
+    A₁₁.height = n - 1 ∧ A₁₂.height = n - 1 ∧
+      A₂₁.height = n - 1 ∧ A₂₂.height = n - 1 := by
+  simp only [wellFormed_combine, height_combine, Nat.max_assoc] at hA h
+  have h₁ := hA.2.2.2.2.1
+  have h₂ := hA.2.2.2.2.2.1
+  have h₃ := hA.2.2.2.2.2.2
+  simp [h₁, h₂, h₃] at h
   grind
 
 def zero [Zero R] (n : ℕ) : StrassenMatrix R :=
@@ -256,7 +272,9 @@ lemma add_assoc {R} [Ring R] {A B C : StrassenMatrix R}
     | combine =>
       cases C with
       | base => simp at h'
-      | combine => grind
+      | combine =>
+        have h := height_combined_of_wellFormed hA hB h
+        grind
 
 @[grind =]
 lemma add_comm {R} [Ring R] {A B : StrassenMatrix R}
@@ -271,7 +289,9 @@ lemma add_comm {R} [Ring R] {A B : StrassenMatrix R}
   | combine =>
     cases B with
     | base => simp at h
-    | combine => grind
+    | combine =>
+      have h := height_combined_of_wellFormed hA hB h
+      grind
 
 @[simp, grind =]
 lemma add_zero {R} [Ring R] {A : StrassenMatrix R} {n : ℕ}
@@ -448,47 +468,17 @@ lemma height_mul {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
     height (A * B) = height A := by
   apply (wellFormed_height_mul h hA hB).2
 
+@[simp, grind =]
+lemma height_mul' {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
+  (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
+    height (A * B) = height B := by
+  simp [h, hA, hB]
+
 @[grind .]
 lemma wellFormed_mul {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
   (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
     (A * B).wellFormed := by
   apply (wellFormed_height_mul h hA hB).1
-
-lemma left_distrib {R} [Ring R] {A B C : StrassenMatrix R}
-  (h : height A = height B) (h' : height B = height C)
-  (hA : A.wellFormed) (hB : B.wellFormed) (hC : C.wellFormed) :
-    A * (B + C) = A * B + A * C := by
-  induction A generalizing B C with
-  | base =>
-    cases B with
-    | base =>
-      cases C with
-      | base =>
-        simp only [add_base_base, mul_base_base, base.injEq]
-        apply Distrib.left_distrib
-      | combine => simp only [height_base_combine] at h'
-    | combine => simp only [height_base_combine] at h
-  | combine A₁₁ A₁₂ A₂₁ A₂₂ ih₁ ih₂ ih₃ ih₄ =>
-    cases B with
-    | base => simp at h
-    | combine B₁₁ B₁₂ B₂₁ B₂₂ =>
-      cases C with
-      | base => simp at h'
-      | combine C₁₁ C₁₂ C₂₁ C₂₂ =>
-        simp at hA hB hC h h' ⊢
-        rw [ih₁ (by grind) (by grind) (by grind) (by grind) (by grind),
-            ih₁ (by grind) (by grind) (by grind) (by grind) (by grind),
-            ih₂ (by grind) (by grind) (by grind) (by grind) (by grind),
-            ih₂ (by grind) (by grind) (by grind) (by grind) (by grind),
-            ih₃ (by grind) (by grind) (by grind) (by grind) (by grind),
-            ih₃ (by grind) (by grind) (by grind) (by grind) (by grind),
-            ih₄ (by grind) (by grind) (by grind) (by grind) (by grind),
-            ih₄ (by grind) (by grind) (by grind) (by grind) (by grind)]
-        split_ands
-        · rw [add_assoc, ← add_assoc (A := A₁₁ * C₁₁), add_comm (A := A₁₁ * C₁₁), add_assoc (A := A₁₂ * B₂₁), ← add_assoc (A := A₁₁ * B₁₁)]
-          · grind
-          ·
-        sorry
 
 def maxAbsEntry (A : StrassenMatrix ℤ) : ℕ :=
   match A with
@@ -567,6 +557,130 @@ end StrassenMatrix
 
 open StrassenMatrix
 
+def toStrassenMatrix (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) : StrassenMatrix R :=
+  match n with
+  | .zero => .base (A 0 0)
+  | .succ m =>
+    .combine (toStrassenMatrix (.of (fun (i j : Fin (2 ^ m)) => A ⟨i.1, by lia⟩ ⟨j.1, by lia⟩)))
+      (toStrassenMatrix (.of (fun (i j : Fin (2 ^ m)) => A ⟨i.1, by lia⟩ ⟨j.1 + 2 ^ m, by lia⟩)))
+      (toStrassenMatrix (.of (fun (i j : Fin (2 ^ m)) => A ⟨i.1 + 2 ^ m, by lia⟩ ⟨j.1, by lia⟩)))
+      (toStrassenMatrix (.of (fun (i j : Fin (2 ^ m)) => A ⟨i.1 + 2 ^ m, by lia⟩
+        ⟨j.1 + 2 ^ m, by lia⟩)))
+
+@[simp, grind =]
+lemma height_toStrassenMatrix {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+    height (toStrassenMatrix A) = n := by
+  induction n with
+  | zero => simp [toStrassenMatrix]
+  | succ m ih =>
+    simp [toStrassenMatrix, ih]
+
+lemma wellFormed_toStrassenMatrix {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+    wellFormed (toStrassenMatrix A) := by
+  induction n with
+  | zero => simp [toStrassenMatrix]
+  | succ m ih => simp [toStrassenMatrix, ih]
+
+lemma toStrassenMatrix_inj {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+    toStrassenMatrix A = toStrassenMatrix B ↔ A = B := by
+  induction n with
+  | zero => simp [toStrassenMatrix, ← Matrix.ext_iff]
+  | succ m ih =>
+    simp [toStrassenMatrix, ih, ← Matrix.ext_iff]
+    constructor
+    · simp [funext_iff]
+      intro h₁ h₂ h₃ h₄
+      intro i j
+      sorry
+    · grind
+
+@[simp, grind =]
+lemma toStrassenMatrix_add [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+    (toStrassenMatrix A) + (toStrassenMatrix B) = toStrassenMatrix (A + B) := by
+  induction n with
+  | zero => simp [toStrassenMatrix]
+  | succ m ih =>
+    have : ∀ (f g: (Fin (2 ^ m)) → (Fin (2 ^ m)) → R),
+      (fun i j => (f i j) + (g i j)) = fun i j => ((f + g) i j) := by
+      intro f g
+      apply funext₂
+      intro i j
+      simp
+    simp [toStrassenMatrix, ih, this]
+
+@[simp, grind =]
+lemma toStrassenMatrix_sub [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+    (toStrassenMatrix A) - (toStrassenMatrix B) = toStrassenMatrix (A - B) := by
+  induction n with
+  | zero => simp [toStrassenMatrix]
+  | succ m ih =>
+    have : ∀ (f g: (Fin (2 ^ m)) → (Fin (2 ^ m)) → R),
+      (fun i j => (f i j) - (g i j)) = fun i j => ((f - g) i j) := by
+      intro f g
+      apply funext₂
+      intro i j
+      simp
+    simp [toStrassenMatrix, ih, this]
+
+lemma sum_helper (f : Fin (2 ^ (n + 1)) → R) [Ring R] :
+    ∑ (x : Fin (2 ^ n)), f ⟨x.1, by lia⟩
+    + ∑ (x : Fin (2 ^ n)), f ⟨x.1 + 2 ^ n, by lia⟩
+      = ∑ x, f x:= by
+  let e₁ : Function.Embedding (Fin (2 ^ n)) (Fin (2 ^ (n + 1))) := {
+    toFun := fun x => ⟨x.1, by lia⟩
+    inj' := by simp [Function.Injective, Fin.val_inj]
+  }
+  let e₂ : Function.Embedding (Fin (2 ^ n)) (Fin (2 ^ (n + 1))) := {
+    toFun := fun x => ⟨x.1 + 2 ^ n, by lia⟩
+    inj' := by simp [Function.Injective, Fin.val_inj]
+  }
+  have : Finset.univ (α := Fin (2 ^ (n + 1))) = (Finset.univ (α := Fin (2 ^ n))).map e₁
+    ∪ (Finset.univ (α := Fin (2 ^ n))).map e₂ := by
+    simp only [Finset.ext_iff, Finset.mem_univ, Finset.mem_union, Finset.mem_map, true_and,
+      true_iff]
+    intro x
+    by_cases h' : x.1 < 2 ^ n
+    · left
+      use ⟨x.1, h'⟩
+      simp [e₁, ← Function.Embedding.toFun_eq_coe]
+    · right
+      use ⟨x.1 - 2 ^ n , by lia⟩
+      simp [e₂, ← Function.Embedding.toFun_eq_coe]
+      grind
+  have dist : Disjoint (Finset.map e₁ Finset.univ) (Finset.map e₂ Finset.univ) := by
+    simp [Finset.disjoint_iff_ne, e₁, e₂, ← Function.Embedding.toFun_eq_coe]
+    lia
+  simp [this, Finset.sum_union dist, e₁, e₂, ← Function.Embedding.toFun_eq_coe]
+
+@[simp, grind =]
+lemma toStrassenMatrix_mul [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+    (toStrassenMatrix A) * (toStrassenMatrix B) = toStrassenMatrix (A * B) := by
+  induction n with
+  | zero =>
+    simp [toStrassenMatrix, Matrix.mul_apply]
+  | succ m ih =>
+    simp only [toStrassenMatrix, Nat.succ_eq_add_one, StrassenMatrix.mul_combine_combine, ih,
+      toStrassenMatrix_add, Matrix.mul_apply, StrassenMatrix.combine.injEq]
+    split_ands
+    · congr
+      simp only [← Matrix.ext_iff, Matrix.add_apply, Matrix.mul_apply, Matrix.of_apply]
+      intro i j
+      rw [sum_helper (fun k => A ⟨i, by lia⟩ k * B k ⟨j, by lia⟩)]
+    · congr
+      simp only [← Matrix.ext_iff, Matrix.add_apply, Matrix.mul_apply, Matrix.of_apply]
+      intro i j
+      rw [sum_helper (fun k => A ⟨i, by lia⟩ k * B k ⟨j + 2 ^ m, by lia⟩)]
+    · congr
+      simp only [← Matrix.ext_iff, Matrix.add_apply, Matrix.mul_apply, Matrix.of_apply]
+      intro i j
+      rw [sum_helper (fun k => A ⟨i + 2 ^ m, by lia⟩ k * B k ⟨j, by lia⟩)]
+    · congr
+      simp only [← Matrix.ext_iff, Matrix.add_apply, Matrix.mul_apply, Matrix.of_apply]
+      intro i j
+      rw [sum_helper (fun k => A ⟨i + 2 ^ m, by lia⟩ k * B k ⟨j + 2 ^ m, by lia⟩)]
+
+open StrassenMatrix
+
 namespace Algolean.Algorithms
 
 open Prog
@@ -626,30 +740,30 @@ termination_by StrassenMatrix.height A
 decreasing_by
   all_goals grind
 
-theorem StrassenProg_eval_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
-  (hA : A.wellFormed) (hB : B.wellFormed) :
-    (StrassenProg A B h hA hB).eval unitArithmeticModel = A * B := by
-  induction h' : A.height generalizing A B with
+theorem StrassenProg_eval_unit {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+    (StrassenProg (toStrassenMatrix A) (toStrassenMatrix B) (by simp)
+        (by apply wellFormed_toStrassenMatrix) (by apply wellFormed_toStrassenMatrix)).eval
+      unitArithmeticModel = toStrassenMatrix (A * B) := by
+  induction n with
   | zero =>
-    cases A with
-    | base =>
-      cases B with
-      | base => simp [StrassenProg, mulProd_eval_unit]
-      | combine => simp only [height_base_combine] at h
-    | combine => simp at h'
+    simp [toStrassenMatrix, StrassenProg, mulProd_eval_unit, Matrix.mul_apply]
   | succ m ih =>
-    cases A with
-    | base => simp at h'
-    | combine A₁₁ A₁₂ A₂₁ A₂₂ =>
-      cases B with
-      | base => simp at h
-      | combine B₁₁ B₁₂ B₂₁ B₂₂ =>
-        simp only [wellFormed_combine, height_combine, Nat.max_assoc, Nat.add_comm m 1] at hA hB h'
-        simp only [StrassenProg, bind_pure_comp, eval_bind, eval_map, mul_combine_combine,
-          combine.injEq]
-        rw [ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind),
-          ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind)]
-        sorry
+    simp [toStrassenMatrix, Nat.succ_eq_add_one, StrassenProg, toStrassenMatrix_add,
+      toStrassenMatrix_sub, bind_pure_comp, eval_bind, ih,
+      eval_map, combine.injEq, toStrassenMatrix_inj, - Matrix.of_sub_of, - Matrix.of_add_of, Matrix.mul_apply]
+    let (eq := h₁) A₁₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1, by lia⟩ ⟨j.1, by lia⟩)
+    let (eq := h₂) A₂₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1 + 2 ^ m, by lia⟩ ⟨j.1, by lia⟩)
+    let (eq := h₃) A₁₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1, by lia⟩ ⟨j.1 + 2 ^ m, by lia⟩)
+    let (eq := h₄) A₂₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1 + 2 ^ m, by lia⟩ ⟨j.1 + 2 ^ m, by lia⟩)
+    simp [← h₁, ← h₂, ← h₃, ← h₄]
+    split_ands
+    · congr
+      simp [← Matrix.ext_iff]
+      intro i j
+      simp [Matrix.mul_apply, left_distrib, right_distrib]
+
+
+
 
 theorem StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
   (hA : A.wellFormed) (hB : B.wellFormed) :
