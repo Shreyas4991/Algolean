@@ -637,11 +637,11 @@ lemma ofStrassenMatrix_toStrassenMatrix_eq_self {R : Type} [Zero R] {n : ℕ}
       · simp [hi, hj, ih]
         grind
 
-def Matrix.maxAbsEntry {n : ℕ} (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :=
+public def Matrix.maxAbsEntry {n : ℕ} (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :=
   Finset.univ (α := (Fin (2 ^ n)) × (Fin (2 ^ n))) |>.image (fun x => (A x.1 x.2).natAbs)
     |>.max' (by simp)
 
-lemma maxAbsEntry_iff {n a : ℕ} {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+public lemma maxAbsEntry_iff {n a : ℕ} {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
     a = A.maxAbsEntry ↔
       (∃ (i j : Fin (2 ^ n)), (A i j).natAbs = a) ∧ ∀ i j, (A i j).natAbs ≤ a := by
   rw [Eq.comm]
@@ -771,12 +771,13 @@ lemma mulProd_cost_unit {x y : ℤ} : (mulProg x y).time unitArithmeticModel = 1
   simp [mulProg]
   grind
 
-def arithReduction (b : ℕ) (hb : 2 ≤ b) :
+@[expose]
+public def arithReduction (b : ℕ) (hb : 2 ≤ b) :
     Reduction unitArithmeticQuery (boundedArithmeticQuery (b ^ 3)) where
   reduce
   | .mul x y => KaratsubaProg b x y hb
 
-lemma arithReduction_correct {b : ℕ} (hb : 2 ≤ b) {ι : Type} (q : unitArithmeticQuery ι) :
+public lemma arithReduction_correct {b : ℕ} (hb : 2 ≤ b) {ι : Type} (q : unitArithmeticQuery ι) :
     ((arithReduction b hb).reduce q).eval (boundedArithmeticModel (b ^ 3))
       = unitArithmeticModel.evalQuery q := by
   cases q with
@@ -1165,7 +1166,7 @@ theorem StrassenHelperProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B 
         simp only [Nat.cast_mul, Nat.cast_ofNat, Nat.cast_pow, ge_iff_le]
         rw [mul_assoc]
 
-def StrassenProg {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+public def StrassenProg {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
     Prog unitArithmeticQuery (Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) := do
   let (eq := h₁) A' := toStrassenMatrix A
   let (eq := h₂) B' := toStrassenMatrix B
@@ -1175,23 +1176,23 @@ def StrassenProg {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
   let res ← StrassenHelperProg A' B' h hA hB
   return ofStrassenMatrix n (res)
 
-theorem StrassenProg_eval_unit_eq_mul {n : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+public theorem StrassenProg_eval_unit_eq_mul {n : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
     (StrassenProg A B).eval unitArithmeticModel = A * B := by
   simp [StrassenProg, StrassenHelperProg_eval_unit]
 
-theorem StrassenProg_eval_boundedArithmetic_eq_mul {n b : ℕ}
+public theorem StrassenProg_eval_boundedArithmetic_eq_mul {n b : ℕ}
   {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} (hb : 1 < b) :
     ((StrassenProg A B).reduceProg (arithReduction b hb)).eval (boundedArithmeticModel (b ^ 3)) =
       A * B := by
   rw [reduceProg_eval, StrassenProg_eval_unit_eq_mul]
   apply arithReduction_correct
 
-theorem StrassenProg_time_unit {n : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+public theorem StrassenProg_time_unit {n : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
     (StrassenProg A B).time unitArithmeticModel = 7 ^ n := by
   simp [StrassenProg, StrassenHelperProg_time_unit]
 
-theorem StrassenProg_time_boundedArithmetic {n b : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ}
-  (hb : 1 < b) :
+public theorem StrassenProg_time_boundedArithmetic {n b : ℕ}
+  {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} (hb : 1 < b) :
     ((StrassenProg A B).reduceProg (arithReduction b hb)).time (boundedArithmeticModel (b ^ 3)) ≤
       7 ^ n * (3 * ((max ((b.digits A.maxAbsEntry).length)
         ((b.digits B.maxAbsEntry).length)) + n : ℝ) ^ Real.logb 2 3) := by
