@@ -8,7 +8,7 @@ module
 public import Algolean.Algorithms.Karatsuba
 
 /-!
-# Strassens Algorithm
+# Strassen's Algorithm
 
 In this module we define Strassen's algorithm to multiply two matrices
 of the form (2 ^ n) × (2 ^ n). We prove the correctness and show a time bound
