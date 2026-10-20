@@ -253,106 +253,6 @@ lemma wellFormed_add {R} [Add R] [Zero R] {A B : StrassenMatrix R}
       simp at ⊢ hA hB
       grind
 
-@[grind =]
-lemma add_assoc {R} [Ring R] {A B C : StrassenMatrix R}
-  (h : height A = height B) (h' : height B = height C)
-  (hA : A.wellFormed) (hB : B.wellFormed) (hC : C.wellFormed) :
-    A + B + C = A + (B + C) := by
-  induction A generalizing B C with
-  | base =>
-    cases B with
-    | base =>
-      cases C with
-      | base => simp [_root_.add_assoc]
-      | combine => simp only [height_base_combine] at h'
-    | combine => simp only [height_base_combine] at h
-  | combine =>
-    cases B with
-    | base => simp at h
-    | combine =>
-      cases C with
-      | base => simp at h'
-      | combine =>
-        have h := height_combined_of_wellFormed hA hB h
-        grind
-
-@[grind =]
-lemma add_comm {R} [Ring R] {A B : StrassenMatrix R}
-  (h : height A = height B)
-  (hA : A.wellFormed) (hB : B.wellFormed) :
-    A + B = B + A:= by
-  induction A generalizing B with
-  | base =>
-    cases B with
-    | base => grind
-    | combine => simp only [height_base_combine] at h
-  | combine =>
-    cases B with
-    | base => simp at h
-    | combine =>
-      have h := height_combined_of_wellFormed hA hB h
-      grind
-
-@[simp, grind =]
-lemma add_zero {R} [Ring R] {A : StrassenMatrix R} {n : ℕ}
-  (h : A.height = n) (hA : A.wellFormed) :
-    A + (StrassenMatrix.zero n) = A := by
-  induction A generalizing n with
-  | base =>
-    simp at h
-    simp [← h, zero]
-  | combine =>
-    simp only [height_combine, Nat.max_assoc] at h
-    simp [← h, zero]
-    grind
-
-@[simp, grind =]
-lemma zero_add {R} [Ring R] {A : StrassenMatrix R} {n : ℕ}
-  (h : A.height = n) (hA : A.wellFormed) :
-    (StrassenMatrix.zero n) + A = A := by
-  grind
-
-def neg {R : Type} [Neg R] (A : StrassenMatrix R) : StrassenMatrix R :=
-  match A with
-  | .base r => .base (- r)
-  | .combine A₁₁ A₁₂ A₂₁ A₂₂ => .combine (neg A₁₁) (neg A₁₂) (neg A₂₁) (neg A₂₂)
-
-instance {R : Type} [Neg R] : Neg (StrassenMatrix R) where
-  neg := neg
-
-@[simp, grind =]
-lemma neg_base {R : Type} [Neg R] {r : R} :
-  - (.base r) = (StrassenMatrix.base (- r)) := by rfl
-
-@[simp, grind =]
-lemma neg_combine {R : Type} [Neg R]
-  {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R} :
-    - (.combine A₁₁ A₁₂ A₂₁ A₂₂) = StrassenMatrix.combine (- A₁₁) (-A₁₂) (- A₂₁) (- A₂₂) := by
-  rfl
-
-@[simp, grind =]
-lemma height_neg {R : Type} [Neg R] {A : StrassenMatrix R} :
-    (- A).height = A.height := by
-  induction A with
-  | base => simp
-  | combine => grind
-
-@[simp, grind =]
-lemma wellFormed_neg {R : Type} [Neg R] {A : StrassenMatrix R} :
-    (- A).wellFormed ↔ A.wellFormed := by
-  induction A with
-  | base => simp
-  | combine => grind
-
-@[simp, grind =]
-lemma neg_add_cancel {R : Type} [Ring R] {A : StrassenMatrix R} (hA : A.wellFormed) :
-    (-A) + A = StrassenMatrix.zero (A.height) := by
-  induction A with
-  | base => simp [zero]
-  | combine =>
-    simp [zero] at hA ⊢
-    grind
-
 def sub {R} [Sub R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
   match A, B with
   | .base r_1, .base r_2 => StrassenMatrix.base (r_1 - r_2)
@@ -404,23 +304,6 @@ lemma wellFormed_sub {R} [Sub R] [Zero R] {A B : StrassenMatrix R}
     | base _ => simp only [height_combine_base] at h
     | combine =>
       simp at ⊢ h hA hB
-      grind
-
-@[grind =]
-lemma sub_eq_add_neg {R : Type} [Ring R] {A B : StrassenMatrix R}
-  (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
-    A - B = A + (- B) := by
-  induction A generalizing B with
-  | base =>
-    cases B with
-    | base =>
-      simp only [sub_base_base, neg_base, add_base_base, base.injEq]
-      apply SubNegMonoid.sub_eq_add_neg
-    | combine => simp only [height_base_combine] at h
-  | combine =>
-    cases B with
-    | base => simp only [height_combine_base] at h
-    | combine =>
       grind
 
 def mul [Mul R] [Add R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
@@ -647,7 +530,8 @@ lemma toStrassenMatrix_sub [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R}
       simp
     simp [toStrassenMatrix, ih, this]
 
-lemma sum_helper (f : Fin (2 ^ (n + 1)) → R) [Ring R] :
+-- a helper lemma to combine sums that arrise in matrix multiplcation
+private lemma sum_helper (f : Fin (2 ^ (n + 1)) → R) [Ring R] :
     ∑ (x : Fin (2 ^ n)), f ⟨x.1, by lia⟩
     + ∑ (x : Fin (2 ^ n)), f ⟨x.1 + 2 ^ n, by lia⟩
       = ∑ x, f x:= by
