@@ -7,6 +7,36 @@ module
 
 public import Algolean.Algorithms.Karatsuba
 
+/-!
+# Strassens Algorithm
+
+In this module we define Strassen's algorithm to multiply two matrices
+of the form (2 ^ n) × (2 ^ n). We prove the correctness and show a time bound
+in two models. In the unit arithmetic model where we can multiply arbitrary
+natural numbers in constant time, we have (7 ^ n) multiplications. In the bounded
+arithmetic model, where we can only multiply numbers of bounded size, we employ
+Karatsuba's algorithm in order to achieve a runtime of
+(7 ^ n) * 3 * (log_2(|maxEntry(A, B)))^(log_2(3)).
+--
+
+## Main definitions
+
+- `StrassenProg`: The implementation of Strassen's algorithm for (2 ^ n) × (2 ^ n)
+  matrices
+- `maxAbsEntry` : The maximum amoung the absolute values of all entries of an integer matrix.
+
+- `arithReduction` : A reduction from the unit to the bounded arithmetic model
+  using Karatsuba's algorithm.
+
+## Main results
+
+- `StrassenProg_eval_unit_eq_mul` : correctness in the unit arithmetic model
+- `StrassenProg_eval_boundedArithmetic_eq_mul` : correctness in the bounded arithmetic model
+- `StrassenProg_time_unit` : the time bound in the unit arithmetic model
+- `StrassenProg_time_boundedArithmetic` the time bound in the bounded arithmetic model
+
+-/
+
 section digits
 
 lemma Nat.length_digits_le_of_le {x y b : ℕ} (hxy : x ≤ y) (hb : 1 < b) :
