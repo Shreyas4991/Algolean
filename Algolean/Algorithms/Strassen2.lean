@@ -172,9 +172,9 @@ lemma height_combined_of_wellFormed {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B�
 
 lemma height_combined_of_wellFormed' {n : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R}
   (hA : (StrassenMatrix.combine A₁₁ A₁₂ A₂₁ A₂₂).wellFormed)
-  (h : (StrassenMatrix.combine A₁₁ A₁₂ A₂₁ A₂₂).height = n) (hn : 0 < n) :
-    A₁₁.height = n - 1 ∧ A₁₂.height = n - 1 ∧
-      A₂₁.height = n - 1 ∧ A₂₂.height = n - 1 := by
+  (h : (StrassenMatrix.combine A₁₁ A₁₂ A₂₁ A₂₂).height = n.succ) :
+    A₁₁.height = n ∧ A₁₂.height = n ∧
+      A₂₁.height = n ∧ A₂₂.height = n := by
   simp only [wellFormed_combine, height_combine, Nat.max_assoc] at hA h
   have h₁ := hA.2.2.2.2.1
   have h₂ := hA.2.2.2.2.2.1
@@ -489,6 +489,14 @@ def maxAbsEntry (A : StrassenMatrix ℤ) : ℕ :=
 @[simp, grind =]
 lemma maxAbsEntry_base (z : ℤ) : maxAbsEntry (.base z) = z.natAbs := by rfl
 
+lemma maxAbsEntry_combine (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ) :
+    (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry = A₁₁.maxAbsEntry ∨
+    (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry = A₁₂.maxAbsEntry ∨
+    (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry = A₂₁.maxAbsEntry ∨
+    (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry = A₂₂.maxAbsEntry := by
+  simp [maxAbsEntry]
+  grind
+
 lemma maxAbsEntry_combine₁₁ (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ) :
     A₁₁.maxAbsEntry ≤ (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry := by
   simp [maxAbsEntry]
@@ -695,6 +703,163 @@ lemma toStrassenMatrix_mul [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R}
       simp only [← Matrix.ext_iff, Matrix.add_apply, Matrix.mul_apply, Matrix.of_apply]
       intro i j
       rw [sum_helper (fun k => A ⟨i + 2 ^ m, by lia⟩ k * B k ⟨j + 2 ^ m, by lia⟩)]
+
+def ofStrassenMatrixHelper {R : Type} {n : ℕ} (A : StrassenMatrix R)
+  (hA : A.wellFormed) (h : height A = n) :
+    Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R :=
+  match A, n with
+  | .base r, .zero => .of (fun _ _ => r)
+  | .combine A₁₁ A₁₂ A₂₁ A₂₂, .succ m =>
+    have h := height_combined_of_wellFormed' hA h
+    have hA := by simp only [wellFormed_combine] at hA; exact hA
+    .of (fun i j =>
+      if hi : i.1 < 2 ^ m
+      then
+        if hj : j.1 < 2 ^ m
+        then (ofStrassenMatrixHelper A₁₁ (by grind) h.1) ⟨i, hi⟩ ⟨j, hj⟩
+        else (ofStrassenMatrixHelper A₁₂ (by grind) h.2.1) ⟨i, hi⟩ ⟨j - 2 ^ m, by lia⟩
+      else
+        if hj : j.1 < 2 ^ m
+        then (ofStrassenMatrixHelper A₂₁ (by grind) h.2.2.1) ⟨i - 2 ^ m, by lia⟩ ⟨j, hj⟩
+        else (ofStrassenMatrixHelper A₂₂ (by grind) h.2.2.2) ⟨i - 2 ^ m, by lia⟩ ⟨j - 2 ^ m, by lia⟩
+    )
+
+def ofStrassenMatrix {R : Type} [Zero R] (n : ℕ) (A : StrassenMatrix R) :
+    Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R :=
+  if h : A.wellFormed ∧ A.height = n
+  then ofStrassenMatrixHelper A h.1 h.2
+  else .of (fun _ _ => 0)
+
+@[simp, grind =]
+lemma ofStrassenMatrix_toStrassenMatrix_eq_self {R : Type} [Zero R] {n : ℕ}
+  (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) :
+    ofStrassenMatrix n (toStrassenMatrix A) = A := by
+  simp only [ofStrassenMatrix, wellFormed_toStrassenMatrix, height_toStrassenMatrix, and_self,
+    ↓reduceDIte]
+  induction n with
+  | zero => simp [toStrassenMatrix, ofStrassenMatrixHelper, ← Matrix.ext_iff]
+  | succ m ih =>
+    simp only [toStrassenMatrix, Nat.succ_eq_add_one, ofStrassenMatrixHelper, ← Matrix.ext_iff,
+      Matrix.of_apply]
+    intro i j
+    by_cases hi : i.1 < 2 ^ m
+    · by_cases hj : j.1 < 2 ^ m
+      · simp [hi, hj, ih]
+      · simp [hi, hj, ih]
+        grind
+    · by_cases hj : j.1 < 2 ^ m
+      · simp [hi, hj, ih]
+        grind
+      · simp [hi, hj, ih]
+        grind
+
+def Matrix.maxAbsEntry {n : ℕ} (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :=
+  Finset.univ (α := (Fin (2 ^ n)) × (Fin (2 ^ n))) |>.image (fun x => (A x.1 x.2).natAbs)
+    |>.max' (by simp)
+
+lemma maxAbsEntry_iff {n a : ℕ} {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+    a = A.maxAbsEntry ↔
+      (∃ (i j : Fin (2 ^ n)), (A i j).natAbs = a) ∧ ∀ i j, (A i j).natAbs ≤ a := by
+  rw [Eq.comm]
+  simp only [Matrix.maxAbsEntry, Finset.max'_eq_iff, Finset.mem_image, Finset.mem_univ, true_and,
+    Prod.exists, forall_exists_index, and_congr_right_iff]
+  intro i j ha
+  constructor
+  · intro h k l
+    apply h _ k l rfl
+  · intro h b k l hb
+    rw [← hb]
+    apply h
+
+lemma maxAbsEntry_toStrassenMatrix {n : ℕ} (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+    (toStrassenMatrix A).maxAbsEntry = A.maxAbsEntry := by
+  simp only [maxAbsEntry_iff]
+  induction n with
+  | zero =>
+    simp [toStrassenMatrix]
+  | succ m ih =>
+    simp only [toStrassenMatrix, Nat.succ_eq_add_one]
+    let (eq := h₁) A₁₁ := (toStrassenMatrix
+      (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i, by lia⟩ ⟨↑j, by lia⟩)))
+    let (eq := h₂) A₁₂ := (toStrassenMatrix
+      (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i, by lia⟩ ⟨↑j + 2 ^ m, by lia⟩)))
+    let (eq := h₃) A₂₁ := (toStrassenMatrix
+      (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i + 2 ^ m, by lia⟩ ⟨↑j, by lia⟩)))
+    let (eq := h₄) A₂₂ := (toStrassenMatrix
+      (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i + 2 ^ m, by lia⟩ ⟨↑j + 2 ^ m, by lia⟩)))
+    simp only [← h₁, ← h₂, ← h₃, ← h₄]
+    constructor
+    · have h := maxAbsEntry_combine A₁₁ A₁₂ A₂₁ A₂₂
+      cases h with
+      | inl h =>
+        specialize ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i, by lia⟩ ⟨↑j, by lia⟩))
+        rcases ih.1 with ⟨i, j, hij⟩
+        simp [← h₁] at hij
+        simp [h, ← hij]
+      | inr h =>
+        cases h with
+        | inl h =>
+          specialize ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i, by lia⟩ ⟨↑j + 2 ^ m, by lia⟩))
+          rcases ih.1 with ⟨i, j, hij⟩
+          simp [← h₂] at hij
+          simp [h, ← hij]
+        | inr h =>
+          cases h with
+          | inl h =>
+            specialize ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i + 2 ^ m, by lia⟩
+              ⟨↑j, by lia⟩))
+            rcases ih.1 with ⟨i, j, hij⟩
+            simp [← h₃] at hij
+            simp [h, ← hij]
+          | inr h =>
+            specialize ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i + 2 ^ m, by lia⟩
+              ⟨↑j + 2 ^ m, by lia⟩))
+            rcases ih.1 with ⟨i, j, hij⟩
+            simp [← h₄] at hij
+            simp [h, ← hij]
+    · intro i j
+      by_cases hi : i.1 < 2 ^ m
+      · by_cases hj : j.1 < 2 ^ m
+        · apply Nat.le_trans ?_ (maxAbsEntry_combine₁₁ A₁₁ A₁₂ A₂₁ A₂₂)
+          simp only [h₁]
+          have := (ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i, by lia⟩ ⟨↑j, by lia⟩))).2
+            ⟨i.1, hi⟩ ⟨j.1, hj⟩
+          simp only [Matrix.of_apply, Fin.eta] at this
+          apply this
+        · apply Nat.le_trans ?_ (maxAbsEntry_combine₁₂ A₁₁ A₁₂ A₂₁ A₂₂)
+          simp only [h₂]
+          have := (ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i, by lia⟩ ⟨↑j + 2 ^ m, by lia⟩))).2
+            ⟨i.1, hi⟩ ⟨j.1 - 2 ^ m, by lia⟩
+          have hj' : ⟨↑j - 2 ^ m + 2 ^ m, by lia⟩ = j := by
+            simp only [Fin.ext_iff]
+            apply Nat.sub_add_cancel
+            simp only [not_lt] at hj
+            apply hj
+          simp only [Matrix.of_apply, Fin.eta, hj'] at this
+          apply this
+      · have hi' : ⟨↑i - 2 ^ m + 2 ^ m, by lia⟩ = i := by
+            simp only [Fin.ext_iff]
+            apply Nat.sub_add_cancel
+            simp only [not_lt] at hi
+            apply hi
+        by_cases hj : j.1 < 2 ^ m
+        · apply Nat.le_trans ?_ (maxAbsEntry_combine₂₁ A₁₁ A₁₂ A₂₁ A₂₂)
+          simp only [h₃]
+          have := (ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i + 2 ^ m, by lia⟩ ⟨↑j, by lia⟩))).2
+            ⟨i.1 - 2 ^ m, by lia⟩ ⟨j.1, hj⟩
+          simp only [Matrix.of_apply, hi', Fin.eta] at this
+          apply this
+        · apply Nat.le_trans ?_ (maxAbsEntry_combine₂₂ A₁₁ A₁₂ A₂₁ A₂₂)
+          simp only [h₄]
+          have := (ih (Matrix.of (fun (i j : Fin (2 ^ m)) ↦ A ⟨↑i + 2 ^ m, by lia⟩
+            ⟨↑j + 2 ^ m, by lia⟩))).2 ⟨i.1 - 2 ^ m, by lia⟩ ⟨j.1 - 2 ^ m, by lia⟩
+          have hj' : ⟨↑j - 2 ^ m + 2 ^ m, by lia⟩ = j := by
+            simp only [Fin.ext_iff]
+            apply Nat.sub_add_cancel
+            simp only [not_lt] at hj
+            apply hj
+          simp only [Matrix.of_apply, hi', hj'] at this
+          apply this
 
 open StrassenMatrix
 
