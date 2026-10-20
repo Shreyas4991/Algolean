@@ -581,18 +581,35 @@ lemma wellFormed_toStrassenMatrix {A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
   | zero => simp [toStrassenMatrix]
   | succ m ih => simp [toStrassenMatrix, ih]
 
-lemma toStrassenMatrix_inj {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
+lemma toStrassenMatrix_inj {n : ℕ} {R : Type} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
     toStrassenMatrix A = toStrassenMatrix B ↔ A = B := by
   induction n with
   | zero => simp [toStrassenMatrix, ← Matrix.ext_iff]
   | succ m ih =>
-    simp [toStrassenMatrix, ih, ← Matrix.ext_iff]
+    simp only [toStrassenMatrix, Nat.succ_eq_add_one, combine.injEq, ih,
+      EmbeddingLike.apply_eq_iff_eq, ← Matrix.ext_iff]
     constructor
-    · simp [funext_iff]
-      intro h₁ h₂ h₃ h₄
-      intro i j
-      sorry
-    · grind
+    · simp only [funext_iff, and_imp]
+      intro h₁ h₂ h₃ h₄ i j
+      by_cases hi : i.1 < 2 ^ m
+      · by_cases hj : j.1 < 2 ^ m
+        · apply h₁ ⟨i.1, hi⟩ ⟨j.1, hj⟩
+        · specialize h₂ ⟨i.1, hi⟩ ⟨j.1 - 2 ^ m, by lia⟩
+          simp only [Fin.eta] at h₂
+          have : ⟨↑j - 2 ^ m + 2 ^ m, by lia⟩ = j := by
+            simp only [Fin.ext_iff]
+            apply Nat.sub_add_cancel
+            simp only [not_lt] at hj
+            apply hj
+          rw [this] at h₂
+          apply h₂
+      · by_cases hj : j.1 < 2 ^ m
+        · specialize h₃ ⟨i.1 - 2 ^ m, by lia⟩ ⟨j.1, hj⟩
+          grind
+        · specialize h₄ ⟨i.1 - 2 ^ m, by lia⟩ ⟨j.1 - 2 ^ m, by lia⟩
+          grind
+    · intro h
+      simp [h]
 
 @[simp, grind =]
 lemma toStrassenMatrix_add [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R} :
@@ -748,22 +765,53 @@ theorem StrassenProg_eval_unit {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
   | zero =>
     simp [toStrassenMatrix, StrassenProg, mulProd_eval_unit, Matrix.mul_apply]
   | succ m ih =>
-    simp [toStrassenMatrix, Nat.succ_eq_add_one, StrassenProg, toStrassenMatrix_add,
-      toStrassenMatrix_sub, bind_pure_comp, eval_bind, ih,
-      eval_map, combine.injEq, toStrassenMatrix_inj, - Matrix.of_sub_of, - Matrix.of_add_of, Matrix.mul_apply]
+    simp only [toStrassenMatrix, Nat.succ_eq_add_one, StrassenProg, toStrassenMatrix_add,
+      toStrassenMatrix_sub, bind_pure_comp, eval_bind, ih, eval_map, Matrix.mul_apply,
+      combine.injEq, toStrassenMatrix_inj]
     let (eq := h₁) A₁₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1, by lia⟩ ⟨j.1, by lia⟩)
-    let (eq := h₂) A₂₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1 + 2 ^ m, by lia⟩ ⟨j.1, by lia⟩)
-    let (eq := h₃) A₁₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1, by lia⟩ ⟨j.1 + 2 ^ m, by lia⟩)
-    let (eq := h₄) A₂₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1 + 2 ^ m, by lia⟩ ⟨j.1 + 2 ^ m, by lia⟩)
-    simp [← h₁, ← h₂, ← h₃, ← h₄]
-    split_ands
-    · congr
-      simp [← Matrix.ext_iff]
+    let (eq := h₂) A₁₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1, by lia⟩
+      ⟨j.1 + 2 ^ m, by lia⟩)
+    let (eq := h₃) A₂₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1 + 2 ^ m, by lia⟩
+      ⟨j.1, by lia⟩)
+    let (eq := h₄) A₂₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1 + 2 ^ m, by lia⟩
+      ⟨j.1 + 2 ^ m, by lia⟩)
+    let (eq := h₅) B₁₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ B ⟨i.1, by lia⟩ ⟨j.1, by lia⟩)
+    let (eq := h₆) B₁₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ B ⟨i.1, by lia⟩
+      ⟨j.1 + 2 ^ m, by lia⟩)
+    let (eq := h₇) B₂₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ B ⟨i.1 + 2 ^ m, by lia⟩
+      ⟨j.1, by lia⟩)
+    let (eq := h₈) B₂₂ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ B ⟨i.1 + 2 ^ m, by lia⟩
+      ⟨j.1 + 2 ^ m, by lia⟩)
+    simp only [← h₁, ← h₄, ← h₅, ← h₈, ← h₇, ← h₂, ← h₆, ← h₃]
+    have : Matrix.of (fun (i j : Fin (2 ^ m)) ↦ ∑ k, A ⟨↑i, by lia⟩ k * B k ⟨↑j, by lia⟩) =
+        A₁₁ * B₁₁ + A₁₂ * B₂₁ := by
+      simp only [h₁, h₅, h₂, h₇, ← Matrix.ext_iff, Matrix.of_apply, Matrix.add_apply,
+        Matrix.mul_apply]
       intro i j
-      simp [Matrix.mul_apply, left_distrib, right_distrib]
-
-
-
+      rw [sum_helper (f := fun k => A ⟨i.1, by lia⟩ k * B k ⟨j.1, by lia⟩)]
+    rw [this]
+    have : Matrix.of (fun (i j : Fin (2 ^ m)) ↦ ∑ k, A ⟨↑i, by lia⟩ k * B k ⟨↑j + 2 ^ m, by lia⟩) =
+        A₁₁ * B₁₂ + A₁₂ * B₂₂ := by
+      simp only [h₁, h₆, h₂, h₈, ← Matrix.ext_iff, Matrix.of_apply, Matrix.add_apply,
+        Matrix.mul_apply]
+      intro i j
+      rw [sum_helper (f := fun k => A ⟨i.1, by lia⟩ k * B k ⟨j.1 + 2 ^ m, by lia⟩)]
+    rw [this]
+    have : Matrix.of (fun (i j : Fin (2 ^ m)) ↦ ∑ k, A ⟨↑i + 2 ^ m, by lia⟩ k * B k ⟨↑j, by lia⟩) =
+        A₂₁ * B₁₁ + A₂₂ * B₂₁ := by
+      simp only [h₃, h₅, h₄, h₇, ← Matrix.ext_iff, Matrix.of_apply, Matrix.add_apply,
+        Matrix.mul_apply]
+      intro i j
+      rw [sum_helper (f := fun k => A ⟨i.1 + 2 ^ m, by lia⟩ k * B k ⟨j.1, by lia⟩)]
+    rw [this]
+    have : Matrix.of (fun (i j : Fin (2 ^ m)) ↦ ∑ k, A ⟨↑i + 2 ^ m, by lia⟩ k *
+        B k ⟨↑j + 2 ^ m, by lia⟩) = A₂₁ * B₁₂ + A₂₂ * B₂₂ := by
+      simp only [h₃, h₆, h₄, h₈, ← Matrix.ext_iff, Matrix.of_apply, Matrix.add_apply,
+        Matrix.mul_apply]
+      intro i j
+      rw [sum_helper (f := fun k => A ⟨i.1 + 2 ^ m, by lia⟩ k * B k ⟨j.1 + 2 ^ m, by lia⟩)]
+    rw [this]
+    grind
 
 theorem StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
   (hA : A.wellFormed) (hB : B.wellFormed) :
