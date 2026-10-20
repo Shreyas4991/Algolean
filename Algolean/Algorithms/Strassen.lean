@@ -155,16 +155,14 @@ def height {R : Type} (A : StrassenMatrix R) : ℕ :=
   | .combine A₁₁ A₁₂ A₂₁ A₂₂ =>
     (max (max A₁₁.height A₁₂.height) (max A₂₁.height A₂₂.height)) + 1
 
-@[simp, grind =]
 lemma height_combine_base {R : Type} {r : R} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R} :
     height (.combine A₁₁ A₁₂ A₂₁ A₂₂) = height (.base r) ↔ False := by
   simp [height]
 
-@[simp, grind =]
 lemma height_base_combine {R : Type} {r : R} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R} :
      height (.base r) = height (.combine A₁₁ A₁₂ A₂₁ A₂₂) ↔ False := by
   simp
-  grind
+  grind [height_combine_base]
 
 @[simp, grind =]
 lemma height_base {R : Type} {r : R} :
@@ -411,7 +409,6 @@ lemma height_mul {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
     height (A * B) = height A := by
   apply (wellFormed_height_mul h hA hB).2
 
-@[simp, grind =]
 lemma height_mul' {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
   (h : height A = height B) (hA : A.wellFormed) (hB : B.wellFormed) :
     height (A * B) = height B := by
