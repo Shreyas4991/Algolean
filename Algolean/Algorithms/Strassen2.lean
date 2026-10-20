@@ -782,7 +782,7 @@ lemma arithReduction_correct {b : ℕ} (hb : 2 ≤ b) {ι : Type} (q : unitArith
   cases q with
   | mul x y => simp [arithReduction, KaratsubaProg_eval, Karatsuba_correct hb]
 
-def StrassenProg (A B : StrassenMatrix ℤ) (h : A.height = B.height)
+def StrassenHelperProg (A B : StrassenMatrix ℤ) (h : A.height = B.height)
   (hA : A.wellFormed) (hB : B.wellFormed) :
     Prog unitArithmeticQuery (StrassenMatrix ℤ) := do
   match h₁ : A, h₂ : B with
@@ -794,27 +794,27 @@ def StrassenProg (A B : StrassenMatrix ℤ) (h : A.height = B.height)
     have h := by simp only [h₁, height_combine, Nat.max_assoc, h₂] at h; exact h
     have hA := by simp only [h₁, wellFormed] at hA; exact hA
     have hB := by simp only [h₂, wellFormed] at hB; exact hB
-    let M₁ ← StrassenProg (A₁₁ + A₂₂) (B₁₁ + B₂₂) (by grind) (by grind) (by grind)
-    let M₂ ← StrassenProg (A₂₁ + A₂₂) B₁₁ (by grind) (by grind) (by grind)
-    let M₃ ← StrassenProg A₁₁ (B₁₂ - B₂₂) (by grind) (by grind) (by grind)
-    let M₄ ← StrassenProg A₂₂ (B₂₁ - B₁₁) (by grind) (by grind) (by grind)
-    let M₅ ← StrassenProg (A₁₁ + A₁₂) B₂₂ (by grind) (by grind) (by grind)
-    let M₆ ← StrassenProg (A₂₁ - A₁₁) (B₁₁ + B₁₂) (by grind) (by grind) (by grind)
-    let M₇ ← StrassenProg (A₁₂ - A₂₂) (B₂₁ + B₂₂) (by grind) (by grind) (by grind)
+    let M₁ ← StrassenHelperProg (A₁₁ + A₂₂) (B₁₁ + B₂₂) (by grind) (by grind) (by grind)
+    let M₂ ← StrassenHelperProg (A₂₁ + A₂₂) B₁₁ (by grind) (by grind) (by grind)
+    let M₃ ← StrassenHelperProg A₁₁ (B₁₂ - B₂₂) (by grind) (by grind) (by grind)
+    let M₄ ← StrassenHelperProg A₂₂ (B₂₁ - B₁₁) (by grind) (by grind) (by grind)
+    let M₅ ← StrassenHelperProg (A₁₁ + A₁₂) B₂₂ (by grind) (by grind) (by grind)
+    let M₆ ← StrassenHelperProg (A₂₁ - A₁₁) (B₁₁ + B₁₂) (by grind) (by grind) (by grind)
+    let M₇ ← StrassenHelperProg (A₁₂ - A₂₂) (B₂₁ + B₂₂) (by grind) (by grind) (by grind)
     return .combine (M₁ + M₄ - M₅ + M₇) (M₃ + M₅) (M₂ + M₄) (M₁ - M₂ + M₃ + M₆)
 termination_by StrassenMatrix.height A
 decreasing_by
   all_goals grind
 
-theorem StrassenProg_eval_unit {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
-    (StrassenProg (toStrassenMatrix A) (toStrassenMatrix B) (by simp)
+theorem StrassenHelperProg_eval_unit {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+    (StrassenHelperProg (toStrassenMatrix A) (toStrassenMatrix B) (by simp)
         (by apply wellFormed_toStrassenMatrix) (by apply wellFormed_toStrassenMatrix)).eval
       unitArithmeticModel = toStrassenMatrix (A * B) := by
   induction n with
   | zero =>
-    simp [toStrassenMatrix, StrassenProg, mulProd_eval_unit, Matrix.mul_apply]
+    simp [toStrassenMatrix, StrassenHelperProg, mulProd_eval_unit, Matrix.mul_apply]
   | succ m ih =>
-    simp only [toStrassenMatrix, Nat.succ_eq_add_one, StrassenProg, toStrassenMatrix_add,
+    simp only [toStrassenMatrix, Nat.succ_eq_add_one, StrassenHelperProg, toStrassenMatrix_add,
       toStrassenMatrix_sub, bind_pure_comp, eval_bind, ih, eval_map, Matrix.mul_apply,
       combine.injEq, toStrassenMatrix_inj]
     let (eq := h₁) A₁₁ := (Matrix.of fun (i j : Fin (2 ^ m)) ↦ A ⟨i.1, by lia⟩ ⟨j.1, by lia⟩)
@@ -862,15 +862,15 @@ theorem StrassenProg_eval_unit {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
     rw [this]
     grind
 
-theorem StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
+theorem StrassenHelperProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.height)
   (hA : A.wellFormed) (hB : B.wellFormed) :
-    (StrassenProg A B h hA hB).time unitArithmeticModel = 7 ^ (A.height) := by
+    (StrassenHelperProg A B h hA hB).time unitArithmeticModel = 7 ^ (A.height) := by
   induction h' : A.height generalizing A B with
   | zero =>
     cases A with
     | base =>
       cases B with
-      | base => simp [StrassenProg, mulProd_cost_unit]
+      | base => simp [StrassenHelperProg, mulProd_cost_unit]
       | combine => simp only [height_base_combine] at h
     | combine => simp at h'
   | succ m ih =>
@@ -880,7 +880,7 @@ theorem StrassenProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = B.heig
       cases B with
       | base => grind
       | combine =>
-        simp [StrassenProg]
+        simp [StrassenHelperProg]
         simp [Nat.add_comm m 1] at h h'
         grind
 
@@ -897,7 +897,7 @@ lemma KaratsubaTime_mono {x x' y y' : ℕ} (hx : x ≤ x') (hy : y ≤ y') :
 -- the following seven lemmas are used in the time complexity proof but moved out
 -- for a better overview and speed.
 
-private lemma StrassenProg_Karatsuba_helper1
+private lemma StrassenHelperProg_Karatsuba_helper1
   {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (m : ℕ) (hb' : 1 < b)
   (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
      A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height)
@@ -931,7 +931,7 @@ private lemma StrassenProg_Karatsuba_helper1
         exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
     · apply maxAbsEntry_add (by grind) (by grind) (by grind)
 
-private lemma StrassenProg_Karatsuba_helper2
+private lemma StrassenHelperProg_Karatsuba_helper2
   {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ} (B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ)
   (m : ℕ) (hb' : 1 < b)
   (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
@@ -958,7 +958,7 @@ private lemma StrassenProg_Karatsuba_helper2
     apply Nat.length_digits_le_of_le _ hb'
     apply maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
 
-private lemma StrassenProg_Karatsuba_helper3
+private lemma StrassenHelperProg_Karatsuba_helper3
   {b : ℕ} {B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ)
   (m : ℕ) (hb' : 1 < b)
   (hB : B₁₁.wellFormed ∧ B₁₂.wellFormed ∧ B₂₁.wellFormed ∧ B₂₂.wellFormed
@@ -985,7 +985,7 @@ private lemma StrassenProg_Karatsuba_helper3
         exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
     · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
 
-private lemma StrassenProg_Karatsuba_helper4
+private lemma StrassenHelperProg_Karatsuba_helper4
   {b : ℕ} {B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ)
   (m : ℕ) (hb' : 1 < b)
   (hB : B₁₁.wellFormed ∧ B₁₂.wellFormed ∧ B₂₁.wellFormed ∧ B₂₂.wellFormed
@@ -1012,7 +1012,7 @@ private lemma StrassenProg_Karatsuba_helper4
         exact maxAbsEntry_combine₁₁ B₁₁ B₁₂ B₂₁ B₂₂
     · apply maxAbsEntry_sub (by grind) (by grind) (by grind)
 
-private lemma StrassenProg_Karatsuba_helper5
+private lemma StrassenHelperProg_Karatsuba_helper5
   {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix ℤ} (B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ)
   (m : ℕ) (hb' : 1 < b)
   (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
@@ -1039,7 +1039,7 @@ private lemma StrassenProg_Karatsuba_helper5
     apply Nat.length_digits_le_of_le _ hb'
     apply maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
 
-private lemma StrassenProg_Karatsuba_helper6
+private lemma StrassenHelperProg_Karatsuba_helper6
   {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (m : ℕ) (hb' : 1 < b)
   (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
      A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height)
@@ -1073,7 +1073,7 @@ private lemma StrassenProg_Karatsuba_helper6
         exact maxAbsEntry_combine₁₂ B₁₁ B₁₂ B₂₁ B₂₂
     · apply maxAbsEntry_add (by grind) (by grind) (by grind)
 
-private lemma StrassenProg_Karatsuba_helper7
+private lemma StrassenHelperProg_Karatsuba_helper7
   {b : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ B₁₁ B₁₂ B₂₁ B₂₂ : StrassenMatrix ℤ} (m : ℕ) (hb' : 1 < b)
   (hA : A₁₁.wellFormed ∧ A₁₂.wellFormed ∧ A₂₁.wellFormed ∧ A₂₂.wellFormed ∧
      A₁₁.height = A₁₂.height ∧ A₁₂.height = A₂₁.height ∧ A₂₁.height = A₂₂.height)
@@ -1107,9 +1107,9 @@ private lemma StrassenProg_Karatsuba_helper7
         exact maxAbsEntry_combine₂₂ B₁₁ B₁₂ B₂₁ B₂₂
     · apply maxAbsEntry_add (by grind) (by grind) (by grind)
 
-theorem StrassenProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : StrassenMatrix ℤ}
+theorem StrassenHelperProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : StrassenMatrix ℤ}
   (h : A.height = B.height) (hA : A.wellFormed) (hB : B.wellFormed) :
-  (((StrassenProg A B h hA hB).reduceProg (arithReduction b hb)).time
+  (((StrassenHelperProg A B h hA hB).reduceProg (arithReduction b hb)).time
       (boundedArithmeticModel (b ^ 3)))
     ≤ 7 ^ A.height * (KaratsubaTime ((b.digits A.maxAbsEntry).length + A.height)
       ((b.digits B.maxAbsEntry).length + A.height)) := by
@@ -1120,7 +1120,7 @@ theorem StrassenProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : Stra
     | base =>
       cases B with
       | base =>
-        simp [StrassenProg, mulProg, KaratsubaTime]
+        simp [StrassenHelperProg, mulProg, KaratsubaTime]
         split <;> split <;> simpa [arithReduction] using Karatsuba_time hb
       | combine => simp only [height_base_combine] at h
     | combine => simp at h'
@@ -1132,20 +1132,20 @@ theorem StrassenProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : Stra
       | base => simp only [height_combine_base] at h
       | combine B₁₁ B₁₂ B₂₁ B₂₂ =>
         have hb' : 1 < b := by grind
-        simp only [unitArithmeticModel_evalQuery, StrassenProg, bind_pure_comp,
+        simp only [unitArithmeticModel_evalQuery, StrassenHelperProg, bind_pure_comp,
           Cslib.FreeM.liftM_bind, Cslib.FreeM.liftM_map, AddWriter.tell_bind, AddWriter.tell_map,
           Nat.cast_add, ge_iff_le]
         simp only [unitArithmeticModel] at ih
         simp only [wellFormed_combine, height_combine, Nat.max_assoc] at hA hB h
         grw [ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind),
           ih _ _ _ (by grind), ih _ _ _ (by grind), ih _ _ _ (by grind)]
-        have h₁ := StrassenProg_Karatsuba_helper1 m hb' hA hB
-        have h₂ := StrassenProg_Karatsuba_helper2 B₁₁ B₁₂ B₂₁ B₂₂ m hb' hA
-        have h₃ := StrassenProg_Karatsuba_helper3 A₁₁ A₁₂ A₂₁ A₂₂ m hb' hB
-        have h₄ := StrassenProg_Karatsuba_helper4 A₁₁ A₁₂ A₂₁ A₂₂ m hb' hB
-        have h₅ := StrassenProg_Karatsuba_helper5 B₁₁ B₁₂ B₂₁ B₂₂ m hb' hA
-        have h₆ := StrassenProg_Karatsuba_helper6 m hb' hA hB
-        have h₇ := StrassenProg_Karatsuba_helper7 m hb' hA hB
+        have h₁ := StrassenHelperProg_Karatsuba_helper1 m hb' hA hB
+        have h₂ := StrassenHelperProg_Karatsuba_helper2 B₁₁ B₁₂ B₂₁ B₂₂ m hb' hA
+        have h₃ := StrassenHelperProg_Karatsuba_helper3 A₁₁ A₁₂ A₂₁ A₂₂ m hb' hB
+        have h₄ := StrassenHelperProg_Karatsuba_helper4 A₁₁ A₁₂ A₂₁ A₂₂ m hb' hB
+        have h₅ := StrassenHelperProg_Karatsuba_helper5 B₁₁ B₁₂ B₂₁ B₂₂ m hb' hA
+        have h₆ := StrassenHelperProg_Karatsuba_helper6 m hb' hA hB
+        have h₇ := StrassenHelperProg_Karatsuba_helper7 m hb' hA hB
         grw [h₁, h₂, h₃, h₄, h₅, h₆, h₇]
         let (eq := h') x := KaratsubaTime
           ((b.digits (A₁₁.combine A₁₂ A₂₁ A₂₂).maxAbsEntry).length + (m + 1))
@@ -1164,5 +1164,39 @@ theorem StrassenProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B : Stra
         rw [this, Nat.pow_add', Nat.pow_one]
         simp only [Nat.cast_mul, Nat.cast_ofNat, Nat.cast_pow, ge_iff_le]
         rw [mul_assoc]
+
+def StrassenProg {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
+    Prog unitArithmeticQuery (Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) := do
+  let (eq := h₁) A' := toStrassenMatrix A
+  let (eq := h₂) B' := toStrassenMatrix B
+  have h : A'.height = B'.height := by simp [h₁, h₂]
+  have hA : A'.wellFormed := by simp [h₁, wellFormed_toStrassenMatrix]
+  have hB : B'.wellFormed := by simp [h₂, wellFormed_toStrassenMatrix]
+  let res ← StrassenHelperProg A' B' h hA hB
+  return ofStrassenMatrix n (res)
+
+theorem StrassenProg_eval_unit_eq_mul {n : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+    (StrassenProg A B).eval unitArithmeticModel = A * B := by
+  simp [StrassenProg, StrassenHelperProg_eval_unit]
+
+theorem StrassenProg_eval_boundedArithmetic_eq_mul {n b : ℕ}
+  {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} (hb : 1 < b) :
+    ((StrassenProg A B).reduceProg (arithReduction b hb)).eval (boundedArithmeticModel (b ^ 3)) =
+      A * B := by
+  rw [reduceProg_eval, StrassenProg_eval_unit_eq_mul]
+  apply arithReduction_correct
+
+theorem StrassenProg_time_unit {n : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ} :
+    (StrassenProg A B).time unitArithmeticModel = 7 ^ n := by
+  simp [StrassenProg, StrassenHelperProg_time_unit]
+
+theorem StrassenProg_time_boundedArithmetic {n b : ℕ} {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ}
+  (hb : 1 < b) :
+    ((StrassenProg A B).reduceProg (arithReduction b hb)).time (boundedArithmeticModel (b ^ 3)) ≤
+      7 ^ n * (3 * ((max ((b.digits A.maxAbsEntry).length)
+        ((b.digits B.maxAbsEntry).length)) + n : ℝ) ^ Real.logb 2 3) := by
+  simp only [StrassenProg, bind_pure_comp, Cslib.FreeM.liftM_map, time_map, Nat.cast_max]
+  grw [StrassenHelperProg_time_boundedArithmetic]
+  simp [KaratsubaTime, maxAbsEntry_toStrassenMatrix]
 
 end Algolean.Algorithms
