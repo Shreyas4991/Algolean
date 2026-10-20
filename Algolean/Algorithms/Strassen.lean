@@ -103,12 +103,22 @@ lemma Nat.length_digits_mul {x y b : ℕ} (hb : 1 < b) :
 
 end digits
 
+/--
+A Strassen Matrix is a model for quadratic block matrices we use in this file.
+This inductive defintion allows easier proofs and functions without running
+into dependent type hell. Note that not all StrassenMatrix object represent
+a real matrix because the submatrices may be of different sizes. This does not
+happen if the matrix is `StrassenMatrix.wellFormed`
+-/
 inductive StrassenMatrix (R : Type) : Type
 | base (r : R) : StrassenMatrix R
 | combine (A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatrix R) : StrassenMatrix R
 
 namespace StrassenMatrix
 
+/--
+The height of a Strassen Matrix is the height of the underlying construction tree.
+-/
 def height {R : Type} (A : StrassenMatrix R) : ℕ :=
   match A with
   | .base _ => 0
@@ -135,6 +145,10 @@ lemma height_combine {R : Type} {A₁₁ A₁₂ A₂₁ A₂₂ : StrassenMatri
     height (.combine A₁₁ A₁₂ A₂₁ A₂₂) =
       (max (max A₁₁.height A₁₂.height) (max A₂₁.height A₂₂.height)) + 1 := by rfl
 
+/--
+Any wellformed StrassenMatrix matches some real matrix and resembles a complete
+quaternary tree. This is a bool, because we use this in a computable way.
+-/
 def wellFormed {R : Type} (A : StrassenMatrix R) : Bool :=
   match A with
   | .base _ => True
@@ -182,6 +196,10 @@ lemma height_combined_of_wellFormed' {n : ℕ} {A₁₁ A₁₂ A₂₁ A₂₂ 
   simp [h₁, h₂, h₃] at h
   grind
 
+/--
+A well formed StrassenMatrix where all entires are zero. This is our
+junk value.
+-/
 def zero [Zero R] (n : ℕ) : StrassenMatrix R :=
   match n with
   | .zero => .base 0
@@ -199,6 +217,10 @@ lemma wellFormed_zero {R : Type} [Zero R] {n : ℕ} : (StrassenMatrix.zero n (R:
   | zero => simp [zero]
   | succ => simp [zero]; grind
 
+/--
+The addition is defined for well formed Strassen Matrices like the addition
+of block matrices works. If both matrices are not compatible, then we gain 0.
+-/
 def add {R} [Add R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
   match A, B with
   | .base r_1, .base r_2 => StrassenMatrix.base (r_1 + r_2)
@@ -253,6 +275,10 @@ lemma wellFormed_add {R} [Add R] [Zero R] {A B : StrassenMatrix R}
       simp at ⊢ hA hB
       grind
 
+/--
+The subtraction is defined for well formed Strassen Matrices like the addition
+of block matrices works. If both matrices are not compatible, then we gain 0.
+-/
 def sub {R} [Sub R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
   match A, B with
   | .base r_1, .base r_2 => StrassenMatrix.base (r_1 - r_2)
@@ -306,6 +332,10 @@ lemma wellFormed_sub {R} [Sub R] [Zero R] {A B : StrassenMatrix R}
       simp at ⊢ h hA hB
       grind
 
+/--
+The multiplication is defined for well formed Strassen Matrices like the addition
+of block matrices works. If both matrices are not compatible, then we gain 0.
+-/
 def mul [Mul R] [Add R] [Zero R] (A B : StrassenMatrix R) : StrassenMatrix R :=
   match A, B with
   | .base r_1, .base r_2 => StrassenMatrix.base (r_1 * r_2)
@@ -363,6 +393,10 @@ lemma wellFormed_mul {R} [Add R] [Mul R] [Zero R] {A B : StrassenMatrix R}
     (A * B).wellFormed := by
   apply (wellFormed_height_mul h hA hB).1
 
+/--
+In a StrassenMatrix with integer entries, this is the largest absolute
+value of all entries.
+-/
 def maxAbsEntry (A : StrassenMatrix ℤ) : ℕ :=
   match A with
   | .base r => r.natAbs
@@ -448,6 +482,10 @@ end StrassenMatrix
 
 open StrassenMatrix
 
+/--
+This transform a Matrix of dimension (2 ^ n) × (2 ^ n) into a well formed
+StrassenMatrix of height n. All operations commute with this definition.
+-/
 def toStrassenMatrix (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R) : StrassenMatrix R :=
   match n with
   | .zero => .base (A 0 0)
@@ -588,6 +626,10 @@ lemma toStrassenMatrix_mul [Ring R] {A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R}
       intro i j
       rw [sum_helper (fun k => A ⟨i + 2 ^ m, by lia⟩ k * B k ⟨j + 2 ^ m, by lia⟩)]
 
+/--
+A helper function that transforms a well formed StrassenMatrix of height n
+back into a (2 ^ n) × (2 ^ n) matrix.
+-/
 def ofStrassenMatrixHelper {R : Type} {n : ℕ} (A : StrassenMatrix R)
   (hA : A.wellFormed) (h : height A = n) :
     Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R :=
@@ -608,6 +650,13 @@ def ofStrassenMatrixHelper {R : Type} {n : ℕ} (A : StrassenMatrix R)
         else (ofStrassenMatrixHelper A₂₂ (by grind) h.2.2.2) ⟨i - 2 ^ m, by lia⟩ ⟨j - 2 ^ m, by lia⟩
     )
 
+/--
+If the StrassenMatrix is well formed and has height n then this produces
+a (2 ^ n) × (2 ^ n) matrix. If we transformed a matrix A into a StrassenMatrix
+using `toStrassenMatrix` we gain a back using this function.
+For non well formed matrices or those whose height does not match the zero matrix
+is returned.
+-/
 def ofStrassenMatrix {R : Type} [Zero R] (n : ℕ) (A : StrassenMatrix R) :
     Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) R :=
   if h : A.wellFormed ∧ A.height = n
@@ -637,6 +686,10 @@ lemma ofStrassenMatrix_toStrassenMatrix_eq_self {R : Type} [Zero R] {n : ℕ}
       · simp [hi, hj, ih]
         grind
 
+/--
+The maximum absolute value of all entries in a matrix. Better use `maxAbsEntry_iff`
+to characterize it than unfolding the definition.
+-/
 public def Matrix.maxAbsEntry {n : ℕ} (A : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :=
   Finset.univ (α := (Fin (2 ^ n)) × (Fin (2 ^ n))) |>.image (fun x => (A x.1 x.2).natAbs)
     |>.max' (by simp)
@@ -751,6 +804,10 @@ namespace Algolean.Algorithms
 
 open Prog
 
+/--
+A prog that multiplies two integers together using one query to the
+multiplication of natural numbers.
+-/
 def mulProg (x y : ℤ) : Prog unitArithmeticQuery ℤ := do
   let prod : ℕ ← unitArithmeticQuery.mul x.natAbs y.natAbs
   if x < 0
@@ -771,6 +828,10 @@ lemma mulProd_cost_unit {x y : ℤ} : (mulProg x y).time unitArithmeticModel = 1
   simp [mulProg]
   grind
 
+/--
+A reduction from the unit arithmetic model to the bounded arithmetic model, where
+every multiplication is done with Karatsuba's algorithm.
+-/
 @[expose]
 public def arithReduction (b : ℕ) (hb : 2 ≤ b) :
     Reduction unitArithmeticQuery (boundedArithmeticQuery (b ^ 3)) where
@@ -783,6 +844,9 @@ public lemma arithReduction_correct {b : ℕ} (hb : 2 ≤ b) {ι : Type} (q : un
   cases q with
   | mul x y => simp [arithReduction, KaratsubaProg_eval, Karatsuba_correct hb]
 
+/--
+This helper function employs Strassen algorithm to multiply two StrassenMatrix.
+-/
 def StrassenHelperProg (A B : StrassenMatrix ℤ) (h : A.height = B.height)
   (hA : A.wellFormed) (hB : B.wellFormed) :
     Prog unitArithmeticQuery (StrassenMatrix ℤ) := do
@@ -885,6 +949,9 @@ theorem StrassenHelperProg_time_unit {A B : StrassenMatrix ℤ} (h : A.height = 
         simp [Nat.add_comm m 1] at h h'
         grind
 
+/--
+This is an abbrevation the time used by Karatsuba's algorithm to multiply two numbers.
+-/
 noncomputable def KaratsubaTime (x y : ℕ) : ℝ := 3 * (max x y) ^ Real.logb 2 3
 
 lemma KaratsubaTime_mono {x x' y y' : ℕ} (hx : x ≤ x') (hy : y ≤ y') :
@@ -1166,6 +1233,9 @@ theorem StrassenHelperProg_time_boundedArithmetic {b : ℕ} (hb : 2 ≤ b) {A B 
         simp only [Nat.cast_mul, Nat.cast_ofNat, Nat.cast_pow, ge_iff_le]
         rw [mul_assoc]
 
+/--
+This prog multiplies two matrices of the form (2 ^ n) × (2 ^ m) using Strassen's algorithm.
+-/
 public def StrassenProg {n : ℕ} (A B : Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) :
     Prog unitArithmeticQuery (Matrix (Fin (2 ^ n)) (Fin (2 ^ n)) ℤ) := do
   let (eq := h₁) A' := toStrassenMatrix A
