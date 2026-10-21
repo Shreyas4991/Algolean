@@ -201,6 +201,7 @@ theorem randomQuicksort_spec_of_queries
   next => exact ⟨fun _ => ⟨.refl _, .nil⟩⟩
   next x xs ih_lt ih_rt =>
     have hflags := mapM_cmpLE_spec le hcmp
+    -- Specialize the induction hypotheses after the pivot and flags are in scope.
     vcgen [hdraw, hflags] until randomQuicksort _
     rename_i hflags_eq
     have hlt : ⦃ True ⦄ randomQuicksort lt
