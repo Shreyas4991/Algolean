@@ -88,25 +88,25 @@ An ADT query type for a Queue.
 -/
 inductive Queue (α : Type u) : Type u → Type u where
   | front : Queue α (Option α)
-  | pushback : Queue α PUnit
-  | popfront (newHead : α) : Queue α PUnit
+  | popfront : Queue α PUnit
+  | pushback (newHead : α) : Queue α PUnit
 
 /--
 A model for the queue query using the ListState to store
 the stack internally in the state type.
 -/
 @[simps]
-def queueModel : ModelM (Stack α) (StateM (ListState α)) ℕ where
+def queueModel : ModelM (Queue α) (StateM (ListState α)) ℕ where
     evalQuery
-      | .top => do
+      | .front => do
             let iL ← get
             return (List.head? iL.internalList)
-      | .pop => do
+      | .popfront => do
             let iL ← get
             set {internalList := List.tail iL.internalList : ListState α}
             return ()
-      | .push x => do
-            modify (fun iL => ⟨x :: iL.internalList⟩)
+      | .pushback x => do
+            modify (fun iL => ⟨iL.internalList ++ [x]⟩)
     cost _ := 1
 
 end Algolean.Algorithms
