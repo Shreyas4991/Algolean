@@ -6,7 +6,6 @@ Authors: Tanner Duve
 module
 
 public import Algolean.Models.RandomSample
-public import Mathlib.Probability.Distributions.Uniform
 
 /-!
 # Computable finite sampling queries
@@ -35,7 +34,11 @@ def model (sample : (n : Nat) → m (Fin (n + 1))) (sampleCost : Cost) :
 
 /-- Uniform probabilistic semantics; internal randomness contributes no query cost. -/
 noncomputable def pmfModel [Zero Cost] : ModelM UniformSample PMF Cost :=
-  model (fun n => PMF.uniformOfFintype (Fin (n + 1))) 0
+  model (fun n => PMF.ofFintype
+    (fun _ : Fin (n + 1) => (n + 1 : ENNReal)⁻¹) (by
+      simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul,
+        Nat.cast_add, Nat.cast_one]
+      exact ENNReal.mul_inv_cancel (by simp) (by simp))) 0
 
 end UniformSample
 

@@ -12,7 +12,7 @@ public import Algolean.Models.UniformSample
 # Randomized quicksort of a list
 
 This file defines randomized quicksort in the comparison-query model and proves that it always
-returns a sorted permutation of its input. The proof is by `mvcgen` through the support-based
+returns a sorted permutation of its input. The proof is by `vcgen` through the support-based
 weakest-precondition semantics of `PMF`.
 
 ## Main definitions
@@ -35,7 +35,7 @@ namespace Algorithms
 
 namespace Models
 
-open SortOps Std.Do Cslib
+open SortOps Std.WP Cslib
 
 /-- Comparison queries and computable finite pivot requests. -/
 abbrev RandomQuicksortOps (α : Type) := fun β => Sum (SortOps α β) (UniformSample β)
@@ -98,29 +98,30 @@ variable {α : Type}
 
 variable (le : α → α → Bool)
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- A comparison query returns the supplied comparator's answer. -/
 theorem query_cmpLE_spec (y p : α) :
     letI := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
-    ⦃⌜True⌝⦄
+    ⦃ True ⦄
       queryCmpLE y p
-      ⦃⇓b => ⌜b = le y p⌝⦄ := by
-  mvcgen [queryCmpLE]
-  intro b hb
-  exact (PMF.mem_support_pure_iff (le y p) b).mp hb
+      ⦃ fun b => b = le y p ⦄ := by
+  let _ := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
+  vcgen [queryCmpLE]
+  change ∀ b ∈ (PMF.pure (le y p)).support, b = le y p
+  simp
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- Comparing every element against `p` yields the flags `xs.map (le · p)`. -/
-theorem mapM_cmpLE_spec [FreeM.HasHandler (RandomQuicksortOps α) .pure]
-    (hcmp : ∀ (y p : α), ⦃⌜True⌝⦄ queryCmpLE y p ⦃⇓b => ⌜b = le y p⌝⦄)
+theorem mapM_cmpLE_spec [FreeM.HasHandler (RandomQuicksortOps α) Prop EStack⟨⟩]
+    (hcmp : ∀ (y p : α), ⦃ True ⦄ queryCmpLE y p ⦃ fun b => b = le y p ⦄)
     (p : α) (xs : List α) :
-    ⦃⌜True⌝⦄ (xs.mapM (fun y ↦ queryCmpLE y p))
-      ⦃⇓ flags => ⌜flags = xs.map (fun y ↦ le y p)⌝⦄ := by
+    ⦃ True ⦄ (xs.mapM (fun y ↦ queryCmpLE y p))
+      ⦃ fun flags => flags = xs.map (fun y ↦ le y p) ⦄ := by
   induction xs with
-  | nil => mvcgen
+  | nil => simp only [List.mapM_nil, List.map_nil]; vcgen
   | cons a as ih =>
     rw [List.mapM_cons]
-    mvcgen [hcmp, ih]
+    vcgen [hcmp, ih]
     simp_all
 
 /-- Keeping the elements flagged by `xs.map g` is filtering by `g`. -/
@@ -184,46 +185,52 @@ private lemma quicksort_combine [Std.Total (fun a b => le a b = true)]
   ⟨partition_glue_perm pivot _ rest sl sr hslp hsrp,
     sorted_glue le pivot rest sl sr hslp hsls hsrp hsrs⟩
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- Correctness only needs accurate comparisons and a pivot in the requested finite range. -/
 theorem randomQuicksort_spec_of_queries
-    [FreeM.HasHandler (RandomQuicksortOps α) .pure]
+    [FreeM.HasHandler (RandomQuicksortOps α) Prop EStack⟨⟩]
     [Std.Total (fun a b => le a b = true)]
     [IsTrans α (fun a b => le a b = true)]
-    (hcmp : ∀ (y p : α), ⦃⌜True⌝⦄ queryCmpLE y p ⦃⇓b => ⌜b = le y p⌝⦄)
-    (hdraw : ∀ n, ⦃⌜True⌝⦄ (drawPivot n : Prog (RandomQuicksortOps α) _)
-      ⦃⇓_ => ⌜True⌝⦄)
+    (hcmp : ∀ (y p : α), ⦃ True ⦄ queryCmpLE y p ⦃ fun b => b = le y p ⦄)
+    (hdraw : ∀ n, ⦃ True ⦄ (drawPivot n : Prog (RandomQuicksortOps α) _)
+      ⦃ fun _ => True ⦄)
     (l : List α) :
-    ⦃⌜True⌝⦄ randomQuicksort l
-      ⦃⇓ out => ⌜out.Perm l ∧ out.Pairwise (fun a b => le a b = true)⌝⦄ := by
+    ⦃ True ⦄ randomQuicksort l
+      ⦃ fun out => out.Perm l ∧ out.Pairwise (fun a b => le a b = true) ⦄ := by
   fun_induction randomQuicksort l
-  next => mvcgen; exact ⟨.refl _, .nil⟩
+  next => exact ⟨fun _ => ⟨.refl _, .nil⟩⟩
   next x xs ih_lt ih_rt =>
     have hflags := mapM_cmpLE_spec le hcmp
-    mvcgen [hdraw]
-    rename_i r pivot rest
-    dsimp +zetaDelta only
-    mvcgen [hflags, ih_lt, ih_rt]
-    rename_i flags hflags sl hsl sr hsr
-    subst hflags
+    vcgen [hdraw, hflags] until randomQuicksort _
+    rename_i hflags_eq
+    have hlt : ⦃ True ⦄ randomQuicksort lt
+        ⦃ fun out => out.Perm lt ∧ out.Pairwise (fun a b => le a b = true) ⦄ := ih_lt r flags
+    have hrt : ⦃ True ⦄ randomQuicksort rt
+        ⦃ fun out => out.Perm rt ∧ out.Pairwise (fun a b => le a b = true) ⦄ := ih_rt r flags
+    vcgen [hlt, hrt]
+    rename_i hsl hsr
+    subst hflags_eq
+    dsimp +zetaDelta only at hsl hsr
     simp only [keepFlagged_map, List.map_map, Function.comp_def] at hsl hsr
-    have hc := quicksort_combine le ((x :: xs).get r) ((x :: xs).eraseIdx ↑r) sl sr
+    have hc := quicksort_combine le ((x :: xs).get r) ((x :: xs).eraseIdx ↑r) sortedlt sortedrt
       hsl.1 hsl.2 hsr.1 hsr.2
     exact ⟨hc.1.trans (List.getElem_cons_eraseIdx_perm r.isLt), hc.2⟩
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- Uniform randomized quicksort returns a sorted permutation under the supplied comparator. -/
 theorem randomQuicksort_spec [Std.Total (fun a b => le a b = true)]
     [IsTrans α (fun a b => le a b = true)] (l : List α) :
     letI := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
-    ⦃⌜True⌝⦄ randomQuicksort l
-      ⦃⇓ out => ⌜out.Perm l ∧ out.Pairwise (fun a b => le a b = true)⌝⦄ := by
+    ⦃ True ⦄ randomQuicksort l
+      ⦃ fun out => out.Perm l ∧ out.Pairwise (fun a b => le a b = true) ⦄ := by
+  let _ := (randomQuicksortModel le UniformSample.pmfModel).hasHandler
   apply @randomQuicksort_spec_of_queries α le
     (randomQuicksortModel le UniformSample.pmfModel).hasHandler _ _
     (query_cmpLE_spec le)
   intro n
-  mvcgen [drawPivot]
-  exact fun _ _ => True.intro
+  vcgen [drawPivot]
+  change ∀ r ∈ ((UniformSample.pmfModel (Cost := ℕ)).evalQuery (.fin n)).support, True
+  simp
 
 end Correctness
 
