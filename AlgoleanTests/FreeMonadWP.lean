@@ -12,7 +12,7 @@ public import Std.Tactic.Do
 
 /-!
 Examples for WP in `Algolean.FreeWP.WP`: instance resolution,
-a `Triple` on a `FreeState` program discharged by `mvcgen`, a custom `CounterF` effect with
+a `Triple` on a `FreeState` program discharged by `vcgen`, a custom `CounterF` effect with
 its own logical handler, sum/failure/demonic effects, arbitrary relational operation specifications,
 and — connecting the WP framework to this repository's query model — Hoare triples about
 query-model programs `Prog Q α` against a handler derived from a `Model Q Cost` (illustrated on
@@ -21,11 +21,11 @@ query-model programs `Prog Q α` against a handler derived from a `Model Q Cost`
 
 @[expose] public section
 
-set_option mvcgen.warning false
+set_option experimental.vcgen true
 
 namespace AlgoleanTests.FreeMonadWP
 
-open Cslib Cslib.FreeM Std.Do
+open Cslib Cslib.FreeM Std.WP
 
 example : WP (FreeState Nat) (.arg Nat .pure) := inferInstance
 example : WPMonad (FreeState Nat) (.arg Nat .pure) := inferInstance
@@ -40,11 +40,11 @@ def incr : FreeState Nat Unit := do
 example : wp incr = wp (FreeState.toStateM incr) :=
   StateF.wp_FreeState_eq_wp_toStateM incr
 
-/-- Starting in state `n`, `incr` ends in state `n + 1`. `mvcgen` picks up the `@[spec]` lemmas
+/-- Starting in state `n`, `incr` ends in state `n + 1`. `vcgen` picks up the `@[spec]` lemmas
 for `MonadStateOf.get`/`set` on `FreeState` and discharges the resulting arithmetic VC. -/
 example (n : Nat) :
-    ⦃fun s => ⌜s = n⌝⦄ (incr : FreeState Nat Unit) ⦃⇓ _ s' => ⌜s' = n + 1⌝⦄ := by
-  mvcgen
+    ⦃fun s => s = n⦄ (incr : FreeState Nat Unit) ⦃fun  _ s' => s' = n + 1⦄ := by
+  vcgen
   intro s heq
   subst heq
   rfl
@@ -67,7 +67,7 @@ def interp : ∀ ι : Type, CounterF ι → StateM Nat ι
   | _, .tick => modify (· + 1)
   | _, .read => MonadStateOf.get
 
-/-- Logical handler for `CounterF` induced by `interp` and `Std.Do`'s `WP (StateM Nat)`
+/-- Logical handler for `CounterF` induced by `interp` and `Std.WP`'s `WP (StateM Nat)`
 instance. -/
 def handler : LHandler CounterF (.arg Nat .pure) :=
   LHandler.ofInterp CounterF.interp
@@ -99,11 +99,11 @@ def threeTicks : FreeCounter Nat := do
 
 /--
 Triple about the counter program: starting at `0`, the final value is `3` and the final state
-is `3`. Proven by the same bridge-then-`mvcgen` pattern as `incr`.
+is `3`. Proven by the same bridge-then-`vcgen` pattern as `incr`.
 -/
 example :
-    ⦃fun s => ⌜s = 0⌝⦄ threeTicks ⦃⇓ v s => ⌜v = 3 ∧ s = 3⌝⦄ := by
-  mvcgen
+    ⦃fun s => s = 0⦄ threeTicks ⦃fun  v s => v = 3 ∧ s = 3⦄ := by
+  vcgen
   intro s seq0
   subst seq0
   exact ⟨rfl, rfl⟩
@@ -113,11 +113,11 @@ inductive FailF : Type → Type where
   /-- Abort the computation. -/
   | fail : FailF PEmpty.{1}
 
-/-- Logical handler for `FailF`: `fail` has precondition `⌜False⌝`, so it is only provable in
+/-- Logical handler for `FailF`: `fail` has precondition `False`, so it is only provable in
 unreachable branches. -/
 def FailF.handler {ps : PostShape} : LHandler FailF ps :=
   fun op => match op with
-    | .fail => PredTrans.const spred(⌜False⌝)
+    | .fail => PredTrans.const spred(False)
 
 /-- A combined state + failure signature, sequencing `StateF Nat` with `FailF`. -/
 abbrev StateFail := fun α => StateF Nat α ⊕ FailF α
@@ -141,20 +141,20 @@ abbrev sfFail {α : Type} : FreeM StateFail α :=
 /-- Hoare spec for the sum-lifted state-read. -/
 @[spec]
 theorem Spec.sfGet {Q : PostCond Nat (.arg Nat .pure)} :
-    Triple sfGet (spred(fun s => Q.1 s s)) Q := by
-  mvcgen
+    Triple sfGet (spred(fun s => Q s s)) Q := by
+  vcgen
 
 /-- Hoare spec for the sum-lifted state-write. -/
 @[spec]
 theorem Spec.sfSet (n : Nat) {Q : PostCond PUnit (.arg Nat .pure)} :
-    Triple (sfSet n) (spred(fun _ => Q.1 ⟨⟩ n)) Q := by
-  mvcgen
+    Triple (sfSet n) (spred(fun _ => Q ⟨⟩ n)) Q := by
+  vcgen
 
 /-- Hoare spec for sum-lifted failure: requires `False` to verify. -/
 @[spec]
 theorem Spec.sfFail {α : Type} {Q : PostCond α (.arg Nat .pure)} :
-    Triple (sfFail : FreeM StateFail α) (spred(⌜False⌝)) Q := by
-  mvcgen
+    Triple (sfFail : FreeM StateFail α) (spred(False)) Q := by
+  vcgen
 
 /-- A non-branching program in the combined signature: read the state, then write
 `state + 1`. Shows that the sum handler composes the StateF and FailF specs cleanly. -/
@@ -164,9 +164,9 @@ def getAndBump : FreeM StateFail Unit := do
 
 /-- `getAndBump` advances the state by 1, proven through the sum handler. -/
 example (n : Nat) :
-    ⦃fun s => ⌜s = n⌝⦄ (getAndBump : FreeM StateFail Unit)
-      ⦃⇓ _ s => ⌜s = n + 1⌝⦄ := by
-  mvcgen
+    ⦃fun s => s = n⦄ (getAndBump : FreeM StateFail Unit)
+      ⦃fun  _ s => s = n + 1⦄ := by
+  vcgen
   intro s a
   subst a
   rfl
@@ -180,10 +180,10 @@ def bumpUnder (limit : Nat) : FreeM StateFail Unit := do
 /-- Starting in a state below `limit`, `bumpUnder` increments without failing — the failure
 branch is unreachable because the precondition rules it out. -/
 example (limit n : Nat) (hlt : n < limit) :
-    ⦃fun s => ⌜s = n⌝⦄ (bumpUnder limit : FreeM StateFail Unit)
-      ⦃⇓ _ s => ⌜s = n + 1⌝⦄ := by
+    ⦃fun s => s = n⦄ (bumpUnder limit : FreeM StateFail Unit)
+      ⦃fun  _ s => s = n + 1⦄ := by
   unfold bumpUnder
-  mvcgen <;> aesop
+  vcgen <;> aesop
 
 /-- Demonic non-determinism: a single operation `choice α` that abstractly returns an arbitrary
 `a : α`. Verification must consider all possible values of `a`. -/
@@ -210,13 +210,13 @@ abbrev demonic (α : Type) : FreeM DemonicF α := lift (DemonicF.choice α)
 
 /-- Triple for `demonic α`: the precondition must imply the postcondition for *every* `a : α`. -/
 @[spec]
-theorem Spec.demonic {α : Type} {Q : PostCond α .pure} :
-    Triple (demonic α) (SPred.forall (fun a : α => Q.1 a)) Q :=
+theorem Spec.demonic {α : Type} {Q : α → Prop} :
+    Triple (demonic α) (SPred.forall (fun a : α => Q a)) Q :=
   fun h => ⟨True.intro, fun a _ => h a⟩
 
 /-- A demonic Bool: the precondition must hold for both `true` and `false`. -/
-example {Q : PostCond Bool .pure} :
-    Triple (demonic Bool) (SPred.and (Q.1 true) (Q.1 false)) Q :=
+example {Q : Bool → Prop} :
+    Triple (demonic Bool) (SPred.and (Q true) (Q false)) Q :=
   fun ⟨ht, hf⟩ => ⟨True.intro, fun
     | true, _ => ht
     | false, _ => hf⟩
@@ -246,15 +246,15 @@ instance : HasHandler PickF .pure where
 abbrev pick : FreeM PickF Bool := lift PickF.pick
 
 /-- The generated operation WP simplifies to the `true` case of the continuation postcondition. -/
-example (Q : PostCond Bool .pure) :
-    (wpH PickF.handler pick).apply Q = Q.1 true := by
+example (Q : Bool → Prop) :
+    (wpH PickF.handler pick).apply Q = Q true := by
   rw [wpH_lift]
   apply SPred.ext_nil
   simp [PickF.handler, PickF.spec]
 
 /-- Consequently, `pick` has precisely the paper's Hoare specification. -/
-example {Q : PostCond Bool .pure} :
-    Triple pick (Q.1 true) Q :=
+example {Q : Bool → Prop} :
+    Triple pick (Q true) Q :=
   fun h => ⟨True.intro, fun _ hEq => hEq ▸ h⟩
 
 /-! ### Query-model programs
@@ -262,7 +262,7 @@ example {Q : PostCond Bool .pure} :
 The repository's query model defines `Prog Q α := FreeM Q α`, and `Algolean.QueryModel` wires every
 query model into this WP framework: `Model.handler` reads a logical handler off a model's
 `evalQuery` at the pure post-shape, a `HasModel` instance registers a query type's default model,
-and the generic `Spec.query` discharges single queries under `mvcgen`. So Hoare triples about the
+and the generic `Spec.query` discharges single queries under `vcgen`. So Hoare triples about the
 *result value* a query program computes are available with no per-example setup.
 
 We illustrate with `ReadOnlyVec`, whose `HasModel (ReadOnlyVec α) ℕ` instance (via
@@ -291,17 +291,17 @@ def readTwo {α : Type} {n : Nat} (a : Vector α n) (i j : Fin n) :
   pure (x, y)
 
 /-- Functional correctness of `readTwo`: it returns exactly `(a[i], a[j])`. The two `read`
-specs compose through the `bind` rule, and `mvcgen` discharges the program. -/
+specs compose through the `bind` rule, and `vcgen` discharges the program. -/
 example {α : Type} {n : Nat} (a : Vector α n) (i j : Fin n) :
-    ⦃⌜True⌝⦄ (readTwo a i j) ⦃⇓ r => ⌜r = (a[i], a[j])⌝⦄ := by
-  mvcgen
+    ⦃True⦄ (readTwo a i j) ⦃fun  r => r = (a[i], a[j])⦄ := by
+  vcgen
 
 /-- A read program whose result depends on the data: read index `i`, and if the value equals
 `x`, the answer is `true`. The triple shows the verifier sees the concrete element `a[i]`. -/
 example {n : Nat} (a : Vector Nat n) (i : Fin n) (x : Nat) :
-    ⦃⌜True⌝⦄
+    ⦃True⦄
       (do let v ← ReadOnlyVec.read a i; pure (v == x) : Prog (ReadOnlyVec Nat) Bool)
-    ⦃⇓ r => ⌜r = (a[i] == x)⌝⦄ := by
-  mvcgen
+    ⦃fun  r => r = (a[i] == x)⦄ := by
+  vcgen
 
 end AlgoleanTests.FreeMonadWP

@@ -7,179 +7,157 @@ Authors: Tanner Duve
 module
 
 public import Cslib.Foundations.Control.Monad.Free
-public import Std.Do.PredTrans
-public import Std.Do.WP.Basic
-public import Std.Do.WP.Monad
-public import Std.Do.Triple
+public import Std.WP
 
 /-!
 # Weakest preconditions for `FreeM` programs
 
-Weakest-precondition interpretation of `FreeM F` programs through `Std.Do`'s
-predicate-transformer monad `PredTrans ps`. The universal property of `FreeM` lifts any
-effect handler `F ι → PredTrans ps ι` to a unique monad morphism `wpH H = liftM H`,
-so weakest preconditions are compositional in `FreeM`'s monadic structure. A
-`[HasHandler F ps]` instance plugs `FreeM F` into `Std.Do`'s `WP`/`WPMonad`/`Triple`
-infrastructure.
-
-The WP's structural rules (`wpH_pure`, `wpH_bind`, …) are immediate from `liftM` being a monad
-morphism; the adequacy theorem `wpH_ofInterp_eq_wp_liftM` — that WP-via-handler agrees with
-`Std.Do`'s WP of the `liftM` interpretation — is the same statement of uniqueness.
-
-For pure specifications, an `OperationSpec F` assigns an arbitrary precondition and relational
-postcondition to every operation in `F`. Its `toHandler` method compiles these contracts into
-logical handlers. This is the free-monad construction from Maillard et al.,
-[*Dijkstra Monads for All*][Maillard2019]: because `FreeM F` imposes no equations on operation
-trees, the primitive contracts extend freely to a compositional weakest-precondition semantics.
-
-The design follows [Vistrup, Sammler, Jung. *Program Logics à la Carte.* POPL 2025], adapted
-from coinductive ITrees to inductive `FreeM` and from Iris to `Std.Do`.
-
-[Maillard2019]: https://arxiv.org/abs/1903.01237
+Logical effect handlers interpret `FreeM` into `Lean.Order.PredTrans`. Monotone handlers
+provide `Std.WP.WPMonad` instances and specifications for `vcgen`. Relational operation
+contracts can supply handlers independently of an executable interpretation.
 -/
 
 @[expose] public section
 
-set_option mvcgen.warning false
+namespace Cslib.FreeM
 
-namespace Cslib
+open Lean.Order Std.WP
 
-open Std.Do
+universe u v w z r
 
-namespace FreeM
+variable {F G : Type u → Type v} {Pred : Type w} {EPred : Type z}
+variable [Assertion Pred] [Assertion EPred] {α β : Type u}
 
-universe u v w
+/-- A monotone predicate transformer for every primitive operation. -/
+structure LHandler (F : Type u → Type v) (Pred : Type w) (EPred : Type z)
+    [Assertion Pred] [Assertion EPred] where
+  /-- Interpret a primitive operation. -/
+  trans {ι : Type u} : F ι → PredTrans Pred EPred ι
+  /-- Weaker postconditions yield weaker preconditions. -/
+  monotone {ι : Type u} (op : F ι) : (trans op).monotone
 
-variable {F G : Type u → Type v} {ps : PostShape.{u}} {α β : Type u}
+instance : CoeFun (LHandler F Pred EPred) (fun _ => {ι : Type u} → F ι → PredTrans Pred EPred ι) :=
+  ⟨LHandler.trans⟩
 
-/-- A logical handler: an effect handler from `F` into the predicate-transformer monad
-`PredTrans ps`. -/
-abbrev LHandler (F : Type u → Type v) (ps : PostShape.{u}) : Type (max (u + 1) v) :=
-  ∀ {ι : Type u}, F ι → PredTrans ps ι
-
-/-- A relational specification for every operation in an indexed signature `F`.
-
-An operation `op : F ι` packages its operation name and input and returns a value of type `ι`.
-`pre op` must hold before invoking it, while `post op out` characterizes the outputs that the
-operation is allowed to return. Because `FreeM F` is free of equations, these contracts may be
-chosen independently for each operation. -/
+/-- Independent preconditions and relational postconditions for primitive operations. -/
 structure OperationSpec (F : Type u → Type v) : Type (max (u + 1) v) where
-  /-- Preconditions for primitive operations. -/
+  /-- The operation is enabled. -/
   pre {ι : Type u} (op : F ι) : Prop
-  /-- Relational postconditions for primitive operations and their outputs. -/
+  /-- The operation permits this result. -/
   post {ι : Type u} (op : F ι) (out : ι) : Prop
 
 namespace OperationSpec
 
-/-- Compile relational operation contracts into a pure logical handler.
+/-- Require the operation to be enabled and every permitted result to satisfy the continuation. -/
+def toHandler (S : OperationSpec F) : LHandler F Prop EStack⟨⟩ where
+  trans op := ⟨fun Q _ => S.pre op ∧ ∀ out, S.post op out → Q out⟩
+  monotone op := by
+    intro Q Q' E E' _ hQ
+    exact fun ⟨hp, h⟩ => ⟨hp, fun a ha => hQ a (h a ha)⟩
 
-For `op : F ι` and a continuation postcondition `Q`, the resulting weakest precondition is
-`S.pre op ∧ ∀ out, S.post op out → Q out`: the operation must be enabled, and every output
-permitted by its relational postcondition must make the continuation safe. -/
-def toHandler (S : OperationSpec F) : LHandler F .pure :=
-  fun op =>
-    { trans := fun Q =>
-        spred(⌜S.pre op ∧ ∀ out, S.post op out → (Q.1 out).down⌝)
-      conjunctiveRaw := by
-        intro Q₁ Q₂
-        aesop }
-
-@[simp]
-theorem apply_toHandler (S : OperationSpec F) {ι : Type u} (op : F ι)
-    (Q : PostCond ι .pure) :
-    (S.toHandler op).apply Q =
-      spred(⌜S.pre op ∧ ∀ out, S.post op out → (Q.1 out).down⌝) :=
-  rfl
+@[simp] theorem apply_toHandler (S : OperationSpec F) {ι : Type u} (op : F ι)
+    (Q : ι → Prop) (E : EStack⟨⟩) :
+    (S.toHandler op).apply Q E = (S.pre op ∧ ∀ out, S.post op out → Q out) := rfl
 
 end OperationSpec
 
 namespace LHandler
 
-/-- Sum of handlers; the counterpart of the paper's `H₁ ⊕ H₂`. -/
-def sum (H₁ : LHandler F ps) (H₂ : LHandler G ps) :
-    LHandler (fun α => F α ⊕ G α) ps :=
-  fun op => Sum.elim H₁ H₂ op
+/-- Combine handlers for disjoint effect signatures. -/
+def sum (H₁ : LHandler F Pred EPred) (H₂ : LHandler G Pred EPred) :
+    LHandler (fun α => F α ⊕ G α) Pred EPred where
+  trans op := Sum.elim H₁.trans H₂.trans op
+  monotone op := by cases op with
+    | inl op => exact H₁.monotone op
+    | inr op => exact H₂.monotone op
 
-@[simp] theorem sum_inl (H₁ : LHandler F ps) (H₂ : LHandler G ps)
+@[simp] theorem sum_inl (H₁ : LHandler F Pred EPred) (H₂ : LHandler G Pred EPred)
     {ι : Type u} (x : F ι) :
     LHandler.sum H₁ H₂ (Sum.inl x : F ι ⊕ G ι) = H₁ x := rfl
 
-@[simp] theorem sum_inr (H₁ : LHandler F ps) (H₂ : LHandler G ps)
+@[simp] theorem sum_inr (H₁ : LHandler F Pred EPred) (H₂ : LHandler G Pred EPred)
     {ι : Type u} (y : G ι) :
     LHandler.sum H₁ H₂ (Sum.inr y : F ι ⊕ G ι) = H₂ y := rfl
 
-/-- Derive a logical handler from an effect handler into any `[WP m ps]` monad, by composing
-with `m`'s WP. -/
-def ofInterp {m : Type u → Type w} [WP m ps]
-    (interp : ∀ ι : Type u, F ι → m ι) : LHandler F ps :=
-  fun {ι} op => wp (interp ι op)
+/-- Derive a logical handler from an interpreter into a monad with weakest preconditions. -/
+def ofInterp {m : Type u → Type r} [Monad m] [WPMonad m Pred EPred]
+    (interp : ∀ ι : Type u, F ι → m ι) : LHandler F Pred EPred where
+  trans op := WP.wpTrans (interp _ op)
+  monotone op := WP.wp_trans_monotone (interp _ op)
 
-@[simp] theorem ofInterp_apply {m : Type u → Type w} [WP m ps]
+@[simp] theorem ofInterp_apply {m : Type u → Type r} [Monad m] [WPMonad m Pred EPred]
     (interp : ∀ ι : Type u, F ι → m ι) {ι : Type u} (op : F ι) :
-    LHandler.ofInterp interp op = wp (interp ι op) := rfl
+    LHandler.ofInterp interp op = WP.wpTrans (interp ι op) := rfl
 
 end LHandler
 
-/-- Weakest-precondition interpretation of a `FreeM F α` program against a logical handler `H`.
-Defined as `FreeM.liftM` instantiated at `PredTrans ps`, the unique monad morphism
-`FreeM F → PredTrans ps` extending `H` per the universal property of `FreeM`. -/
-def wpH (H : LHandler F ps) (x : FreeM F α) : PredTrans ps α :=
-  x.liftM H
+/-- Extend a logical handler to a free program using the universal property of `FreeM`. -/
+def wpH (H : LHandler F Pred EPred) (x : FreeM F α) : PredTrans Pred EPred α :=
+  x.liftM H.trans
 
-@[simp] theorem wpH_pure (H : LHandler F ps) (a : α) :
+@[simp] theorem wpH_pure (H : LHandler F Pred EPred) (a : α) :
     wpH H (pure a : FreeM F α) = Pure.pure a := rfl
 
-theorem wpH_liftBind (H : LHandler F ps) {ι : Type u}
+theorem wpH_liftBind (H : LHandler F Pred EPred) {ι : Type u}
     (op : F ι) (k : ι → FreeM F α) :
     wpH H ((lift op : FreeM F ι) >>= k) = H op >>= fun x => wpH H (k x) := rfl
 
-theorem wpH_lift (H : LHandler F ps) {ι : Type u} (op : F ι) :
-    wpH H (lift op : FreeM F ι) = H op :=
-  liftM_lift _ op
+@[simp] theorem wpH_lift (H : LHandler F Pred EPred) {ι : Type u} (op : F ι) :
+    wpH H (lift op : FreeM F ι) = H op := liftM_lift _ op
 
-@[simp] theorem wpH_bind (H : LHandler F ps) (x : FreeM F α) (f : α → FreeM F β) :
-    wpH H (x >>= f) = wpH H x >>= fun a => wpH H (f a) :=
-  liftM_bind H x f
+@[simp] theorem wpH_bind (H : LHandler F Pred EPred) (x : FreeM F α) (f : α → FreeM F β) :
+    wpH H (x >>= f) = wpH H x >>= fun a => wpH H (f a) := liftM_bind H.trans x f
 
-/-- Adequacy theorem: WP via `FreeM` against an `ofInterp`-derived handler agrees with
-`Std.Do`'s WP of the `liftM` interpretation. Equivalently, two monad morphisms
-`FreeM F → PredTrans ps` extending the same handler are equal. -/
-theorem wpH_ofInterp_eq_wp_liftM
-    {m : Type u → Type w} [Monad m] [WPMonad m ps]
-    (interp : ∀ ι : Type u, F ι → m ι) (x : FreeM F α) :
-    wpH (LHandler.ofInterp interp) x = wp (x.liftM (fun {_} => interp _)) := by
+/-- The free extension of monotone primitive transformers is monotone. -/
+theorem wpH_monotone (H : LHandler F Pred EPred) (x : FreeM F α) : (wpH H x).monotone := by
   induction x with
-  | pure a => simp [wpH, WPMonad.wp_pure]
+  | pure a => exact fun _ _ _ _ _ hQ => hQ a
   | lift_bind op k ih =>
-    simp only [wpH] at ih ⊢
-    simp [WPMonad.wp_bind, ih]
+    intro Q Q' E E' hE hQ
+    exact H.monotone op _ _ _ _ hE (fun a => ih a _ _ _ _ hE hQ)
 
-/-- Records a default logical handler for `F` at shape `ps`, enabling the global
-`WP (FreeM F) ps` instance and any `Triple`/`mvcgen` reasoning over `FreeM F`. -/
-class HasHandler (F : Type u → Type v) (ps : outParam (PostShape.{u})) where
-  /-- The default logical handler for `F`. -/
-  handler {ι : Type u} : F ι → PredTrans ps ι
+/-- Interpreting the syntax through logical handlers is sound for any `Std.WP.WPMonad`.
+The new API assumes only refinement for pure and bind, so generic adequacy is an entailment. -/
+theorem wpH_ofInterp_le_wp_liftM
+    {m : Type u → Type r} [Monad m] [WPMonad m Pred EPred]
+    (interp : ∀ ι : Type u, F ι → m ι) (x : FreeM F α) (Q : α → Pred) (E : EPred) :
+    (wpH (LHandler.ofInterp interp) x).apply Q E ⊑
+      wp (x.liftM (fun {_} => interp _)) Q E := by
+  induction x with
+  | pure a => exact WPMonad.pure_le_wp_pure a Q E
+  | lift_bind op k ih =>
+    exact PartialOrder.rel_trans
+      (WP.wp_consequence (interp _ op) _ _ E (fun a => ih a))
+      (WPMonad.bind_le_wp_bind (interp _ op) _ Q E)
 
-instance instWPFreeM [HasHandler F ps] : WP (FreeM F) ps where
-  wp := wpH HasHandler.handler
+/-- Select the default logical handler for a free effect signature. -/
+class HasHandler (F : Type u → Type v) (Pred : outParam (Type w)) (EPred : outParam (Type z))
+    [Assertion Pred] [Assertion EPred] where
+  /-- The selected logical handler. -/
+  handler : LHandler F Pred EPred
 
-instance instWPMonadFreeM [HasHandler F ps] : WPMonad (FreeM F) ps where
-  wp_pure _ := rfl
-  wp_bind x f := wpH_bind _ x f
+instance instWPFreeM [HasHandler F Pred EPred] : WP (FreeM F α) α Pred EPred where
+  wpTrans := wpH HasHandler.handler
+  wp_trans_monotone := wpH_monotone _
 
-/-- The WP of a primitive query is the predicate transformer selected by its handler. -/
-@[simp] theorem wp_lift [HasHandler F ps] (op : F α) :
-    wp (lift op : FreeM F α) = HasHandler.handler op :=
-  wpH_lift _ op
+instance instWPMonadFreeM [HasHandler F Pred EPred] : WPMonad (FreeM F) Pred EPred where
+  toWP _ := inferInstance
+  pure_le_wp_pure _ _ _ := PartialOrder.rel_refl
+  bind_le_wp_bind x f Q E := by
+    change (wpH _ x).apply _ E ⊑ (wpH _ (x >>= f)).apply Q E
+    rw [wpH_bind]
+    exact PartialOrder.rel_refl
 
-/-- The generic Hoare rule for a primitive `FreeM` operation. Its precondition is exactly the
-predicate transformer assigned by the selected logical handler. Its low `mvcgen` priority lets
-effect-specific rules expose more useful preconditions when available. -/
+/-- The WP of a primitive query is the transformer selected by its logical handler. -/
+@[simp] theorem wp_lift [HasHandler F Pred EPred] (op : F α) (Q : α → Pred) (E : EPred) :
+    wp (lift op : FreeM F α) Q E = (HasHandler.handler op).apply Q E := by
+  change (wpH _ (lift op)).apply Q E = _
+  rw [wpH_lift]
+
+/-- The generic primitive-operation rule, with lower priority than effect-specific rules. -/
 @[spec low]
-theorem Spec.lift_FreeM [HasHandler F ps] (op : F α) {Q : PostCond α ps} :
-    Triple (lift op : FreeM F α) ((HasHandler.handler op).apply Q) Q :=
-  Triple.iff.mpr SPred.entails.rfl
+theorem Spec.lift_FreeM [HasHandler F Pred EPred] (op : F α) {Q : α → Pred} {E : EPred} :
+    Triple (lift op : FreeM F α) ((HasHandler.handler op).apply Q E) Q E :=
+  ⟨by rw [wp_lift]⟩
 
-end FreeM
-
-end Cslib
+end Cslib.FreeM

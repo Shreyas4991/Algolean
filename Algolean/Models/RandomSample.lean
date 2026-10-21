@@ -46,7 +46,7 @@ denotes `PMF.pure`.
 
 namespace Algolean.Algorithms
 
-open Cslib Std.Do
+open Cslib Lean.Order Std.WP
 
 /-!
 ## Weakest-precondition semantics for `PMF`
@@ -58,35 +58,28 @@ the right notion for algorithms whose answer must be correct on every run. Reaso
 probabilities themselves is quantitative and not captured by these instances.
 
 These instances make every `ModelM Q PMF Cost` interpretation (for example `RandomSample.free`)
-plug into `Std.Do`'s `Triple`/`mvcgen` infrastructure through `ModelM.handler`, just as a
+plug into `Std.WP`'s `Triple`/`vcgen` infrastructure through `ModelM.handler`, just as a
 deterministic `Model` does.
 -/
 
 /-- Support-based weakest-precondition interpretation of a `PMF`. -/
-instance instWPPMF : WP PMF .pure where
-  wp x :=
-    { trans := fun Q => ⟨∀ a ∈ x.support, (Q.1 a).down⟩
-      conjunctiveRaw := by
-        intro Q₁ Q₂
-        simp only [SPred.bientails_nil, SPred.and_nil]
-        grind }
+instance instWPPMF : WP (PMF α) α Prop EStack⟨⟩ where
+  wpTrans x := ⟨fun Q _ => ∀ a ∈ x.support, Q a⟩
+  wp_trans_monotone x := by
+    intro Q Q' E E' _ hQ h a ha
+    exact hQ a (h a ha)
 
-/-- The support interpretation is a monad morphism, so `mvcgen` reasoning applies. -/
-instance instWPMonadPMF : WPMonad PMF .pure where
-  wp_pure a := by
-    apply PredTrans.ext
-    intro Q
-    have hp : (pure a : PMF _) = PMF.pure a := rfl
-    rw [hp, PredTrans.apply_Pure_pure]
-    apply ULift.ext
-    simp only [WP.wp, PredTrans.apply, PMF.mem_support_pure_iff, forall_eq]
-  wp_bind x f := by
-    apply PredTrans.ext
-    intro Q
-    have hxf : (x >>= f) = x.bind f := rfl
-    rw [hxf, PredTrans.apply_Bind_bind]
-    apply ULift.ext
-    simp only [WP.wp, PredTrans.apply, PMF.mem_support_bind_iff]
+/-- The support interpretation respects pure and bind, so `vcgen` reasoning applies. -/
+instance instWPMonadPMF : WPMonad PMF Prop EStack⟨⟩ where
+  toWP _ := inferInstance
+  pure_le_wp_pure a Q E := by
+    change Q a → ∀ b ∈ (PMF.pure a).support, Q b
+    simp only [PMF.mem_support_pure_iff, forall_eq]
+    exact id
+  bind_le_wp_bind x f Q E := by
+    change (∀ a ∈ x.support, ∀ b ∈ (f a).support, Q b) →
+      ∀ b ∈ (x.bind f).support, Q b
+    simp only [PMF.mem_support_bind_iff]
     grind
 
 /-- Sample from a distribution supplied by this query. -/

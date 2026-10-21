@@ -265,24 +265,24 @@ we can state Hoare triples about the *result value* a program computes under the
 
 The cost field plays no role here — `.pure` tracks only the returned value — so the construction
 works for a model over *any* cost type, with no algebraic structure required. To register a query
-type's canonical model as the default for `mvcgen`/`Triple` reasoning, provide a `HasModel`
+type's canonical model as the default for `vcgen`/`Triple` reasoning, provide a `HasModel`
 instance; the global `WP (Prog Q) .pure` instance then fires automatically.
 -/
 
-open Cslib Cslib.FreeM Std.Do
+open Cslib Cslib.FreeM Lean.Order Std.WP
 
 variable {Q : Type u → Type v} {Cost : Type w} {ι α : Type u}
 
 /-- The logical handler induced by a model `M : Model Q Cost`: interpret each query through
 `M.evalQuery` into `Id` (where `pure` is the identity), then take its weakest precondition at the
-pure post-shape. This is the bridge that turns a query model into a `Std.Do` effect, so
-`mvcgen`/`Triple` reasoning works on any `Prog Q α`. -/
-def Model.handler (M : Model Q Cost) : LHandler Q .pure :=
+pure post-shape. This is the bridge that turns a query model into a `Std.WP` effect, so
+`vcgen`/`Triple` reasoning works on any `Prog Q α`. -/
+def Model.handler (M : Model Q Cost) : LHandler Q Prop EStack⟨⟩ :=
   LHandler.ofInterp (m := Id) (fun _ q => M.evalQuery q)
 
 /-- A query type equipped with a designated default cost model. Registering an instance lets the
 generic `HasHandler`/`WP (Prog Q) .pure` instances fire, so query programs plug into
-`Std.Do`'s `Triple`/`mvcgen` infrastructure with no per-type boilerplate. -/
+`Std.WP`'s `Triple`/`vcgen` infrastructure with no per-type boilerplate. -/
 class HasModel (Q : Type u → Type v) (Cost : outParam (Type w)) where
   /-- The designated default model for `Q`. -/
   model : Model Q Cost
@@ -290,15 +290,18 @@ class HasModel (Q : Type u → Type v) (Cost : outParam (Type w)) where
 /-- Generic handler instance: every query type with a default `HasModel` gets the WP framework at
 the pure post-shape, induced by that model. This is the single instance that "generates" a handler
 for an arbitrary model. -/
-instance instHasHandlerOfModel [HasModel Q Cost] : HasHandler Q .pure where
+instance instHasHandlerOfModel [HasModel Q Cost] : HasHandler Q Prop EStack⟨⟩ where
   handler := (HasModel.model (Cost := Cost)).handler
 
 /-- Adequacy for the query model: the WP of a query program against a model's handler agrees with
-`Std.Do`'s WP of its `Id`-interpretation under that model — i.e. with what the program
+`Std.WP`'s WP of its `Id`-interpretation under that model — i.e. with what the program
 `eval`uates to. -/
 theorem Model.wp_eq_wp_interp (M : Model Q Cost) (P : Prog Q α) :
-    wpH M.handler P = wp (P.liftM (fun {_} q => (M.evalQuery q : Id _))) :=
-  wpH_ofInterp_eq_wp_liftM (m := Id) (fun _ q => M.evalQuery q) P
+    wpH M.handler P = WP.wpTrans (P.liftM (fun {_} q => (M.evalQuery q : Id _))) :=
+by
+  induction P using FreeM.induction with
+  | pure a => rfl
+  | lift_bind op k ih => exact ih (M.evalQuery op)
 
 
 theorem FreeM.liftM_bind_id {F : Type u → Type v} {α β : Type u}
@@ -313,27 +316,29 @@ theorem FreeM.liftM_bind_id {F : Type u → Type v} {α β : Type u}
 
 /-- The single-query Hoare spec, generic over any registered model: to establish postcondition `Q'`
 after running a query `q`, it suffices that `Q'` holds of the value `HasModel.model.evalQuery q`
-that the model returns. Tagged `@[spec]` so `mvcgen` discharges every lifted query automatically. -/
+that the model returns. Tagged `@[spec]` so `vcgen` discharges every lifted query automatically. -/
 @[spec]
-theorem Spec.query [HasModel Q Cost] (q : Q ι) {Q' : PostCond ι .pure} :
+theorem Spec.query [HasModel Q Cost] (q : Q ι) {Q' : ι → Prop} :
     Triple (FreeM.lift q : Prog Q ι)
-      (Q'.1 ((HasModel.model : Model Q Cost).evalQuery q)) Q' :=
-  Triple.iff.mpr SPred.entails.rfl
+      (Q' ((HasModel.model : Model Q Cost).evalQuery q)) Q' () :=
+  ⟨fun h => h⟩
 
-theorem Spec.pure_FreeM {F : Type u → Type v} {α : Type u} [HasHandler F .pure]
-    (a : α) {Q' : PostCond α .pure} :
-    Triple (FreeM.pure a : FreeM F α) (Q'.1 a) Q' :=
-  Triple.iff.mpr SPred.entails.rfl
+theorem Spec.pure_FreeM {F : Type u → Type v} {α : Type u} [HasHandler F Prop EStack⟨⟩]
+    (a : α) {Q' : α → Prop} :
+    Triple (FreeM.pure a : FreeM F α) (Q' a) Q' () :=
+  ⟨fun h => h⟩
 
 /-- Adequacy bridge: a pure-shape Hoare triple with trivial precondition yields a fact about the
-value the program `eval`uates to under the registered model. This turns an `mvcgen` proof about a
+value the program `eval`uates to under the registered model. This turns an `vcgen` proof about a
 `Prog Q` program directly into a statement about `Prog.eval`. -/
 theorem eval_of_triple [HasModel Q Cost] {prog : Prog Q α} {φ : α → Prop}
-    (h : ⦃⌜True⌝⦄ prog ⦃⇓r => ⌜φ r⌝⦄) :
+    (h : ⦃True⦄ prog ⦃fun r => φ r⦄) :
     φ (prog.eval (HasModel.model : Model Q Cost)) :=
-  Id.of_wp_run_eq
-    (prog := prog.liftM (fun {_} q => ((HasModel.model : Model Q Cost).evalQuery q : Id _)))
-    rfl φ (by rw [← (HasModel.model : Model Q Cost).wp_eq_wp_interp prog]; exact h)
+by
+  have hwp := h.le_wp trivial
+  change (wpH (HasModel.model (Cost := Cost)).handler prog).apply φ () at hwp
+  rw [(HasModel.model (Cost := Cost)).wp_eq_wp_interp prog] at hwp
+  exact hwp
 
 end WeakestPrecondition
 

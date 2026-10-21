@@ -45,7 +45,7 @@ def ReadOnlyVec.natCost : Model (ReadOnlyVec α) ℕ where
   cost _ := 1
 
 /-- Register `natCost` as the default model for `ReadOnlyVec`, so the global
-`WP (Prog (ReadOnlyVec α)) .pure` / `HasHandler` instances fire and `Triple`/`mvcgen` reasoning
+`WP (Prog (ReadOnlyVec α)) .pure` / `HasHandler` instances fire and `Triple`/`vcgen` reasoning
 works on read-only-vector programs out of the box. -/
 instance : HasModel (ReadOnlyVec α) ℕ where
   model := ReadOnlyVec.natCost

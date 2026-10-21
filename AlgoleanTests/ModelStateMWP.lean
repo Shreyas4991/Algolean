@@ -12,16 +12,16 @@ public import Std.Tactic.Do
 /-!
 # Weakest-precondition reasoning for `ModelStateM`
 
-This file exercises weakest-precondition reasoning and `mvcgen` for a `StateM` query model.
+This file exercises weakest-precondition reasoning and `vcgen` for a `StateM` query model.
 -/
 
 @[expose] public section
 
-set_option mvcgen.warning false
+set_option experimental.vcgen true
 
 namespace AlgoleanTests.ModelStateMWP
 
-open Algolean Algolean.Algorithms Cslib Cslib.FreeM Std.Do
+open Algolean Algolean.Algorithms Cslib Cslib.FreeM Std.WP
 
 /-- Queries for incrementing and reading a counter. -/
 inductive CounterQ : Type → Type where
@@ -55,12 +55,12 @@ example {Q : PostCond Nat (.arg Nat .pure)} :
     let _ : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
     Triple (FreeM.lift CounterQ.read : Prog CounterQ Nat)
       (wp⟦counterModel.evalQuery .read⟧ Q) Q := by
-  mvcgen [counterModel, ModelStateM.handler]
+  vcgen [counterModel, ModelStateM.handler]
 
 example (n : Nat) :
-    ⦃fun s => ⌜s = n⌝⦄ tickThenRead
-      ⦃⇓ value s => ⌜value = n + 1 ∧ s = n + 1⌝⦄ := by
-  mvcgen [tickThenRead, tick, read, counterModel, ModelStateM.handler]
+    ⦃fun s => s = n⦄ tickThenRead
+      ⦃fun  value s => value = n + 1 ∧ s = n + 1⦄ := by
+  vcgen [tickThenRead, tick, read, counterModel, ModelStateM.handler]
   subst_vars
   exact ⟨rfl, rfl⟩
 
@@ -77,9 +77,9 @@ example (P : Prog CounterQ α) :
 
 -- Both queries are charged, and an existing cost is retained.
 example (n c : Nat) :
-    ⦃fun cost s => ⌜cost = c ∧ s = n⌝⦄ tickThenRead
-      ⦃⇓ value cost s => ⌜value = n + 1 ∧ s = n + 1 ∧ cost = c + 2⌝⦄ := by
-  mvcgen [tickThenRead, tick, read]
+    ⦃fun cost s => cost = c ∧ s = n⦄ tickThenRead
+      ⦃fun  value cost s => value = n + 1 ∧ s = n + 1 ∧ cost = c + 2⦄ := by
+  vcgen [tickThenRead, tick, read]
   simp_all only [HasHandler.handler, counterModel, wp_lift, ModelStateM.costHandler_apply_state,
     ModelStateM.ofCost_runQuery_state, Nat.add_assoc, Nat.reduceAdd,
     and_true, SPred.down_pure_nil]
@@ -99,9 +99,9 @@ local instance : HasHandler CounterQ (.arg Nat (.arg Nat .pure)) :=
   stateCostModel.hasCostHandler
 
 example (n c : Nat) :
-    ⦃fun cost s => ⌜cost = c ∧ s = n⌝⦄ tickThenRead
-      ⦃⇓ value cost s => ⌜value = n + 1 ∧ s = n + 1 ∧ cost = c + n + 2⌝⦄ := by
-  mvcgen [tickThenRead, tick, read]
+    ⦃fun cost s => cost = c ∧ s = n⦄ tickThenRead
+      ⦃fun  value cost s => value = n + 1 ∧ s = n + 1 ∧ cost = c + n + 2⦄ := by
+  vcgen [tickThenRead, tick, read]
   simp_all [HasHandler.handler, stateCostModel, Nat.add_assoc]
 
 end StateCosts

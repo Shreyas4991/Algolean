@@ -16,8 +16,8 @@ public import Algolean.QueryModel
 `Prog.evalM` evaluates a program, `Prog.runM` records its result and accumulated query cost, and
 `Prog.costM` returns the accumulated cost.
 
-For a monad with a `Std.Do.WPMonad` instance, `ModelM.handler` and `ModelM.hasHandler` provide
-weakest-precondition semantics for `mvcgen`.
+For a monad with a `Std.WP.WPMonad` instance, `ModelM.handler` and `ModelM.hasHandler` provide
+weakest-precondition semantics for `vcgen`.
 -/
 
 @[expose] public section
@@ -269,38 +269,38 @@ end Prog
 
 section WeakestPrecondition
 
-open Cslib.FreeM Std.Do
+open Cslib.FreeM Lean.Order Std.WP
 
-variable {ps : PostShape.{u}}
+variable {Pred EPred : Type u} [Assertion Pred] [Assertion EPred]
 
 namespace ModelM
 
 /-- The logical handler induced by `M.evalQuery`. -/
-def handler [WP m ps] (M : ModelM Q m Cost) : LHandler Q ps :=
+def handler [Monad m] [WPMonad m Pred EPred] (M : ModelM Q m Cost) : LHandler Q Pred EPred :=
   LHandler.ofInterp (m := m) (fun _ q => M.evalQuery q)
 
-@[simp] theorem handler_sum [WP m ps] {Q₂ : Type u → Type x}
+@[simp] theorem handler_sum [Monad m] [WPMonad m Pred EPred] {Q₂ : Type u → Type x}
     (M₁ : ModelM Q m Cost) (M₂ : ModelM Q₂ m Cost) (q : Q α ⊕ Q₂ α) :
     (M₁.sum M₂).handler q = LHandler.sum M₁.handler M₂.handler q := by
   cases q <;> rfl
 
 /-- Use `M.handler` as the logical handler for `Prog Q`. -/
-@[reducible] def hasHandler [WP m ps] (M : ModelM Q m Cost) : HasHandler Q ps where
+@[reducible] def hasHandler [Monad m] [WPMonad m Pred EPred] (M : ModelM Q m Cost) : HasHandler Q Pred EPred where
   handler := M.handler
 
 /-- The weakest precondition given by `M.handler` agrees with that of `Prog.evalM M`. -/
-theorem wp_eq_wp_evalM [Monad m] [WPMonad m ps]
-    (M : ModelM Q m Cost) (P : Prog Q α) :
-    wpH M.handler P = wp (P.evalM M) :=
-  wpH_ofInterp_eq_wp_liftM (m := m) (fun _ q => M.evalQuery q) P
+theorem wp_le_wp_evalM [Monad m] [WPMonad m Pred EPred]
+    (M : ModelM Q m Cost) (P : Prog Q α) (post : α → Pred) (epost : EPred) :
+    (wpH M.handler P).apply post epost ⊑ wp (P.evalM M) post epost :=
+  wpH_ofInterp_le_wp_liftM (m := m) (fun _ q => M.evalQuery q) P post epost
 
 end ModelM
 
 /-- The `ModelM` query rule stated directly through the semantic monad's weakest precondition. -/
-theorem ModelM.query_spec [Monad m] [WPMonad m ps]
-    (M : ModelM Q m Cost) (q : Q α) {Q' : PostCond α ps} :
-    let _ : HasHandler Q ps := M.hasHandler
-    Triple (FreeM.lift q : Prog Q α) (wp⟦M.evalQuery q⟧ Q') Q' := by
+theorem ModelM.query_spec [Monad m] [WPMonad m Pred EPred]
+    (M : ModelM Q m Cost) (q : Q α) {Q' : α → Pred} {E : EPred} :
+    let _ : HasHandler Q Pred EPred := M.hasHandler
+    Triple (FreeM.lift q : Prog Q α) (wp (M.evalQuery q) Q' E) Q' E := by
   let _inst := M.hasHandler
   exact Cslib.FreeM.Spec.lift_FreeM q
 

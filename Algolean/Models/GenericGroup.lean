@@ -158,7 +158,7 @@ def groupModel (G : Type u) [AddCommGroup G] [DecidableEq G] :
     (groupModel G).cost q = q.charge := rfl
 
 /-- Register `groupModel` as the default model for `GroupQuery`, so the global
-`WP (Prog (GroupQuery G)) .pure` / `HasHandler` instances fire and `Triple`/`mvcgen` reasoning
+`WP (Prog (GroupQuery G)) .pure` / `HasHandler` instances fire and `Triple`/`vcgen` reasoning
 works on generic group programs out of the box. -/
 instance [AddCommGroup G] [DecidableEq G] : HasModel (GroupQuery G) GroupCosts where
   model := groupModel G
@@ -198,7 +198,7 @@ abbrev groupOps (oa : GroupProg G α) : ℕ := (cost oa).groupOps
 
 `groupModel` is the registered default model of `GroupQuery`, so the weakest-precondition
 instances of `Algolean.QueryModel` fire on `GroupProg`. The three specs below are all that stands
-between that and `mvcgen`: the generic `Spec.query` discharges a lifted query but leaves the
+between that and `vcgen`: the generic `Spec.query` discharges a lifted query but leaves the
 model's answer unevaluated, so these take priority over it and read that answer back in `G`.
 
 Cost is not in view here. The `.pure` post-shape sees only the returned value, and the query counts
@@ -207,31 +207,31 @@ remain the business of `cost` above.
 
 section Specs
 
-open Std.Do
+open Std.WP
 
 /-- The oracle answers `add x y` with the sum of `x` and `y`. -/
 @[spec high]
-theorem add_spec (x y : G) {Q' : PostCond G .pure} :
-    Triple (GroupQuery.add x y : GroupProg G G) (Q'.1 (x + y)) Q' :=
+theorem add_spec (x y : G) {Q' : G → Prop} :
+    Triple (GroupQuery.add x y : GroupProg G G) (Q' (x + y)) Q' () :=
   Spec.query (Cost := GroupCosts) (GroupQuery.add x y)
 
 /-- The oracle answers `neg x` with the negation of `x`. -/
 @[spec high]
-theorem neg_spec (x : G) {Q' : PostCond G .pure} :
-    Triple (GroupQuery.neg x : GroupProg G G) (Q'.1 (-x)) Q' :=
+theorem neg_spec (x : G) {Q' : G → Prop} :
+    Triple (GroupQuery.neg x : GroupProg G G) (Q' (-x)) Q' () :=
   Spec.query (Cost := GroupCosts) (GroupQuery.neg x)
 
 /-- The oracle answers `eq x y` with the lifted decision of `x = y`. -/
 @[spec high]
-theorem eq_spec (x y : G) {Q' : PostCond (ULift Bool) .pure} :
+theorem eq_spec (x y : G) {Q' : ULift Bool → Prop} :
     Triple (GroupQuery.eq x y : GroupProg G (ULift Bool))
-      (Q'.1 (ULift.up (decide (x = y)))) Q' :=
+      (Q' (ULift.up (decide (x = y)))) Q' () :=
   Spec.query (Cost := GroupCosts) (GroupQuery.eq x y)
 
 /-- A triple with a trivial precondition is a statement about what the program `eval`uates to in
 `G`, which is the form the rest of the development is written in. -/
 theorem eval_of_triple {oa : GroupProg G α} {φ : α → Prop}
-    (h : ⦃⌜True⌝⦄ oa ⦃⇓r => ⌜φ r⌝⦄) : φ (eval oa) :=
+    (h : ⦃True⦄ oa ⦃fun r => φ r⦄) : φ (eval oa) :=
   Algolean.Algorithms.eval_of_triple (Cost := GroupCosts) h
 
 end Specs

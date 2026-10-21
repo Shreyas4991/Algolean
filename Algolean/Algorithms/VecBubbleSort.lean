@@ -15,10 +15,10 @@ public import Std.Tactic.Do
 
 Bubble sort written as a program in the `Vec` query model (`Prog (Vec α)`), using `read` and
 `write` queries against a mutable vector threaded through `for` loops. This is the worked example
-the query-model WP framework is built for: a *non-trivial* `mvcgen` development establishing full
+the query-model WP framework is built for: a *non-trivial* `vcgen` development establishing full
 functional correctness — both that the output is a permutation of the input and that it is sorted.
 
-The algorithm is split into two pieces, each verified with its own single-loop `mvcgen` proof and
+The algorithm is split into two pieces, each verified with its own single-loop `vcgen` proof and
 composed through a Hoare-triple spec (`bubblePass_spec`), which is the idiomatic way to keep loop
 reasoning modular:
 
@@ -43,9 +43,9 @@ namespace Algolean
 
 namespace Algorithms
 
-open Cslib Prog Std.Do
+open Cslib Prog Std.WP
 
-set_option mvcgen.warning false
+set_option experimental.vcgen true
 
 /--
 One bubbling sweep in the `Vec` query model: for each adjacent pair `v[j], v[j+1]` with
@@ -77,7 +77,7 @@ def bubbleSort (le : α → α → Bool) (v : Vector α n) : Prog (Vec α) (Vect
 
 `MaxAt le w m` says `w[m]` dominates the prefix `[0, m]`; `SortedFrom le w b` says positions
 `[b, n)` are sorted and dominated by the whole prefix. These are the loop invariants, with the
-pointwise lemmas below feeding `mvcgen`'s verification conditions. -/
+pointwise lemmas below feeding `vcgen`'s verification conditions. -/
 
 variable {α : Type} {n : Nat}
 
@@ -164,22 +164,22 @@ private lemma sortedFrom_zero_pairwise {le : α → α → Bool} {w : Vector α 
 private lemma sub_one_sub_add (k : Nat) (h : k < n) : n - 1 - k + 1 = n - k := by lia
 private lemma sub_succ (k : Nat) : n - (k + 1) = n - 1 - k := by lia
 
-/-! ### Hoare specs via `mvcgen`
+/-! ### Hoare specs via `vcgen`
 
-The two single-loop proofs that carry the work: each calls `mvcgen` with one hand-supplied loop
+The two single-loop proofs that carry the work: each calls `vcgen` with one hand-supplied loop
 invariant, then discharges the (concrete, `grind`-friendly) verification conditions. -/
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- One pass deposits the maximum of `[0, bound]` at `bound`, preserves the sorted suffix above,
 and permutes the vector. -/
 theorem bubblePass_spec (le : α → α → Bool) [Std.Total (fun a b : α => le a b = true)]
     [IsTrans α (fun a b => le a b = true)]
     (bound : Nat) (hb : bound < n) (v : Vector α n) (hpre : SortedFrom le v (bound + 1)) :
-    ⦃⌜True⌝⦄ bubblePass le bound hb v
-      ⦃⇓w => ⌜MaxAt le w bound ∧ SortedFrom le w (bound + 1) ∧ w.toList.Perm v.toList⌝⦄ := by
-  mvcgen [bubblePass] invariants
-    · ⇓⟨xs, w⟩ => ⌜MaxAt le w xs.prefix.length ∧ SortedFrom le w (bound + 1)
-        ∧ w.toList.Perm v.toList⌝
+    ⦃True⦄ bubblePass le bound hb v
+      ⦃fun w => MaxAt le w bound ∧ SortedFrom le w (bound + 1) ∧ w.toList.Perm v.toList⦄ := by
+  vcgen [bubblePass] invariants
+    · fun ⟨xs, w⟩ => MaxAt le w xs.prefix.length ∧ SortedFrom le w (bound + 1)
+        ∧ w.toList.Perm v.toList
   case vc3.pre =>
     simp only [List.length_nil]
     exact ⟨maxAt_zero le (Std.Refl.refl (r := fun a b : α => le a b = true)) v,
@@ -208,13 +208,13 @@ theorem bubblePass_spec (le : α → α → Bool) [Std.Total (fun a b : α => le
       at hmax hns hcb ⊢
     exact ⟨maxAt_noswap le Std.Total.total IsTrans.trans _ _ (by lia) hmax hns, hsort, hperm⟩
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- `bubbleSort` is correct: it sorts and permutes its input (for a total, transitive `le`). -/
 theorem bubbleSort_spec (le : α → α → Bool) [Std.Total (fun a b : α => le a b = true)]
     [IsTrans α (fun a b => le a b = true)] (v : Vector α n) :
-    ⦃⌜True⌝⦄ bubbleSort le v ⦃⇓w => ⌜SortedFrom le w 0 ∧ w.toList.Perm v.toList⌝⦄ := by
-  mvcgen [bubbleSort, bubblePass_spec] invariants
-    · ⇓⟨xs, w⟩ => ⌜SortedFrom le w (n - xs.prefix.length) ∧ w.toList.Perm v.toList⌝
+    ⦃True⦄ bubbleSort le v ⦃fun w => SortedFrom le w 0 ∧ w.toList.Perm v.toList⦄ := by
+  vcgen [bubbleSort, bubblePass_spec] invariants
+    · fun ⟨xs, w⟩ => SortedFrom le w (n - xs.prefix.length) ∧ w.toList.Perm v.toList
   case vc1.hpre =>
     have hsort := (‹SortedFrom le _ _ ∧ List.Perm _ _›).1
     have hcb := (‹Fin n› : Fin n).isLt

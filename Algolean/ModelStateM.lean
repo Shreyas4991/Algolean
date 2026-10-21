@@ -13,19 +13,19 @@ public import Algolean.ModelM
 # Monadic query models with joint state and cost semantics
 
 `ModelStateM` interprets each query with its result and cost in the same monadic execution.
-Unlike `ModelM`, costs may depend on the state or on the query outcome. In order to track 
-this, we lift the query into an `AddWriterT Cost m a` transformer which allows cost tracking 
-to depend on how the execution state, that is hidden in the model changes. For instance, 
-when the  memory and registers of the WordRAM model are hidden, we can still track the 
-cells that are written to, which allows us to assign space complexity. The monad 
-remains generic: stateful and probabilistic interpretations both retain the correlation 
-between results and costs. 
-- `Prog.evalStateM` evaluates a program, 
+Unlike `ModelM`, costs may depend on the state or on the query outcome. In order to track
+this, we lift the query into an `AddWriterT Cost m a` transformer which allows cost tracking
+to depend on how the execution state, that is hidden in the model changes. For instance,
+when the  memory and registers of the WordRAM model are hidden, we can still track the
+cells that are written to, which allows us to assign space complexity. The monad
+remains generic: stateful and probabilistic interpretations both retain the correlation
+between results and costs.
+- `Prog.evalStateM` evaluates a program,
 - `Prog.runStateM` records its result and accumulated cost, and
 - `Prog.costStateM` returns the accumulated cost.
 
 `ModelStateM.handler` and `ModelStateM.hasHandler` provide weakest-precondition semantics
-for `mvcgen` when the monad has a `Std.Do.WPMonad` instance.
+for `vcgen` when the monad has a `Std.WP.WPMonad` instance.
 -/
 
 @[expose] public section
@@ -309,70 +309,70 @@ end Prog
 
 section WeakestPrecondition
 
-open Cslib.FreeM Std.Do
+open Cslib.FreeM Lean.Order Std.WP
 
-variable {ps : PostShape.{u}}
+variable {Pred EPred : Type u} [Assertion Pred] [Assertion EPred]
 
 namespace ModelStateM
 
 /-- A handler exposing both query results and accumulated costs to postconditions. -/
-def costHandler [Functor m] [Add Cost] [WP m ps] (M : ModelStateM Q m Cost) :
-    LHandler Q (.arg Cost ps) :=
+def costHandler [Functor m] [Add Cost] [Monad m] [WPMonad m Pred EPred] (M : ModelStateM Q m Cost) :
+    LHandler Q (Cost → Pred) EPred :=
   LHandler.ofInterp (m := AddWriterT Cost m) (fun _ q => M.runQuery q)
 
 /-- Evaluate a cost-aware state-model query's postcondition from its joint outcome. -/
 @[simp] theorem costHandler_apply_state [Add Cost]
     (M : ModelStateM Q (StateM σ) Cost) (q : Q α)
-    (post : PostCond α (.arg Cost (.arg σ .pure))) (initial : Cost) (s : σ) :
-    (M.costHandler q).apply post initial s =
-      post.fst ((M.runQuery q).run s).fst.ret
+    (post : α → Cost → σ → Prop) (epost : EStack⟨⟩) (initial : Cost) (s : σ) :
+    (M.costHandler q).apply post epost initial s =
+      post ((M.runQuery q).run s).fst.ret
         (initial + ((M.runQuery q).run s).fst.tell) ((M.runQuery q).run s).snd := rfl
 
-/-- Register joint execution for cost-aware `mvcgen` reasoning. -/
-@[reducible] def hasCostHandler [Functor m] [Add Cost] [WP m ps]
-    (M : ModelStateM Q m Cost) : HasHandler Q (.arg Cost ps) where
+/-- Register joint execution for cost-aware `vcgen` reasoning. -/
+@[reducible] def hasCostHandler [Functor m] [Add Cost] [Monad m] [WPMonad m Pred EPred]
+    (M : ModelStateM Q m Cost) : HasHandler Q (Cost → Pred) EPred where
   handler := M.costHandler
 
 /-- The cost-aware handler agrees with joint program execution. -/
-theorem wp_eq_wp_runStateM [Monad m] [AddMonoid Cost] [WPMonad m ps]
-    (M : ModelStateM Q m Cost) (P : Prog Q α) :
-    wpH M.costHandler P = wp (P.runStateM M) :=
-  wpH_ofInterp_eq_wp_liftM (m := AddWriterT Cost m) (fun _ q => M.runQuery q) P
+theorem wp_le_wp_runStateM [Monad m] [AddMonoid Cost] [WPMonad m Pred EPred]
+    (M : ModelStateM Q m Cost) (P : Prog Q α) (post : α → Cost → Pred) (epost : EPred) :
+    (wpH M.costHandler P).apply post epost ⊑ wp (P.runStateM M) post epost :=
+  wpH_ofInterp_le_wp_liftM (m := AddWriterT Cost m) (fun _ q => M.runQuery q) P post epost
 
 /-- The logical handler induced by `M.evalQuery`. -/
-def handler [Functor m] [WP m ps] (M : ModelStateM Q m Cost) : LHandler Q ps :=
+def handler [Functor m] [Monad m] [WPMonad m Pred EPred] (M : ModelStateM Q m Cost) : LHandler Q Pred EPred :=
   LHandler.ofInterp (m := m) (fun _ q => M.evalQuery q)
 
-@[simp] theorem handler_sum [Functor m] [WP m ps] {Q₂ : Type u → Type x}
+@[simp] theorem handler_sum [Functor m] [Monad m] [WPMonad m Pred EPred] {Q₂ : Type u → Type x}
     (M₁ : ModelStateM Q m Cost) (M₂ : ModelStateM Q₂ m Cost) (q : Q α ⊕ Q₂ α) :
     (M₁.sum M₂).handler q = LHandler.sum M₁.handler M₂.handler q := by
   cases q <;> rfl
 
 /-- Use `M.handler` as the logical handler for `Prog Q`. -/
-@[reducible] def hasHandler [Functor m] [WP m ps] (M : ModelStateM Q m Cost) : HasHandler Q ps where
+@[reducible] def hasHandler [Functor m] [Monad m] [WPMonad m Pred EPred] (M : ModelStateM Q m Cost) : HasHandler Q Pred EPred where
   handler := M.handler
 
 /-- The weakest precondition given by `M.handler` agrees with that of `Prog.evalStateM M`. -/
-theorem wp_eq_wp_evalStateM [Monad m] [WPMonad m ps]
-    (M : ModelStateM Q m Cost) (P : Prog Q α) :
-    wpH M.handler P = wp (P.evalStateM M) :=
-  wpH_ofInterp_eq_wp_liftM (m := m) (fun _ q => M.evalQuery q) P
+theorem wp_le_wp_evalStateM [Monad m] [WPMonad m Pred EPred]
+    (M : ModelStateM Q m Cost) (P : Prog Q α) (post : α → Pred) (epost : EPred) :
+    (wpH M.handler P).apply post epost ⊑ wp (P.evalStateM M) post epost :=
+  wpH_ofInterp_le_wp_liftM (m := m) (fun _ q => M.evalQuery q) P post epost
 
 end ModelStateM
 
 /-- The query rule stated directly through the semantic monad's weakest precondition. -/
-theorem ModelStateM.query_spec [Monad m] [WPMonad m ps]
-    (M : ModelStateM Q m Cost) (q : Q α) {Q' : PostCond α ps} :
-    let _ : HasHandler Q ps := M.hasHandler
-    Triple (FreeM.lift q : Prog Q α) (wp⟦M.evalQuery q⟧ Q') Q' := by
+theorem ModelStateM.query_spec [Monad m] [WPMonad m Pred EPred]
+    (M : ModelStateM Q m Cost) (q : Q α) {Q' : α → Pred} {E : EPred} :
+    let _ : HasHandler Q Pred EPred := M.hasHandler
+    Triple (FreeM.lift q : Prog Q α) (wp (M.evalQuery q) Q' E) Q' E := by
   let _inst := M.hasHandler
   exact Cslib.FreeM.Spec.lift_FreeM q
 
 /-- The query rule for postconditions that also observe accumulated cost. -/
-theorem ModelStateM.cost_query_spec [Monad m] [AddMonoid Cost] [WPMonad m ps]
-    (M : ModelStateM Q m Cost) (q : Q α) {Q' : PostCond α (.arg Cost ps)} :
-    let _ : HasHandler Q (.arg Cost ps) := M.hasCostHandler
-    Triple (FreeM.lift q : Prog Q α) (wp⟦M.runQuery q⟧ Q') Q' := by
+theorem ModelStateM.cost_query_spec [Monad m] [AddMonoid Cost] [WPMonad m Pred EPred]
+    (M : ModelStateM Q m Cost) (q : Q α) {Q' : α → Cost → Pred} {E : EPred} :
+    let _ : HasHandler Q (Cost → Pred) EPred := M.hasCostHandler
+    Triple (FreeM.lift q : Prog Q α) (wp (M.runQuery q) Q' E) Q' E := by
   let _inst := M.hasCostHandler
   exact Cslib.FreeM.Spec.lift_FreeM q
 

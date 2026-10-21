@@ -12,16 +12,16 @@ public import Std.Tactic.Do
 /-!
 # Weakest-precondition reasoning for `ModelM`
 
-This file exercises weakest-precondition reasoning and `mvcgen` for a `StateM` query model.
+This file exercises weakest-precondition reasoning and `vcgen` for a `StateM` query model.
 -/
 
 @[expose] public section
 
-set_option mvcgen.warning false
+set_option experimental.vcgen true
 
 namespace AlgoleanTests.ModelMWP
 
-open Algolean.Algorithms Cslib Cslib.FreeM Std.Do
+open Algolean.Algorithms Cslib Cslib.FreeM Std.WP
 
 /-- Queries for incrementing and reading a counter. -/
 inductive CounterQ : Type → Type where
@@ -56,12 +56,12 @@ example {Q : PostCond Nat (.arg Nat .pure)} :
     let _ : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
     Triple (FreeM.lift CounterQ.read : Prog CounterQ Nat)
       (wp⟦counterModel.evalQuery .read⟧ Q) Q := by
-  mvcgen [counterModel, ModelM.handler]
+  vcgen [counterModel, ModelM.handler]
 
 example (n : Nat) :
-    ⦃fun s => ⌜s = n⌝⦄ tickThenRead
-      ⦃⇓ value s => ⌜value = n + 1 ∧ s = n + 1⌝⦄ := by
-  mvcgen [tickThenRead, tick, read, counterModel, ModelM.handler]
+    ⦃fun s => s = n⦄ tickThenRead
+      ⦃fun  value s => value = n + 1 ∧ s = n + 1⦄ := by
+  vcgen [tickThenRead, tick, read, counterModel, ModelM.handler]
   subst_vars
   exact ⟨rfl, rfl⟩
 
