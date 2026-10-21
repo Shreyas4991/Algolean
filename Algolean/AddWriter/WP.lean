@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.AddWriter.Transformer
-public import Std.Do
+public import Std.WP
 
 /-!
 # Weakest preconditions for additive writer computations
@@ -20,9 +20,10 @@ reported by `run`; an arbitrary initial cost permits compositional reasoning acr
 
 namespace Algolean.AddWriterT
 
-open Std.Do Std.Do.WPMonad
+open Lean.Order Std.WP
 
-variable {Cost : Type u} {m : Type u → Type v} {ps : PostShape.{u}}
+variable {Cost : Type u} {m : Type u → Type v} {Pred : Type w} {EPred : Type z}
+variable [Assertion Pred] [Assertion EPred]
 
 /-- Interpret the writer output as an increment to a logical cost accumulator. -/
 def toStateT [Functor m] [Add Cost] (x : AddWriterT Cost m α) : StateT Cost m α :=
@@ -47,39 +48,44 @@ def toStateT [Functor m] [Add Cost] (x : AddWriterT Cost m α) : StateT Cost m �
   rw [StateT.run_bind]
   simp [toStateT, StateT.run, bind_map_left, add_assoc]
 
-/-- Writer weakest preconditions expose accumulated cost before the underlying post-shape. -/
-instance [Functor m] [Add Cost] [WP m ps] : WP (AddWriterT Cost m) (.arg Cost ps) where
-  wp x := wp x.toStateT
+/-- Writer weakest preconditions expose accumulated cost before the underlying assertions. -/
+instance [Functor m] [Add Cost] [WP (m (α × Cost)) (α × Cost) Pred EPred] :
+    WP (AddWriterT Cost m α) α (Cost → Pred) EPred where
+  wpTrans x := WP.wpTrans x.toStateT
+  wp_trans_monotone x := WP.wp_trans_monotone x.toStateT
 
 /-- The cost-accumulator interpretation respects pure and bind. -/
-instance [Monad m] [AddMonoid Cost] [WPMonad m ps] :
-    WPMonad (AddWriterT Cost m) (.arg Cost ps) where
-  wp_pure a := by
-    change wp (toStateT (pure a : AddWriterT Cost m _)) = _
-    rw [toStateT_pure, wp_pure]
-  wp_bind x f := by
-    change wp (toStateT (x >>= f)) = _
-    rw [toStateT_bind, wp_bind]
-    rfl
+instance [Monad m] [AddMonoid Cost] [WPMonad m Pred EPred] :
+    WPMonad (AddWriterT Cost m) (Cost → Pred) EPred where
+  toWP _ := inferInstance
+  pure_le_wp_pure a Q E := by
+    change Q a ⊑ wp (toStateT (pure a : AddWriterT Cost m _)) Q E
+    rw [toStateT_pure]
+    exact WPMonad.pure_le_wp_pure a Q E
+  bind_le_wp_bind x f Q E := by
+    change wp x.toStateT (fun a => wp (f a).toStateT Q E) E ⊑
+      wp (toStateT (x >>= f)) Q E
+    rw [toStateT_bind]
+    exact WPMonad.bind_le_wp_bind x.toStateT (fun a => (f a).toStateT) Q E
 
 /-- Expose the underlying state interpretation to verification condition generation. -/
-theorem wp_eq_wp_toStateT [Functor m] [Add Cost] [WP m ps]
+theorem wp_eq_wp_toStateT [Functor m] [Add Cost] [WP (m (α × Cost)) (α × Cost) Pred EPred]
     (x : AddWriterT Cost m α) : wp x = wp x.toStateT := rfl
 
 /-- A writer over state exposes its result, accumulated cost, and final physical state. -/
 @[simp] theorem wp_apply_state [Add Cost] (x : AddWriterT Cost (StateM σ) α)
-    (Q : PostCond α (.arg Cost (.arg σ .pure))) (initial : Cost) (s : σ) :
-    (wp x).apply Q initial s =
-      Q.fst (x.run s).fst.ret (initial + (x.run s).fst.tell) (x.run s).snd := rfl
+    (Q : α → Cost → σ → Prop) (E : EStack⟨⟩) (initial : Cost) (s : σ) :
+    wp x Q E initial s =
+      Q (x.run s).fst.ret (initial + (x.run s).fst.tell) (x.run s).snd := rfl
 
 /-- Optional state execution exposes either the exact joint result or its failure postcondition. -/
 @[simp] theorem wp_apply_state_option [Add Cost] (x : AddWriterT Cost (StateT σ Option) α)
-    (Q : PostCond α (.arg Cost (.arg σ (.except PUnit .pure)))) (initial : Cost) (s : σ) :
-    (wp x).apply Q initial s =
+    (Q : α → Cost → σ → Prop) (E : Unit → Prop) (initial : Cost) (s : σ) :
+    wp x Q E initial s =
       match x.run s with
-      | none => Q.snd.fst PUnit.unit
-      | some (result, final) => Q.fst result.ret (initial + result.tell) final := by
-  dsimp [wp_eq_wp_toStateT, wp, toStateT, PredTrans.apply]
+      | none => E ()
+      | some (result, final) => Q result.ret (initial + result.tell) final := by
+  dsimp [wp_eq_wp_toStateT, wp, WP.wpTrans, toStateT, PredTrans.pushArg]
   simp only [StateT.run_map]
   dsimp only [StateT.run]
   cases x.run s <;> rfl

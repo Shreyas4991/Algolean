@@ -8,6 +8,7 @@ module
 
 public import Algolean.Models.Quantum.Indexing
 public import QuantumInfo.States.Pure.Qubit
+public import QuantumInfo.ForMathlib.Isometry
 public import Mathlib.Data.Fin.Tuple.Basic
 
 /-!

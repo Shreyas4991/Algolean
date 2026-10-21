@@ -22,7 +22,7 @@ noncomputable section
 
 namespace AlgoleanTests.RandomSampleExamples
 
-open Algolean.Algorithms Cslib RandomSample Std.Do
+open Algolean.Algorithms Cslib RandomSample Std.WP
 
 example (dist : PMF ℕ) : (draw dist).evalM (free (Cost := ℕ)) = dist := by
   simp
@@ -69,15 +69,15 @@ theorem costM_branchWithExtraDraw (coin : PMF Bool) (extra : PMF α) :
   intro b
   cases b <;> simp
 
--- Almost-sure reasoning through the support interpretation. `mvcgen` discharges the triple that a
+-- Almost-sure reasoning through the support interpretation. `vcgen` discharges the triple that a
 -- drawn value always lies in the distribution's support, using `free`'s handler as the selected
 -- interpretation of the query language.
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 example {α : Type} (dist : PMF α) :
     letI := (free (Cost := ℕ)).hasHandler
-    ⦃⌜True⌝⦄ draw dist ⦃⇓ a => ⌜a ∈ dist.support⌝⦄ := by
+    ⦃ True ⦄ draw dist ⦃ fun a => a ∈ dist.support ⦄ := by
   let _inst := (free (Cost := ℕ)).hasHandler
-  mvcgen [draw]
+  vcgen [draw]
   exact fun a ha => ha
 
 end AlgoleanTests.RandomSampleExamples
