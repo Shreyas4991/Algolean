@@ -40,7 +40,7 @@ length, and returns `none` otherwise.
 
 ## Main results
 
-- `boyerMooreMajorityVote_spec`: an `mvcgen`-verified Hoare triple characterizing the result.
+- `boyerMooreMajorityVote_spec`: an `vcgen`-verified Hoare triple characterizing the result.
 - `boyerMooreMajorityVote_correct`: the algorithm returns `some a` exactly when `a` is a strict
   majority.
 - `boyerMooreMajorityVote_time_complexity`: the algorithm uses at most `2 * xs.length`
@@ -51,7 +51,7 @@ length, and returns `none` otherwise.
 
 namespace Algolean.Algorithms
 
-open Cslib Prog Comparison Std.Do
+open Cslib Prog Comparison Std.WP
 
 /-- `a` is a strict majority of `xs` when it occurs more than `xs.length / 2` times. -/
 def IsMajority [BEq α] (a : α) (xs : List α) : Prop :=
@@ -186,70 +186,70 @@ private lemma VoteState.candidate_eq_of_score_pos [BEq α] [LawfulBEq α]
     state.map Prod.fst = some a := by
   rcases state with _ | ⟨c, n⟩ <;> grind [score]
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- A monadic cancellation step evaluates to the corresponding pure state transition. -/
 theorem VoteState.stepM_spec [BEq α] [LawfulBEq α]
     (state : VoteState α) (x : α) :
-    ⦃⌜True⌝⦄ VoteState.stepM state x ⦃⇓result => ⌜result = VoteState.step state x⌝⦄ := by
-  mvcgen [stepM]
+    ⦃ True ⦄ VoteState.stepM state x ⦃ fun result => result = VoteState.step state x ⦄ := by
+  vcgen [stepM]
   all_goals simp_all [Comparison.hasModel_model, step]
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- One verification step increments precisely when the current element equals the candidate. -/
 theorem countStep_spec [BEq α]
     (candidate x : α) (count : OccurrenceCount α) :
-    ⦃⌜True⌝⦄ countStep candidate x count
-      ⦃⇓result =>
-        ⌜result = if candidate == x then ⟨count.value + 1, count.phantom⟩ else count⌝⦄ := by
-  mvcgen [countStep]
+    ⦃ True ⦄ countStep candidate x count
+      ⦃ fun result =>
+        result = if candidate == x then ⟨count.value + 1, count.phantom⟩ else count ⦄ := by
+  vcgen [countStep]
+  simp
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- The first pass retains every strict-majority element as its candidate. -/
 theorem majorityCandidate_spec [BEq α] [LawfulBEq α] (xs : List α) :
-    ⦃⌜True⌝⦄ majorityCandidate xs
-      ⦃⇓candidate => ⌜∀ a, IsMajority a xs → candidate = some a⌝⦄ := by
-  mvcgen [majorityCandidate, VoteState.stepM_spec] invariants
-    · ⇓⟨it, state⟩ =>
-        ⌜∀ a, VoteState.balance a it.prefix ≤ VoteState.score a state⌝
-  case vc1.step.success =>
+    ⦃ True ⦄ majorityCandidate xs
+      ⦃ fun candidate => ∀ a, IsMajority a xs → candidate = some a ⦄ := by
+  vcgen [majorityCandidate, VoteState.stepM_spec] invariants
+    · fun it _ state =>
+        ∀ a, VoteState.balance a it ≤ VoteState.score a state
+  case vc1 => rfl
+  case vc2 =>
+    rename_i result hresult a ha
+    exact VoteState.candidate_eq_of_score_pos a _
+      ((VoteState.balance_pos_of_majority a xs ha).trans_le (hresult a))
+  case vc3 =>
     subst_vars
     intro a
     rw [VoteState.balance_append_singleton]
     refine le_trans ?_ (VoteState.score_step a _ ‹VoteState α›)
     have := ‹∀ a, VoteState.balance a _ ≤ VoteState.score a _› a
     lia
-  case vc2.pre => intro a; rfl
-  case vc3.post.success =>
-    rename_i result hresult
-    intro a ha
-    exact VoteState.candidate_eq_of_score_pos a _
-      ((VoteState.balance_pos_of_majority a xs ha).trans_le (hresult a))
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- The verification loop counts exactly the occurrences of its candidate. -/
 theorem countLoop_spec [BEq α] [LawfulBEq α] (candidate : α) (xs : List α) :
-    ⦃⌜True⌝⦄ countLoop candidate xs
-      ⦃⇓count => ⌜count.value = xs.count candidate⌝⦄ := by
-  mvcgen [countLoop, countStep_spec] invariants
-    · ⇓⟨it, count⟩ => ⌜count.value = it.prefix.count candidate⌝
+    ⦃ True ⦄ countLoop candidate xs
+      ⦃ fun count => count.value = xs.count candidate ⦄ := by
+  vcgen [countLoop, countStep_spec] invariants
+    · fun it _ count => count.value = it.count candidate
   all_goals grind
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /-- The verification pass counts exactly the occurrences of its candidate. -/
 theorem countOccurrences_spec [BEq α] [LawfulBEq α] (candidate : α) (xs : List α) :
-    ⦃⌜True⌝⦄ countOccurrences candidate xs
-      ⦃⇓count => ⌜count = xs.count candidate⌝⦄ := by
-  mvcgen [countOccurrences, countLoop_spec]
+    ⦃ True ⦄ countOccurrences candidate xs
+      ⦃ fun count => count = xs.count candidate ⦄ := by
+  vcgen [countOccurrences, countLoop_spec]
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 /--
 Functional correctness as a Hoare triple: the returned element is exactly the strict majority,
 when one exists.
 -/
 theorem boyerMooreMajorityVote_spec [BEq α] [LawfulBEq α] (xs : List α) :
-    ⦃⌜True⌝⦄ boyerMooreMajorityVote xs
-      ⦃⇓result => ⌜∀ a, result = some a ↔ IsMajority a xs⌝⦄ := by
-  mvcgen [boyerMooreMajorityVote, majorityCandidate_spec, countOccurrences_spec]
+    ⦃ True ⦄ boyerMooreMajorityVote xs
+      ⦃ fun result => ∀ a, result = some a ↔ IsMajority a xs ⦄ := by
+  vcgen [boyerMooreMajorityVote, majorityCandidate_spec, countOccurrences_spec]
   all_goals grind [IsMajority]
 
 /-- Boyer-Moore returns `some a` exactly when `a` is a strict majority of the input. -/

@@ -13,6 +13,7 @@ public import Algolean.Algorithms.ListLinearSearch
 public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
+public import Algolean.Algorithms.RandomQuicksort
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Algorithms.WordRAMLinearSearch
@@ -40,6 +41,7 @@ public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
+public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
 public import Algolean.QueryComposition
 public import Algolean.QueryModel
