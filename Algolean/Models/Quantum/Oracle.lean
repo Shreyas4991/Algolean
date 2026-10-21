@@ -6,7 +6,8 @@ Authors: Tanner Duve
 
 module
 
-public import Algolean.QueryModel
+public import Algolean.ModelM
+public import Mathlib.Probability.ProbabilityMassFunction.Constructions
 public import Algolean.Models.Quantum.Embed
 public import QuantumInfo.States.Mixed.MState
 public import QuantumInfo.Measurements.POVM
@@ -14,37 +15,47 @@ public import QuantumInfo.Measurements.POVM
 /-!
 # Quantum Oracle Query Model
 
-A query model for quantum oracle complexity. Each query is a syntactic
-description of a gate on an `n`-qubit register (indices in `Fin n`, rational
-phase parameters). Semantics maps each query to its honest unitary
-`𝐔[Fin n → Fin 2]` from `QuantumInfo`; the density-matrix evolution and
-measurement are supplied by `QuantumInfo.MState` / `POVM`.
+A query model for quantum oracle complexity. The register's density matrix is the model's hidden
+state: gates and oracle calls act on it and return `Unit`, and computational-basis measurements
+return their classical outcome and collapse it. A program observes only measurement outcomes, as a
+physical algorithm does, and can branch on them in the middle of a computation.
 
 ## Main definitions
 
-- `QuantumQuery n`: syntactic query type. Constructors are single-qubit gates
-  (`hadamard`, `pauliX`, `pauliZ`, rational `phase`), `cnot` with a proof
-  that control and target differ, and a Boolean-function-parameterized
-  `oracle`. Each query's output type is `𝐔[Fin n → Fin 2]`.
-- `unitaryOf`: syntax-to-semantics — each syntactic constructor maps to its
-  honest unitary via `embedQubitGate`, `cnotUnitary`, `phaseGate`, or the
-  oracle phase-flip.
-- `quantumModel`: cost model assigning `1` to `oracle` queries, `0` to
-  all others.
-- `applyGate`: state-threading wrapper that lifts a query into a `Prog`
-  returning the transformed `MState`.
-- `measureQubitPOVM`: computational-basis projective measurement on a
-  single qubit, as a `POVM (Fin 2) (Fin n → Fin 2)`.
-- `measureRegisterPOVM`: computational-basis projective measurement on
-  the full register, as a `POVM (Fin n → Fin 2) (Fin n → Fin 2)`.
+- `QuantumGate n`: gate syntax. Constructors are single-qubit gates (`hadamard`, `pauliX`,
+  `pauliZ`, rational `phase`), `cnot` with a proof that control and target differ, and the phase
+  `oracle`.
+- `QuantumQuery n`: the query type. `gate g` applies a gate, `measure q` measures qubit `q`, and
+  `measureAll` measures the whole register.
+- `unitaryOf`: syntax-to-semantics map sending each gate to its unitary on the full register via
+  `embedQubitGate`, `cnotUnitary`, `phaseGate`, or the oracle phase flip.
+- `measureQubitPOVM`, `measureRegisterPOVM`: computational-basis measurements as POVMs.
+- `bornPMF`: the outcome distribution of a POVM on a state, as a `PMF`.
+- `collapse`: the normalized post-measurement state for a measurement operator.
+- `QuantumM n`: the execution monad `StateT (MState (Fin n → Fin 2)) PMF`.
+- `quantumModel n f`: the model for the oracle function `f`. Oracle calls cost `1`; all other
+  queries cost `0`.
+- `MeasurementFree`, `unitaryModel`: programs without measurements and their deterministic
+  semantics. `evalM_quantumModel_of_measurementFree` says such programs run deterministically.
 
 ## Design notes
 
-Queries carry only finite syntactic data (tags, `Fin n` indices, `ℚ` phase
-parameters). This is required for uniform BQP: a classical Turing machine
-can output values of `QuantumQuery n`, but cannot output complex matrices.
-The unitaries that queries denote are produced by the `unitaryOf` semantic
-layer, not stored in the query itself.
+No query returns a unitary or the register state, and the oracle function is a parameter of the
+model rather than data in the program, so a program learns about `f` only through oracle calls
+followed by measurements. The oracle is the phase oracle on the whole register, which cannot
+distinguish `f` from `!f`: `gateOracle (!f) = -gateOracle f` differs by a global phase. The model
+therefore suits problems that are unchanged when `f` is complemented, such as search and
+Deutsch–Jozsa, and query lower bounds proved in it do not carry over to the standard bit-oracle
+model.
+
+Gates form their own non-indexed type. Pattern matching on `QuantumQuery n Unit` cannot exclude
+the measurement constructors, because Lean cannot refute `Fin 2 = Unit`, so `unitaryOf` and the
+circuit leaves of `QuantumCircuit` take a `QuantumGate`.
+
+Gates carry only finite syntactic data (tags, `Fin n` indices, `ℚ` phase parameters). This is
+required for uniform BQP: a classical Turing machine can output values of `QuantumGate n`, but
+cannot output complex matrices. The unitaries that gates denote are produced by the `unitaryOf`
+semantic layer, not stored in the gate itself.
 
 Phase parameters are rational (`θ : ℚ`). The semantic interpretation is
 `exp(2πi·θ)`, so "quarter turn" is `θ = 1/4`. This keeps the syntax
@@ -60,26 +71,33 @@ namespace Algorithms
 open Cslib Prog Complex
 open scoped MState ComplexOrder
 
-/-! ### Query type -/
+/-! ### Gates and queries -/
 
-/-- Syntactic description of a single quantum gate on `n` qubits. Each
-constructor produces a value whose output-type index is the full
-`n`-qubit unitary; the unitary itself is produced by `unitaryOf` via the
-`Model` semantics. -/
-inductive QuantumQuery (n : ℕ) : Type → Type where
+/-- Syntactic description of a single quantum gate on `n` qubits. The unitary it denotes is
+produced by `unitaryOf`. -/
+inductive QuantumGate (n : ℕ) : Type where
   /-- Hadamard gate on qubit `q`. -/
-  | hadamard (q : Fin n) : QuantumQuery n (𝐔[Fin n → Fin 2])
+  | hadamard (q : Fin n)
   /-- Pauli-X (NOT) gate on qubit `q`. -/
-  | pauliX (q : Fin n) : QuantumQuery n (𝐔[Fin n → Fin 2])
+  | pauliX (q : Fin n)
   /-- Pauli-Z gate on qubit `q`. -/
-  | pauliZ (q : Fin n) : QuantumQuery n (𝐔[Fin n → Fin 2])
+  | pauliZ (q : Fin n)
   /-- Controlled-NOT with distinct control and target. -/
-  | cnot (control target : Fin n) (h : control ≠ target) :
-      QuantumQuery n (𝐔[Fin n → Fin 2])
+  | cnot (control target : Fin n) (h : control ≠ target)
   /-- Phase gate `R(θ)` with rational parameter; semantics uses `exp(2πi·θ)`. -/
-  | phase (q : Fin n) (θ : ℚ) : QuantumQuery n (𝐔[Fin n → Fin 2])
+  | phase (q : Fin n) (θ : ℚ)
   /-- Oracle query: applies the phase oracle `|x⟩ ↦ (-1)^{f(x)}|x⟩`. -/
-  | oracle : QuantumQuery n (𝐔[Fin n → Fin 2])
+  | oracle
+
+/-- Quantum queries on an `n`-qubit register. Gates act on the hidden register state and return
+`Unit`; measurements return their classical outcome. -/
+inductive QuantumQuery (n : ℕ) : Type → Type where
+  /-- Apply a gate to the register. -/
+  | gate (g : QuantumGate n) : QuantumQuery n Unit
+  /-- Measure qubit `q` in the computational basis. -/
+  | measure (q : Fin n) : QuantumQuery n (Fin 2)
+  /-- Measure the whole register in the computational basis. -/
+  | measureAll : QuantumQuery n (Fin n → Fin 2)
 
 /-! ### Phase oracle -/
 
@@ -117,21 +135,16 @@ theorem gateOracle_apply {n : ℕ} (f : (Fin n → Fin 2) → Bool)
 
 /-! ### Semantic interpretation -/
 
-/-- Interpret a syntactic query as its semantic unitary on the full `n`-qubit
-register. The `oracle` case uses the supplied oracle unitary; all other
-cases delegate to gate-embedding helpers.
-
-Defined generically in the output-type index `ι` so that Lean can use it
-as `evalQuery` in a `Model (QuantumQuery n) Cost`. Each constructor forces
-`ι = 𝐔[Fin n → Fin 2]`. -/
+/-- Interpret a gate as its unitary on the full `n`-qubit register. The `oracle` case uses the
+supplied oracle unitary; all other cases delegate to gate-embedding helpers. -/
 noncomputable def unitaryOf {n : ℕ} (oracle : 𝐔[Fin n → Fin 2]) :
-    {ι : Type} → QuantumQuery n ι → ι
-  | _, .hadamard q => embedQubitGate q Qubit.H
-  | _, .pauliX q => embedQubitGate q Qubit.X
-  | _, .pauliZ q => embedQubitGate q Qubit.Z
-  | _, .cnot c t h => cnotUnitary c t h
-  | _, .phase q θ => embedQubitGate q (phaseGate (2 * Real.pi * (θ : ℝ)))
-  | _, .oracle => oracle
+    QuantumGate n → 𝐔[Fin n → Fin 2]
+  | .hadamard q => embedQubitGate q Qubit.H
+  | .pauliX q => embedQubitGate q Qubit.X
+  | .pauliZ q => embedQubitGate q Qubit.Z
+  | .cnot c t h => cnotUnitary c t h
+  | .phase q θ => embedQubitGate q (phaseGate (2 * Real.pi * (θ : ℝ)))
+  | .oracle => oracle
 
 /-! ### Oracle families -/
 
@@ -146,61 +159,19 @@ noncomputable def extendOracle {n : ℕ} (oracle : 𝐔[Fin n → Fin 2]) :
     OracleFamily :=
   fun m => if h : m = n then h ▸ oracle else 1
 
-/-! ### Cost model -/
-
-/-- Cost model for `QuantumQuery`. Gates are free (cost `0`); oracle queries
-cost `1`. Matches the operational-query-count semantics used in
-complexity classes like `BQP` relative to an oracle. -/
-noncomputable def quantumModel (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
-    Model (QuantumQuery n) ℕ where
-  evalQuery q := unitaryOf (gateOracle f) q
-  cost
-    | .oracle => 1
-    | _ => 0
-
-@[simp]
-theorem quantumModel_evalQuery_oracle (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
-    (quantumModel n f).evalQuery .oracle = gateOracle f := rfl
-
-@[simp]
-theorem quantumModel_cost_oracle (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
-    (quantumModel n f).cost (QuantumQuery.oracle) = 1 := rfl
-
 /-! ### Prog helpers -/
 
-/-- Apply a gate to a density matrix, threading the result through `Prog`.
-The user writes `let ρ' ← applyGate q ρ` in `do` notation. -/
-noncomputable def applyGate {n : ℕ}
-    (q : QuantumQuery n (𝐔[Fin n → Fin 2]))
-    (ρ : MState (Fin n → Fin 2)) :
-    Prog (QuantumQuery n) (MState (Fin n → Fin 2)) :=
-  FreeM.liftBind q fun U => pure (U ◃ ρ)
+/-- Apply a gate to the register. -/
+def applyGate {n : ℕ} (g : QuantumGate n) : Prog (QuantumQuery n) Unit :=
+  FreeM.lift (.gate g)
 
-@[simp]
-theorem applyGate_eval {n : ℕ}
-    (q : QuantumQuery n (𝐔[Fin n → Fin 2]))
-    (ρ : MState (Fin n → Fin 2))
-    (M : Model (QuantumQuery n) Cost) :
-    (applyGate q ρ).eval M = M.evalQuery q ◃ ρ := by
-  simp [applyGate]
+/-- Measure qubit `q`, returning its outcome. -/
+def measureQubit {n : ℕ} (q : Fin n) : Prog (QuantumQuery n) (Fin 2) :=
+  FreeM.lift (.measure q)
 
-@[simp]
-theorem applyGate_liftM {n : ℕ}
-    (q : QuantumQuery n (𝐔[Fin n → Fin 2]))
-    (ρ : MState (Fin n → Fin 2))
-    (M : Model (QuantumQuery n) Cost) :
-    (applyGate q ρ).liftM (fun {_} q => (M.evalQuery q : Id _)) =
-      M.evalQuery q ◃ ρ := by
-  unfold applyGate
-  rfl
-
-@[simp]
-theorem applyGate_time [AddZeroClass Cost] {n : ℕ}
-    (q : QuantumQuery n (𝐔[Fin n → Fin 2]))
-    (ρ : MState (Fin n → Fin 2))
-    (M : Model (QuantumQuery n) Cost) :
-    (applyGate q ρ).time M = M.cost q := by
-  simp [applyGate]
+/-- Measure the whole register, returning the observed bitstring. -/
+def measureRegister (n : ℕ) : Prog (QuantumQuery n) (Fin n → Fin 2) :=
+  FreeM.lift .measureAll
 
 /-! ### State-entry lemmas -/
 
@@ -384,6 +355,142 @@ theorem measureRegisterPOVM_measure_apply_coe {n : ℕ}
     simp [basisIndicator_eq_zero_of_ne hy]
   · intro h
     exact absurd (Finset.mem_univ x) h
+
+/-! ### Born-rule distributions and collapse -/
+
+/-- The outcome distribution of measuring `ρ` with `Λ`, as a `PMF`. QuantumInfo's `POVM.measure`
+produces its own `ProbDistribution`; the conversion to `PMF` happens here, once per measurement. -/
+noncomputable def bornPMF {X d : Type*} [Fintype X] [Fintype d] [DecidableEq d]
+    (Λ : POVM X d) (ρ : MState d) : PMF X :=
+  PMF.ofFintype (fun x => ENNReal.ofReal (Λ.measure ρ x : ℝ)) (by
+    rw [← ENNReal.ofReal_sum_of_nonneg (fun x _ => (Λ.measure ρ x).2.1)]
+    simp)
+
+@[simp]
+theorem bornPMF_apply {X d : Type*} [Fintype X] [Fintype d] [DecidableEq d]
+    (Λ : POVM X d) (ρ : MState d) (x : X) :
+    bornPMF Λ ρ x = ENNReal.ofReal (Λ.measure ρ x : ℝ) := rfl
+
+/-- The post-measurement state for the measurement operator `K`: `K ρ K† / tr(K ρ K†)`. When
+the outcome has probability zero the state is returned unchanged; `bornPMF` gives that branch no
+mass, so the choice does not affect any run. -/
+noncomputable def collapse {d : Type*} [Fintype d] [DecidableEq d]
+    (K : Matrix d d ℂ) (ρ : MState d) : MState d :=
+  if h : 0 < ((ρ.M.conj K).trace : ℝ) then
+    { M := ((ρ.M.conj K).trace : ℝ)⁻¹ • ρ.M.conj K
+      nonneg := smul_nonneg (inv_nonneg.mpr h.le) (HermitianMat.conj_nonneg K ρ.nonneg)
+      tr := by rw [HermitianMat.trace_smul, inv_mul_cancel₀ h.ne'] }
+  else ρ
+
+/-! ### The execution model -/
+
+/-- The register state: a density matrix on `n` qubits. -/
+abbrev QState (n : ℕ) := MState (Fin n → Fin 2)
+
+/-- Execution monad: a distribution over results paired with post-execution register states. -/
+abbrev QuantumM (n : ℕ) := StateT (QState n) PMF
+
+/-- Measure qubit `q`: sample the outcome by the Born rule, then collapse the register onto it. -/
+noncomputable def measureQubitM {n : ℕ} (q : Fin n) : QuantumM n (Fin 2) := fun ρ =>
+  (bornPMF (measureQubitPOVM q) ρ).map fun b => (b, collapse (computationalProjector q b).mat ρ)
+
+/-- Measure the whole register: sample a bitstring by the Born rule. The register is left in the
+observed basis state. -/
+noncomputable def measureRegisterM (n : ℕ) : QuantumM n (Fin n → Fin 2) := fun ρ =>
+  (bornPMF (measureRegisterPOVM n) ρ).map fun x => (x, MState.pure (Ket.basis x))
+
+/-- The quantum query model for the oracle function `f`. Gates and oracle calls conjugate the
+register by their unitary; measurements sample and collapse. Oracle calls cost `1`, all other
+queries `0`. -/
+noncomputable def quantumModel (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
+    ModelM (QuantumQuery n) (QuantumM n) ℕ where
+  evalQuery
+    | .gate g => modify (unitaryOf (gateOracle f) g ◃ ·)
+    | .measure q => measureQubitM q
+    | .measureAll => measureRegisterM n
+  cost
+    | .gate .oracle => 1
+    | _ => 0
+
+@[simp]
+theorem quantumModel_evalQuery_gate (n : ℕ) (f : (Fin n → Fin 2) → Bool) (g : QuantumGate n) :
+    (quantumModel n f).evalQuery (.gate g) = modify (unitaryOf (gateOracle f) g ◃ ·) := rfl
+
+@[simp]
+theorem quantumModel_evalQuery_measure (n : ℕ) (f : (Fin n → Fin 2) → Bool) (q : Fin n) :
+    (quantumModel n f).evalQuery (.measure q) = measureQubitM q := rfl
+
+@[simp]
+theorem quantumModel_evalQuery_measureAll (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
+    (quantumModel n f).evalQuery .measureAll = measureRegisterM n := rfl
+
+@[simp]
+theorem quantumModel_cost_oracle (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
+    (quantumModel n f).cost (.gate .oracle) = 1 := rfl
+
+theorem quantumModel_cost_gate_of_ne_oracle (n : ℕ) (f : (Fin n → Fin 2) → Bool)
+    {g : QuantumGate n} (hg : g ≠ .oracle) :
+    (quantumModel n f).cost (.gate g) = 0 := by
+  cases g <;> first | rfl | exact absurd rfl hg
+
+@[simp]
+theorem quantumModel_cost_measure (n : ℕ) (f : (Fin n → Fin 2) → Bool) (q : Fin n) :
+    (quantumModel n f).cost (.measure q) = 0 := rfl
+
+@[simp]
+theorem quantumModel_cost_measureAll (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
+    (quantumModel n f).cost .measureAll = 0 := rfl
+
+/-- Measuring qubit `q` returns each outcome with its Born-rule probability. -/
+theorem measureQubitM_outcome {n : ℕ} (q : Fin n) (ρ : QState n) :
+    Prod.fst <$> (measureQubitM q).run ρ = bornPMF (measureQubitPOVM q) ρ := by
+  simp only [measureQubitM, StateT.run, PMF.monad_map_eq_map, PMF.map_comp, Function.comp_def]
+  exact PMF.map_id _
+
+/-- Measuring the register returns each bitstring with its Born-rule probability. -/
+theorem measureRegisterM_outcome (n : ℕ) (ρ : QState n) :
+    Prod.fst <$> (measureRegisterM n).run ρ = bornPMF (measureRegisterPOVM n) ρ := by
+  simp only [measureRegisterM, StateT.run, PMF.monad_map_eq_map, PMF.map_comp, Function.comp_def]
+  exact PMF.map_id _
+
+/-- Measuring the register in the basis state `|x⟩` returns `x` with probability one. -/
+theorem bornPMF_measureRegister_basis {n : ℕ} (x : Fin n → Fin 2) :
+    bornPMF (measureRegisterPOVM n) (MState.pure (Ket.basis x)) = PMF.pure x := by
+  ext y
+  rw [bornPMF_apply, measureRegisterPOVM_measure_pure_apply_coe, PMF.pure_apply]
+  by_cases h : y = x
+  · subst h
+    simp [Ket.basis, Ket.apply]
+  · simp [Ket.basis, Ket.apply, h, Ne.symm h]
+
+/-! ### Programs without measurements -/
+
+/-- A program that applies only gates. -/
+inductive MeasurementFree {n : ℕ} {α : Type} : Prog (QuantumQuery n) α → Prop where
+  | pure (a : α) : MeasurementFree (FreeM.pure a)
+  | gate (g : QuantumGate n) {k : Unit → Prog (QuantumQuery n) α} :
+      MeasurementFree (k ()) → MeasurementFree (FreeM.liftBind (.gate g) k)
+
+/-- Deterministic gate semantics in `StateM`. Measurements get placeholder results; the model
+is meant for `MeasurementFree` programs, which never measure. -/
+noncomputable def unitaryModel (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
+    ModelM (QuantumQuery n) (StateM (QState n)) ℕ where
+  evalQuery
+    | .gate g => modify (unitaryOf (gateOracle f) g ◃ ·)
+    | .measure _ => pure 0
+    | .measureAll => pure 0
+  cost := (quantumModel n f).cost
+
+/-- A program without measurements runs deterministically: its distribution is a point mass at
+the result of applying its gates in order. -/
+theorem evalM_quantumModel_of_measurementFree {n : ℕ} {f : (Fin n → Fin 2) → Bool}
+    {α : Type} {P : Prog (QuantumQuery n) α} (hP : MeasurementFree P) (ρ : QState n) :
+    (P.evalM (quantumModel n f)).run ρ = PMF.pure ((P.evalM (unitaryModel n f)).run ρ) := by
+  induction hP generalizing ρ with
+  | pure a => rfl
+  | gate g _ ih =>
+    have := ih ((unitaryOf (gateOracle f) g) ◃ ρ)
+    simpa [Prog.evalM, FreeM.liftM, unitaryModel] using this
 
 end Algorithms
 
