@@ -27,6 +27,7 @@ represent linear data structures like linked lists,
 stacks, and queues.
 -/
 structure ListState (α : Type u) where
+  /-- The internal list -/
   internalList : List α
 
 /--
@@ -40,6 +41,7 @@ inductive SinglyLinkedList (α : Type u) : Type u → Type u where
 /--
 A stateful model for a singly linked list.
 -/
+@[simps]
 def singlyLLModel : ModelM (SinglyLinkedList α) (StateM (ListState α)) ℕ where
     evalQuery
       | .head => do
@@ -67,6 +69,7 @@ inductive Stack (α : Type u) : Type u → Type u where
 A model for the stack query using the ListState to store
 the stack internally in the state type.
 -/
+@[simps]
 def stackModel : ModelM (Stack α) (StateM (ListState α)) ℕ where
     evalQuery
       | .top => do
@@ -92,6 +95,7 @@ inductive Queue (α : Type u) : Type u → Type u where
 A model for the queue query using the ListState to store
 the stack internally in the state type.
 -/
+@[simps]
 def queueModel : ModelM (Stack α) (StateM (ListState α)) ℕ where
     evalQuery
       | .top => do
