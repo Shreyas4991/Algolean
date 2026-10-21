@@ -142,7 +142,7 @@ private theorem log2_half_bound (n k : Nat) (hn : 2 ≤ n) (hk : k ≤ n / 2) :
     k.log2 + 1 ≤ n.log2 := by
   have h : k.log2 ≤ (n / 2).log2 := by
     simpa only [Nat.log2_eq_log_two] using Nat.log_mono_right (b := 2) hk
-  rw [Nat.log2_def n, if_pos hn]
+  rw [Nat.log2_def n, ite_eq_left hn]
   lia
 
 /-- One charged iteration plus a half-sized recursive search preserves the logarithmic bound. -/
@@ -168,7 +168,7 @@ private theorem right_log {lo hi : Nat}
     (h : lo + (hi - lo) / 2 < hi) :
     8 + (8 * (hi - (lo + (hi - lo) / 2 + 1) + 1).log2 + 8) =
       8 * (hi - lo + 1).log2 + 8 := by
-  rw [right_length h, Nat.log2_def (hi - lo + 1), if_pos (by lia : 2 ≤ hi - lo + 1)]
+  rw [right_length h, Nat.log2_def (hi - lo + 1), ite_eq_left (by lia : 2 ≤ hi - lo + 1)]
   lia
 
 private structure Summary (input : Array (Word w)) (target : Word w) (lo hi : Nat)
@@ -368,13 +368,13 @@ private theorem search_spec (input : Search.Input (Word w)) (s : RAMState w 6)
     · simpa using hs.addresses
     · have ht := hs.time
       have hlen : input.data.size - 1 - 0 + 1 = input.data.size := by lia
-      simp only [RAMCost.mk_add, binarySearchTime, if_neg hn]
+      simp only [RAMCost.mk_add, binarySearchTime, ite_eq_right hn]
       rw [hlen] at ht
       lia
     · intro hw hz hk1
       have ht := hs.worst hw (by simp [start, hz]) (by simp [start, hk1])
       have hlen : input.data.size - 1 - 0 + 1 = input.data.size := by lia
-      simp only [RAMCost.mk_add, binarySearchTime, if_neg hn]
+      simp only [RAMCost.mk_add, binarySearchTime, ite_eq_right hn]
       rw [hlen] at ht
       lia
 

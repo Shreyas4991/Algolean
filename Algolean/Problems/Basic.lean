@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Mathlib.Logic.Basic
+public import Mathlib.Basic.Logic.Basic
 
 /-!
 # Problems and program guarantees

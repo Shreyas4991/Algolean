@@ -149,7 +149,7 @@ private theorem setup_completes (input : Search.Input (Word w)) (s : RAMState w 
     RAMCost.mk_add, Finset.empty_union,
     Option.pure_def, Option.bind_eq_bind, Option.bind_some, RAMCost.zero_time, add_zero,
     RAMCost.zero_addresses,
-    Nat.reduceAdd, Finset.singleton_union, insert_empty_eq, initialized, Bool.if_false_right,
+    Nat.reduceAdd, Finset.singleton_union, insert_empty_eq, initialized, Bool.ite_false_right,
     Option.some.injEq,
     Prod.mk.injEq, ExecutionState.mk.injEq, RAMState.mk.injEq, true_and, and_true]
   constructor

@@ -357,33 +357,42 @@ example : execute 0 (set (w := 8) r0 1 : Prog (WordRAM 8 4) Unit) RAMState.zero 
 
 section WeakestPreconditions
 
-open Cslib.FreeM Std.Do
+open Cslib.FreeM Std.WP
 
 local instance : HasHandler (WordRAM 8 4)
-    (.arg (RAMCost 8 4) (.arg (ExecutionState 8 4) (.except PUnit .pure))) :=
+    (RAMCost 8 4 → ExecutionState 8 4 → Prop) (Unit → Prop) :=
   timeAndSpaceCost.hasCostHandler
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 example :
-    ⦃fun cost s => ⌜cost = 0 ∧ s = ⟨pointerState 9, 2⟩⌝⦄ followPointer
-      ⦃⇓ _ cost s => ⌜cost.time = 2 ∧ cost.addresses = {0, 9} ∧ s.ram.Registers r1 = 42⌝⦄ := by
-  mvcgen [followPointer]
+    ⦃ fun cost s => cost = 0 ∧ s = ⟨pointerState 9, 2⟩ ⦄ followPointer
+      ⦃ fun _ cost s => cost.time = 2 ∧ cost.addresses = {0, 9} ∧ s.ram.Registers r1 = 42 ⦄ := by
+  vcgen [followPointer]
   simp_all [HasHandler.handler, ModelStateM.costHandler, timeAndSpaceCost,
-    runBlock, runCode, step, pointerState, r0, r1, Finset.pair_comm]
+    runBlock, runCode, step, pointerState, Finset.pair_comm]
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 example :
-    ⦃fun cost s => ⌜cost = 0 ∧ s = ⟨Branches.initial 3 7, 4⟩⌝⦄ Branches.choose
-      ⦃⇓ _ cost s => ⌜cost.time = 3 ∧ cost.addresses = {9} ∧ s.ram.Memory 9 = 42⌝⦄ := by
-  mvcgen [Branches.choose, Prog.ifThenElse, test, branch]
+    ⦃ fun cost s => cost = 0 ∧ s = ⟨Branches.initial 3 7, 4⟩ ⦄ Branches.choose
+      ⦃ fun _ cost s => cost.time = 3 ∧ cost.addresses = {9} ∧ s.ram.Memory 9 = 42 ⦄ := by
+  vcgen [Branches.choose, Prog.ifThenElse, test, branch]
+  simp_all only [Branches.initial, BitVec.ofNat_eq_ofNat, r0, Fin.isValue, r1, r3,
+    HasHandler.handler, ModelStateM.costHandler, timeAndSpaceCost, runBlock,
+    LHandler.ofInterp_apply, ↓binderNameHint.eq_1, WP.wpTrans_apply_eq,
+    AddWriterT.wp_apply_state_option, AddWriterT.run_mk, runCode, step, CmpOp.eval, ↓reduceIte,
+    BitVec.toNat_ofNat, Nat.reducePow, Nat.reduceMod, one_ne_zero, Nat.reduceLT, decide_true,
+    runCode_nil, RAMCost.mk_add, Finset.empty_union, Option.pure_def, Option.bind_eq_bind,
+    Option.bind_some, RAMCost.zero_time, add_zero, RAMCost.zero_addresses, zero_add]
+  change wp (Cslib.FreeM.lift _ : Prog (WordRAM 8 4) Unit) _ _ _ _
+  vcgen
   simp_all [HasHandler.handler, ModelStateM.costHandler, timeAndSpaceCost,
-    runBlock, runCode, step, Branches.initial, CmpOp.eval, r0, r1, r2, r3]
+    runBlock, runCode, step]
 
-set_option mvcgen.warning false in
+set_option experimental.vcgen true in
 example :
-    ⦃fun cost s => ⌜cost = 0 ∧ s = ⟨RAMState.zero.writeFlag .ult true, 3⟩⌝⦄ Loops.flagLoop
-      ⦃⇓ _ cost s => ⌜cost.time = 1 ∧ s.ram.Flags .ult = false ∧ s.fuel = 0⌝⦄ := by
-  mvcgen [Loops.flagLoop, whileLoop]
+    ⦃ fun cost s => cost = 0 ∧ s = ⟨RAMState.zero.writeFlag .ult true, 3⟩ ⦄ Loops.flagLoop
+      ⦃ fun _ cost s => cost.time = 1 ∧ s.ram.Flags .ult = false ∧ s.fuel = 0 ⦄ := by
+  vcgen [Loops.flagLoop, whileLoop]
   simp_all [HasHandler.handler, ModelStateM.costHandler, timeAndSpaceCost,
     runBlock, runCode, step, RAMState.zero]
 
@@ -446,7 +455,7 @@ private theorem representingState_input (target junk : Word 8) :
     (show (if i < searchInput.size + 1 then sizedArrayMemory searchInput (BitVec.ofNat 8 i)
       else junk) = (withSize searchInput)[i] from
         by
-          rw [if_pos (by simpa using hi)]
+          rw [ite_eq_left (by simpa using hi)]
           exact sizedArrayMemory_ofNat searchInput (by decide) i hi)
 
 example (target junk : Word 8) :

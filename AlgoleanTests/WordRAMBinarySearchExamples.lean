@@ -77,7 +77,7 @@ private theorem representingState_input (target junk : Word 8) :
     by simp [representingState, input]⟩
   intro i hi
   have hiw : i < 2 ^ 8 := by have : input.size = 7 := rfl; lia
-  simpa only [representingState, wordAddress_toNat i hiw, if_pos hi] using
+  simpa only [representingState, wordAddress_toNat i hiw, ite_eq_left hi] using
     arrayMemory_ofNat input (by decide) i hi
 
 example (target junk : Word 8) :
