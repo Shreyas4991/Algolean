@@ -271,24 +271,25 @@ section WeakestPrecondition
 
 open Cslib.FreeM Lean.Order Std.WP
 
-variable {Pred EPred : Type u} [Assertion Pred] [Assertion EPred]
+variable {Pred EPred : Type*} [Assertion Pred] [Assertion EPred]
 
 namespace ModelM
 
 /-- The logical handler induced by `M.evalQuery`. -/
-def handler [Monad m] [WPMonad m Pred EPred] (M : ModelM Q m Cost) : LHandler Q Pred EPred :=
+def handler [∀ α, WP (m α) α Pred EPred] (M : ModelM Q m Cost) : LHandler Q Pred EPred :=
   LHandler.ofInterp (m := m) (fun _ q => M.evalQuery q)
 
-@[simp] theorem handler_sum [Monad m] [WPMonad m Pred EPred] {Q₂ : Type u → Type x}
+@[simp] theorem handler_sum [∀ α, WP (m α) α Pred EPred] {Q₂ : Type u → Type x}
     (M₁ : ModelM Q m Cost) (M₂ : ModelM Q₂ m Cost) (q : Q α ⊕ Q₂ α) :
     (M₁.sum M₂).handler q = LHandler.sum M₁.handler M₂.handler q := by
   cases q <;> rfl
 
 /-- Use `M.handler` as the logical handler for `Prog Q`. -/
-@[reducible] def hasHandler [Monad m] [WPMonad m Pred EPred] (M : ModelM Q m Cost) : HasHandler Q Pred EPred where
+@[reducible] def hasHandler [∀ α, WP (m α) α Pred EPred] (M : ModelM Q m Cost) :
+    HasHandler Q Pred EPred where
   handler := M.handler
 
-/-- The weakest precondition given by `M.handler` agrees with that of `Prog.evalM M`. -/
+/-- The handler WP entails the WP of `Prog.evalM M` under the new API's refinement laws. -/
 theorem wp_le_wp_evalM [Monad m] [WPMonad m Pred EPred]
     (M : ModelM Q m Cost) (P : Prog Q α) (post : α → Pred) (epost : EPred) :
     (wpH M.handler P).apply post epost ⊑ wp (P.evalM M) post epost :=

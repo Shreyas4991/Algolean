@@ -43,8 +43,7 @@ instance StateF.instHasHandler {σ : Type u} :
 
 /-- WP of a `FreeState` program matches WP of its `StateM` interpretation. -/
 theorem StateF.wp_FreeState_eq_wp_toStateM {σ α : Type u} (comp : FreeState σ α) :
-    wp comp = wp (FreeState.toStateM comp) :=
-by
+    wp comp = wp (FreeState.toStateM comp) := by
   funext Q E s
   induction comp using FreeM.induction generalizing s with
   | pure a => rfl
@@ -74,8 +73,7 @@ instance ReaderF.instHasHandler {σ : Type u} :
 
 /-- WP of a `FreeReader` program matches WP of its `ReaderM` interpretation. -/
 theorem ReaderF.wp_FreeReader_eq_wp_toReaderM {σ α : Type u} (comp : FreeReader σ α) :
-    wp comp = wp (FreeReader.toReaderM comp) :=
-by
+    wp comp = wp (FreeReader.toReaderM comp) := by
   funext Q E s
   induction comp using FreeM.induction with
   | pure a => rfl

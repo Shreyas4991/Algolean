@@ -25,12 +25,12 @@ set_option experimental.vcgen true
 
 namespace AlgoleanTests.FreeMonadWP
 
-open Cslib Cslib.FreeM Std.WP
+open Cslib Cslib.FreeM Lean.Order Std.WP
 
-example : WP (FreeState Nat) (.arg Nat .pure) := inferInstance
-example : WPMonad (FreeState Nat) (.arg Nat .pure) := inferInstance
-example : WP (FreeReader Nat) (.arg Nat .pure) := inferInstance
-example : HasHandler (StateF Nat) (.arg Nat .pure) := inferInstance
+example : WP (FreeState Nat Unit) Unit (Nat → Prop) EStack⟨⟩ := inferInstance
+example : WPMonad (FreeState Nat) (Nat → Prop) EStack⟨⟩ := inferInstance
+example : WP (FreeReader Nat Unit) Unit (Nat → Prop) EStack⟨⟩ := inferInstance
+example : HasHandler (StateF Nat) (Nat → Prop) EStack⟨⟩ := inferInstance
 
 /-- Increment the natural-number state by 1. -/
 def incr : FreeState Nat Unit := do
@@ -43,10 +43,9 @@ example : wp incr = wp (FreeState.toStateM incr) :=
 /-- Starting in state `n`, `incr` ends in state `n + 1`. `vcgen` picks up the `@[spec]` lemmas
 for `MonadStateOf.get`/`set` on `FreeState` and discharges the resulting arithmetic VC. -/
 example (n : Nat) :
-    ⦃fun s => s = n⦄ (incr : FreeState Nat Unit) ⦃fun  _ s' => s' = n + 1⦄ := by
-  vcgen
-  intro s heq
-  subst heq
+    ⦃ fun s => s = n ⦄ (incr : FreeState Nat Unit) ⦃ fun _ s' => s' = n + 1 ⦄ := by
+  vcgen [incr]
+  subst_vars
   rfl
 
 /-- A counter effect with two operations. -/
@@ -69,10 +68,10 @@ def interp : ∀ ι : Type, CounterF ι → StateM Nat ι
 
 /-- Logical handler for `CounterF` induced by `interp` and `Std.WP`'s `WP (StateM Nat)`
 instance. -/
-def handler : LHandler CounterF (.arg Nat .pure) :=
+def handler : LHandler CounterF (Nat → Prop) EStack⟨⟩ :=
   LHandler.ofInterp CounterF.interp
 
-instance : HasHandler CounterF (.arg Nat .pure) where
+instance : HasHandler CounterF (Nat → Prop) EStack⟨⟩ where
   handler := CounterF.handler
 
 /-- Interpret counter programs as `StateM Nat` programs. -/
@@ -81,8 +80,11 @@ abbrev toStateM {α : Type} (comp : FreeCounter α) : StateM Nat α :=
 
 /-- Adequacy theorem specialized to `CounterF`. -/
 theorem wp_FreeCounter_eq_wp_toStateM {α : Type} (comp : FreeCounter α) :
-    wp comp = wp (CounterF.toStateM comp) :=
-  wpH_ofInterp_eq_wp_liftM (m := StateM Nat) CounterF.interp comp
+    wp comp = wp (CounterF.toStateM comp) := by
+  funext Q E s
+  induction comp using FreeM.induction generalizing s with
+  | pure a => rfl
+  | lift_bind op k ih => cases op <;> exact ih _ _
 
 end CounterF
 
@@ -102,10 +104,10 @@ Triple about the counter program: starting at `0`, the final value is `3` and th
 is `3`. Proven by the same bridge-then-`vcgen` pattern as `incr`.
 -/
 example :
-    ⦃fun s => s = 0⦄ threeTicks ⦃fun  v s => v = 3 ∧ s = 3⦄ := by
-  vcgen
-  intro s seq0
-  subst seq0
+    ⦃ fun s => s = 0 ⦄ threeTicks ⦃ fun v s => v = 3 ∧ s = 3 ⦄ := by
+  vcgen [threeTicks, tick, readCounter, CounterF.handler, CounterF.interp]
+  subst_vars
+  change (3 : Nat) = 3 ∧ (3 : Nat) = 3
   exact ⟨rfl, rfl⟩
 
 /-- A failure effect with one operation `fail` of empty answer type. -/
@@ -115,16 +117,17 @@ inductive FailF : Type → Type where
 
 /-- Logical handler for `FailF`: `fail` has precondition `False`, so it is only provable in
 unreachable branches. -/
-def FailF.handler {ps : PostShape} : LHandler FailF ps :=
-  fun op => match op with
-    | .fail => PredTrans.const spred(False)
+noncomputable def FailF.handler {Pred EPred : Type} [Assertion Pred] [Assertion EPred] :
+    LHandler FailF Pred EPred where
+  trans _ := ⟨fun _ _ => Lean.Order.bot⟩
+  monotone _ := fun _ _ _ _ _ _ => PartialOrder.rel_refl
 
 /-- A combined state + failure signature, sequencing `StateF Nat` with `FailF`. -/
 abbrev StateFail := fun α => StateF Nat α ⊕ FailF α
 
 /-- Handler for the combined signature: the sum of the component handlers — the paper's
 `H₁ ⊕ H₂` composition. -/
-instance : HasHandler StateFail (.arg Nat .pure) where
+noncomputable instance : HasHandler StateFail (Nat → Prop) EStack⟨⟩ where
   handler := StateF.handler.sum FailF.handler
 
 /-- Smart constructor for state-read in the combined signature. -/
@@ -140,21 +143,21 @@ abbrev sfFail {α : Type} : FreeM StateFail α :=
 
 /-- Hoare spec for the sum-lifted state-read. -/
 @[spec]
-theorem Spec.sfGet {Q : PostCond Nat (.arg Nat .pure)} :
-    Triple sfGet (spred(fun s => Q s s)) Q := by
-  vcgen
+theorem Spec.sfGet {Q : Nat → Nat → Prop} :
+    Triple sfGet (fun s => Q s s) Q () :=
+  ⟨fun _ h => h⟩
 
 /-- Hoare spec for the sum-lifted state-write. -/
 @[spec]
-theorem Spec.sfSet (n : Nat) {Q : PostCond PUnit (.arg Nat .pure)} :
-    Triple (sfSet n) (spred(fun _ => Q ⟨⟩ n)) Q := by
-  vcgen
+theorem Spec.sfSet (n : Nat) {Q : PUnit → Nat → Prop} :
+    Triple (sfSet n) (fun _ => Q ⟨⟩ n) Q () :=
+  ⟨fun _ h => h⟩
 
 /-- Hoare spec for sum-lifted failure: requires `False` to verify. -/
 @[spec]
-theorem Spec.sfFail {α : Type} {Q : PostCond α (.arg Nat .pure)} :
-    Triple (sfFail : FreeM StateFail α) (spred(False)) Q := by
-  vcgen
+theorem Spec.sfFail {α : Type} {Q : α → Nat → Prop} :
+    Triple (sfFail : FreeM StateFail α) (fun _ => False) Q () :=
+  ⟨fun _ h => h.elim⟩
 
 /-- A non-branching program in the combined signature: read the state, then write
 `state + 1`. Shows that the sum handler composes the StateF and FailF specs cleanly. -/
@@ -164,11 +167,10 @@ def getAndBump : FreeM StateFail Unit := do
 
 /-- `getAndBump` advances the state by 1, proven through the sum handler. -/
 example (n : Nat) :
-    ⦃fun s => s = n⦄ (getAndBump : FreeM StateFail Unit)
-      ⦃fun  _ s => s = n + 1⦄ := by
-  vcgen
-  intro s a
-  subst a
+    ⦃ fun s => s = n ⦄ (getAndBump : FreeM StateFail Unit)
+      ⦃ fun _ s => s = n + 1 ⦄ := by
+  vcgen [getAndBump]
+  subst_vars
   rfl
 
 /-- Increment the state if it's strictly below `limit`, otherwise fail. Branches on the state's
@@ -180,8 +182,8 @@ def bumpUnder (limit : Nat) : FreeM StateFail Unit := do
 /-- Starting in a state below `limit`, `bumpUnder` increments without failing — the failure
 branch is unreachable because the precondition rules it out. -/
 example (limit n : Nat) (hlt : n < limit) :
-    ⦃fun s => s = n⦄ (bumpUnder limit : FreeM StateFail Unit)
-      ⦃fun  _ s => s = n + 1⦄ := by
+    ⦃ fun s => s = n ⦄ (bumpUnder limit : FreeM StateFail Unit)
+      ⦃ fun _ s => s = n + 1 ⦄ := by
   unfold bumpUnder
   vcgen <;> aesop
 
@@ -199,10 +201,10 @@ def DemonicF.spec : OperationSpec DemonicF where
   post _ _ := True
 
 /-- Logical handler for demonic choice, generated from its relational operation specification. -/
-def DemonicF.handler : LHandler DemonicF .pure :=
+def DemonicF.handler : LHandler DemonicF Prop EStack⟨⟩ :=
   DemonicF.spec.toHandler
 
-instance : HasHandler DemonicF .pure where
+instance : HasHandler DemonicF Prop EStack⟨⟩ where
   handler := DemonicF.handler
 
 /-- Smart constructor for demonic choice over `α`. -/
@@ -211,15 +213,15 @@ abbrev demonic (α : Type) : FreeM DemonicF α := lift (DemonicF.choice α)
 /-- Triple for `demonic α`: the precondition must imply the postcondition for *every* `a : α`. -/
 @[spec]
 theorem Spec.demonic {α : Type} {Q : α → Prop} :
-    Triple (demonic α) (SPred.forall (fun a : α => Q a)) Q :=
-  fun h => ⟨True.intro, fun a _ => h a⟩
+    Triple (demonic α) (∀ a : α, Q a) Q () :=
+  ⟨fun h => ⟨True.intro, fun a _ => h a⟩⟩
 
 /-- A demonic Bool: the precondition must hold for both `true` and `false`. -/
 example {Q : Bool → Prop} :
-    Triple (demonic Bool) (SPred.and (Q true) (Q false)) Q :=
-  fun ⟨ht, hf⟩ => ⟨True.intro, fun
+    Triple (demonic Bool) (Q true ∧ Q false) Q () :=
+  ⟨fun ⟨ht, hf⟩ => ⟨True.intro, fun
     | true, _ => ht
-    | false, _ => hf⟩
+    | false, _ => hf⟩⟩
 
 /-! ### Arbitrarily specified operations -/
 
@@ -236,10 +238,10 @@ def PickF.spec : OperationSpec PickF where
     | .pick, b => b = true
 
 /-- Logical handler generated independently of any executable interpretation of `pick`. -/
-def PickF.handler : LHandler PickF .pure :=
+def PickF.handler : LHandler PickF Prop EStack⟨⟩ :=
   PickF.spec.toHandler
 
-instance : HasHandler PickF .pure where
+instance : HasHandler PickF Prop EStack⟨⟩ where
   handler := PickF.handler
 
 /-- Smart constructor for the abstract `pick` operation. -/
@@ -247,39 +249,38 @@ abbrev pick : FreeM PickF Bool := lift PickF.pick
 
 /-- The generated operation WP simplifies to the `true` case of the continuation postcondition. -/
 example (Q : Bool → Prop) :
-    (wpH PickF.handler pick).apply Q = Q true := by
+    (wpH PickF.handler pick).apply Q () = Q true := by
   rw [wpH_lift]
-  apply SPred.ext_nil
   simp [PickF.handler, PickF.spec]
 
 /-- Consequently, `pick` has precisely the paper's Hoare specification. -/
 example {Q : Bool → Prop} :
-    Triple pick (Q true) Q :=
-  fun h => ⟨True.intro, fun _ hEq => hEq ▸ h⟩
+    Triple pick (Q true) Q () :=
+  ⟨fun h => ⟨True.intro, fun _ hEq => hEq ▸ h⟩⟩
 
 /-! ### Query-model programs
 
 The repository's query model defines `Prog Q α := FreeM Q α`, and `Algolean.QueryModel` wires every
 query model into this WP framework: `Model.handler` reads a logical handler off a model's
-`evalQuery` at the pure post-shape, a `HasModel` instance registers a query type's default model,
+`evalQuery` at `Prop` assertions, a `HasModel` instance registers a query type's default model,
 and the generic `Spec.query` discharges single queries under `vcgen`. So Hoare triples about the
 *result value* a query program computes are available with no per-example setup.
 
 We illustrate with `ReadOnlyVec`, whose `HasModel (ReadOnlyVec α) ℕ` instance (via
 `ReadOnlyVec.natCost`, in `Algolean.Models.ReadOnlyVec`) makes the global
-`WP (Prog (ReadOnlyVec α)) .pure` instance fire automatically. -/
+`WP (Prog (ReadOnlyVec α) Unit) Unit Prop EStack⟨⟩` instance fire automatically. -/
 
 open Algolean Algolean.Algorithms
 
 /-- The WP framework is available on query programs with no local setup — the handler instance is
 generated from the registered model. -/
-example {α : Type} : WP (Prog (ReadOnlyVec α)) .pure := inferInstance
+example {α : Type} : WP (Prog (ReadOnlyVec α) Unit) Unit Prop EStack⟨⟩ := inferInstance
 
 /-- Adequacy, specialized to `ReadOnlyVec` from the generic `Model.wp_eq_wp_interp`: the WP of a
 program agrees with the WP of its `Id`-interpretation under `natCost`, i.e. with what the program
 actually `eval`uates to. -/
 example {α β : Type} (P : Prog (ReadOnlyVec α) β) :
-    wp P = wp (P.liftM (fun {_} q => (ReadOnlyVec.natCost.evalQuery q : Id _))) :=
+    WP.wpTrans P = WP.wpTrans (P.liftM (fun {_} q => (ReadOnlyVec.natCost.evalQuery q : Id _))) :=
   ReadOnlyVec.natCost.wp_eq_wp_interp P
 
 /-- Read indices `i` then `j` of a vector and return the pair of values. Queries lift into `Prog`
@@ -293,15 +294,17 @@ def readTwo {α : Type} {n : Nat} (a : Vector α n) (i j : Fin n) :
 /-- Functional correctness of `readTwo`: it returns exactly `(a[i], a[j])`. The two `read`
 specs compose through the `bind` rule, and `vcgen` discharges the program. -/
 example {α : Type} {n : Nat} (a : Vector α n) (i j : Fin n) :
-    ⦃True⦄ (readTwo a i j) ⦃fun  r => r = (a[i], a[j])⦄ := by
-  vcgen
+    ⦃ True ⦄ (readTwo a i j) ⦃ fun r => r = (a[i], a[j]) ⦄ := by
+  vcgen [readTwo]
+  rfl
 
 /-- A read program whose result depends on the data: read index `i`, and if the value equals
 `x`, the answer is `true`. The triple shows the verifier sees the concrete element `a[i]`. -/
 example {n : Nat} (a : Vector Nat n) (i : Fin n) (x : Nat) :
-    ⦃True⦄
+    ⦃ True ⦄
       (do let v ← ReadOnlyVec.read a i; pure (v == x) : Prog (ReadOnlyVec Nat) Bool)
-    ⦃fun  r => r = (a[i] == x)⦄ := by
+    ⦃ fun r => r = (a[i] == x) ⦄ := by
   vcgen
+  rfl
 
 end AlgoleanTests.FreeMonadWP

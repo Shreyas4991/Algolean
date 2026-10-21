@@ -158,7 +158,8 @@ def groupModel (G : Type u) [AddCommGroup G] [DecidableEq G] :
     (groupModel G).cost q = q.charge := rfl
 
 /-- Register `groupModel` as the default model for `GroupQuery`, so the global
-`WP (Prog (GroupQuery G)) .pure` / `HasHandler` instances fire and `Triple`/`vcgen` reasoning
+`WP (Prog (GroupQuery G) α) α Prop EStack⟨⟩` / `HasHandler` instances fire, enabling
+`Triple`/`vcgen` reasoning
 works on generic group programs out of the box. -/
 instance [AddCommGroup G] [DecidableEq G] : HasModel (GroupQuery G) GroupCosts where
   model := groupModel G
@@ -201,7 +202,7 @@ instances of `Algolean.QueryModel` fire on `GroupProg`. The three specs below ar
 between that and `vcgen`: the generic `Spec.query` discharges a lifted query but leaves the
 model's answer unevaluated, so these take priority over it and read that answer back in `G`.
 
-Cost is not in view here. The `.pure` post-shape sees only the returned value, and the query counts
+Cost is not in view here. The `Prop` assertion sees only the returned value, and the query counts
 remain the business of `cost` above.
 -/
 
@@ -231,7 +232,7 @@ theorem eq_spec (x y : G) {Q' : ULift Bool → Prop} :
 /-- A triple with a trivial precondition is a statement about what the program `eval`uates to in
 `G`, which is the form the rest of the development is written in. -/
 theorem eval_of_triple {oa : GroupProg G α} {φ : α → Prop}
-    (h : ⦃True⦄ oa ⦃fun r => φ r⦄) : φ (eval oa) :=
+    (h : ⦃ True ⦄ oa ⦃ fun r => φ r ⦄) : φ (eval oa) :=
   Algolean.Algorithms.eval_of_triple (Cost := GroupCosts) h
 
 end Specs

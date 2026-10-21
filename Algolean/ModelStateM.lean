@@ -311,12 +311,12 @@ section WeakestPrecondition
 
 open Cslib.FreeM Lean.Order Std.WP
 
-variable {Pred EPred : Type u} [Assertion Pred] [Assertion EPred]
+variable {Pred EPred : Type*} [Assertion Pred] [Assertion EPred]
 
 namespace ModelStateM
 
 /-- A handler exposing both query results and accumulated costs to postconditions. -/
-def costHandler [Functor m] [Add Cost] [Monad m] [WPMonad m Pred EPred] (M : ModelStateM Q m Cost) :
+def costHandler [Functor m] [Add Cost] [∀ α, WP (m α) α Pred EPred] (M : ModelStateM Q m Cost) :
     LHandler Q (Cost → Pred) EPred :=
   LHandler.ofInterp (m := AddWriterT Cost m) (fun _ q => M.runQuery q)
 
@@ -329,30 +329,32 @@ def costHandler [Functor m] [Add Cost] [Monad m] [WPMonad m Pred EPred] (M : Mod
         (initial + ((M.runQuery q).run s).fst.tell) ((M.runQuery q).run s).snd := rfl
 
 /-- Register joint execution for cost-aware `vcgen` reasoning. -/
-@[reducible] def hasCostHandler [Functor m] [Add Cost] [Monad m] [WPMonad m Pred EPred]
+@[reducible] def hasCostHandler [Functor m] [Add Cost] [∀ α, WP (m α) α Pred EPred]
     (M : ModelStateM Q m Cost) : HasHandler Q (Cost → Pred) EPred where
   handler := M.costHandler
 
-/-- The cost-aware handler agrees with joint program execution. -/
+/-- The cost-aware handler WP entails the WP of joint program execution. -/
 theorem wp_le_wp_runStateM [Monad m] [AddMonoid Cost] [WPMonad m Pred EPred]
     (M : ModelStateM Q m Cost) (P : Prog Q α) (post : α → Cost → Pred) (epost : EPred) :
     (wpH M.costHandler P).apply post epost ⊑ wp (P.runStateM M) post epost :=
   wpH_ofInterp_le_wp_liftM (m := AddWriterT Cost m) (fun _ q => M.runQuery q) P post epost
 
 /-- The logical handler induced by `M.evalQuery`. -/
-def handler [Functor m] [Monad m] [WPMonad m Pred EPred] (M : ModelStateM Q m Cost) : LHandler Q Pred EPred :=
+def handler [Functor m] [∀ α, WP (m α) α Pred EPred] (M : ModelStateM Q m Cost) :
+    LHandler Q Pred EPred :=
   LHandler.ofInterp (m := m) (fun _ q => M.evalQuery q)
 
-@[simp] theorem handler_sum [Functor m] [Monad m] [WPMonad m Pred EPred] {Q₂ : Type u → Type x}
+@[simp] theorem handler_sum [Functor m] [∀ α, WP (m α) α Pred EPred] {Q₂ : Type u → Type x}
     (M₁ : ModelStateM Q m Cost) (M₂ : ModelStateM Q₂ m Cost) (q : Q α ⊕ Q₂ α) :
     (M₁.sum M₂).handler q = LHandler.sum M₁.handler M₂.handler q := by
   cases q <;> rfl
 
 /-- Use `M.handler` as the logical handler for `Prog Q`. -/
-@[reducible] def hasHandler [Functor m] [Monad m] [WPMonad m Pred EPred] (M : ModelStateM Q m Cost) : HasHandler Q Pred EPred where
+@[reducible] def hasHandler [Functor m] [∀ α, WP (m α) α Pred EPred] (M : ModelStateM Q m Cost) :
+    HasHandler Q Pred EPred where
   handler := M.handler
 
-/-- The weakest precondition given by `M.handler` agrees with that of `Prog.evalStateM M`. -/
+/-- The handler WP entails the WP of `Prog.evalStateM M`. -/
 theorem wp_le_wp_evalStateM [Monad m] [WPMonad m Pred EPred]
     (M : ModelStateM Q m Cost) (P : Prog Q α) (post : α → Pred) (epost : EPred) :
     (wpH M.handler P).apply post epost ⊑ wp (P.evalStateM M) post epost :=

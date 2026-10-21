@@ -75,7 +75,7 @@ theorem costM_branchWithExtraDraw (coin : PMF Bool) (extra : PMF α) :
 set_option experimental.vcgen true in
 example {α : Type} (dist : PMF α) :
     letI := (free (Cost := ℕ)).hasHandler
-    ⦃True⦄ draw dist ⦃fun  a => a ∈ dist.support⦄ := by
+    ⦃ True ⦄ draw dist ⦃ fun a => a ∈ dist.support ⦄ := by
   let _inst := (free (Cost := ℕ)).hasHandler
   vcgen [draw]
   exact fun a ha => ha

@@ -190,7 +190,7 @@ set_option experimental.vcgen true in
 /-- A monadic cancellation step evaluates to the corresponding pure state transition. -/
 theorem VoteState.stepM_spec [BEq α] [LawfulBEq α]
     (state : VoteState α) (x : α) :
-    ⦃True⦄ VoteState.stepM state x ⦃fun result => result = VoteState.step state x⦄ := by
+    ⦃ True ⦄ VoteState.stepM state x ⦃ fun result => result = VoteState.step state x ⦄ := by
   vcgen [stepM]
   all_goals simp_all [Comparison.hasModel_model, step]
 
@@ -198,47 +198,47 @@ set_option experimental.vcgen true in
 /-- One verification step increments precisely when the current element equals the candidate. -/
 theorem countStep_spec [BEq α]
     (candidate x : α) (count : OccurrenceCount α) :
-    ⦃True⦄ countStep candidate x count
-      ⦃fun result =>
-        result = if candidate == x then ⟨count.value + 1, count.phantom⟩ else count⦄ := by
+    ⦃ True ⦄ countStep candidate x count
+      ⦃ fun result =>
+        result = if candidate == x then ⟨count.value + 1, count.phantom⟩ else count ⦄ := by
   vcgen [countStep]
+  simp
 
 set_option experimental.vcgen true in
 /-- The first pass retains every strict-majority element as its candidate. -/
 theorem majorityCandidate_spec [BEq α] [LawfulBEq α] (xs : List α) :
-    ⦃True⦄ majorityCandidate xs
-      ⦃fun candidate => ∀ a, IsMajority a xs → candidate = some a⦄ := by
+    ⦃ True ⦄ majorityCandidate xs
+      ⦃ fun candidate => ∀ a, IsMajority a xs → candidate = some a ⦄ := by
   vcgen [majorityCandidate, VoteState.stepM_spec] invariants
-    · fun ⟨it, state⟩ =>
-        ∀ a, VoteState.balance a it.prefix ≤ VoteState.score a state
-  case vc1.step.success =>
+    · fun it _ state =>
+        ∀ a, VoteState.balance a it ≤ VoteState.score a state
+  case vc1 => rfl
+  case vc2 =>
+    rename_i result hresult a ha
+    exact VoteState.candidate_eq_of_score_pos a _
+      ((VoteState.balance_pos_of_majority a xs ha).trans_le (hresult a))
+  case vc3 =>
     subst_vars
     intro a
     rw [VoteState.balance_append_singleton]
     refine le_trans ?_ (VoteState.score_step a _ ‹VoteState α›)
     have := ‹∀ a, VoteState.balance a _ ≤ VoteState.score a _› a
     lia
-  case vc2.pre => intro a; rfl
-  case vc3.post.success =>
-    rename_i result hresult
-    intro a ha
-    exact VoteState.candidate_eq_of_score_pos a _
-      ((VoteState.balance_pos_of_majority a xs ha).trans_le (hresult a))
 
 set_option experimental.vcgen true in
 /-- The verification loop counts exactly the occurrences of its candidate. -/
 theorem countLoop_spec [BEq α] [LawfulBEq α] (candidate : α) (xs : List α) :
-    ⦃True⦄ countLoop candidate xs
-      ⦃fun count => count.value = xs.count candidate⦄ := by
+    ⦃ True ⦄ countLoop candidate xs
+      ⦃ fun count => count.value = xs.count candidate ⦄ := by
   vcgen [countLoop, countStep_spec] invariants
-    · fun ⟨it, count⟩ => count.value = it.prefix.count candidate
+    · fun it _ count => count.value = it.count candidate
   all_goals grind
 
 set_option experimental.vcgen true in
 /-- The verification pass counts exactly the occurrences of its candidate. -/
 theorem countOccurrences_spec [BEq α] [LawfulBEq α] (candidate : α) (xs : List α) :
-    ⦃True⦄ countOccurrences candidate xs
-      ⦃fun count => count = xs.count candidate⦄ := by
+    ⦃ True ⦄ countOccurrences candidate xs
+      ⦃ fun count => count = xs.count candidate ⦄ := by
   vcgen [countOccurrences, countLoop_spec]
 
 set_option experimental.vcgen true in
@@ -247,8 +247,8 @@ Functional correctness as a Hoare triple: the returned element is exactly the st
 when one exists.
 -/
 theorem boyerMooreMajorityVote_spec [BEq α] [LawfulBEq α] (xs : List α) :
-    ⦃True⦄ boyerMooreMajorityVote xs
-      ⦃fun result => ∀ a, result = some a ↔ IsMajority a xs⦄ := by
+    ⦃ True ⦄ boyerMooreMajorityVote xs
+      ⦃ fun result => ∀ a, result = some a ↔ IsMajority a xs ⦄ := by
   vcgen [boyerMooreMajorityVote, majorityCandidate_spec, countOccurrences_spec]
   all_goals grind [IsMajority]
 

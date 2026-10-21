@@ -80,12 +80,12 @@ def sum (H₁ : LHandler F Pred EPred) (H₂ : LHandler G Pred EPred) :
     LHandler.sum H₁ H₂ (Sum.inr y : F ι ⊕ G ι) = H₂ y := rfl
 
 /-- Derive a logical handler from an interpreter into a monad with weakest preconditions. -/
-def ofInterp {m : Type u → Type r} [Monad m] [WPMonad m Pred EPred]
+def ofInterp {m : Type u → Type r} [∀ ι, WP (m ι) ι Pred EPred]
     (interp : ∀ ι : Type u, F ι → m ι) : LHandler F Pred EPred where
   trans op := WP.wpTrans (interp _ op)
   monotone op := WP.wp_trans_monotone (interp _ op)
 
-@[simp] theorem ofInterp_apply {m : Type u → Type r} [Monad m] [WPMonad m Pred EPred]
+@[simp] theorem ofInterp_apply {m : Type u → Type r} [∀ ι, WP (m ι) ι Pred EPred]
     (interp : ∀ ι : Type u, F ι → m ι) {ι : Type u} (op : F ι) :
     LHandler.ofInterp interp op = WP.wpTrans (interp ι op) := rfl
 

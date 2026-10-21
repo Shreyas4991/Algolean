@@ -175,20 +175,20 @@ and permutes the vector. -/
 theorem bubblePass_spec (le : α → α → Bool) [Std.Total (fun a b : α => le a b = true)]
     [IsTrans α (fun a b => le a b = true)]
     (bound : Nat) (hb : bound < n) (v : Vector α n) (hpre : SortedFrom le v (bound + 1)) :
-    ⦃True⦄ bubblePass le bound hb v
-      ⦃fun w => MaxAt le w bound ∧ SortedFrom le w (bound + 1) ∧ w.toList.Perm v.toList⦄ := by
+    ⦃ True ⦄ bubblePass le bound hb v
+      ⦃ fun w => MaxAt le w bound ∧ SortedFrom le w (bound + 1) ∧ w.toList.Perm v.toList ⦄ := by
   vcgen [bubblePass] invariants
-    · fun ⟨xs, w⟩ => MaxAt le w xs.prefix.length ∧ SortedFrom le w (bound + 1)
+    · fun xs _ w => MaxAt le w xs.length ∧ SortedFrom le w (bound + 1)
         ∧ w.toList.Perm v.toList
-  case vc3.pre =>
+  case vc1 =>
     simp only [List.length_nil]
     exact ⟨maxAt_zero le (Std.Refl.refl (r := fun a b : α => le a b = true)) v,
       hpre, List.Perm.refl _⟩
-  case vc4.post.success =>
+  case vc2 =>
     obtain ⟨h1, h2, h3⟩ := ‹MaxAt le _ _ ∧ SortedFrom le _ _ ∧ List.Perm _ _›
     rw [List.length_finRange] at h1
     exact ⟨h1, h2, h3⟩
-  case vc1.step.isTrue =>
+  case vc3 =>
     obtain ⟨hmax, hsort, hperm⟩ := ‹MaxAt le _ _ ∧ SortedFrom le _ _ ∧ List.Perm _ _›
     have hc := fin_cur_eq ‹List.finRange bound = _ ++ _ :: _›
     have hcb := (‹Fin bound› : Fin bound).isLt
@@ -198,7 +198,7 @@ theorem bubblePass_spec (le : α → α → Bool) [Std.Total (fun a b : α => le
     exact ⟨maxAt_swap le Std.Total.total _ _ (by grind) hmax hcmp,
       sortedFrom_swap le _ _ _ (by grind) (by grind) hsort,
       (set_set_toList_perm _ _ _ (by grind) (by grind)).trans hperm⟩
-  case vc2.step.isFalse =>
+  case vc4 =>
     obtain ⟨hmax, hsort, hperm⟩ := ‹MaxAt le _ _ ∧ SortedFrom le _ _ ∧ List.Perm _ _›
     have hc := fin_cur_eq ‹List.finRange bound = _ ++ _ :: _›
     have hcb := (‹Fin bound› : Fin bound).isLt
@@ -212,24 +212,24 @@ set_option experimental.vcgen true in
 /-- `bubbleSort` is correct: it sorts and permutes its input (for a total, transitive `le`). -/
 theorem bubbleSort_spec (le : α → α → Bool) [Std.Total (fun a b : α => le a b = true)]
     [IsTrans α (fun a b => le a b = true)] (v : Vector α n) :
-    ⦃True⦄ bubbleSort le v ⦃fun w => SortedFrom le w 0 ∧ w.toList.Perm v.toList⦄ := by
+    ⦃ True ⦄ bubbleSort le v ⦃ fun w => SortedFrom le w 0 ∧ w.toList.Perm v.toList ⦄ := by
   vcgen [bubbleSort, bubblePass_spec] invariants
-    · fun ⟨xs, w⟩ => SortedFrom le w (n - xs.prefix.length) ∧ w.toList.Perm v.toList
-  case vc1.hpre =>
+    · fun xs _ w => SortedFrom le w (n - xs.length) ∧ w.toList.Perm v.toList
+  case vc4 =>
     have hsort := (‹SortedFrom le _ _ ∧ List.Perm _ _›).1
     have hcb := (‹Fin n› : Fin n).isLt
     rw [fin_cur_eq ‹List.finRange n = _ ++ _ :: _›] at hcb ⊢
     rwa [sub_one_sub_add _ hcb]
-  case vc2.step.success =>
+  case vc3 =>
     obtain ⟨hmax, hsort, hperm⟩ := ‹MaxAt le _ _ ∧ SortedFrom le _ _ ∧ List.Perm _ _›
     have hperm0 := (‹SortedFrom le _ _ ∧ List.Perm _ _›).2
     have key := sortedFrom_of_maxAt le _ _ hmax hsort
     rw [fin_cur_eq ‹List.finRange n = _ ++ _ :: _›] at key
     exact ⟨by simp only [List.length_append, List.length_cons, List.length_nil]; rwa [sub_succ],
       hperm.trans hperm0⟩
-  case vc3.pre =>
+  case vc1 =>
     exact ⟨fun p q _ hq => absurd (by simpa using hq) (by have := q.isLt; lia), List.Perm.refl _⟩
-  case vc4.post.success =>
+  case vc2 =>
     obtain ⟨h1, h2⟩ := ‹SortedFrom le _ _ ∧ List.Perm _ _›
     rw [List.length_finRange, Nat.sub_self] at h1
     exact ⟨h1, h2⟩

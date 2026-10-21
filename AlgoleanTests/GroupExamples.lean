@@ -67,8 +67,8 @@ example (x : ZMod 11) :
 The observables above are read off a program by `decide` or by unfolding. For a program with a loop
 that does not scale, and it need not be done by hand: `Algolean.QueryModel` wires every query model
 into `Std.WP`'s weakest-precondition framework, and `groupModel` is registered as the default
-`HasModel (GroupQuery G)`, so the global `WP (Prog (GroupQuery G)) .pure` instance fires and Hoare
-triples about a `GroupProg` are available.
+`HasModel (GroupQuery G)`, so the global `WP` instance provides
+Hoare triples about a `GroupProg`.
 
 Nothing has to be set up here. `GroupProg.add_spec`, `neg_spec` and `eq_spec` in
 `Algolean.Models.GenericGroup` are tagged `@[spec]`, so `vcgen` already knows what the oracle
@@ -76,7 +76,7 @@ answers each query with, and `GroupProg.eval_of_triple` reads a triple back as a
 `GroupProg.eval`.
 
 Two things are worth keeping apart. This is reasoning about the *value* a program returns: the
-`.pure` post-shape does not see cost, which stays with `GroupProg.cost`. And it is reasoning in a
+`Prop` assertion does not see cost, which stays with `GroupProg.cost`. And it is reasoning in a
 fixed group, since `HasModel (GroupQuery G) GroupCosts` needs the instances — the programs stay
 polymorphic in `V`, and the group is chosen when the triple is stated, exactly as with `eval`.
 -/
@@ -91,7 +91,7 @@ variable [AddCommGroup G] [DecidableEq G]
 /-- Quadrupling, now as a Hoare triple: the two `add` specs compose through the `bind` rule and
 `vcgen` leaves the group identity behind. -/
 theorem quadruple_spec (x : G) :
-    ⦃True⦄ quadruple x ⦃fun r => r = (4 : ℕ) • x⦄ := by
+    ⦃ True ⦄ quadruple x ⦃ fun r => r = (4 : ℕ) • x ⦄ := by
   vcgen [quadruple]
   module
 
@@ -108,7 +108,7 @@ def isDouble (x y : V) : GroupProg V Bool := do
 
 /-- The oracle's answer to the comparison is the comparison in the group. -/
 theorem isDouble_spec (x y : G) :
-    ⦃True⦄ isDouble x y ⦃fun r => r = true ↔ x + x = y⦄ := by
+    ⦃ True ⦄ isDouble x y ⦃ fun r => r = true ↔ x + x = y ⦄ := by
   vcgen [isDouble]
   simp
 
@@ -126,17 +126,15 @@ def repeatedDouble (x : V) (k : ℕ) : GroupProg V V := do
 /-- The loop is where `vcgen` earns its keep: one invariant, and the three verification
 conditions it generates are goals about `G` with no monad left in them. -/
 theorem repeatedDouble_spec (x : G) (k : ℕ) :
-    ⦃True⦄ repeatedDouble x k ⦃fun r => r = (2 ^ k : ℕ) • x⦄ := by
+    ⦃ True ⦄ repeatedDouble x k ⦃ fun r => r = (2 ^ k : ℕ) • x ⦄ := by
   vcgen [repeatedDouble] invariants
-    · fun ⟨xs, acc⟩ => acc = (2 ^ xs.prefix.length : ℕ) • x
-  case vc1.step =>
+    · fun xs _ acc => acc = (2 ^ xs.length : ℕ) • x
+  case vc1 => simp
+  case vc2 => subst_vars; simp
+  case vc3 =>
     subst_vars
     simp only [List.length_append, List.length_cons, List.length_nil, pow_succ]
     module
-  case vc2.pre => simp
-  case vc3.post.success =>
-    subst_vars
-    simp
 
 /-- Back to `eval`, and in every group at once: the loop invariant, not evaluation, is what
 proves this. -/

@@ -173,7 +173,7 @@ end RandomizeModel
 /-- A `HasModel` on `Q` induces a handler on `RandomizeQuery Q` in which `Q` queries follow
 their model and draws are free. -/
 noncomputable instance instHasHandlerRandomizeQuery [HasModel Q Cost] [Zero Cost] :
-    Cslib.FreeM.HasHandler (RandomizeQuery Q) .pure :=
+    Cslib.FreeM.HasHandler (RandomizeQuery Q) Prop EStack⟨⟩ :=
   (RandomizeModel.ofModel (HasModel.model : Model Q Cost)).hasHandler
 
 end Algolean.Algorithms
