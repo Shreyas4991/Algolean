@@ -12,16 +12,16 @@ public import Std.Tactic.Do
 /-!
 # Weakest-precondition reasoning for `ModelM`
 
-This file exercises weakest-precondition reasoning and `mvcgen` for a `StateM` query model.
+This file exercises weakest-precondition reasoning and `vcgen` for a `StateM` query model.
 -/
 
 @[expose] public section
 
-set_option mvcgen.warning false
+set_option experimental.vcgen true
 
 namespace AlgoleanTests.ModelMWP
 
-open Algolean.Algorithms Cslib Cslib.FreeM Std.Do
+open Algolean.Algorithms Cslib Cslib.FreeM Lean.Order Std.WP
 
 /-- Queries for incrementing and reading a counter. -/
 inductive CounterQ : Type → Type where
@@ -35,7 +35,7 @@ def counterModel : ModelM CounterQ (StateM Nat) Nat where
     | .read => get
   cost _ := 1
 
-local instance : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
+local instance : HasHandler CounterQ (Nat → Prop) EStack⟨⟩ := counterModel.hasHandler
 
 /-- Increment the counter. -/
 def tick : Prog CounterQ Unit := FreeM.lift .tick
@@ -48,20 +48,22 @@ def tickThenRead : Prog CounterQ Nat := do
   tick
   read
 
-example (P : Prog CounterQ α) :
-    wpH counterModel.handler P = wp (P.evalM counterModel) :=
-  counterModel.wp_eq_wp_evalM P
+example (P : Prog CounterQ α) (post : α → Nat → Prop) :
+    (wpH counterModel.handler P).apply post () ⊑ wp (P.evalM counterModel) post () :=
+  counterModel.wp_le_wp_evalM P post ()
 
-example {Q : PostCond Nat (.arg Nat .pure)} :
-    let _ : HasHandler CounterQ (.arg Nat .pure) := counterModel.hasHandler
+example {Q : Nat → Nat → Prop} :
+    let _ : HasHandler CounterQ (Nat → Prop) EStack⟨⟩ := counterModel.hasHandler
     Triple (FreeM.lift CounterQ.read : Prog CounterQ Nat)
-      (wp⟦counterModel.evalQuery .read⟧ Q) Q := by
-  mvcgen [counterModel, ModelM.handler]
+      (wp (counterModel.evalQuery .read) Q ()) Q () := by
+  dsimp only
+  vcgen [counterModel, ModelM.handler]
+  assumption
 
 example (n : Nat) :
-    ⦃fun s => ⌜s = n⌝⦄ tickThenRead
-      ⦃⇓ value s => ⌜value = n + 1 ∧ s = n + 1⌝⦄ := by
-  mvcgen [tickThenRead, tick, read, counterModel, ModelM.handler]
+    ⦃ fun s => s = n ⦄ tickThenRead
+      ⦃ fun value s => value = n + 1 ∧ s = n + 1 ⦄ := by
+  vcgen [tickThenRead, tick, read, counterModel, ModelM.handler]
   subst_vars
   exact ⟨rfl, rfl⟩
 
