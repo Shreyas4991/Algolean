@@ -52,7 +52,7 @@ def runQuery [Functor m] (M : ModelM Q m Cost) (q : Q α) : AddWriterT Cost m α
   simp [runQuery, AddWriterT.cost]
 
 /-- Regard a deterministic `Model` as a `ModelM` over any monad, returning each answer with
-`pure`. Over `Id` this is the model itself; over `PMF` its answers are point masses. -/
+`pure`. -/
 def ofModel [Pure m] (M : Algolean.Algorithms.Model Q Cost) : ModelM Q m Cost where
   evalQuery q := pure (M.evalQuery q)
   cost q := M.cost q
