@@ -14,4 +14,5 @@ public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples
 public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
+public import AlgoleanTests.WordRAMBinarySearchExamples
 public import AlgoleanTests.WordRAMExamples

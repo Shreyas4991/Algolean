@@ -17,7 +17,9 @@ public import Algolean.Algorithms.RandomQuicksort
 public import Algolean.Algorithms.Strassen
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
-public import Algolean.Algorithms.WordRAMLinearSearch
+public import Algolean.Algorithms.WordRAM.Basic
+public import Algolean.Algorithms.WordRAM.BinarySearch
+public import Algolean.Algorithms.WordRAM.LinearSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
