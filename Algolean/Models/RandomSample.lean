@@ -164,9 +164,7 @@ This is the standard randomized-query construction: the original queries retain 
 random choices only determine which queries execute.
 -/
 abbrev ofModel [Zero Cost] (M : Model Q Cost) : RandomizeModel Q Cost :=
-  ofModelM
-    { evalQuery := fun q => PMF.pure (M.evalQuery q)
-      cost := M.cost }
+  ofModelM (ModelM.ofModel M)
 
 end RandomizeModel
 

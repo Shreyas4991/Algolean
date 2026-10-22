@@ -44,6 +44,7 @@ example (M : ModelM Q PMF Cost) [Zero Cost] (dist : PMF α) :
 example (M : Model Q Cost) [Zero Cost] (q : Q α) :
     (RandomizeQuery.query q).evalM (RandomizeModel.ofModel M) = PMF.pure (M.evalQuery q) := by
   simp
+  rfl
 
 /-- One branch stops after one draw while the other performs a second draw. -/
 def branchWithExtraDraw (coin : PMF Bool) (extra : PMF α) : Prog RandomSample Bool := do
