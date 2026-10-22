@@ -8,7 +8,7 @@ module
 
 public import Algolean.Models.ListComparisonSort
 public import Mathlib.Algebra.Order.Group.Nat
-public import Mathlib.Data.Int.ConditionallyCompleteOrder
+public import Mathlib.Order.Int.ConditionallyCompleteOrder
 public import Mathlib.Data.List.Sort
 public import Mathlib.Order.ConditionallyCompleteLattice.Basic
 

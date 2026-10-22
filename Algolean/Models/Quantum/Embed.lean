@@ -8,6 +8,7 @@ module
 
 public import Algolean.Models.Quantum.Indexing
 public import QuantumInfo.States.Pure.Qubit
+public import QuantumInfo.ForMathlib.Isometry
 public import Mathlib.Data.Fin.Tuple.Basic
 
 /-!
@@ -107,12 +108,12 @@ lemma cnotAction_involutive {n : ℕ} {c t : Fin n} (h : c ≠ t) :
   intro x
   unfold cnotAction
   by_cases hxc : x c = 1
-  · rw [if_pos hxc]
+  · rw [ite_eq_left hxc]
     have hc : Function.update x t (1 - x t) c = 1 := by
       rw [Function.update_of_ne h]; exact hxc
-    rw [if_pos hc, Function.update_self, Function.update_idem, fin2_sub_sub_self]
+    rw [ite_eq_left hc, Function.update_self, Function.update_idem, fin2_sub_sub_self]
     exact Function.update_eq_self t x
-  · rw [if_neg hxc, if_neg hxc]
+  · rw [ite_eq_right hxc, ite_eq_right hxc]
 
 /-- The CNOT gate on `Fin n → Fin 2` as a permutation unitary. Flips the
 target qubit whenever the control qubit is `1`. Control and target must

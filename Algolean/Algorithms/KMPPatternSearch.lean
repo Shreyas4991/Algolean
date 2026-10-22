@@ -605,7 +605,7 @@ private lemma buildLPSLoop_time_le_bound [BEq α]
   | succ fuel ih =>
       by_cases hlt : pos < pat.length
       · have hlenPat : len < pat.length := lt_of_lt_of_le hlen hpos
-        rw [buildLPSLoop, if_pos hlt, getElem?_pos pat pos hlt, getElem?_pos pat len hlenPat]
+        rw [buildLPSLoop, ite_eq_left hlt, getElem?_pos pat pos hlt, getElem?_pos pat len hlenPat]
         simp
         by_cases hcmp : (pat[pos]'hlt == pat[len]'hlenPat) = true
         · have : ∀ i, i < pos + 1 → ((lps.set pos (len + 1))[i]?).getD 0 < i + 1 := by grind
@@ -692,7 +692,7 @@ private lemma buildLPSLoop_replicate_append_singleton_time
   | succ m ih =>
       have hpatPos : (List.replicate (k + (m + 1) + 1) y ++ [x])[k + 1]? = some y := by grind
       have hpatLen : (List.replicate (k + (m + 1) + 1) y ++ [x])[k]? = some y := by grind
-      rw [buildLPSLoop, if_pos (by simp), hpatPos, hpatLen]
+      rw [buildLPSLoop, ite_eq_left (by simp), hpatPos, hpatLen]
       have hreplicate: (List.replicate (m + 2) 0).set 0 (k + 1) =
               (k + 1) :: List.replicate (m + 1) 0 := by simp [List.replicate]
       have hreplicate' : List.range (k + 1) ++ (k + 1) :: List.replicate (m + 1) 0 =
