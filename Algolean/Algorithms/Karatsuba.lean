@@ -358,14 +358,14 @@ theorem boundedMul_helper {b : ℕ} {l : List ℕ} (hb : 2 ≤ b) (h : ∀ x ∈
 -/
 def KaratsubaHelperProg (b d : ℕ) (l₁ l₂ : List ℕ) (hb : 2 ≤ b)
   (h₁ : ∀ x ∈ l₁, x < b) (h₂ : ∀ x ∈ l₂, x < b) :
-    Prog (mulQuery (b^3)) ℕ := do
+    Prog (boundedArithmeticQuery (b^3)) ℕ := do
   match d with
   | 0 =>
     let x := l₁.take 3
     let y := l₂.take 3
     have h₁ : ofDigits b x < b^3 := boundedMul_helper hb h₁
     have h₂ : ofDigits b y < b^3 := boundedMul_helper hb h₂
-    return ← mulQuery.mul (ofDigits b x) (ofDigits b y) h₁ h₂
+    return ← boundedArithmeticQuery.mul (ofDigits b x) (ofDigits b y) h₁ h₂
   | succ d' =>
     -- extract parts
     let x₁ := l₁.drop (2^d' + 1)
@@ -407,7 +407,7 @@ the multiplication of zeroes is directly handled here, because for the runtime p
 it was important that maxLength ≥ 1 holds.
 -/
 def KaratsubaProg (b x y : ℕ) (hb : 2 ≤ b) :
-    Prog (mulQuery (b^3)) ℕ := do
+    Prog (boundedArithmeticQuery (b^3)) ℕ := do
   let l₁ := Nat.digits b x
   let l₂ := Nat.digits b y
   let maxLength := max l₁.length l₂.length
@@ -432,7 +432,8 @@ def KaratsubaProg (b x y : ℕ) (hb : 2 ≤ b) :
 
 theorem KaratsubaHelperProg_eval {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ b)
   (h₁ : ∀ x ∈ l₁, x < b) (h₂ : ∀ x ∈ l₂, x < b) :
-    (KaratsubaHelperProg b d l₁ l₂ hb h₁ h₂).eval (mulModel (b^3)) = KaratsubaHelper b d l₁ l₂ := by
+    (KaratsubaHelperProg b d l₁ l₂ hb h₁ h₂).eval (boundedArithmeticModel (b^3)) =
+      KaratsubaHelper b d l₁ l₂ := by
   fun_induction KaratsubaHelper with
   | case1 l₁ l₂ x y =>
     simp [KaratsubaHelperProg, x, y]
@@ -442,7 +443,7 @@ theorem KaratsubaHelperProg_eval {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ 
     rw [ih1, ih2, ih3]
 
 theorem KaratsubaProg_eval (b x y : ℕ) (hb : 2 ≤ b) :
-    (KaratsubaProg b x y hb).eval (mulModel (b^3)) = Karatsuba b x y := by
+    (KaratsubaProg b x y hb).eval (boundedArithmeticModel (b^3)) = Karatsuba b x y := by
   simp only [KaratsubaProg, Karatsuba]
   split
   · rename_i h
@@ -463,7 +464,7 @@ theorem KaratsubaProg_eval (b x y : ℕ) (hb : 2 ≤ b) :
 theorem KaratsubaHelperProg_time {b d : ℕ} {l₁ l₂ : List ℕ} (hb : 2 ≤ b)
   (h₁ : l₁.length = 2 ^ d + 2) (h₂ : l₂.length = 2 ^ d + 2)
   (h₃ : ∀ x ∈ l₁, x < b) (h₄ : ∀ x ∈ l₂, x < b) :
-    (KaratsubaHelperProg b d l₁ l₂ hb h₃ h₄).time (mulModel (b^3)) = 3 ^ d := by
+    (KaratsubaHelperProg b d l₁ l₂ hb h₃ h₄).time (boundedArithmeticModel (b^3)) = 3 ^ d := by
   fun_induction KaratsubaHelperProg with
   | case1 => simp
   | case2 =>
@@ -498,8 +499,8 @@ theorem _root_.Nat.clog_le_add_one_log_base_two (n : ℕ) : Nat.clog 2 n ≤ 1 +
   rw [← Real.natFloor_logb_natCast, ← Real.natCeil_logb_natCast, add_comm]
   apply Nat.ceil_le_floor_add_one
 
-theorem Karatsuba_time (b x y : ℕ) (hb : 2 ≤ b) :
-    (KaratsubaProg b x y hb).time (mulModel (b^3)) ≤
+theorem Karatsuba_time {b x y : ℕ} (hb : 2 ≤ b) :
+    (KaratsubaProg b x y hb).time (boundedArithmeticModel (b^3)) ≤
       3 * ((max (digits b x).length (digits b y).length) : ℝ) ^ Real.logb 2 3 := by
   simp only [KaratsubaProg]
   let n := max (b.digits x).length (b.digits y).length
