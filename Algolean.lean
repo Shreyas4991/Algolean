@@ -32,6 +32,7 @@ public import Algolean.Models.FanInTwoCircuits
 public import Algolean.Models.GenericGroup
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
+public import Algolean.Models.ListDataStructs
 public import Algolean.Models.Quantum.Circuit
 public import Algolean.Models.Quantum.Embed
 public import Algolean.Models.Quantum.Indexing
