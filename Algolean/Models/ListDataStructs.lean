@@ -31,82 +31,52 @@ structure ListState (α : Type u) where
   internalList : List α
 
 /--
-The query type for a singlylinkedlist
+Insertion strategy. This can be either last-in-first-out (`lifo`)
+or first-in-first-out (`fifo`)
 -/
-inductive SinglyLinkedList (α : Type u) : Type u → Type u where
-  | head : SinglyLinkedList α (Option α)
-  | tail : SinglyLinkedList α PUnit
-  | cons (newHead : α) : SinglyLinkedList α PUnit
-
-/--
-A stateful model for a singly linked list.
--/
-@[simps]
-def singlyLLModel : ModelM (SinglyLinkedList α) (StateM (ListState α)) ℕ where
-    evalQuery
-      | .head => do
-            let iL ← get
-            return (List.head? iL.internalList)
-      | .tail => do
-            let iL ← get
-            set {internalList := List.tail iL.internalList : ListState α}
-            return ()
-      | .cons x => do
-            modify (fun iL => ⟨x :: iL.internalList⟩)
-    cost _ := 1
+inductive Strategy where
+  | lifo
+  | fifo
 
 /--
 An ADT query type for a stack. Note this is essentially identical
 to the List query type, but with renamed queries to match
 the typical names of a stack interface.
 -/
-inductive Stack (α : Type u) : Type u → Type u where
-  | top : Stack α (Option α)
-  | pop : Stack α PUnit
-  | push (newHead : α) : Stack α PUnit
+inductive ListADT (s : Strategy) (α : Type u) : Type u → Type u where
+  | peek : ListADT s α (Option α)
+  | drop : ListADT s α PUnit
+  | insert (data : α) : ListADT s α PUnit
 
 /--
 A model for the stack query using the ListState to store
 the stack internally in the state type.
 -/
 @[simps]
-def stackModel : ModelM (Stack α) (StateM (ListState α)) ℕ where
+def listModel (s : Strategy) :
+      ModelM (ListADT s α) (StateM (ListState α)) ℕ where
     evalQuery
-      | .top => do
+      | .peek => do
             let iL ← get
             return (List.head? iL.internalList)
-      | .pop => do
+      | .drop => do
             let iL ← get
             set {internalList := List.tail iL.internalList : ListState α}
             return ()
-      | .push x => do
-            modify (fun iL => ⟨x :: iL.internalList⟩)
+      | .insert x => do
+            match s with
+            | .lifo => modify (fun iL => ⟨x :: iL.internalList⟩)
+            | .fifo => modify (fun iL => ⟨iL.internalList ++ [x]⟩)
     cost _ := 1
 
 /--
-An ADT query type for a Queue.
+Interpretation of ListADT as the ADT of a stack
 -/
-inductive Queue (α : Type u) : Type u → Type u where
-  | front : Queue α (Option α)
-  | popfront : Queue α PUnit
-  | pushback (newHead : α) : Queue α PUnit
+abbrev stackModel {α} := @listModel α .lifo
 
 /--
-A model for the queue query using the ListState to store
-the stack internally in the state type.
+Interpretation of ListADT as the ADT of a queue
 -/
-@[simps]
-def queueModel : ModelM (Queue α) (StateM (ListState α)) ℕ where
-    evalQuery
-      | .front => do
-            let iL ← get
-            return (List.head? iL.internalList)
-      | .popfront => do
-            let iL ← get
-            set {internalList := List.tail iL.internalList : ListState α}
-            return ()
-      | .pushback x => do
-            modify (fun iL => ⟨iL.internalList ++ [x]⟩)
-    cost _ := 1
+abbrev queueModel {α} := @listModel α .fifo
 
 end Algolean.Algorithms
