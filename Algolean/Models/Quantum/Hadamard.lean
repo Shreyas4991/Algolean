@@ -33,17 +33,46 @@ The full-register Hadamard unitary `H^⊗n` and its entries.
 
 @[expose] public section
 
-namespace Algolean.Algorithms
-
 open Complex
 open scoped MState ComplexOrder Matrix
 
 noncomputable section
 
+namespace Qubit
+
 /-- Entries of the Hadamard gate: `(1/√2) · (−1)^{ab}`. -/
-theorem _root_.Qubit.H_apply (a b : Fin 2) :
+theorem H_apply (a b : Fin 2) :
     Qubit.H a b = (√(1 / 2 : ℝ) : ℂ) * (-1 : ℂ) ^ (a.val * b.val) := by
   fin_cases a <;> fin_cases b <;> simp [Qubit.H]
+
+end Qubit
+
+namespace MState
+
+/-- The matrix of `U ◃ ρ` is `U ρ U†`. -/
+theorem uConj_m {d : Type*} [Fintype d] [DecidableEq d]
+    (ρ : MState d) (U : 𝐔[d]) : (U ◃ ρ).m = U.val * ρ.m * U.valᴴ :=
+  HermitianMat.conj_apply_mat _ _
+
+/-- The matrix of a pure state is the outer product `|ψ⟩⟨ψ|`. -/
+theorem pure_m {d : Type*} [Fintype d] [DecidableEq d] (ψ : Ket d) :
+    (MState.pure ψ).m = Matrix.vecMulVec ψ.vec (star ψ.vec) := rfl
+
+/-- Conjugating by the identity leaves a state unchanged. -/
+@[simp] theorem uConj_one {d : Type*} [Fintype d] [DecidableEq d]
+    (ρ : MState d) : (1 : 𝐔[d]) ◃ ρ = ρ := by
+  ext1
+  simp [MState.uConj]
+
+/-- Conjugating by `U * V` conjugates by `V`, then by `U`. -/
+theorem uConj_mul {d : Type*} [Fintype d] [DecidableEq d]
+    (ρ : MState d) (U V : 𝐔[d]) : (U * V) ◃ ρ = U ◃ (V ◃ ρ) := by
+  ext1
+  simpa [MState.uConj] using (HermitianMat.conj_conj ρ.M V.val U.val).symm
+
+end MState
+
+namespace Algolean.Algorithms
 
 /-- The action of a unitary on a ket: the matrix–vector product, which keeps the ket normalized. -/
 def unitaryKet {d : Type*} [Fintype d] [DecidableEq d]
@@ -64,15 +93,6 @@ def unitaryKet {d : Type*} [Fintype d] [DecidableEq d]
 theorem unitaryKet_vec {d : Type*} [Fintype d] [DecidableEq d]
     (U : 𝐔[d]) (ψ : Ket d) : (unitaryKet U ψ).vec = U.val *ᵥ ψ.vec := rfl
 
-/-- The matrix of `U ◃ ρ` is `U ρ U†`. -/
-theorem _root_.MState.uConj_m {d : Type*} [Fintype d] [DecidableEq d]
-    (ρ : MState d) (U : 𝐔[d]) : (U ◃ ρ).m = U.val * ρ.m * U.valᴴ :=
-  HermitianMat.conj_apply_mat _ _
-
-/-- The matrix of a pure state is the outer product `|ψ⟩⟨ψ|`. -/
-theorem _root_.MState.pure_m {d : Type*} [Fintype d] [DecidableEq d] (ψ : Ket d) :
-    (MState.pure ψ).m = Matrix.vecMulVec ψ.vec (star ψ.vec) := rfl
-
 /-- `U` applied to the basis ket `|b⟩` is column `b` of `U`. -/
 @[simp]
 theorem unitaryKet_basis_apply {d : Type*} [Fintype d] [DecidableEq d]
@@ -80,25 +100,22 @@ theorem unitaryKet_basis_apply {d : Type*} [Fintype d] [DecidableEq d]
     unitaryKet U (Ket.basis b) x = U x b := by
   simp [Ket.apply, unitaryKet_vec, Ket.basis, Matrix.mulVec, dotProduct]
 
+end Algolean.Algorithms
+
+namespace MState
+
+open Algolean.Algorithms in
 /-- Conjugating the pure state of `ψ` by `U` gives the pure state of `U` applied to `ψ`. -/
-theorem _root_.MState.uConj_pure {d : Type*} [Fintype d] [DecidableEq d]
+theorem uConj_pure {d : Type*} [Fintype d] [DecidableEq d]
     (U : 𝐔[d]) (ψ : Ket d) :
     U ◃ MState.pure ψ = MState.pure (unitaryKet U ψ) := by
   apply MState.ext_m
   rw [MState.uConj_m, MState.pure_m, MState.pure_m, Matrix.mul_vecMulVec,
     Matrix.vecMulVec_mul, unitaryKet_vec, Matrix.star_mulVec]
 
-/-- Conjugating by the identity leaves a state unchanged. -/
-@[simp] theorem _root_.MState.uConj_one {d : Type*} [Fintype d] [DecidableEq d]
-    (ρ : MState d) : (1 : 𝐔[d]) ◃ ρ = ρ := by
-  ext1
-  simp [MState.uConj]
+end MState
 
-/-- Conjugating by `U * V` conjugates by `V`, then by `U`. -/
-theorem _root_.MState.uConj_mul {d : Type*} [Fintype d] [DecidableEq d]
-    (ρ : MState d) (U V : 𝐔[d]) : (U * V) ◃ ρ = U ◃ (V ◃ ρ) := by
-  ext1
-  simpa [MState.uConj] using (HermitianMat.conj_conj ρ.M V.val U.val).symm
+namespace Algolean.Algorithms
 
 /-- Entries of a single-qubit gate embedded at qubit `q`: zero unless the two bitstrings agree
 away from `q`, and otherwise the gate's entry at their bits at `q`. -/
@@ -325,6 +342,6 @@ theorem unitaryKet_hadamardsUnitary_zero (n : ℕ) :
   intro x
   simp
 
-end
-
 end Algolean.Algorithms
+
+end
