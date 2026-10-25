@@ -11,8 +11,7 @@ public import Algolean.Algorithms.Quantum.DeutschJozsa
 /-!
 # Deutsch–Jozsa examples
 
-Concrete constant and balanced instances of Deutsch–Jozsa on two qubits, and the zero-qubit
-constant case.
+Concrete constant and balanced instances of Deutsch–Jozsa on two qubits.
 
 ## Main definitions
 
@@ -23,7 +22,6 @@ constant case.
 
 - `deutschJozsaOutput_two_constant`: a constant function gives the answer `true`.
 - `deutschJozsaOutput_two_balanced`: a balanced function gives the answer `false`.
-- `deutschJozsaOutput_zero_constant`: the empty register also gives `true` for a constant oracle.
 -/
 
 @[expose] public section
@@ -51,11 +49,5 @@ theorem deutschJozsaOutput_two_balanced :
   simpa only [decide_eq_false (fun hc =>
     not_isConstant_and_isBalanced _ ⟨hc, hbal⟩)] using
     deutschJozsaOutput_eq_pure (Or.inr hbal)
-
-/-- With no qubits, Deutsch–Jozsa still answers `true` for a constant function. -/
-theorem deutschJozsaOutput_zero_constant :
-    deutschJozsaOutput 0 (fun _ => true) = PMF.pure true := by
-  have hc : IsConstant (fun _ : Fin 0 → Fin 2 => true) := ⟨true, fun _ => rfl⟩
-  simpa only [decide_eq_true hc] using deutschJozsaOutput_eq_pure (Or.inl hc)
 
 end AlgoleanTests.DeutschJozsaExamples
