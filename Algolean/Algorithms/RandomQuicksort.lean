@@ -43,10 +43,7 @@ abbrev RandomQuicksortOps (α : Type) := fun β => Sum (SortOps α β) (UniformS
 /-- Interpret comparisons with `le`, charging one per comparison and using `sampling` for draws. -/
 def randomQuicksortModel [Monad m] (le : α → α → Bool)
     (sampling : ModelM UniformSample m ℕ) : ModelM (RandomQuicksortOps α) m ℕ :=
-  ModelM.sum
-    { evalQuery := fun q => pure ((sortModelNat le).evalQuery q)
-      cost := (sortModelNat le).cost }
-    sampling
+  ModelM.sum (ModelM.ofModel (sortModelNat le)) sampling
 
 /-- Compare two values through the model's Boolean comparator. -/
 def queryCmpLE (y p : α) : Prog (RandomQuicksortOps α) Bool :=

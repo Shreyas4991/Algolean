@@ -51,16 +51,17 @@ def runQuery [Functor m] (M : ModelM Q m Cost) (q : Q α) : AddWriterT Cost m α
     (M.runQuery q).cost = (fun _ => M.cost q) <$> M.evalQuery q := by
   simp [runQuery, AddWriterT.cost]
 
-/-- Regard a `Model` as a `ModelM` over `Id`. -/
-def ofModel (M : Algolean.Algorithms.Model Q Cost) : ModelM Q Id Cost where
-  evalQuery q := M.evalQuery q
+/-- Regard a deterministic `Model` as a `ModelM` over any monad, returning each answer with
+`pure`. -/
+def ofModel [Pure m] (M : Algolean.Algorithms.Model Q Cost) : ModelM Q m Cost where
+  evalQuery q := pure (M.evalQuery q)
   cost q := M.cost q
 
-@[simp] theorem ofModel_evalQuery (M : Algolean.Algorithms.Model Q Cost) (q : Q α) :
-    (ofModel M).evalQuery q = M.evalQuery q := rfl
+@[simp] theorem ofModel_evalQuery [Pure m] (M : Algolean.Algorithms.Model Q Cost) (q : Q α) :
+    (ofModel M : ModelM Q m Cost).evalQuery q = pure (M.evalQuery q) := rfl
 
-@[simp] theorem ofModel_cost (M : Algolean.Algorithms.Model Q Cost) (q : Q α) :
-    (ofModel M).cost q = M.cost q := rfl
+@[simp] theorem ofModel_cost [Pure m] (M : Algolean.Algorithms.Model Q Cost) (q : Q α) :
+    (ofModel M : ModelM Q m Cost).cost q = M.cost q := rfl
 
 /-- Sum two query languages interpreted in the same monad with the same cost type. -/
 def sum {Q₂ : Type u → Type x} (M₁ : ModelM Q m Cost) (M₂ : ModelM Q₂ m Cost) :

@@ -15,6 +15,7 @@ public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
 public import Algolean.Algorithms.RandomQuicksort
+public import Algolean.Algorithms.Strassen
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Algorithms.WordRAMLinearSearch
@@ -33,6 +34,7 @@ public import Algolean.Models.GenericGroup
 public import Algolean.Models.Graphs
 public import Algolean.Models.ListComparisonSearch
 public import Algolean.Models.ListComparisonSort
+public import Algolean.Models.ListDataStructs
 public import Algolean.Models.Quantum.Circuit
 public import Algolean.Models.Quantum.Embed
 public import Algolean.Models.Quantum.Indexing
