@@ -17,7 +17,15 @@ public import Algolean.Algorithms.RandomQuicksort
 public import Algolean.Algorithms.Strassen
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
-public import Algolean.Algorithms.WordRAMLinearSearch
+public import Algolean.Algorithms.WordRAM.Basic
+public import Algolean.Algorithms.WordRAM.BinarySearch.Algorithm
+public import Algolean.Algorithms.WordRAM.BinarySearch.Common
+public import Algolean.Algorithms.WordRAM.BinarySearch.Complexity
+public import Algolean.Algorithms.WordRAM.BinarySearch.Correctness
+public import Algolean.Algorithms.WordRAM.LinearSearch.Algorithm
+public import Algolean.Algorithms.WordRAM.LinearSearch.Common
+public import Algolean.Algorithms.WordRAM.LinearSearch.Complexity
+public import Algolean.Algorithms.WordRAM.LinearSearch.Correctness
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
@@ -44,5 +52,8 @@ public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
+public import Algolean.Models.WordRAMSyntax
+public import Algolean.Problems.Basic
+public import Algolean.Problems.Search
 public import Algolean.QueryComposition
 public import Algolean.QueryModel
