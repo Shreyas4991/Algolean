@@ -9,6 +9,7 @@ public import AlgoleanTests.ModelMWP
 public import AlgoleanTests.ModelStateM
 public import AlgoleanTests.ModelStateMWP
 public import AlgoleanTests.NaivePatternSearchExamples
+public import AlgoleanTests.PaperExamples
 public import AlgoleanTests.ProgExamples
 public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples
