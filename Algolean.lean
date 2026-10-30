@@ -13,6 +13,7 @@ public import Algolean.Algorithms.ListLinearSearch
 public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
+public import Algolean.Algorithms.Quantum.HadamardLayer
 public import Algolean.Algorithms.RandomQuicksort
 public import Algolean.Algorithms.Strassen
 public import Algolean.Algorithms.VecBubbleSort
@@ -35,8 +36,10 @@ public import Algolean.Models.ListComparisonSort
 public import Algolean.Models.ListDataStructs
 public import Algolean.Models.Quantum.Circuit
 public import Algolean.Models.Quantum.Embed
+public import Algolean.Models.Quantum.Hadamard
 public import Algolean.Models.Quantum.Indexing
 public import Algolean.Models.Quantum.Oracle
+public import Algolean.Models.Quantum.Spec
 public import Algolean.Models.RandomSample
 public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
