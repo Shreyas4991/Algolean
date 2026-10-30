@@ -4,12 +4,12 @@ public import AlgoleanTests.CircuitExamples
 public import AlgoleanTests.FreeMonadWP
 public import AlgoleanTests.GroupExamples
 public import AlgoleanTests.KMPExamples
+public import AlgoleanTests.MinThree
 public import AlgoleanTests.ModelM
 public import AlgoleanTests.ModelMWP
 public import AlgoleanTests.ModelStateM
 public import AlgoleanTests.ModelStateMWP
 public import AlgoleanTests.NaivePatternSearchExamples
-public import AlgoleanTests.PaperExamples
 public import AlgoleanTests.ProgExamples
 public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples
