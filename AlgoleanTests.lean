@@ -9,10 +9,12 @@ public import AlgoleanTests.ModelMWP
 public import AlgoleanTests.ModelStateM
 public import AlgoleanTests.ModelStateMWP
 public import AlgoleanTests.NaivePatternSearchExamples
+public import AlgoleanTests.PolytimeBasicClasses
 public import AlgoleanTests.ProgExamples
 public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples
 public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
 public import AlgoleanTests.SingleTapeTMExamples
+public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.WordRAMExamples

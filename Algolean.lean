@@ -14,6 +14,13 @@ public import Algolean.Algorithms.ListOrderedInsert
 public import Algolean.Algorithms.MergeSort
 public import Algolean.Algorithms.NaivePatternSearch
 public import Algolean.Algorithms.RandomQuicksort
+public import Algolean.Algorithms.SingleTapeTuringMachines.Basic
+public import Algolean.Algorithms.SingleTapeTuringMachines.BitOperations
+public import Algolean.Algorithms.SingleTapeTuringMachines.Complexity
+public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
+public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
+public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
+public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
 public import Algolean.Algorithms.Strassen
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
@@ -42,6 +49,11 @@ public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
+public import Algolean.Models.SingleTapeTM.Composition.Basic
+public import Algolean.Models.SingleTapeTM.Composition.Branch
+public import Algolean.Models.SingleTapeTM.Composition.Functions
+public import Algolean.Models.SingleTapeTM.Composition.Sequential
+public import Algolean.Models.SingleTapeTM.Composition.While
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
