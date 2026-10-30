@@ -53,8 +53,7 @@ def Solves (P : Prog Q α) (prob : QueryProblem Q Cost α) : Prop :=
   ∀ M : Model Q Cost, prob.spec M (P.eval M)
 
 /-- `P` solves `prob` within cost `bound` under a specific model `M`.
-This is the model-specific version, used when the model is fixed
-(e.g., Turing machines have a unique model `TMModel tm`). -/
+This is the model-specific version, used when the model is fixed. -/
 def SolvesWithinModel [AddZero Cost] [Preorder Cost]
     (P : Prog Q α) (prob : QueryProblem Q Cost α)
     (M : Model Q Cost) (bound : Cost) : Prop :=
