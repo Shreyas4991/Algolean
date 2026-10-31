@@ -26,9 +26,9 @@ for constant `f` and `0` for balanced `f`.
 
 ## Main results
 
-- `deutschJozsa_spec`: a `Std.Do` triple: from `|0…0⟩`, under the promise, every possible answer
-  is `decide (IsConstant f)`.
-- `deutschJozsaPrepare_spec`: a `Std.Do` triple for the state before measurement.
+- `deutschJozsa_spec`: a Hoare triple: from `|0…0⟩`, under the promise, every possible answer is
+  `decide (IsConstant f)`.
+- `deutschJozsaPrepare_spec`: a Hoare triple for the state before measurement.
 - `deutschJozsaOutput_eq_pure`: under the promise, the answer distribution is the point mass at
   the correct answer.
 - `deutschJozsa_cost`: every run makes exactly one oracle call.
@@ -45,7 +45,7 @@ for constant `f` and `0` for balanced `f`.
 
 namespace Algolean.Algorithms
 
-open Cslib Complex Std.Do
+open Cslib Complex Std.WP
 open scoped MState ComplexOrder
 
 noncomputable section
@@ -116,18 +116,18 @@ private theorem deutschJozsaPrepare_wp_result (n : ℕ)
   rw [deutschJozsaKet, hadamardOracleUnitary, hρ, ← MState.uConj_mul,
     ← MState.uConj_mul, zeroState, MState.uConj_pure]
 
-set_option linter.deprecated.syntax false in
-/-- The state before measurement, as a `Std.Do` triple: from `|0…0⟩`, the preparation stage leaves
-the register in `deutschJozsaKet n f`. -/
+set_option experimental.vcgen true in
+/-- The state before measurement: from `|0…0⟩`, the preparation stage leaves the register in
+`deutschJozsaKet n f`. -/
 theorem deutschJozsaPrepare_spec (n : ℕ) (f : (Fin n → Fin 2) → Bool) :
-    letI := quantumWP n f
-    ⦃fun ρ => ⌜ρ = zeroState n⌝⦄
+    letI := (quantumModel n f).hasHandler
+    ⦃ fun ρ => ρ = zeroState n ⦄
       deutschJozsaPrepare n
-    ⦃⇓ _ ρ => ⌜ρ = MState.pure (deutschJozsaKet n f)⌝⦄ := by
-  mvcgen [deutschJozsaPrepare]
-  case vc1 =>
-    simp only [evolveState_eq]
-    exact deutschJozsaPrepare_wp_result n f _ ‹_›
+    ⦃ fun _ ρ => ρ = MState.pure (deutschJozsaKet n f) ⦄ := by
+  let _ := (quantumModel n f).hasHandler
+  vcgen [deutschJozsaPrepare]
+  simp only [evolveState_eq]
+  exact deutschJozsaPrepare_wp_result n f _ ‹_›
 
 /-- The answer distribution is the measurement distribution of `deutschJozsaKet n f`, mapped
 through the test `x = 0`. -/
@@ -287,21 +287,22 @@ theorem decide_eq_of_mem_support_deutschJozsaKet {n : ℕ} {f : (Fin n → Fin 2
     exact (PMF.mem_support_map_iff _ _ _).mpr ⟨x, hx, rfl⟩
   rwa [deutschJozsaOutput_eq_pure hf, PMF.mem_support_pure_iff] at hmem
 
-set_option linter.deprecated.syntax false in
-/-- Correctness of Deutsch–Jozsa as a `Std.Do` triple: from `|0…0⟩`, under the promise, every
-possible answer is `decide (IsConstant f)`. -/
+set_option experimental.vcgen true in
+/-- Correctness of Deutsch–Jozsa: from `|0…0⟩`, under the promise, every possible answer is
+`decide (IsConstant f)`. -/
 theorem deutschJozsa_spec (n : ℕ) (f : (Fin n → Fin 2) → Bool)
     (hf : IsConstant f ∨ IsBalanced f) :
-    letI := quantumWP n f
-    ⦃fun ρ => ⌜ρ = zeroState n⌝⦄
+    letI := (quantumModel n f).hasHandler
+    ⦃ fun ρ => ρ = zeroState n ⦄
       deutschJozsa n
-    ⦃⇓ b => ⌜b = decide (IsConstant f)⌝⦄ := by
+    ⦃ fun b _ => b = decide (IsConstant f) ⦄ := by
+  let _ := (quantumModel n f).hasHandler
   simp only [deutschJozsa, map_eq_pure_bind]
-  mvcgen [deutschJozsaPrepare]
-  case vc1 ρ hρ x _ hx =>
-    simp only [evolveState_eq] at hx
-    rw [unitaryOf, deutschJozsaPrepare_wp_result n f ρ hρ] at hx
-    exact decide_eq_of_mem_support_deutschJozsaKet hf hx.1
+  vcgen [deutschJozsaPrepare]
+  rename_i _ ρ hρ hx
+  simp only [evolveState_eq, unitaryOf] at hx
+  rw [deutschJozsaPrepare_wp_result n f ρ hρ] at hx
+  exact decide_eq_of_mem_support_deutschJozsaKet hf hx
 
 /-! ### Query cost -/
 
