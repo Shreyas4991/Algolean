@@ -55,3 +55,38 @@ theorem runs_while_step {condition : TMCondition tm} {body : Prog (TMQuery tm) U
 end TMQuery
 
 end Algolean.Algorithms
+
+namespace Algolean.Algorithms.Component
+
+open Cslib.Turing TMQuery
+
+variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
+variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
+
+/-- A verified loop with an invariant, a decreasing logical rank, and a per-iteration time bound.
+The rank and bound are proof data; the executable loop tests only the embedded condition. -/
+@[simps program]
+def whileLoop {ι : Type} (condition : TMCondition tm) (invariant : ι → TMState tm → Prop)
+    (rank : TMState tm → ℕ) (bound : ι → ℕ)
+    (body : Component tm
+      (fun i s => invariant i s ∧ condition.eval s.config = true)
+      (fun i s cost final => invariant i final ∧ rank final < rank s ∧ cost.steps ≤ bound i)) :
+    Component tm invariant (fun i s cost final => invariant i final ∧
+      condition.eval final.config = false ∧ cost.steps ≤ rank s * bound i) where
+  program := TMQuery.whileLoop condition body.program
+  correct i s hs := by
+    generalize hn : rank s = n
+    induction n using Nat.strong_induction_on generalizing s with
+    | h n ih =>
+      by_cases htest : condition.eval s.config = true
+      · obtain ⟨a, t, hb, ht, hlt, ha⟩ := body.correct i s ⟨hs, htest⟩
+        obtain ⟨b, u, hr, hu, hfalse, hbound⟩ := ih (rank t) (by lia) t ht rfl
+        refine ⟨a + b, u, Completes.while_step htest hb hr, hu, hfalse, ?_⟩
+        calc
+          (a + b).steps ≤ bound i + rank t * bound i := by simpa using Nat.add_le_add ha hbound
+          _ = (rank t + 1) * bound i := by ring
+          _ ≤ n * bound i := Nat.mul_le_mul_right _ (by lia)
+      · exact ⟨0, s, completes_while_false _ _ _ (by simpa using htest), hs,
+          by simpa using htest, by simp⟩
+
+end Algolean.Algorithms.Component

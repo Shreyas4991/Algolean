@@ -102,23 +102,16 @@ def P (L : Language Symbol) : Prop :=
   ∃ (f : List Symbol → List Symbol) (yes : List Symbol),
     Nonempty (TMQuery.PolyTimeComputable f) ∧ ∀ x, f x = yes ↔ L x
 
-/-- A language `L` is in `NP` if one fixed polynomial-time TM query program computes
-a verifier `V : List Symbol → List Symbol`, with a fixed accept string `yes`,
-and a polynomial certificate-length bound `q` such that `L x` iff some
-certificate `c` of length at most `q(|x|)` makes `V (x ++ c) = yes`.
-The verifier receives input and certificate concatenated on a single
-tape; the boundary is handled per-language by the verifier. -/
+/-- A language is in `NP` if a language `A` in `P` checks encoded input-certificate pairs,
+and an input belongs to `L` exactly when some certificate of polynomial length passes that check.
+The separator in `Augmented.encodePair` preserves the boundary between input and certificate.
+The pair language uses the finite alphabet `Augmented Symbol`; `L` remains over `Symbol`.
+This is the relation-based formulation of Papadimitriou, *Computational Complexity* (1994),
+§9.1, Proposition 9.1, p. 181. The proof of `P ⊆ NP` is in `Algolean.Complexity.NP`. -/
 def NP (L : Language Symbol) : Prop :=
-  ∃ (V : List Symbol → List Symbol) (yes : List Symbol) (q : Polynomial ℕ),
-    Nonempty (TMQuery.PolyTimeComputable V) ∧
+  ∃ (A : Language (Augmented Symbol)) (q : Polynomial ℕ), P A ∧
     ∀ x, L x ↔ ∃ c : List Symbol,
-      c.length ≤ q.eval x.length ∧ V (x ++ c) = yes
-
-/-- `P ⊆ NP`: every language in `P` is in `NP` with the empty certificate. -/
-theorem NP.ofP {L : Language Symbol} (hP : P L) : NP L := by
-  obtain ⟨f, yes, hPTC, hEq⟩ := hP
-  refine ⟨f, yes, 0, hPTC, ?_⟩
-  simpa using fun x => (hEq x).symm
+      c.length ≤ q.eval x.length ∧ A (Augmented.encodePair x c)
 
 end Algorithms
 

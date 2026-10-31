@@ -15,8 +15,8 @@ public import Algolean.Models.SingleTapeTM.Composition.Functions
 # Uniform computation and complexity bounds for Boolean tape procedures
 
 The same programs work on all inputs and on arbitrary initial control states, head origins,
-and visited-cell histories. `Computes.space` derives the corresponding additional-space bound;
-the initial visited set is retained. The polynomial witnesses use the deeply embedded model.
+and allocated tape histories. `Computes.space` derives the corresponding additional-space bound;
+the initially allocated tape is retained. The polynomial witnesses use the deeply embedded model.
 -/
 
 @[expose] public section
@@ -88,6 +88,37 @@ theorem increment_computes :
   · simpa [cursor_start] using increment_correct input s (by simpa [cursor_start] using hs)
   · have := carryCount_le_length input
     lia
+
+/-- Verified identity machine, with no head moves. -/
+def identityComputer : Computer tm id (fun _ => 0) :=
+  Computer.ofComputes (identity_computes (tm := tm))
+
+/-- Verified fixed-bit write machine. -/
+def writeBitComputer (bit : Bool) :
+    Computer tm (fun bits => bit :: bits.tail) (fun _ => 0) :=
+  Computer.ofComputes (writeBit_computes (tm := tm) bit)
+
+/-- Verified first-bit complementation machine. -/
+def flipBitComputer : Computer tm flipFirst (fun _ => 0) :=
+  Computer.ofComputes (flipBit_computes (tm := tm))
+
+/-- Verified append machine, ready for composition with other word transformations. -/
+def appendBitComputer (bit : Bool) :
+    Computer tm (fun bits => bits ++ [bit]) (fun bits => 2 * bits.length + 2) :=
+  Computer.ofComputes (appendBit_computes (tm := tm) bit)
+
+/-- Verified block complementation machine. -/
+def complementBlockComputer :
+    Computer tm (List.map Bool.not) (fun bits => 2 * bits.length + 2) :=
+  Computer.ofComputes (complementBlock_computes (tm := tm))
+
+/-- Verified erasing machine. -/
+def eraseBlockComputer : Computer tm (fun _ => []) (fun bits => 2 * bits.length + 2) :=
+  Computer.ofComputes (eraseBlock_computes (tm := tm))
+
+/-- Verified binary successor machine, including carry overflow. -/
+def incrementComputer : Computer tm incrementBits (fun bits => 2 * bits.length + 2) :=
+  Computer.ofComputes (increment_computes (tm := tm))
 
 /-- A polynomial-time witness for appending a fixed bit, using exactly the proved query program. -/
 noncomputable def appendBitPolyTimeComputable (bit : Bool) :

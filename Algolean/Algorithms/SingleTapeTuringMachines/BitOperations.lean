@@ -35,10 +35,6 @@ theorem cursor_write_any (left right : List Bool) (bit : Bool) :
 @[simp] theorem cursor_erase_last (left : List Bool) (bit : Bool) :
     (cursor left [bit]).write none = cursor left [] := rfl
 
-@[simp] theorem before_nil : before [] = BiTape.nil := rfl
-
-@[simp] theorem cursor_nil : cursor [] [] = BiTape.nil := rfl
-
 /-- Negate a bit under the head; leave a blank cell blank. -/
 def flipBit (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   ifₜ tape =ₜ some true then

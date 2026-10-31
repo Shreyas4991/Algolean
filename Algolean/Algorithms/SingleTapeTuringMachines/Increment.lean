@@ -156,8 +156,8 @@ theorem increment_correct (bits : List Bool) (s : TMState tm)
 theorem increment_complexity (bits : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = cursor [] bits) :
     ∃ cost final, Completes (increment tm) s cost final ∧ cost.steps ≤ 2 * bits.length + 2 ∧
-      cost.cellsVisited ≤ 2 * bits.length + 2 ∧
-      final.cellsVisited.card ≤ s.cellsVisited.card + (2 * bits.length + 2) := by
+      cost.cellsAllocated ≤ 2 * bits.length + 2 ∧
+      final.cellsAllocated.card ≤ s.cellsAllocated.card + (2 * bits.length + 2) := by
   obtain ⟨cost, final, hc, ht, hspace, htotal⟩ := (increment_correct bits s hs).space
   have := carryCount_le_length bits
   exact ⟨cost, final, hc, by lia, by lia, by lia⟩

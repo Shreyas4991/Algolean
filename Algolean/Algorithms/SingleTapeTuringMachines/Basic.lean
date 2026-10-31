@@ -11,7 +11,7 @@ public import Algolean.Models.SingleTapeTM.Composition.Sequential
 public import Algolean.Models.SingleTapeTMSyntax
 
 /-!
-# Contracts and tape views for Boolean single-tape procedures
+# Contracts and tape views for single-tape procedures
 
 `cursor left right` stores the prefix to the left of the head in reverse order, with `right`
 starting at the head. The occupied block is `left.reverse ++ right`, surrounded by blanks.
@@ -27,62 +27,69 @@ open Cslib Cslib.Turing TMQuery
 
 open scoped TMQuery
 
-/-- A contiguous Boolean block, split at the head; the left part is in reverse order. -/
+variable {Symbol : Type}
+
+/-- A contiguous block, split at the head; the left part is in reverse order. -/
 @[simps head left right]
-def cursor (left right : List Bool) : BiTape Bool where
+def cursor (left right : List Symbol) : BiTape Symbol where
   head := right.head?
   left := StackTape.mapSome left
   right := StackTape.mapSome right.tail
 
-/-- The blank immediately preceding a contiguous Boolean block. -/
+/-- The blank immediately preceding a contiguous block. -/
 @[simps]
-def before (right : List Bool) : BiTape Bool where
+def before (right : List Symbol) : BiTape Symbol where
   head := none
   left := ∅
   right := StackTape.mapSome right
 
-@[simp] theorem head_mapSome (bits : List Bool) : (StackTape.mapSome bits).head = bits.head? := by
+@[simp] theorem head_mapSome (bits : List Symbol) : (StackTape.mapSome bits).head = bits.head? := by
   cases bits <;> rfl
 
-@[simp] theorem tail_mapSome (bits : List Bool) :
+@[simp] theorem tail_mapSome (bits : List Symbol) :
     (StackTape.mapSome bits).tail = StackTape.mapSome bits.tail := by
   cases bits <;> rfl
 
-@[simp] theorem cons_mapSome (bit : Bool) (bits : List Bool) :
+@[simp] theorem cons_mapSome (bit : Symbol) (bits : List Symbol) :
     StackTape.cons (some bit) (StackTape.mapSome bits) = StackTape.mapSome (bit :: bits) := rfl
 
-@[simp] theorem mapSome_nil : StackTape.mapSome ([] : List Bool) = StackTape.nil := rfl
+@[simp] theorem mapSome_nil : StackTape.mapSome ([] : List Symbol) = StackTape.nil := rfl
 
-@[simp] theorem head_nil : (StackTape.nil : StackTape Bool).head = none := rfl
+@[simp] theorem head_nil : (StackTape.nil : StackTape Symbol).head = none := rfl
 
-@[simp] theorem tail_nil : (StackTape.nil : StackTape Bool).tail = StackTape.nil := rfl
+@[simp] theorem tail_nil : (StackTape.nil : StackTape Symbol).tail = StackTape.nil := rfl
 
 @[simp] theorem cons_none_nil :
-    StackTape.cons none (StackTape.nil : StackTape Bool) = StackTape.nil := rfl
+    StackTape.cons none (StackTape.nil : StackTape Symbol) = StackTape.nil := rfl
 
-theorem cursor_start (bits : List Bool) : cursor [] bits = BiTape.mk₁ bits := by
+theorem cursor_start (bits : List Symbol) : cursor [] bits = BiTape.mk₁ bits := by
   cases bits <;> rfl
 
-@[simp] theorem cursor_moveRight (left : List Bool) (bit : Bool) (right : List Bool) :
+@[simp] theorem before_nil : before ([] : List Symbol) = BiTape.nil := rfl
+
+@[simp] theorem cursor_nil : cursor ([] : List Symbol) [] = BiTape.nil := rfl
+
+@[simp] theorem cursor_moveRight (left : List Symbol) (bit : Symbol) (right : List Symbol) :
     (cursor left (bit :: right)).moveRight = cursor (bit :: left) right := by
   simp [cursor, BiTape.moveRight]
 
-@[simp] theorem cursor_moveLeft (bit : Bool) (left right : List Bool) :
+@[simp] theorem cursor_moveLeft (bit : Symbol) (left right : List Symbol) :
     (cursor (bit :: left) right).moveLeft = cursor left (bit :: right) := by
   cases right <;> simp [cursor, BiTape.moveLeft]
 
-@[simp] theorem cursor_moveLeft_nil (right : List Bool) :
+@[simp] theorem cursor_moveLeft_nil (right : List Symbol) :
     (cursor [] right).moveLeft = before right := by
   cases right <;> simp [cursor, before, BiTape.moveLeft]
 
-@[simp] theorem before_moveRight (right : List Bool) :
+@[simp] theorem before_moveRight (right : List Symbol) :
     (before right).moveRight = cursor [] right := by
   simp [before, cursor, BiTape.moveRight]
 
-variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+variable [Inhabited Symbol] [Fintype Symbol]
+variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
 /-- The identity procedure; its input is supplied exclusively by the initial tape. -/
-def identity (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def identity (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   pure ()
 
 /-- Identity preserves the entire execution state and incurs zero cost. -/
@@ -94,12 +101,13 @@ def writeBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := d
   tape ←ₜ some bit
 
 /-- A write preserves the head position, control state, and space history. -/
-theorem writeBit_correct (s : TMState tm) (bit : Bool) :
+theorem writeBit_correct {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+    (s : TMState tm) (bit : Bool) :
     Runs (writeBit tm bit) s (s.config.BiTape.write (some bit)) s.headPos 0 :=
   ⟨0, s.write (some bit), completes_write s _, rfl, rfl, rfl⟩
 
 /-- The primitive write contract also covers erasing a cell. -/
-theorem write_correct (s : TMState tm) (symbol : Option Bool) :
+theorem write_correct (s : TMState tm) (symbol : Option Symbol) :
     Runs (FreeM.lift (.write symbol)) s (s.config.BiTape.write symbol) s.headPos 0 :=
   ⟨0, s.write symbol, completes_write s _, rfl, rfl, rfl⟩
 

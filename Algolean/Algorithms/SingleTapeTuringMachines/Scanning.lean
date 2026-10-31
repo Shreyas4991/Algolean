@@ -9,7 +9,7 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.Basic
 public import Algolean.Models.SingleTapeTM.Composition.While
 
-/-! # Scanning a contiguous Boolean block and returning to its left end -/
+/-! # Scanning a contiguous block and returning to its left end -/
 
 @[expose] public section
 
@@ -19,15 +19,17 @@ open Cslib Cslib.Turing TMQuery
 
 open scoped TMQuery
 
-variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
+
+variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 
 /-- Scan right until the first blank, without changing any tape contents. -/
-def seekRightBlank (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def seekRightBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
     moveₜ .Right
 
 /-- Scanning a suffix reaches its right blank in exactly its length many moves. -/
-theorem seekRightBlank_correct (left right : List Bool) (s : TMState tm)
+theorem seekRightBlank_correct (left right : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor left right) :
     Runs (seekRightBlank tm) s (cursor (right.reverse ++ left) [])
       (s.headPos + right.length) right.length := by
@@ -50,12 +52,13 @@ theorem seekRightBlank_correct (left right : List Bool) (s : TMState tm)
     simpa [seekRightBlank, Nat.add_comm] using hr
 
 /-- Scan left over occupied cells, stopping at the blank preceding the block. -/
-def seekLeftBlank (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def seekLeftBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
     moveₜ .Left
 
 /-- Scanning left from a bit crosses the reversed prefix and stops at its preceding blank. -/
-theorem seekLeftBlank_correct (left : List Bool) (bit : Bool) (right : List Bool) (s : TMState tm)
+theorem seekLeftBlank_correct (left : List Symbol) (bit : Symbol) (right : List Symbol)
+    (s : TMState tm)
     (hs : s.config.BiTape = cursor left (bit :: right)) :
     Runs (seekLeftBlank tm) s (before (left.reverse ++ bit :: right))
       (s.headPos - (left.length + 1 : ℕ)) (left.length + 1) := by
@@ -88,13 +91,13 @@ theorem seekLeftBlank_correct (left : List Bool) (bit : Bool) (right : List Bool
     simpa [seekLeftBlank, Nat.add_comm, Nat.add_left_comm] using hr
 
 /-- Return to the first bit of a block, including when starting at its right blank. -/
-def seekLeftEnd (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def seekLeftEnd (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left
   seekLeftBlank tm
   moveₜ .Right
 
 /-- Returning to the left end preserves all bits and takes `left.length + 2` moves. -/
-theorem seekLeftEnd_correct (left right : List Bool) (s : TMState tm)
+theorem seekLeftEnd_correct (left right : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor left right) :
     Runs (seekLeftEnd tm) s (cursor [] (left.reverse ++ right))
       (s.headPos - left.length) (left.length + 2) := by
@@ -131,5 +134,25 @@ theorem seekLeftEnd_correct (left right : List Bool) (s : TMState tm)
                 sub_eq_add_neg, add_assoc])
         simpa [Nat.add_assoc] using hret)
     simpa [seekLeftEnd, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hr
+
+/-- A verified scanning component; its prefix and suffix are logical contract parameters. -/
+@[simps program]
+def seekRightBlankComponent :
+    Component tm (fun p : List Symbol × List Symbol => fun s => s.config.BiTape = cursor p.1 p.2)
+      (fun p s cost final =>
+        final.config = {s.config with BiTape := cursor (p.2.reverse ++ p.1) []} ∧
+        final.headPos = s.headPos + p.2.length ∧ cost.steps = p.2.length) where
+  program := seekRightBlank tm
+  correct p s hs := seekRightBlank_correct p.1 p.2 s hs
+
+/-- A verified return-to-start component, usable after another procedure without resetting space. -/
+@[simps program]
+def seekLeftEndComponent :
+    Component tm (fun p : List Symbol × List Symbol => fun s => s.config.BiTape = cursor p.1 p.2)
+      (fun p s cost final =>
+        final.config = {s.config with BiTape := cursor [] (p.1.reverse ++ p.2)} ∧
+        final.headPos = s.headPos - p.1.length ∧ cost.steps = p.1.length + 2) where
+  program := seekLeftEnd tm
+  correct p s hs := seekLeftEnd_correct p.1 p.2 s hs
 
 end Algolean.Algorithms.SingleTapeTuringMachines

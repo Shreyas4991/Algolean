@@ -15,6 +15,8 @@ public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples
 public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
+public import AlgoleanTests.SingleTapeTMAugmentation
+public import AlgoleanTests.SingleTapeTMComposition
 public import AlgoleanTests.SingleTapeTMExamples
 public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.WordRAMExamples
