@@ -21,14 +21,14 @@ measurement.
 ## Main results
 
 - `hadamards_one_entry`: the sign and normalization of the Hadamard matrix.
-- `hadamards_measure_gate_spec`: `mvcgen` continues through measurement to a subsequent gate.
+- `hadamards_measure_gate_spec`: `vcgen` continues through measurement to a subsequent gate.
 -/
 
 @[expose] public section
 
 namespace AlgoleanTests.HadamardExamples
 
-open Algolean.Algorithms Cslib Std.Do
+open Algolean.Algorithms Cslib Std.WP
 open scoped MState
 
 noncomputable section
@@ -45,15 +45,15 @@ def hadamardsMeasureGate : Prog (QuantumQuery 1) (Fin 1 → Fin 2) := do
   applyGate (.hadamard 0)
   pure x
 
-set_option linter.deprecated.syntax false in
-/-- A Hadamard layer, register measurement, and subsequent gate can be verified with `mvcgen`. -/
+set_option experimental.vcgen true in
+/-- A Hadamard layer, register measurement, and subsequent gate can be verified with `vcgen`. -/
 theorem hadamards_measure_gate_spec (f : (Fin 1 → Fin 2) → Bool) :
-    letI := quantumWP 1 f
-    ⦃fun ρ => ⌜ρ = MState.pure (Ket.basis 0)⌝⦄
+    letI := (quantumModel 1 f).hasHandler
+    ⦃ fun ρ => ρ = MState.pure (Ket.basis 0) ⦄
       hadamardsMeasureGate
-    ⦃⇓ x ρ => ⌜ρ = evolveState (embedQubitGate 0 Qubit.H)
-      (MState.pure (Ket.basis x))⌝⦄ := by
-  mvcgen [hadamardsMeasureGate]
+    ⦃ fun x ρ => ρ = evolveState (embedQubitGate 0 Qubit.H) (MState.pure (Ket.basis x)) ⦄ := by
+  let _ := (quantumModel 1 f).hasHandler
+  vcgen [hadamardsMeasureGate]
   simp_all [unitaryOf]
 
 end

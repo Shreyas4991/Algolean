@@ -24,14 +24,14 @@ Apply one Hadamard gate to each qubit of the hidden register.
 - `measurementFree_applyHadamards`: the layer contains no measurements.
 - `applyHadamards_evalM_unitaryModel`: its deterministic action is `hadamardsUnitary n`.
 - `applyHadamards_cost`: the layer has zero oracle cost.
-- `applyHadamards_spec`: the `mvcgen` rule for the layer.
+- `applyHadamards_spec`: the `vcgen` rule for the layer.
 -/
 
 @[expose] public section
 
 namespace Algolean.Algorithms
 
-open Cslib Std.Do
+open Cslib Std.WP
 open scoped MState
 
 noncomputable section
@@ -116,13 +116,11 @@ theorem applyHadamards_cost (n : ℕ) (f : (Fin n → Fin 2) → Bool) (ρ : QSt
       PMF.pure (0, hadamardsUnitary n ◃ ρ) :=
   applyHadamardsUpTo_cost (Nat.le_refl n) f ρ
 
-/-- `mvcgen` rule for the Hadamard layer: conjugation by `hadamardsUnitary n`. -/
+/-- The Hadamard layer conjugates the register by `hadamardsUnitary n`. -/
 @[spec]
-theorem applyHadamards_spec (n : ℕ) (f : (Fin n → Fin 2) → Bool)
-    (post : PostCond Unit (.arg (QState n) .pure)) :
-    letI := quantumWP n f
-    Triple (applyHadamards n)
-      (fun ρ => post.1 () (evolveState (hadamardsUnitary n) ρ)) post := by
+theorem applyHadamards_spec (n : ℕ) (f : (Fin n → Fin 2) → Bool) (post : Unit → QState n → Prop) :
+    letI := (quantumModel n f).hasHandler
+    ⦃ fun ρ => post () (evolveState (hadamardsUnitary n) ρ) ⦄ applyHadamards n ⦃ post ⦄ := by
   simpa only [evolveState_eq, applyHadamards_evalM_unitaryModel] using
     (measurementFree_applyHadamards n).spec f post
 
