@@ -186,6 +186,18 @@ def costM [Monad m] [AddZero Cost]
     costM (f <$> P) M = costM P M := by
   simp [costM]
 
+/-- If `f a` has cost distribution `c` under `M` for every `a`, then the cost distribution of
+`P >>= f` under `M` is that of `P` plus an independent draw from `c`. -/
+theorem costM_bind_of_forall_costM_eq [Monad m] [LawfulMonad m] [AddMonoid Cost]
+    (P : Prog Q α) (f : α → Prog Q β) (M : ModelM Q m Cost) {c : m Cost}
+    (hf : ∀ a, costM (f a) M = c) :
+    costM (P >>= f) M = costM P M >>= fun a => (a + ·) <$> c := by
+  simp only [costM, runM_bind, AddWriterT.cost, AddWriterT.run_bind, map_bind, map_pure,
+    bind_map_left]
+  apply bind_congr
+  intro a
+  simp [← hf a.ret, costM, AddWriterT.cost, map_eq_bind_pure_comp]
+
 section State
 
 /-- Evaluate a pure program at a concrete initial state. -/

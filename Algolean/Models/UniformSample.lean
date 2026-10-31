@@ -40,6 +40,15 @@ noncomputable def pmfModel [Zero Cost] : ModelM UniformSample PMF Cost :=
         Nat.cast_add, Nat.cast_one]
       exact ENNReal.mul_inv_cancel (by simp) (by simp))) 0
 
+/-- `pmfModel` charges nothing for a draw. -/
+@[simp] theorem pmfModel_cost [Zero Cost] (q : UniformSample α) :
+    (pmfModel (Cost := Cost)).cost q = 0 := rfl
+
+/-- In `pmfModel`, the query `.fin n` returns each `i : Fin (n + 1)` with probability
+`1 / (n + 1)`. -/
+@[simp] theorem pmfModel_evalQuery_fin_apply [Zero Cost] (n : ℕ) (i : Fin (n + 1)) :
+    (pmfModel (Cost := Cost)).evalQuery (.fin n) i = (n + 1 : ENNReal)⁻¹ := rfl
+
 end UniformSample
 
 end Algolean.Algorithms
