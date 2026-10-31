@@ -85,6 +85,20 @@ theorem cursor_start (bits : List Symbol) : cursor [] bits = BiTape.mk₁ bits :
     (before right).moveRight = cursor [] right := by
   simp [before, cursor, BiTape.moveRight]
 
+@[simp] theorem cursor_write (left : List Symbol) (old bit : Symbol) (right : List Symbol) :
+    (cursor left (old :: right)).write (some bit) = cursor left (bit :: right) := rfl
+
+@[simp] theorem cursor_write_blank (left : List Symbol) (bit : Symbol) :
+    (cursor left []).write (some bit) = cursor left [bit] := rfl
+
+/-- Writing a symbol at either a blank or occupied head preserves the suffix after that cell. -/
+theorem cursor_write_any (left right : List Symbol) (bit : Symbol) :
+    (cursor left right).write (some bit) = cursor left (bit :: right.tail) := by
+  cases right <;> rfl
+
+@[simp] theorem cursor_erase_last (left : List Symbol) (bit : Symbol) :
+    (cursor left [bit]).write none = cursor left [] := rfl
+
 variable [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 

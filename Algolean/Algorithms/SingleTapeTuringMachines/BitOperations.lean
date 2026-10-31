@@ -21,20 +21,6 @@ open scoped TMQuery
 
 variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 
-@[simp] theorem cursor_write (left : List Bool) (old bit : Bool) (right : List Bool) :
-    (cursor left (old :: right)).write (some bit) = cursor left (bit :: right) := rfl
-
-@[simp] theorem cursor_write_blank (left : List Bool) (bit : Bool) :
-    (cursor left []).write (some bit) = cursor left [bit] := rfl
-
-/-- Writing a bit at either a blank or occupied head preserves the suffix after that cell. -/
-theorem cursor_write_any (left right : List Bool) (bit : Bool) :
-    (cursor left right).write (some bit) = cursor left (bit :: right.tail) := by
-  cases right <;> rfl
-
-@[simp] theorem cursor_erase_last (left : List Bool) (bit : Bool) :
-    (cursor left [bit]).write none = cursor left [] := rfl
-
 /-- Negate a bit under the head; leave a blank cell blank. -/
 def flipBit (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   ifₜ tape =ₜ some true then

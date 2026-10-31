@@ -47,43 +47,22 @@ theorem seekSeparator_correct (left right : List (Augmented Symbol)) (s : TMStat
   | nil =>
     unfold seekSeparator
     apply runs_while_step (by simp [hs])
-    have hw : Runs (branch (.tapeIs none) (FreeM.lift (.write (some .separator)))
-        (FreeM.lift (.move .Right))) s (cursor left [.separator]) s.headPos 0 := by
-      apply Runs.branch
-      simpa [hs, cursor, BiTape.write] using write_correct s (some .separator)
-    simpa [seekSeparator, Augmented.firstWord, Augmented.afterSeparator] using hw.seq
-      (q := seekSeparator tm) (second := cursor left [.separator]) (pos₂ := s.headPos)
-      (time₂ := 0) (by
-        intro t ht hp
-        simpa [seekSeparator, ht, hp] using runs_while_false
-          (.not (.tapeIs (some .separator)))
-          (branch (.tapeIs none) (FreeM.lift (.write (some .separator)))
-            (FreeM.lift (.move .Right))) t (by simp [ht]))
+    apply Runs.branch_seq
+    have h : Runs (seekSeparator tm) (s.write (some .separator))
+        (cursor left [.separator]) s.headPos 0 := by
+      simp [seekSeparator, TMState.write, hs]
+    simpa [seekSeparator, hs, Augmented.firstWord, Augmented.afterSeparator] using h.prepend_write
   | cons a right ih =>
     cases a with
-    | separator =>
-      simpa [seekSeparator, hs, Augmented.firstWord, Augmented.afterSeparator] using
-        runs_while_false (.not (.tapeIs (some .separator)))
-          (branch (.tapeIs none) (FreeM.lift (.write (some .separator)))
-            (FreeM.lift (.move .Right))) s (by simp [hs])
+    | separator => simp [seekSeparator, hs, Augmented.firstWord, Augmented.afterSeparator]
     | symbol a =>
       unfold seekSeparator
       apply runs_while_step (by simp [hs])
-      have hm : Runs (branch (.tapeIs none) (FreeM.lift (.write (some .separator)))
-          (FreeM.lift (.move .Right))) s (cursor (.symbol a :: left) right)
-          (s.headPos + 1) 1 := by
-        apply Runs.branch
-        simpa [hs, TMState.move] using move_correct s .Right
-      have hr := hm.seq (q := seekSeparator tm)
-        (second := cursor ((Augmented.firstWord (.symbol a :: right)).reverse.map .symbol ++ left)
-          (.separator :: Augmented.afterSeparator (.symbol a :: right)))
-        (pos₂ := s.headPos + (Augmented.firstWord (.symbol a :: right)).length)
-        (time₂ := (Augmented.firstWord right).length) (by
-          intro t ht hp
-          simpa [Augmented.firstWord, Augmented.afterSeparator, ht, hp, List.reverse_cons,
-            List.map_append, List.append_assoc, add_assoc, add_comm, add_left_comm] using
-            ih (.symbol a :: left) t (by simp [ht]))
-      simpa [seekSeparator, Augmented.firstWord, Nat.add_comm] using hr
+      apply Runs.branch_seq
+      have h := ih (.symbol a :: left) (s.move .Right) (by simp [TMState.move, hs])
+      simpa [seekSeparator, hs, Augmented.firstWord, Augmented.afterSeparator, TMState.move,
+        List.reverse_cons, List.append_assoc, add_assoc, add_comm, add_left_comm] using
+        h.prepend_move
 
 variable [Inhabited Symbol]
 
@@ -99,30 +78,17 @@ theorem fillRight_correct (left right : List (Augmented Symbol)) (s : TMState tm
       (cursor (List.replicate right.length (.symbol (default : Symbol)) ++ left) [])
       (s.headPos + right.length) right.length := by
   induction right generalizing left s with
-  | nil =>
-    simpa [fillRight, hs] using
-      runs_while_false (tm := tm) (.not (.tapeIs none))
-        (do FreeM.lift (.write (some (.symbol (default : Symbol)))); FreeM.lift (.move .Right))
-        s (by simp [hs])
+  | nil => simp [fillRight, hs]
   | cons a right ih =>
     unfold fillRight
     apply runs_while_step (by simp [hs])
-    have hw : Runs (FreeM.lift (.write (some (.symbol (default : Symbol))))) s
-        (cursor left (.symbol default :: right)) s.headPos 0 := by
-      simpa [hs, cursor, BiTape.write] using write_correct s (some (.symbol (default : Symbol)))
-    have hm := hw.seq (q := FreeM.lift (.move .Right))
-      (second := cursor (.symbol default :: left) right) (pos₂ := s.headPos + 1)
-      (time₂ := 1) (by
-        intro t ht hp
-        simpa [TMState.move, ht, hp] using move_correct t .Right)
-    have hr := hm.seq (q := fillRight tm)
-      (second := cursor (List.replicate (a :: right).length (.symbol default) ++ left) [])
-      (pos₂ := s.headPos + (a :: right).length) (time₂ := right.length) (by
-        intro t ht hp
-        convert ih (.symbol default :: left) t (by simp [ht]) using 1 <;>
-          simp [hp, List.replicate_succ', List.append_assoc, add_assoc]
-        ring)
-    simpa [fillRight, Nat.add_comm] using hr
+    have h := ih (.symbol default :: left)
+      ((s.write (some (.symbol default))).move .Right) (by simp [TMState.move, TMState.write, hs])
+    have h := h.prepend_move.prepend_write
+    simp only [fillRight, TMState.move_headPos, TMState.write_headPos, Dir.offset,
+      List.length_cons, List.replicate_succ', List.append_assoc, List.singleton_append,
+      bind_assoc] at h ⊢
+    grind
 
 /-- Erase leftwards until the separator is under the head, leaving that separator in place. -/
 def eraseToSeparator (tm : SingleTapeTM (Augmented Symbol)) : Prog (TMQuery tm) Unit :=
@@ -140,38 +106,19 @@ theorem eraseToSeparator_correct (n : ℕ) (left : List (Augmented Symbol)) (s :
   | zero =>
     unfold eraseToSeparator
     apply runs_while_step (by simp [hs])
-    have hw : Runs (FreeM.lift (.write none)) s (cursor (.separator :: left) [])
-        s.headPos 0 := by simpa [hs, cursor, BiTape.write] using write_correct s none
-    have hm := hw.seq (q := FreeM.lift (.move .Left)) (second := cursor left [.separator])
-      (pos₂ := s.headPos - 1) (time₂ := 1) (by
-        intro t ht hp
-        simpa [TMState.move, ht, hp, sub_eq_add_neg] using move_correct t .Left)
-    simpa [eraseToSeparator] using hm.seq
-      (q := eraseToSeparator tm) (second := cursor left [.separator])
-      (pos₂ := s.headPos - 1) (time₂ := 0) (by
-        intro t ht hp
-        simpa [eraseToSeparator, ht, hp] using runs_while_false
-          (.not (.tapeIs (some .separator)))
-          (do FreeM.lift (.write none); FreeM.lift (.move .Left)) t (by simp [ht]))
+    have h : Runs (eraseToSeparator tm) ((s.write none).move .Left)
+        (cursor left [.separator]) (s.headPos - 1) 0 := by
+      simp [eraseToSeparator, TMState.move, TMState.write, hs, sub_eq_add_neg]
+    simpa [eraseToSeparator] using h.prepend_move.prepend_write
   | succ n ih =>
     unfold eraseToSeparator
     apply runs_while_step (by simp [hs])
-    have hw : Runs (FreeM.lift (.write none)) s
-        (cursor (List.replicate (n + 1) (.symbol default) ++ .separator :: left) [])
-        s.headPos 0 := by simpa [hs, cursor, BiTape.write] using write_correct s none
-    have hm := hw.seq (q := FreeM.lift (.move .Left))
-      (second := cursor (List.replicate n (.symbol default) ++ .separator :: left)
-        [.symbol default]) (pos₂ := s.headPos - 1) (time₂ := 1) (by
-        intro t ht hp
-        simpa [TMState.move, ht, hp, sub_eq_add_neg, List.replicate_succ] using
-          move_correct t .Left)
-    have hr := hm.seq (q := eraseToSeparator tm) (second := cursor left [.separator])
-      (pos₂ := s.headPos - (n + 1 + 1 : ℕ)) (time₂ := n + 1) (by
-        intro t ht hp
-        convert ih t (by simp [ht]) using 1
-        simp [hp, sub_eq_add_neg, add_assoc]
-        ring)
-    simpa [eraseToSeparator, Nat.add_comm] using hr
+    have h := ih ((s.write none).move .Left)
+      (by simp [TMState.move, TMState.write, hs, List.replicate_succ])
+    have h := h.prepend_move.prepend_write
+    simp only [eraseToSeparator, TMState.move_headPos, TMState.write_headPos, Dir.offset,
+      Nat.cast_add, Nat.cast_one, bind_assoc] at h ⊢
+    grind
 
 /-- Finish erasing an overwritten suffix, including the separator that precedes it. -/
 def finishDiscard (tm : SingleTapeTM (Augmented Symbol)) : Prog (TMQuery tm) Unit :=
@@ -186,39 +133,16 @@ theorem finishDiscard_correct (n : ℕ) (left : List (Augmented Symbol)) (s : TM
     Runs (finishDiscard tm) s (cursor left []) (s.headPos - (n + 1 : ℕ)) (n + 1) := by
   cases n with
   | zero =>
-    have hm : Runs (FreeM.lift (.move .Left)) s (cursor left [.separator])
-        (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := do eraseToSeparator tm; FreeM.lift (.write none))
-      (second := cursor left []) (pos₂ := s.headPos - 1) (time₂ := 0) (by
-        intro t ht hp
-        have he : Runs (eraseToSeparator tm) t (cursor left [.separator]) t.headPos 0 := by
-          simpa [eraseToSeparator, ht] using runs_while_false
-            (.not (.tapeIs (some .separator)))
-            (do FreeM.lift (.write none); FreeM.lift (.move .Left)) t (by simp [ht])
-        simpa [hp] using he.seq (q := FreeM.lift (.write none))
-          (second := cursor left []) (pos₂ := t.headPos) (time₂ := 0) (by
-            intro u hu hup
-            simpa [hu, hup, cursor, BiTape.write] using write_correct u none))
-    simpa [finishDiscard] using hr
+    have h : Runs (eraseToSeparator tm) (s.move .Left)
+        (cursor left [.separator]) (s.headPos - 1) 0 := by
+      simp [eraseToSeparator, TMState.move, hs, sub_eq_add_neg]
+    simpa [finishDiscard] using (h.append_write none).prepend_move
   | succ n =>
-    have hm : Runs (FreeM.lift (.move .Left)) s
-        (cursor (List.replicate n (.symbol default) ++ .separator :: left) [.symbol default])
-        (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg, List.replicate_succ] using move_correct s .Left
-    have hr := hm.seq (q := do eraseToSeparator tm; FreeM.lift (.write none))
-      (second := cursor left []) (pos₂ := s.headPos - (n + 1 + 1 : ℕ))
-      (time₂ := n + 1) (by
-        intro t ht hp
-        have he := eraseToSeparator_correct n left t (by simp [ht])
-        have hw := he.seq (q := FreeM.lift (.write none)) (second := cursor left [])
-          (pos₂ := s.headPos - (n + 1 + 1 : ℕ)) (time₂ := 0) (by
-            intro u hu hup
-            convert write_correct u none using 1 <;>
-              simp [hu, hup, hp, cursor, BiTape.write, sub_eq_add_neg, add_assoc]
-            ring)
-        simpa using hw)
-    simpa [finishDiscard, Nat.add_comm] using hr
+    have h := eraseToSeparator_correct n left (s.move .Left)
+      (by simp [TMState.move, hs, List.replicate_succ])
+    have h := (h.append_write none).prepend_move
+    simp only [finishDiscard, cursor_erase_last, TMState.move_headPos, Dir.offset] at h ⊢
+    grind
 
 /-- Remove the separator and everything to its right, preserving the word to its left. -/
 def discardRight (tm : SingleTapeTM (Augmented Symbol)) : Prog (TMQuery tm) Unit :=
@@ -230,22 +154,16 @@ def discardRight (tm : SingleTapeTM (Augmented Symbol)) : Prog (TMQuery tm) Unit
 theorem discardRight_correct (left right : List (Augmented Symbol)) (s : TMState tm)
     (hs : s.config.BiTape = cursor left (.separator :: right)) :
     Runs (discardRight tm) s (cursor left []) s.headPos (2 * right.length + 2) := by
-  have hm : Runs (FreeM.lift (.move .Right)) s (cursor (.separator :: left) right)
-      (s.headPos + 1) 1 := by
-    simpa [TMState.move, hs] using move_correct s .Right
-  have hr := hm.seq (q := do fillRight tm; finishDiscard tm) (second := cursor left [])
-    (pos₂ := s.headPos) (time₂ := right.length + (right.length + 1)) (by
+  have h := (fillRight_correct (.separator :: left) right (s.move .Right)
+    (by simp [TMState.move, hs])).prepend_move
+  have hr := h.seq (q := finishDiscard tm) (second := cursor left [])
+    (pos₂ := s.headPos) (time₂ := right.length + 1) (by
       intro t ht hp
-      have hf := fillRight_correct (.separator :: left) right t (by simp [ht])
-      have he := hf.seq (q := finishDiscard tm) (second := cursor left [])
-        (pos₂ := s.headPos) (time₂ := right.length + 1) (by
-          intro u hu hup
-          convert finishDiscard_correct right.length left u (by simp [hu]) using 1
-          lia)
-      exact he)
-  convert hr using 1
-  · simp [discardRight]
-  · lia
+      convert finishDiscard_correct right.length left t (by simp [ht]) using 1
+      simp only [TMState.move_headPos, Dir.offset] at hp
+      grind)
+  simp only [discardRight, bind_assoc] at hr ⊢
+  grind
 
 /-- Keep the first word of a pair and return to its first cell. A missing separator keeps the
 entire word. The program also terminates on words containing several separators. -/
@@ -260,26 +178,22 @@ theorem firstWord_computes :
     Computes (firstWord tm) (fun input => (Augmented.firstWord input).map .symbol)
       (fun input => 2 * input.length + 4) := by
   intro input s hs
-  let leftWord := (Augmented.firstWord input).reverse.map Augmented.symbol
-  let tail := Augmented.afterSeparator input
-  have hseek := seekSeparator_correct [] input s (by simpa [cursor_start] using hs)
-  have hr := hseek.seq (q := do discardRight tm; seekLeftEnd tm)
-    (second := BiTape.mk₁ ((Augmented.firstWord input).map .symbol)) (pos₂ := s.headPos)
-    (time₂ := (2 * tail.length + 2) + ((Augmented.firstWord input).length + 2)) (by
-      intro t ht hp
-      have hd := discardRight_correct leftWord tail t (by
-        simpa [leftWord, tail] using congrArg SingleTapeTM.Cfg.BiTape ht)
-      have hl := hd.seq (q := seekLeftEnd tm)
-        (second := BiTape.mk₁ ((Augmented.firstWord input).map .symbol))
-        (pos₂ := s.headPos) (time₂ := (Augmented.firstWord input).length + 2) (by
-          intro u hu hup
-          convert seekLeftEnd_correct leftWord [] u (by simp [hu]) using 1 <;>
-            simp [leftWord, List.map_reverse, cursor_start, hup, hp, sub_eq_add_neg, add_assoc])
-      exact hl)
-  refine ⟨_, by simpa [firstWord] using hr, ?_⟩
-  have := Augmented.lengths_le input
-  dsimp [tail]
-  lia
+  have h := seekSeparator_correct [] input s (by simpa [cursor_start] using hs)
+  refine ⟨(Augmented.firstWord input).length +
+    (2 * (Augmented.afterSeparator input).length + 2 + ((Augmented.firstWord input).length + 2)),
+    ?_, ?_⟩
+  · unfold firstWord
+    refine h.seq ?_
+    intro t ht hp
+    refine (discardRight_correct ((Augmented.firstWord input).reverse.map .symbol)
+      (Augmented.afterSeparator input) t
+      (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht)).seq ?_
+    intro u hu hup
+    simpa [List.map_reverse, cursor_start, hp, hup, sub_eq_add_neg, add_assoc] using
+      seekLeftEnd_correct ((Augmented.firstWord input).reverse.map Augmented.symbol) [] u
+        (by simp [hu])
+  · have := Augmented.lengths_le input
+    grind
 
 /-- A reusable machine interface for extracting the first encoded word. -/
 @[simps! program]

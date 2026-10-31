@@ -50,9 +50,7 @@ theorem eraseLeft_correct (left : List Bool) (bit : Bool) (s : TMState tm)
     have hr := hb.seq (q := eraseLeft tm) (second := BiTape.nil)
       (pos₂ := s.headPos - 1) (time₂ := 0) (by
         intro t ht hp
-        simpa [eraseLeft, ht, hp, BiTape.nil] using runs_while_false (tm := tm)
-          (.not (.tapeIs none)) (do FreeM.lift (.write none); FreeM.lift (.move .Left)) t
-          (by simp [ht, BiTape.nil]))
+        simp [eraseLeft, ht, hp, BiTape.nil])
     simpa [eraseLeft] using hr
   | cons prev left ih =>
     unfold eraseLeft
@@ -92,9 +90,7 @@ theorem eraseToLeft_correct (left : List Bool) (s : TMState tm)
       (second := BiTape.nil) (pos₂ := s.headPos) (time₂ := 1) (by
         intro t ht hp
         have he : Runs (eraseLeft tm) t BiTape.nil (s.headPos - 1) 0 := by
-          simpa [eraseLeft, ht, hp, BiTape.nil] using runs_while_false (tm := tm)
-            (.not (.tapeIs none)) (do FreeM.lift (.write none); FreeM.lift (.move .Left)) t
-            (by simp [ht, BiTape.nil])
+          simp [eraseLeft, ht, hp, BiTape.nil]
         simpa using he.seq (q := FreeM.lift (.move .Right)) (second := BiTape.nil)
           (pos₂ := s.headPos) (time₂ := 1) (by
             intro u hu hup

@@ -34,8 +34,7 @@ theorem seekRightBlank_correct (left right : List Symbol) (s : TMState tm)
     Runs (seekRightBlank tm) s (cursor (right.reverse ++ left) [])
       (s.headPos + right.length) right.length := by
   induction right generalizing left s with
-  | nil => simpa [seekRightBlank, hs] using
-      runs_while_false (.not (.tapeIs none)) (FreeM.lift (.move .Right)) s (by simp [hs])
+  | nil => simp [seekRightBlank, hs]
   | cons bit right ih =>
     unfold seekRightBlank
     apply runs_while_step (by simp [hs])
@@ -71,8 +70,7 @@ theorem seekLeftBlank_correct (left : List Symbol) (bit : Symbol) (right : List 
     have hr := hm.seq (q := seekLeftBlank tm) (time₂ := 0)
       (second := before (bit :: right)) (pos₂ := s.headPos - 1) (by
         intro t ht hp
-        simpa [ht, hp, seekLeftBlank] using runs_while_false (.not (.tapeIs none))
-          (FreeM.lift (.move .Left)) t (by simp [ht]))
+        simp [ht, hp, seekLeftBlank])
     simpa [seekLeftBlank] using hr
   | cons prev left ih =>
     unfold seekLeftBlank
@@ -109,8 +107,7 @@ theorem seekLeftEnd_correct (left right : List Symbol) (s : TMState tm)
       (second := cursor [] right) (pos₂ := s.headPos) (by
         intro t ht hp
         have hl : Runs (seekLeftBlank tm) t (before right) (s.headPos - 1) 0 := by
-          simpa [seekLeftBlank, ht, hp] using runs_while_false (.not (.tapeIs none))
-            (FreeM.lift (.move .Left)) t (by simp [ht])
+          simp [seekLeftBlank, ht, hp]
         simpa using hl.seq (q := FreeM.lift (.move .Right)) (time₂ := 1)
           (second := cursor [] right) (pos₂ := s.headPos) (by
             intro u hu hup

@@ -42,6 +42,55 @@ theorem Runs.seq {p q : Prog (TMQuery tm) Unit} {s : TMState tm}
   exact ⟨a + b, u, hp.seq hq, by simpa [ht] using hu, hup, by simp [ha, hb]⟩
 
 
+section PrimitiveComposition
+
+/-- Prepend a completed procedure that preserves the control state. -/
+theorem Runs.prepend {p q : Prog (TMQuery tm) Unit} {s t : TMState tm} {a : TMCost}
+    {output : BiTape Symbol} {pos : ℤ} {time : ℕ} (h : Runs q t output pos time)
+    (hp : Completes p s a t) (hc : t.config.state = s.config.state) :
+    Runs (do p; q) s output pos (a.steps + time) := by
+  obtain ⟨b, u, hq, ht, hpos, hb⟩ := h
+  exact ⟨a + b, u, hp.seq hq, by simpa [hc] using ht, hpos, by simp [hb]⟩
+
+/-- Prepend a write without introducing an intermediate-state proof. -/
+theorem Runs.prepend_write {p : Prog (TMQuery tm) Unit} {s : TMState tm}
+    {a : Option Symbol} {output : BiTape Symbol} {pos : ℤ} {time : ℕ}
+    (h : Runs p (s.write a) output pos time) :
+    Runs (do FreeM.lift (.write a); p) s output pos time := by
+  simpa using h.prepend (completes_write s a) rfl
+
+/-- Prepend a head move, charging one move and retaining the actual storage history. -/
+theorem Runs.prepend_move {p : Prog (TMQuery tm) Unit} {s : TMState tm}
+    {direction : Dir} {output : BiTape Symbol} {pos : ℤ} {time : ℕ}
+    (h : Runs p (s.move direction) output pos time) :
+    Runs (do FreeM.lift (.move direction); p) s output pos (1 + time) := by
+  simpa [TMState.moveCost] using h.prepend (completes_move s direction) rfl
+
+/-- Append a write to an existing tape and time contract. -/
+theorem Runs.append_write {p : Prog (TMQuery tm) Unit} {s : TMState tm}
+    {output : BiTape Symbol} {pos : ℤ} {time : ℕ} (h : Runs p s output pos time)
+    (a : Option Symbol) : Runs (do p; FreeM.lift (.write a)) s (output.write a) pos time := by
+  obtain ⟨c, t, hp, ht, hpos, hc⟩ := h
+  refine ⟨c, t.write a, ?_, ?_, hpos, hc⟩
+  · simpa using hp.seq (completes_write t a)
+  · simp [TMState.write, ht, BiTape.write]
+
+/-- Append a head move to an existing tape and time contract. -/
+theorem Runs.append_move {p : Prog (TMQuery tm) Unit} {s : TMState tm}
+    {output : BiTape Symbol} {pos : ℤ} {time : ℕ} (h : Runs p s output pos time)
+    (direction : Dir) :
+    Runs (do p; FreeM.lift (.move direction)) s
+      (match direction with
+        | .Left => output.moveLeft
+        | .Right => output.moveRight
+        | .Stop => output) (pos + direction.offset) (time + 1) := by
+  obtain ⟨c, t, hp, ht, hpos, hc⟩ := h
+  refine ⟨c + t.moveCost direction, t.move direction, hp.seq (completes_move t direction),
+    ?_, by simp [hpos], by simp [TMState.moveCost, hc]⟩
+  cases direction <;> simp [TMState.move, ht]
+
+end PrimitiveComposition
+
 end TMQuery
 
 end Algolean.Algorithms

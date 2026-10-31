@@ -91,13 +91,11 @@ theorem carryRight_correct (left bits : List Bool) (s : TMState tm)
       (s.headPos + carryCount bits) (carryCount bits) := by
   induction bits generalizing left s with
   | nil =>
-    simpa [carryRight, hs] using runs_while_false (tm := tm) (.tapeIs (some true))
-      (do FreeM.lift (.write (some false)); FreeM.lift (.move .Right)) s (by simp [hs])
+    simp [carryRight, hs]
   | cons bit bits ih =>
     cases bit with
     | false =>
-      simpa [carryRight, hs] using runs_while_false (tm := tm) (.tapeIs (some true))
-        (do FreeM.lift (.write (some false)); FreeM.lift (.move .Right)) s (by simp [hs])
+      simp [carryRight, hs]
     | true =>
       unfold carryRight
       apply runs_while_step (by simp [hs])

@@ -42,6 +42,19 @@ theorem runs_while_false (condition : TMCondition tm) (body : Prog (TMQuery tm) 
     Runs (whileLoop condition body) s s.config.BiTape s.headPos 0 :=
   ⟨0, s, completes_while_false _ _ _ h, by cases s.config; rfl, rfl, rfl⟩
 
+/-- A loop whose first test is false has exactly the unchanged tape, head, and zero move cost. -/
+@[simp] theorem runs_while_false_iff (condition : TMCondition tm) (body : Prog (TMQuery tm) Unit)
+    (s : TMState tm) (output : BiTape Symbol) (pos : ℤ) (time : ℕ)
+    (h : condition.eval s.config = false) :
+    Runs (whileLoop condition body) s output pos time ↔
+      output = s.config.BiTape ∧ pos = s.headPos ∧ time = 0 := by
+  constructor
+  · rintro ⟨cost, t, hc, ht, hp, hm⟩
+    have := hc.unique (completes_while_false condition body s h)
+    grind
+  · rintro ⟨rfl, rfl, rfl⟩
+    exact runs_while_false condition body s h
+
 /-- Lift a composed iteration contract to the loop it implements. -/
 theorem runs_while_step {condition : TMCondition tm} {body : Prog (TMQuery tm) Unit}
     {s : TMState tm} {outputTape : BiTape Symbol} {pos : ℤ} {time : ℕ}

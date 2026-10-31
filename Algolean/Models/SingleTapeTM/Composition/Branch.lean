@@ -39,6 +39,16 @@ theorem Runs.branch {condition : TMCondition tm} {yes no : Prog (TMQuery tm) Uni
   exact ⟨cost, final, hc.branch, ht, hp, hm⟩
 
 
+/-- Select a branch and then execute its continuation, keeping the shared state and cost. -/
+theorem Runs.branch_seq {condition : TMCondition tm} {yes no p : Prog (TMQuery tm) Unit}
+    {s : TMState tm} {output : BiTape Symbol} {pos : ℤ} {time : ℕ}
+    (h : Runs (do (if condition.eval s.config then yes else no); p) s output pos time) :
+    Runs (do TMQuery.branch condition yes no; p) s output pos time := by
+  obtain ⟨cost, u, ⟨fuel, hr⟩, hc, hp, ht⟩ := h
+  refine ⟨cost, u, ⟨fuel + 1, ?_⟩, hc, hp, ht⟩
+  cases hguard : condition.eval s.config <;>
+    simpa [execute_bind, execute_branch_succ, hguard] using hr
+
 end TMQuery
 
 end Algolean.Algorithms

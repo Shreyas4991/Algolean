@@ -59,8 +59,7 @@ theorem complementRight_correct (left right : List Bool) (s : TMState tm)
       (s.headPos + right.length) right.length := by
   induction right generalizing left s with
   | nil =>
-    simpa [complementRight, hs] using runs_while_false (tm := tm) (.not (.tapeIs none))
-      (do flipBit tm; FreeM.lift (.move .Right)) s (by simp [hs])
+    simp [complementRight, hs]
   | cons bit right ih =>
     unfold complementRight
     apply runs_while_step (by simp [hs])

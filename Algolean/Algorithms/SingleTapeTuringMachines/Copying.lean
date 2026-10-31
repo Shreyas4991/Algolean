@@ -123,8 +123,7 @@ theorem seekRightBlank_segment (left : StackTape Bool) (bits : List Bool) (tail 
       (s.headPos + bits.length) bits.length := by
   induction bits generalizing left s with
   | nil =>
-    simpa [seekRightBlank, hs] using runs_while_false (.not (.tapeIs none))
-      (FreeM.lift (.move .Right)) s (by simp [hs])
+    simp [seekRightBlank, hs]
   | cons bit bits ih =>
     unfold seekRightBlank
     apply runs_while_step (by simp [hs])
@@ -162,8 +161,7 @@ theorem seekLeftGap_segment (base : StackTape Bool) (left bits : List Bool)
       (second := segment base [] (stackAppend bits (StackTape.cons none tail)))
       (pos₂ := s.headPos - 1) (by
         intro t ht hp
-        simpa [seekLeftBlank, ht, hp] using runs_while_false (.not (.tapeIs none))
-          (FreeM.lift (.move .Left)) t (by simp [ht]))
+        simp [seekLeftBlank, ht, hp])
     simpa [seekLeftGap] using hr
   | cons bit left ih =>
     have hm : Runs (FreeM.lift (.move .Left)) s
@@ -236,9 +234,7 @@ theorem shiftLeft_correct (left : StackTape Bool) (bits : List Bool) (tail : Sta
       (s.headPos + bits.length) (3 * bits.length) := by
   induction bits generalizing left s with
   | nil =>
-    simpa [shiftLeft, hs] using runs_while_false (.not (.tapeIs none))
-      (branch (.tapeIs (some true)) (shiftBitLeft tm true) (shiftBitLeft tm false)) s
-      (by simp [hs])
+    simp [shiftLeft, hs]
   | cons bit bits ih =>
     unfold shiftLeft
     apply runs_while_step (by simp [hs])
@@ -442,8 +438,7 @@ theorem copyLoop_correct (doneBits bits : List Bool) (s : TMState tm)
       (4 * bits.length ^ 2 + 6 * doneBits.length * bits.length + 5 * bits.length) := by
   induction bits generalizing doneBits s with
   | nil =>
-    simpa [copyLoop, hs, layout] using runs_while_false (.not (.tapeIs none))
-      (branch (.tapeIs (some true)) (copyBit tm true) (copyBit tm false)) s (by simp [hs, layout])
+    simp [copyLoop, hs, layout]
   | cons bit bits ih =>
     unfold copyLoop
     apply runs_while_step (by simp [hs, layout])
