@@ -2,6 +2,7 @@ module  -- shake: keep-all --deprecated_module: ignore
 
 public import AlgoleanTests.CircuitExamples
 public import AlgoleanTests.FreeMonadWP
+public import AlgoleanTests.FuelExecMonad
 public import AlgoleanTests.GroupExamples
 public import AlgoleanTests.HadamardExamples
 public import AlgoleanTests.KMPExamples

@@ -77,56 +77,75 @@ theorem Completes.unique {p : Prog (TMQuery tm) Unit} {s t u : TMState tm} {a b 
     (hp : Completes p s a t) (hq : Completes p s b u) : a = b ∧ t = u := by
   obtain ⟨fuel, hp⟩ := hp
   obtain ⟨extra, hq⟩ := hq
-  have h₁ := execute_add_fuel fuel extra p s _ _ hp
-  have h₂ := execute_add_fuel extra fuel p s _ _ hq
+  have h₁ := FuelExecMonad.execute_add_fuel fuel extra p s _ _ hp
+  have h₂ := FuelExecMonad.execute_add_fuel extra fuel p s _ _ hq
   grind [Nat.add_comm]
 
 /-- Writing changes only the head symbol and costs no head moves or space. -/
 theorem completes_write (s : TMState tm) (symbol : Option Symbol) :
     Completes (FreeM.lift (.write symbol)) s 0 (s.write symbol) := by
   refine ⟨1, ?_⟩
-  simp [execute_eq_runCode, runCode, step, TMState.write]
+  simp [step, TMState.write]
 
 /-- Changing the control label leaves the tape and cell histories unchanged and has zero cost. -/
 theorem completes_update (s : TMState tm) (label : tm.State) :
     Completes (FreeM.lift (.update label)) s 0 {s with config.state := some label} := by
-  exact ⟨1, by simp [execute_eq_runCode, runCode, step]⟩
+  exact ⟨1, by simp [step]⟩
 
 /-- A primitive move has the exact state-dependent space cost. -/
 theorem completes_move (s : TMState tm) (dir : Dir) :
     Completes (FreeM.lift (.move dir)) s (s.moveCost dir) (s.move dir) := by
   refine ⟨1, ?_⟩
-  cases dir <;> simp [execute_eq_runCode, runCode, step, TMState.move, TMState.moveCost,
+  cases dir <;> simp [step, TMState.move, TMState.moveCost,
     sub_eq_add_neg] <;> split <;> simp_all
 
 /-- Each head move extends the tape range by at most one cell. -/
-theorem step_cellsAllocated_le_steps (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit))
-    (s : TMState tm) : (step q rest s).cost.cellsAllocated ≤ (step q rest s).cost.steps := by
+theorem step_cellsAllocated_le_steps (q : TMQuery tm α)
+    (next : α → Prog (TMQuery tm) β) (s : TMState tm) :
+    (step q next s).cost.cellsAllocated ≤ (step q next s).cost.steps := by
   cases q with
   | move dir => cases dir <;> grind [step]
   | _ => simp [step]
 
-/-- Additional cells in the tape range are bounded by head moves for every completed procedure. -/
-theorem runCode_cellsAllocated_le_steps (fuel : ℕ) (code : List (TMQuery tm Unit)) (s : TMState tm)
-    (result : Algolean.AddWriter TMCost Unit) (final : ExecutionState tm)
-    (h : runCode fuel code s = some (result, final)) :
+/-- Additional cells in the tape range are bounded by head moves for every completed program. -/
+theorem execute_cellsAllocated_le_steps (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm)
+    (result : AddWriter TMCost α) (final : ExecutionState tm)
+    (h : execute fuel p s = some (result, final)) :
     result.tell.cellsAllocated ≤ result.tell.steps := by
-  induction fuel generalizing code s result final with
-  | zero => cases code <;> grind [runCode]
+  induction fuel generalizing p s result final with
+  | zero =>
+    cases p with
+    | pure a =>
+      simp only [FreeM.pure_eq_pure, FuelExecMonad.execute_pure,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp
+    | liftBind q next => simp only [FuelExecMonad.execute_zero_liftBind] at h; cases h
   | succ fuel ih =>
-    cases code with
-    | nil => grind
-    | cons q code =>
-      cases hr : runCode fuel (step q code s).code (step q code s).machine <;> simp_all [runCode]
-      have := step_cellsAllocated_le_steps q code s
-      grind
+    cases p with
+    | pure a =>
+      simp only [FreeM.pure_eq_pure, FuelExecMonad.execute_pure,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp
+    | liftBind q next =>
+      simp only [FuelExecMonad.execute_liftBind_succ] at h
+      cases hr : execute fuel (step q next s).program (step q next s).machine with
+      | none => simp [hr] at h
+      | some pair =>
+        obtain ⟨r, u⟩ := pair
+        simp only [hr, Option.pure_def] at h
+        obtain ⟨rfl, rfl⟩ := h
+        have hu := ih _ _ _ _ hr
+        have hs := step_cellsAllocated_le_steps q next s
+        simp only [TMCost.add_cellsAllocated, TMCost.add_steps]
+        omega
 
 /-- Every exact completion bounds additional storage by its head moves. -/
 theorem Completes.space_le_time {p : Prog (TMQuery tm) Unit} {s t : TMState tm} {cost : TMCost}
     (h : Completes p s cost t) : cost.cellsAllocated ≤ cost.steps := by
   obtain ⟨fuel, h⟩ := h
-  rw [execute_eq_runCode] at h
-  exact runCode_cellsAllocated_le_steps fuel _ _ _ _ h
+  exact execute_cellsAllocated_le_steps fuel p s _ _ h
 
 /-- Total space includes the initial tape range, even under sequential composition. -/
 theorem Completes.space_eq {p : Prog (TMQuery tm) Unit} {s t : TMState tm} {cost : TMCost}

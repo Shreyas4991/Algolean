@@ -56,7 +56,7 @@ theorem Runs.branch_seq {condition : TMCondition tm} {yes no p : Prog (TMQuery t
   obtain ⟨cost, u, ⟨fuel, hr⟩, hc, hp, ht⟩ := h
   refine ⟨cost, u, ⟨fuel + 1, ?_⟩, hc, hp, ht⟩
   cases hguard : condition.eval s.config <;>
-    simpa [execute_bind, execute_branch_succ, hguard] using hr
+    simpa [FuelExecMonad.execute_bind, execute_branch_succ, hguard] using hr
 
 end TMQuery
 

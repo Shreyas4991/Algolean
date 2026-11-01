@@ -18,7 +18,7 @@ In particular, disjoint injections can give independently defined components fre
 ## Main definitions and results
 
 * `TMState.relabel`, `TMCondition.relabel`, and `TMQuery.relabel` map finite control labels.
-* `TMQuery.relabelProg` relabels an existing fixed program, including branches and loops.
+* `TMQuery.relabelReduction` supplies the query translation used by `Prog.reduceProg`.
 * `TMQuery.Completes.relabel` preserves exact completion and execution costs.
 * `Component.relabel` relabels a component and proves that its correctness specification
   still holds.
@@ -59,16 +59,21 @@ def TMQuery.relabel (f : source.State → target.State) : TMQuery source α → 
 
 namespace TMQuery
 
-/-- Relabel an existing program without consulting its input. -/
-def relabelProg (f : source.State → target.State) (p : Prog (TMQuery source) Unit) :
-    Prog (TMQuery target) Unit := p.liftM (fun q => FreeM.lift (q.relabel f))
+/-- Implement each source query with the corresponding relabeled target query.
+Use `Prog.reduceProg` to apply this translation to an entire program. -/
+def relabelReduction (f : source.State → target.State) :
+    Reduction (TMQuery source) (TMQuery target) where
+  reduce q := FreeM.lift (q.relabel f)
 
-@[simp] theorem instructions_relabelProg (f : source.State → target.State)
-    (p : Prog (TMQuery source) Unit) :
-    instructions (relabelProg f p) = (instructions p).map (relabel f) := by
-  induction p with
-  | pure a => cases a; rfl
-  | liftBind q next ih => cases q <;> simp_all [relabelProg, FreeM.liftM, instructions, relabel]
+private theorem relabel_forM (f : source.State → target.State)
+    (body : List (TMQuery source Unit)) :
+    FreeM.liftM (m := Prog (TMQuery target))
+      (fun {α} (q : TMQuery source α) => FreeM.lift (q.relabel f))
+      (forM body (fun q => FreeM.lift q)) =
+      forM body (fun q => FreeM.lift (q.relabel f)) := by
+  induction body with
+  | nil => rfl
+  | cons q rest ih => simp only [List.forM_cons, FreeM.liftM_bind, FreeM.liftM_lift, ih]
 
 variable [DecidableEq Symbol] [DecidableEq source.State] [DecidableEq target.State]
 
@@ -80,48 +85,63 @@ variable [DecidableEq Symbol] [DecidableEq source.State] [DecidableEq target.Sta
   | stateIs label => simp [TMState.relabel, (Option.map_injective hf).eq_iff]
   | not condition ih => simpa using congrArg Bool.not ih
 
-/-- Relabel a pending interpreter step, retaining its exact cost. -/
-@[simps] def Step.relabel (f : source.State → target.State) (next : Step source) : Step target :=
-  ⟨next.cost, next.machine.relabel f, next.code.map (TMQuery.relabel f)⟩
+/-- Relabel the remaining program and machine state without changing the step's cost. -/
+@[simps] def relabelStep (f : source.State → target.State)
+    (next : FuelExecMonad.Step (TMQuery source) (TMState source) TMCost α) :
+    FuelExecMonad.Step (TMQuery target) (TMState target) TMCost α :=
+  ⟨next.cost, next.machine.relabel f, next.program.reduceProg (relabelReduction f)⟩
 
 theorem step_relabel (f : source.State → target.State) (hf : Function.Injective f)
-    (q : TMQuery source Unit) (rest : List (TMQuery source Unit)) (s : TMState source) :
-    step (q.relabel f) (rest.map (relabel f)) (s.relabel f) = (step q rest s).relabel f := by
+    (q : TMQuery source α) (next : α → Prog (TMQuery source) β) (s : TMState source) :
+    step (q.relabel f) (fun a => Prog.reduceProg (next a) (relabelReduction f)) (s.relabel f) =
+      relabelStep f (step q next s) := by
   cases q with
   | move direction =>
-    cases direction <;> simp [relabel, step, Step.relabel, TMState.relabel] <;>
+    cases direction <;> simp [relabel, step, relabelStep, TMState.relabel] <;>
       split <;> simp_all
   | branchCode condition yes no =>
     cases h : condition.eval s.config <;>
-      simp [relabel, step, Step.relabel, eval_relabel f hf, h]
+      simp [relabel, step, relabelStep, eval_relabel f hf, h,
+        Prog.reduceProg, relabelReduction, FreeM.liftM_bind, relabel_forM]
   | whileCode condition body =>
     cases h : condition.eval s.config <;>
-      simp [relabel, step, Step.relabel, eval_relabel f hf, h]
-  | _ => simp [relabel, step, Step.relabel, TMState.relabel]
+      simp [relabel, step, relabelStep, eval_relabel f hf, h,
+        Prog.reduceProg, relabelReduction, FreeM.liftM_bind, relabel_forM]
+  | _ => simp [relabel, step, relabelStep, TMState.relabel]
 
-theorem runCode_relabel (f : source.State → target.State) (hf : Function.Injective f)
-    (fuel : ℕ) (code : List (TMQuery source Unit)) (s : TMState source) :
-    runCode fuel (code.map (relabel f)) (s.relabel f) =
-      (runCode fuel code s).map (fun (result, final) =>
+/-- Relabeling preserves program execution, including the exact cost and remaining fuel. -/
+theorem execute_relabel (f : source.State → target.State) (hf : Function.Injective f)
+    (fuel : ℕ) (p : Prog (TMQuery source) α) (s : TMState source) :
+    execute fuel (p.reduceProg (relabelReduction f)) (s.relabel f) =
+      (execute fuel p s).map (fun (result, final) =>
         (result, ⟨final.machine.relabel f, final.fuel⟩)) := by
-  induction fuel generalizing code s with
-  | zero => cases code <;> rfl
+  induction fuel generalizing p s with
+  | zero =>
+    cases p with
+    | pure a => simp [Prog.reduceProg, relabelReduction]
+    | liftBind q next =>
+      change execute 0 (.liftBind (q.relabel f)
+        (fun a => Prog.reduceProg (next a) (relabelReduction f))) _ = _
+      simp only [FuelExecMonad.execute_zero_liftBind, Option.map_none]
   | succ fuel ih =>
-    cases code with
-    | nil => rfl
-    | cons q rest =>
-      simp only [List.map_cons, runCode, step_relabel f hf, Step.relabel_machine,
-        Step.relabel_code, Step.relabel_cost, ih]
-      cases runCode fuel (step q rest s).code (step q rest s).machine <;> rfl
+    cases p with
+    | pure a => simp [Prog.reduceProg, relabelReduction]
+    | liftBind q next =>
+      change execute (fuel + 1) (.liftBind (q.relabel f)
+        (fun a => Prog.reduceProg (next a) (relabelReduction f))) _ = _
+      simp only [FuelExecMonad.execute_liftBind_succ, step_relabel f hf, relabelStep_machine,
+        relabelStep_program, relabelStep_cost, ih]
+      simp only [execute, TMModel]
+      cases FuelExecMonad.execute (interpreter source).toModel fuel
+        (step q next s).program (step q next s).machine <;> rfl
 
 /-- State relabeling preserves complete execution, including exact time and additional space. -/
 theorem Completes.relabel {p : Prog (TMQuery source) Unit} {s t : TMState source} {cost : TMCost}
     (h : Completes p s cost t) (f : source.State → target.State) (hf : Function.Injective f) :
-    Completes (relabelProg f p) (s.relabel f) cost (t.relabel f) := by
+    Completes (p.reduceProg (relabelReduction f)) (s.relabel f) cost (t.relabel f) := by
   obtain ⟨fuel, h⟩ := h
   refine ⟨fuel, ?_⟩
-  rw [execute_eq_runCode, instructions_relabelProg, runCode_relabel f hf]
-  rw [execute_eq_runCode] at h
+  rw [execute_relabel f hf]
   simp [h]
 
 end TMQuery
@@ -140,7 +160,7 @@ def relabel {ι : Type} {pre : ι → TMState source → Prop}
     Component target (fun i s => ∃ original, pre i original ∧ s = original.relabel f)
       (fun i s cost final => ∃ original result,
         s = original.relabel f ∧ final = result.relabel f ∧ post i original cost result) where
-  program := TMQuery.relabelProg f machine.program
+  program := machine.program.reduceProg (TMQuery.relabelReduction f)
   correct i s hs := by
     obtain ⟨original, hp, rfl⟩ := hs
     obtain ⟨cost, result, hc, hpost⟩ := machine.correct i original hp

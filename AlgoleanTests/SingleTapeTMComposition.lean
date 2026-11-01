@@ -51,7 +51,8 @@ def excursionComputer : Computer machine id (fun _ => 2) where
 
 -- Repeating a component adds time while charging the newly reached cell only once.
 example :
-    ((excursionComputer.seq excursionComputer).execute 4 (TMState.init machine [])).map
+    (execute 4 (EncodedComputer.seq excursionComputer excursionComputer).program
+      (TMState.init machine [])).map
       (fun (result, final) => (final.machine.headPos, result.tell.steps,
         result.tell.cellsAllocated, final.machine.cellsAllocated.card, final.fuel)) =
       some (0, 4, 1, 2, 0) := by decide
@@ -62,7 +63,7 @@ example :
       headPos := 37
       cellsAllocated := Finset.Icc 35 41
       cellsVisited := {37}}
-    ((excursionComputer.seq excursionComputer).execute 4 initial).map
+    (execute 4 (EncodedComputer.seq excursionComputer excursionComputer).program initial).map
       (fun (result, final) => (final.machine.headPos, result.tell.steps,
         result.tell.cellsAllocated, final.machine.cellsAllocated.card)) =
       some (37, 4, 0, 7) := by decide
@@ -106,15 +107,17 @@ theorem embed_injective : Function.Injective embed := fun _ _ h => congrArg Prod
 
 -- Relabeling preserves a proved loop contract, its exact cost, and the tape history.
 example (s : TMState machine) (h : s.config.state = some false) :
-    Completes (relabelProg (target := target) embed finishLoop) (s.relabel embed) 0
+    Completes (finishLoop.reduceProg (relabelReduction (target := target) embed))
+      (s.relabel embed) 0
       (({s with config.state := some true} : TMState machine).relabel embed) :=
   (finishLoop_completes s h).relabel embed embed_injective
 
 -- Labels inside both structured constructs must be mapped, as well as the update itself.
 example :
-    (execute 5 (relabelProg (target := target) embed (do
+    (execute 5 (Prog.reduceProg (do
       finishLoop
-      branch (.stateIs (some true)) (FreeM.lift (.move .Right)) (FreeM.lift (.move .Left))))
+      branch (.stateIs (some true)) (FreeM.lift (.move .Right)) (FreeM.lift (.move .Left)))
+        (relabelReduction (target := target) embed))
       ((TMState.init machine []).relabel embed)).map
         (fun (result, final) => (final.machine.config.state, final.machine.headPos,
           result.tell.steps, result.tell.cellsAllocated, final.fuel)) =

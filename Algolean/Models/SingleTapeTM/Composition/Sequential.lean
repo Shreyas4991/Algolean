@@ -18,8 +18,7 @@ The time bound for the second procedure is evaluated on the first procedure's ou
 
 * `TMQuery.Completes.seq` and `TMQuery.Runs.seq` compose execution contracts.
 * `Component.andThen` composes components whose preconditions and postconditions agree.
-* `EncodedComputer.seq` and `Computer.seq` compose verified transformations.
-* `Computer.identity_seq`, `Computer.seq_identity`, and `Computer.seq_assoc` describe program laws.
+* `EncodedComputer.seq` composes verified transformations, including ordinary word computers.
 -/
 
 @[expose] public section
@@ -37,7 +36,7 @@ theorem Completes.seq {p q : Prog (TMQuery tm) Unit} {s t u : TMState tm} {a b :
   obtain ⟨fuel, hp⟩ := hp
   obtain ⟨extra, hq⟩ := hq
   refine ⟨fuel + extra, ?_⟩
-  simp [execute_add_fuel fuel extra p s _ _ hp, hq]
+  simp [FuelExecMonad.execute_add_fuel fuel extra p s _ _ hp, hq]
 
 
 /-- Compose contracts while retaining the intermediate execution state. -/
@@ -161,7 +160,6 @@ open Cslib Cslib.Turing TMQuery
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
-variable {f g : List Symbol → List Symbol} {a b : List Symbol → ℕ}
 
 /-- The generic verified identity component, with zero head moves and unchanged history. -/
 @[simps program]
@@ -171,31 +169,7 @@ def identity : Computer tm id (fun _ => 0) where
     simp only [id_eq] at hs
     exact ⟨0, s, completes_pure s, by simp [← hs], rfl, le_rfl⟩
 
-/-- Run the second machine on the first machine's output and add their time bounds. -/
-@[simps program] def seq (first : Computer tm f a) (second : Computer tm g b) :
-    Computer tm (g ∘ f) (fun input => a input + b (f input)) where
-  program := do first.program; second.program
-  correct input s hs := by
-    obtain ⟨ca, t, hp, ht, hpos, ha⟩ := first.correct input s hs
-    obtain ⟨cb, u, hq, hu, hup, hb⟩ := second.correct (f input) t (by simp [ht])
-    exact ⟨ca + cb, u, hp.seq hq, by simpa [ht] using hu, by simpa [hpos] using hup,
-      by simpa using Nat.add_le_add ha hb⟩
-
 /-- Sequential composition of verified machines, read from left to right. -/
-scoped infixr:55 " ≫ₜ " => Computer.seq
-
-/-- Identity before a component preserves its executable program. -/
-theorem identity_seq (machine : Computer tm f a) :
-    (identity.seq machine).program = machine.program := by simp
-
-/-- Identity after a component preserves its executable program. -/
-theorem seq_identity (machine : Computer tm f a) :
-    (machine.seq identity).program = machine.program := by simp
-
-/-- Reassociating verified composition preserves the executable program. -/
-theorem seq_assoc {h : List Symbol → List Symbol} {c : List Symbol → ℕ}
-    (first : Computer tm f a) (second : Computer tm g b) (third : Computer tm h c) :
-    ((first.seq second).seq third).program = (first.seq (second.seq third)).program := by
-  simp [bind_assoc]
+scoped infixr:55 " ≫ₜ " => EncodedComputer.seq
 
 end Algolean.Algorithms.Computer

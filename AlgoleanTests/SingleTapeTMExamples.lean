@@ -34,11 +34,11 @@ abbrev machine : SingleTapeTM Bool where
 section Notation
 
 -- A nested block supplies its own machine and control-state type.
-example : instructions (do [TMQuery machine]
+example : (do [TMQuery machine]
     let other := do [TMQuery (SingleTapeTM.idComputer (Symbol := Bool))]
       state ←ₜ ()
     let _ := other
-    moveₜ .Stop) = [.move .Stop] := rfl
+    moveₜ .Stop) = FreeM.lift (.move .Stop : TMQuery machine Unit) := rfl
 
 -- Primitive notation has generated unexpanders; control flow has explicit ones.
 /-- info: fun symbol ↦ tape ←ₜ symbol : Option Bool → TMQuery machine Unit -/
@@ -75,7 +75,7 @@ info: fun condition body ↦ do
 
 end Notation
 
-attribute [local simp] execute_eq_runCode runCode step branch whileLoop
+attribute [local simp] execute_while_succ step
   TMState.init SingleTapeTM.initCfg BiTape.mk₁ BiTape.nil
   BiTape.moveLeft BiTape.moveRight BiTape.write
   StackTape.head StackTape.tail StackTape.mapSome StackTape.nil
@@ -86,7 +86,7 @@ example (input : List Bool) :
     (execute 0 (do [TMQuery machine] pure ()) (TMState.init machine input)).map
       (fun (_, final) => (final.machine.spaceUsed, final.machine.cellsVisited.card)) =
       some (max 1 input.length, 1) := by
-  simp only [execute_pure, Option.map_some, TMState.spaceUsed_init,
+  simp only [FuelExecMonad.execute_pure, Option.map_some, TMState.spaceUsed_init,
     TMState.init_cellsVisited, Finset.card_singleton]
 
 /-- Both updates remain in the model, and the program returns only unit. -/
@@ -197,8 +197,7 @@ example : (execute 6 nested (TMState.init machine [])).map
     pure ()
 
 example (fuel : ℕ) : execute fuel forever (TMState.init machine []) = none := by
-  simp only [execute_eq_runCode, forever, whileLoop, instructions_lift, instructions_pure]
-  induction fuel <;> simp_all
+  induction fuel <;> simp_all [execute_while_succ]
 
 -- An infinite unselected branch must not execute or consume fuel.
 example : (execute 1
@@ -233,7 +232,8 @@ example :
       ⦃ fun _ cost s => cost = 0 ∧ s.machine.config.BiTape.head = some true ∧
         s.machine.config.state = some true ∧ s.fuel = 0 ⦄ := by
   vcgen [writeAndUpdate]
-  simp_all [HasHandler.handler, ModelStateM.costHandler, TMModel, runBlock]
+  simp_all [HasHandler.handler, ModelStateM.costHandler,
+    FuelExecMonad.Interpreter.runQuery_eq_execute, AddWriterT.run_mk]
 
 -- The loop is machine-controlled; postconditions can still observe its exact time and space.
 set_option experimental.vcgen true in
@@ -243,7 +243,9 @@ example (initial : TMCost) :
         cost.steps = initial.steps + 2 ∧ cost.cellsAllocated = initial.cellsAllocated + 1 ∧
         s.machine.cellsAllocated.card = 3 ∧ s.fuel = 0 ⦄ := by
   vcgen [scanRight, whileLoop]
-  simp_all [HasHandler.handler, ModelStateM.costHandler, TMModel, runBlock]
+  simp_all [HasHandler.handler, ModelStateM.costHandler,
+    FuelExecMonad.Interpreter.runQuery_eq_execute,
+    AddWriterT.run_mk, ← whileLoop.eq_1]
 
 end WeakestPreconditions
 

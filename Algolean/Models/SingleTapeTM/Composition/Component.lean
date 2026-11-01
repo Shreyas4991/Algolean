@@ -23,7 +23,7 @@ returns the head to the first output cell. Scans can use the general `Component`
 
 * `Component` bundles a fixed program with a total correctness contract.
 * `EncodedComputer` and `Computer` specialize components to data and word transformations.
-* `Component.execute` runs a component; `Component.space` derives its storage bound.
+* `Component.space` derives the component's storage bound.
 -/
 
 @[expose] public section
@@ -63,10 +63,6 @@ namespace Component
 
 variable {tm} {ι : Type} {pre : ι → TMState tm → Prop}
 variable {post : ι → TMState tm → TMCost → TMState tm → Prop}
-
-/-- Run a component through the existing model, retaining the entire supplied machine state. -/
-def execute (machine : Component tm pre post) (fuel : ℕ) (s : TMState tm) :=
-  TMQuery.execute fuel machine.program s
 
 /-- A component's contract also bounds additional tape storage by its actual head-move cost. -/
 theorem space (machine : Component tm pre post) (i : ι) (s : TMState tm) (h : pre i s) :

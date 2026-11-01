@@ -27,16 +27,15 @@ cells it will use. The results in this file show that the final configuration, n
 moves, and fuel consumed stay the same. The additional storage cost may change: a cell already
 in the tape range does not need to be counted again.
 
-The file also proves that unused fuel can be removed from a successful run. This lets us
-describe the completed computation using exactly the fuel it consumed.
+To describe a completed computation using exactly the fuel it consumed, we apply the shared
+`FuelExecMonad.execute_trim_fuel` theorem to remove any unused fuel.
 
 ## Main results
 
-* `TMQuery.runCode_config_time` shows that head coordinates and cell histories do not affect
+* `TMQuery.execute_config_time` shows that head coordinates and cell histories do not affect
   the final configuration or the number of head moves.
 * `TMQuery.execute_of_config_eq` reuses a successful run with different head coordinates or
   cell histories.
-* `TMQuery.runCode_trim_fuel` removes unused fuel without changing the result or cost.
 * `TMQuery.completes_of_execute` proves that a successful run can finish with no fuel left.
 -/
 
@@ -50,30 +49,35 @@ variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
 theorem step_config_time {s t : TMState tm} (h : s.config = t.config)
-    (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit)) :
-    (step q rest s).machine.config = (step q rest t).machine.config ∧
-      (step q rest s).code = (step q rest t).code ∧
-      (step q rest s).cost.steps = (step q rest t).cost.steps := by
+    (q : TMQuery tm α) (next : α → Prog (TMQuery tm) β) :
+    (step q next s).machine.config = (step q next t).machine.config ∧
+      (step q next s).program = (step q next t).program ∧
+      (step q next s).cost.steps = (step q next t).cost.steps := by
   cases q with
   | move direction => cases direction <;> simp [step, h]
   | _ => simp [step, h]
 
-theorem runCode_config_time (fuel : ℕ) (code : List (TMQuery tm Unit))
+/-- Changing the recorded head coordinate or cell histories does not change the computation. -/
+theorem execute_config_time (fuel : ℕ) (p : Prog (TMQuery tm) α)
     (s t : TMState tm) (h : s.config = t.config) :
-    (runCode fuel code s).map (fun (r, u) => (u.machine.config, r.tell.steps, u.fuel)) =
-      (runCode fuel code t).map (fun (r, u) => (u.machine.config, r.tell.steps, u.fuel)) := by
-  induction fuel generalizing code s t with
-  | zero => cases code <;> simp [runCode, h]
+    (execute fuel p s).map (fun (r, u) => (u.machine.config, r.tell.steps, u.fuel)) =
+      (execute fuel p t).map (fun (r, u) => (u.machine.config, r.tell.steps, u.fuel)) := by
+  induction fuel generalizing p s t with
+  | zero =>
+    cases p with
+    | pure a => simp [h]
+    | liftBind q next => simp only [FuelExecMonad.execute_zero_liftBind]
   | succ fuel ih =>
-    cases code with
-    | nil => simp [h]
-    | cons q rest =>
-      obtain ⟨hc, hcode, htime⟩ := step_config_time h q rest
-      have hr := ih (step q rest s).code (step q rest s).machine (step q rest t).machine hc
-      rw [hcode] at hr
-      cases hs : runCode fuel (step q rest s).code (step q rest s).machine <;>
-        cases ht : runCode fuel (step q rest t).code (step q rest t).machine <;>
-        simp_all [runCode]
+    cases p with
+    | pure a => simp [h]
+    | liftBind q next =>
+      simp only [FuelExecMonad.execute_liftBind_succ]
+      obtain ⟨hc, hp, htime⟩ := step_config_time h q next
+      have hr := ih (step q next s).program (step q next s).machine (step q next t).machine hc
+      rw [hp] at hr
+      cases hs : execute fuel (step q next s).program (step q next s).machine <;>
+        cases ht : execute fuel (step q next t).program (step q next t).machine <;>
+        simp_all
       grind
 
 /-- Reuse a successful run with the same configuration but different head coordinates or
@@ -84,45 +88,21 @@ theorem execute_of_config_eq (fuel : ℕ) (p : Prog (TMQuery tm) Unit) {s t : TM
     ∃ result' final', execute fuel p t = some (result', final') ∧
       final'.machine.config = final.machine.config ∧ result'.tell.steps = result.tell.steps ∧
       final'.fuel = final.fuel := by
-  have heq := runCode_config_time fuel (instructions p) s t h
-  simp only [← execute_eq_runCode, hr, Option.map_some] at heq
+  have heq := execute_config_time fuel p s t h
+  simp only [hr, Option.map_some] at heq
   cases ht : execute fuel p t with
   | none => simp [ht] at heq
   | some pair =>
     obtain ⟨result', final'⟩ := pair
     exact ⟨result', final', rfl, by simpa [ht] using heq.symm⟩
 
-/-- A successful run can use exactly its consumed fuel, without changing its result or cost. -/
-theorem runCode_trim_fuel (fuel : ℕ) (code : List (TMQuery tm Unit)) (s : TMState tm)
-    (result : AddWriter TMCost Unit) (final : ExecutionState tm)
-    (h : runCode fuel code s = some (result, final)) :
-    final.fuel ≤ fuel ∧
-      runCode (fuel - final.fuel) code s = some (result, ⟨final.machine, 0⟩) := by
-  induction fuel generalizing code s result final with
-  | zero => cases code <;> grind [runCode]
-  | succ fuel ih =>
-    cases code with
-    | nil => grind [runCode]
-    | cons q rest =>
-      cases hr : runCode fuel (step q rest s).code (step q rest s).machine with
-      | none => simp [runCode, hr] at h
-      | some pair =>
-        obtain ⟨r, u⟩ := pair
-        obtain ⟨hle, htrim⟩ := ih _ _ _ _ hr
-        simp only [runCode, hr] at h
-        obtain ⟨rfl, rfl⟩ := h
-        refine ⟨by lia, ?_⟩
-        have hsub : fuel + 1 - u.fuel = (fuel - u.fuel) + 1 := by lia
-        simp [hsub, runCode, htrim]
-
 /-- A successful run can finish with no fuel left by starting with exactly the fuel it consumes. -/
 theorem completes_of_execute {p : Prog (TMQuery tm) Unit} {fuel : ℕ} {s : TMState tm}
     {result : AddWriter TMCost Unit} {final : ExecutionState tm}
     (h : execute fuel p s = some (result, final)) :
     Completes p s result.tell final.machine := by
-  rw [execute_eq_runCode] at h
-  have ht := (runCode_trim_fuel fuel _ s result final h).2
+  have ht := (FuelExecMonad.execute_trim_fuel fuel p s result final h).2
   refine ⟨fuel - final.fuel, ?_⟩
-  simpa [execute_eq_runCode, AddWriter.ext_iff] using ht
+  simpa [AddWriter.ext_iff] using ht
 
 end Algolean.Algorithms.TMQuery
