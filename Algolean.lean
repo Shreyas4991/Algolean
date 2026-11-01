@@ -23,6 +23,7 @@ public import Algolean.Complexity.Basic
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
+public import Algolean.FuelExecMonad
 public import Algolean.LowerBounds.ComparisonSort
 public import Algolean.ModelM
 public import Algolean.ModelStateM
