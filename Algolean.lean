@@ -46,6 +46,13 @@ public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
+public import Algolean.Models.SingleTapeTM.Composition.Basic
+public import Algolean.Models.SingleTapeTM.Composition.Branch
+public import Algolean.Models.SingleTapeTM.Composition.Component
+public import Algolean.Models.SingleTapeTM.Composition.Frame
+public import Algolean.Models.SingleTapeTM.Composition.Relabel
+public import Algolean.Models.SingleTapeTM.Composition.Sequential
+public import Algolean.Models.SingleTapeTM.Composition.While
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM

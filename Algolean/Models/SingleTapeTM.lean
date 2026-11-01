@@ -41,7 +41,8 @@ Papadimitriou [§2.5, Definition 2.6, p. 35][papadimitriou1994].
 
 * `TMQuery tm` describes tape writes, control-state updates, head moves, branches, and loops.
 * `TMCondition` is syntax for testing tape symbols and control states inside the interpreter.
-* `TMQuery.branch` and `TMQuery.whileLoop` accept `Prog` bodies and compile them to finite code.
+* `TMQuery.branch` and `TMQuery.whileLoop` accept `Prog` bodies. Their internal storage uses
+  instruction lists.
 * `TMState.cellsAllocated` retains every initially stored or subsequently reached cell;
   its cardinality gives total space. `TMCost.cellsAllocated` counts cells added to this range.
 * `TMState.cellsVisited` records cells actually visited by the head, separately from space usage.
@@ -198,36 +199,31 @@ variable {tm : SingleTapeTM Symbol}
 theorem result_type (q : TMQuery tm α) : α = Unit := by
   cases q <;> rfl
 
-/-- Compile a program body to finite code without consulting any machine data. -/
+-- Only structured control stores bodies as lists. Programs and their execution use `Prog`.
+namespace Internal
+
+/-- Store a fixed program as the body of a structured control instruction. -/
 def instructions : Prog (TMQuery tm) Unit → List (TMQuery tm Unit)
   | .pure _ => []
   | .liftBind q next =>
     (result_type q ▸ q) :: instructions (next ((result_type q).symm ▸ ()))
 
-@[simp, grind =] theorem instructions_pure :
-    instructions (pure () : Prog (TMQuery tm) Unit) = [] := rfl
-
-@[simp, grind =] theorem instructions_lift_bind (q : TMQuery tm Unit)
-    (next : Unit → Prog (TMQuery tm) Unit) :
-    instructions (FreeM.lift q >>= next) = q :: instructions (next ()) := rfl
-
-@[simp, grind =] theorem instructions_bind (p : Prog (TMQuery tm) Unit)
-    (next : Unit → Prog (TMQuery tm) Unit) :
-    instructions (p >>= next) = instructions p ++ instructions (next ()) := by
+private theorem forM_instructions (p : Prog (TMQuery tm) Unit) :
+    (instructions p).forM (fun q => FreeM.lift q) = p := by
   induction p with
-  | pure a => cases a; simp
-  | liftBind q cont ih => cases q <;> simp_all [instructions]
+  | pure a => cases a; rfl
+  | liftBind q next ih =>
+    cases q <;> simp_all only [instructions, List.forM_eq_forM, List.forM_cons]
+    all_goals rw [FreeM.liftBind_eq]; congr 1
 
-@[simp, grind =] theorem instructions_lift (q : TMQuery tm Unit) :
-    instructions (Cslib.FreeM.lift q) = [q] := rfl
+end Internal
+
+open Internal
 
 /-- Host-language return values are fixed by syntax; queries return only `Unit`. -/
 def returnValue : Prog (TMQuery tm) α → α
   | .pure a => a
   | .liftBind q next => returnValue (next ((result_type q).symm ▸ ()))
-
-@[simp] theorem returnValue_unit (p : Prog (TMQuery tm) Unit) : returnValue p = () :=
-  Subsingleton.elim _ _
 
 /-- Replacing the return value by its syntactically fixed value preserves the program. -/
 theorem eq_bind_return (p : Prog (TMQuery tm) α) :
@@ -254,23 +250,14 @@ abbrev ExecutionState (tm : SingleTapeTM Symbol) := FuelExecState (TMState tm)
 /-- Fuel exhaustion fails the whole execution rather than returning a partial result. -/
 abbrev ExecutionM (tm : SingleTapeTM Symbol) := FuelExecMonad (TMState tm)
 
-/-- One small step, with pending code kept outside the physical machine state. -/
-@[ext, grind]
-structure Step (tm : SingleTapeTM Symbol) where
-  /-- Resource cost of this step. -/
-  cost : TMCost
-  /-- Updated physical machine state. -/
-  machine : TMState tm
-  /-- Code still to execute. -/
-  code : List (TMQuery tm Unit)
-
 variable [DecidableEq Symbol] [DecidableEq tm.State]
 
-/-- Execute a primitive instruction or schedule the selected control-flow block. -/
-def step (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit)) (s : TMState tm) : Step tm :=
+/-- Execute one query and continue with its `Prog` continuation. -/
+def step (q : TMQuery tm α) (next : α → Prog (TMQuery tm) β) (s : TMState tm) :
+    FuelExecMonad.Step (TMQuery tm) (TMState tm) TMCost β :=
   match q with
-  | .write symbol => ⟨0, {s with config.BiTape := s.config.BiTape.write symbol}, rest⟩
-  | .update st => ⟨0, {s with config.state := some st}, rest⟩
+  | .write symbol => ⟨0, {s with config.BiTape := s.config.BiTape.write symbol}, next ()⟩
+  | .update st => ⟨0, {s with config.state := some st}, next ()⟩
   | .move dir =>
     let (tape, pos) := match dir with
       | .Left => (s.config.BiTape.moveLeft, s.headPos - 1)
@@ -281,11 +268,83 @@ def step (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit)) (s : TMState tm) 
         config := {s.config with BiTape := tape}
         headPos := pos
         cellsAllocated := insert pos s.cellsAllocated
-        cellsVisited := insert pos s.cellsVisited}, rest⟩
+        cellsVisited := insert pos s.cellsVisited}, next ()⟩
   | .branchCode condition yes no =>
-    ⟨0, s, (if condition.eval s.config then yes else no) ++ rest⟩
+    ⟨0, s, (if condition.eval s.config then yes else no).forM (fun q => FreeM.lift q) >>= next⟩
   | .whileCode condition body =>
-    ⟨0, s, if condition.eval s.config then body ++ q :: rest else rest⟩
+    ⟨0, s, if condition.eval s.config then do
+      body.forM (fun q => FreeM.lift q)
+      FreeM.lift (.whileCode condition body) >>= next
+    else next ()⟩
+
+end TMQuery
+
+/-- The TM's primitive instructions and structured control define its small-step semantics. -/
+abbrev TMQuery.interpreter (tm : SingleTapeTM Symbol)
+    [DecidableEq Symbol] [DecidableEq tm.State] :
+    FuelExecMonad.Interpreter (TMQuery tm) (TMState tm) TMCost where
+  step := TMQuery.step
+  step_bind := by
+    intro α β γ q next cont s
+    cases q <;> simp [TMQuery.step, bind_assoc]
+    split <;> simp
+
+/-- Stateful execution and costs for deeply embedded single-tape programs. -/
+abbrev TMModel (tm : SingleTapeTM Symbol) [DecidableEq Symbol] [DecidableEq tm.State] :
+    ModelStateM (TMQuery tm) (TMQuery.ExecutionM tm) TMCost :=
+  (TMQuery.interpreter tm).toModel
+
+namespace TMQuery
+
+open Internal
+
+variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
+
+/-- Execute a fixed program on a separately supplied input state. -/
+abbrev execute (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm) :
+    Option (AddWriter TMCost α × ExecutionState tm) :=
+  FuelExecMonad.execute (TMModel tm) fuel p s
+
+/-- Branch selection consumes one unit of fuel and executes only the selected body. -/
+@[simp, grind =] theorem execute_branch_succ (fuel : ℕ) (condition : TMCondition tm)
+    (yes no : Prog (TMQuery tm) Unit) (s : TMState tm) :
+    execute (fuel + 1) (branch condition yes no) s =
+      if condition.eval s.config then execute fuel yes s else execute fuel no s := by
+  change FuelExecMonad.execute (interpreter tm).toModel (fuel + 1)
+    (.liftBind (.branchCode condition (instructions yes)
+    (instructions no)) pure) s = _
+  rw [FuelExecMonad.execute_liftBind_succ (I := interpreter tm) fuel
+    (.branchCode condition (instructions yes) (instructions no)) pure s]
+  simp only [step]
+  split
+  · simp only [forM_instructions, bind_pure, zero_add]
+    change (execute fuel yes s).bind some = _
+    simp
+  · simp only [forM_instructions, bind_pure, zero_add]
+    change (execute fuel no s).bind some = _
+    simp
+
+@[simp, grind =] theorem execute_while_zero (condition : TMCondition tm)
+    (body : Prog (TMQuery tm) Unit) (s : TMState tm) :
+    execute 0 (whileLoop condition body) s = none := by
+  simp only [whileLoop, FreeM.lift, FuelExecMonad.execute_zero_liftBind]
+
+/-- Each loop test consumes fuel; the body determines the machine cost and state. -/
+@[grind =] theorem execute_while_succ (fuel : ℕ) (condition : TMCondition tm)
+    (body : Prog (TMQuery tm) Unit) (s : TMState tm) :
+    execute (fuel + 1) (whileLoop condition body) s =
+      if condition.eval s.config then execute fuel (do body; whileLoop condition body) s
+      else some (⟨(), 0⟩, ⟨s, fuel⟩) := by
+  change FuelExecMonad.execute (interpreter tm).toModel (fuel + 1)
+    (.liftBind (.whileCode condition (instructions body)) pure) s = _
+  rw [FuelExecMonad.execute_liftBind_succ (I := interpreter tm) fuel
+    (.whileCode condition (instructions body)) pure s]
+  simp only [step, forM_instructions]
+  split
+  · simp only [bind_pure, zero_add]
+    change (execute fuel (do body; whileLoop condition body) s).bind some = _
+    simp
+  · simp
 
 private theorem insert_Icc_adjacent {lo hi pos : ℤ}
     (hlo : lo - 1 ≤ pos) (hhi : pos ≤ hi + 1) :
@@ -295,8 +354,8 @@ private theorem insert_Icc_adjacent {lo hi pos : ℤ}
   lia
 
 /-- A head move can extend either end of the stored tape but cannot create a gap. -/
-theorem step_allocatedInterval (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit))
-    (s : TMState tm) (h : s.AllocatedInterval) : (step q rest s).machine.AllocatedInterval := by
+theorem step_allocatedInterval (q : TMQuery tm α) (next : α → Prog (TMQuery tm) β)
+    (s : TMState tm) (h : s.AllocatedInterval) : (step q next s).machine.AllocatedInterval := by
   obtain ⟨lo, hi, hs, hlo, hhi⟩ := h
   cases q with
   | move dir =>
@@ -305,200 +364,79 @@ theorem step_allocatedInterval (q : TMQuery tm Unit) (rest : List (TMQuery tm Un
       simpa [step, hs] using insert_Icc_adjacent (lo := lo) (hi := hi) (by lia) (by lia)
   | _ => exact ⟨lo, hi, hs, hlo, hhi⟩
 
-/-- Run pending code with shared fuel; every instruction and control test consumes one unit. -/
-def runCode : ℕ → List (TMQuery tm Unit) → TMState tm →
-    Option (AddWriter TMCost Unit × ExecutionState tm)
-  | fuel, [], s => some (⟨(), 0⟩, ⟨s, fuel⟩)
-  | 0, _ :: _, _ => none
-  | fuel + 1, q :: rest, s => do
-    let next := step q rest s
-    let (result, final) ← runCode fuel next.code next.machine
-    pure (⟨(), next.cost + result.tell⟩, final)
-
-/-- Interpret a finite block through the joint state-and-cost interface. -/
-def runBlock (code : List (TMQuery tm Unit)) : AddWriterT TMCost (ExecutionM tm) Unit :=
-  AddWriterT.mk fun s => runCode s.fuel code s.machine
-
-end TMQuery
-
-/-- Stateful execution and costs for deeply embedded single-tape programs. -/
-def TMModel (tm : SingleTapeTM Symbol) [DecidableEq Symbol] [DecidableEq tm.State] :
-    ModelStateM (TMQuery tm) (TMQuery.ExecutionM tm) TMCost where
-  runQuery q := (TMQuery.result_type q).symm ▸ TMQuery.runBlock [TMQuery.result_type q ▸ q]
-
-namespace TMQuery
-
-variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
-
-/-- Execute a fixed program on a separately supplied input state. -/
-def execute (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm) :
-    Option (AddWriter TMCost α × ExecutionState tm) :=
-  FuelExecMonad.execute (TMModel tm) fuel p s
-
-theorem model_runQuery (q : TMQuery tm Unit) :
-    (TMModel tm).runQuery q = runBlock [q] := rfl
-
-@[simp, grind =] theorem runCode_nil (fuel : Nat) (s : TMState tm) :
-    runCode fuel [] s = some (⟨(), 0⟩, ⟨s, fuel⟩) := by
-  cases fuel <;> rfl
-
-@[simp, grind =] theorem runCode_zero_cons (q : TMQuery tm Unit)
-    (rest : List (TMQuery tm Unit)) (s : TMState tm) : runCode 0 (q :: rest) s = none := rfl
-
-@[simp, grind =] theorem execute_pure (fuel : Nat) (a : α) (s : TMState tm) :
-    execute fuel (pure a) s = some (⟨a, 0⟩, ⟨s, fuel⟩) := rfl
-
-/-- Sequencing shares the remaining fuel and accumulates the joint execution costs. -/
-@[simp, grind =] theorem execute_bind (fuel : ℕ) (p : Prog (TMQuery tm) α)
-    (next : α → Prog (TMQuery tm) β) (s : TMState tm) :
-    execute fuel (p >>= next) s = (do
-      let (a, t) ← execute fuel p s
-      let (b, u) ← execute t.fuel (next a.ret) t.machine
-      pure (⟨b.ret, a.tell + b.tell⟩, u)) := by
-  exact FuelExecMonad.execute_bind (TMModel tm) fuel p next s
-
-/-- Appending code preserves the next physical step. -/
-@[simp, grind =] theorem step_append (q : TMQuery tm Unit) (rest tail : List (TMQuery tm Unit))
-    (s : TMState tm) :
-    step q (rest ++ tail) s = {step q rest s with code := (step q rest s).code ++ tail} := by
-  cases q <;> simp [step, List.append_assoc]
-  split <;> simp [List.append_assoc]
-
-private theorem unit_ret (a : AddWriter TMCost Unit) : a.ret = () :=
-  Subsingleton.elim _ _
-
-@[simp] private theorem unit_result (a : AddWriter TMCost Unit) :
-    (⟨(), a.tell⟩ : AddWriter TMCost Unit) = a := by
-  cases a with | mk ret tell => cases ret; rfl
-
-/-- Executing concatenated code shares the budget and adds exactly the two execution costs. -/
-theorem runCode_append (fuel : Nat) (code tail : List (TMQuery tm Unit)) (s : TMState tm) :
-    runCode fuel (code ++ tail) s = (do
-      let (a, t) ← runCode fuel code s
-      let (b, u) ← runCode t.fuel tail t.machine
-      pure (⟨(), a.tell + b.tell⟩, u)) := by
-  induction fuel generalizing code s with
-  | zero => cases code <;> simp [runCode]
-  | succ fuel ih => cases code <;> simp [runCode, ih, Option.bind_assoc, add_assoc]
-
-@[simp] theorem runBlock_nil : runBlock ([] : List (TMQuery tm Unit)) = pure () := by
-  funext s
-  exact runCode_nil s.fuel s.machine
-
-@[simp] theorem runBlock_cons (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit)) :
-    runBlock (q :: rest) = ((TMModel tm).runQuery q >>= fun _ => runBlock rest) := by
-  apply AddWriterT.ext
-  funext s
-  simpa only [model_runQuery, FuelExecMonad.run_bind_cost, runBlock, AddWriterT.run_mk,
-    unit_ret, List.singleton_append] using
-    runCode_append s.fuel [q] rest s.machine
-
-@[simp, grind =] theorem runBlock_instructions (p : Prog (TMQuery tm) Unit) :
-    runBlock (instructions p) = p.runStateM (TMModel tm) := by
-  induction p with
-  | pure a => cases a; simp
-  | liftBind q cont ih => cases q <;> simp_all [Prog.runStateM, FreeM.liftM]
-
-/-- Additional fuel preserves a completed code execution, including its exact TM cost. -/
-theorem runCode_add_fuel (fuel extra : Nat) (code : List (TMQuery tm Unit)) (s : TMState tm)
-    (result : AddWriter TMCost Unit) (final : ExecutionState tm)
-    (h : runCode fuel code s = some (result, final)) :
-    runCode (fuel + extra) code s = some (result, { final with fuel := final.fuel + extra }) := by
-  induction fuel generalizing code s result final with
-  | zero => cases code <;> grind [runCode]
-  | succ fuel ih =>
-    cases code with
-    | nil => grind
-    | cons q code =>
-      cases hr : runCode fuel (step q code s).code (step q code s).machine <;>
-        simp_all [runCode, Nat.succ_add]
-      grind [Option.bind_eq_some_iff]
-
-/-- Once a loop-containing program completes, extra fuel cannot change its outcome or cost. -/
-theorem execute_add_fuel (fuel extra : Nat) (p : Prog (TMQuery tm) Unit) (s : TMState tm)
-    (result : AddWriter TMCost Unit) (final : ExecutionState tm)
-    (h : execute fuel p s = some (result, final)) :
-    execute (fuel + extra) p s = some (result, { final with fuel := final.fuel + extra }) := by
-  simp only [execute, FuelExecMonad.execute, ← runBlock_instructions,
-    runBlock, AddWriterT.run_mk] at h ⊢
-  exact runCode_add_fuel fuel extra _ s result final h
-
-/-- At the execution boundary, compilation and `ModelStateM.runStateM` coincide. -/
-@[grind =] theorem execute_eq_runCode (fuel : Nat) (p : Prog (TMQuery tm) Unit) (s : TMState tm) :
-    execute fuel p s = runCode fuel (instructions p) s := by
-  simp [execute, FuelExecMonad.execute, ← runBlock_instructions, runBlock]
-
-/-- Branch selection consumes one unit of fuel and executes only the selected body. -/
-@[simp, grind =] theorem execute_branch_succ (fuel : ℕ) (condition : TMCondition tm)
-    (yes no : Prog (TMQuery tm) Unit) (s : TMState tm) :
-    execute (fuel + 1) (branch condition yes no) s =
-      if condition.eval s.config then execute fuel yes s else execute fuel no s := by
-  simp only [execute_eq_runCode, branch, instructions_lift, runCode, step]
-  split <;> simp
-
-@[simp, grind =] theorem execute_while_zero (condition : TMCondition tm)
-    (body : Prog (TMQuery tm) Unit) (s : TMState tm) :
-    execute 0 (whileLoop condition body) s = none := by
-  simp [execute_eq_runCode, whileLoop]
-
-/-- Loop tests consume fuel, while the selected body determines the machine cost and state. -/
-@[grind =] theorem execute_while_succ (fuel : ℕ) (condition : TMCondition tm)
-    (body : Prog (TMQuery tm) Unit) (s : TMState tm) :
-    execute (fuel + 1) (whileLoop condition body) s =
-      if condition.eval s.config then execute fuel (do body; whileLoop condition body) s
-      else some (⟨(), 0⟩, ⟨s, fuel⟩) := by
-  simp only [execute_eq_runCode, whileLoop, instructions_lift, instructions_bind, runCode, step]
-  split <;> simp
-
 /-- A step's space charge is exactly the number of cells added to the tape range. -/
-@[grind ←] theorem step_cellsAllocated (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit))
-    (s : TMState tm) :
-    s.cellsAllocated.card + (step q rest s).cost.cellsAllocated =
-      (step q rest s).machine.cellsAllocated.card := by
+@[grind ←] theorem step_cellsAllocated (q : TMQuery tm α)
+    (next : α → Prog (TMQuery tm) β) (s : TMState tm) :
+    s.cellsAllocated.card + (step q next s).cost.cellsAllocated =
+      (step q next s).machine.cellsAllocated.card := by
   cases q with
   | move dir => cases dir <;> grind [step]
   | _ => simp [step]
 
-/-- Completed code charges each extension of the tape range once, through branches and loops. -/
-@[grind →] theorem runCode_cellsAllocated (fuel : ℕ) (code : List (TMQuery tm Unit))
-    (s : TMState tm)
-    (result : AddWriter TMCost Unit) (final : ExecutionState tm)
-    (h : runCode fuel code s = some (result, final)) :
-    s.cellsAllocated.card + result.tell.cellsAllocated = final.machine.cellsAllocated.card := by
-  induction fuel generalizing code s result final with
-  | zero => cases code <;> grind [runCode]
-  | succ fuel ih =>
-    cases code with
-    | nil => grind
-    | cons q code =>
-      cases hr : runCode fuel (step q code s).code (step q code s).machine <;>
-        simp_all [runCode]
-      grind
-
 /-- Total storage is the initial tape range plus the accumulated space cost. -/
-@[grind →] theorem execute_cellsAllocated (fuel : ℕ) (p : Prog (TMQuery tm) Unit) (s : TMState tm)
-    (result : AddWriter TMCost Unit) (final : ExecutionState tm)
+@[grind →] theorem execute_cellsAllocated (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm)
+    (result : AddWriter TMCost α) (final : ExecutionState tm)
     (h : execute fuel p s = some (result, final)) :
     s.cellsAllocated.card + result.tell.cellsAllocated = final.machine.cellsAllocated.card := by
-  grind
-
-/-- A completed program retains a single tape range, even after erasure. -/
-theorem runCode_allocatedInterval (fuel : ℕ) (code : List (TMQuery tm Unit)) (s : TMState tm)
-    (result : AddWriter TMCost Unit) (final : ExecutionState tm)
-    (h : runCode fuel code s = some (result, final)) (hs : s.AllocatedInterval) :
-    final.machine.AllocatedInterval := by
-  induction fuel generalizing code s result final with
-  | zero => cases code <;> grind [runCode]
+  induction fuel generalizing p s result final with
+  | zero =>
+    cases p with
+    | pure a =>
+      simp only [FreeM.pure_eq_pure, FuelExecMonad.execute_pure,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp
+    | liftBind q next => simp only [FuelExecMonad.execute_zero_liftBind] at h; cases h
   | succ fuel ih =>
-    cases code with
-    | nil => grind
-    | cons q rest =>
-      cases hr : runCode fuel (step q rest s).code (step q rest s).machine with
-      | none => simp [runCode, hr] at h
+    cases p with
+    | pure a =>
+      simp only [FreeM.pure_eq_pure, FuelExecMonad.execute_pure,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      simp
+    | liftBind q next =>
+      simp only [FuelExecMonad.execute_liftBind_succ] at h
+      cases hr : execute fuel (step q next s).program (step q next s).machine with
+      | none => simp [hr] at h
       | some pair =>
         obtain ⟨r, u⟩ := pair
-        have hu := ih _ _ _ _ hr (step_allocatedInterval q rest s hs)
-        simp_all [runCode]
+        simp only [hr, Option.pure_def] at h
+        obtain ⟨rfl, rfl⟩ := h
+        have hu := ih _ _ _ _ hr
+        have hs := step_cellsAllocated q next s
+        simp only [TMCost.add_cellsAllocated]
+        omega
+
+/-- A completed program retains a single tape range, even after erasure. -/
+theorem execute_preserves_allocatedInterval (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm)
+    (result : AddWriter TMCost α) (final : ExecutionState tm)
+    (h : execute fuel p s = some (result, final)) (hs : s.AllocatedInterval) :
+    final.machine.AllocatedInterval := by
+  induction fuel generalizing p s result final with
+  | zero =>
+    cases p with
+    | pure a =>
+      simp only [FreeM.pure_eq_pure, FuelExecMonad.execute_pure,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact hs
+    | liftBind q next => simp only [FuelExecMonad.execute_zero_liftBind] at h; cases h
+  | succ fuel ih =>
+    cases p with
+    | pure a =>
+      simp only [FreeM.pure_eq_pure, FuelExecMonad.execute_pure,
+        Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact hs
+    | liftBind q next =>
+      simp only [FuelExecMonad.execute_liftBind_succ] at h
+      cases hr : execute fuel (step q next s).program (step q next s).machine with
+      | none => simp [hr] at h
+      | some pair =>
+        obtain ⟨r, u⟩ := pair
+        simp only [hr, Option.pure_def] at h
+        obtain ⟨rfl, rfl⟩ := h
+        exact ih _ _ _ _ hr (step_allocatedInterval q next s hs)
 
 /-- Storage after an initialized run includes the entire input and every tape extension. -/
 theorem execute_spaceUsed (fuel : ℕ) (p : Prog (TMQuery tm) Unit) (input : List Symbol)
@@ -513,30 +451,27 @@ theorem execute_spaceUsed (fuel : ℕ) (p : Prog (TMQuery tm) Unit) (input : Lis
 theorem execute_allocatedInterval (fuel : ℕ) (p : Prog (TMQuery tm) Unit) (input : List Symbol)
     (result : AddWriter TMCost Unit) (final : ExecutionState tm)
     (h : execute fuel p (TMState.init tm input) = some (result, final)) :
-    final.machine.AllocatedInterval := by
-  rw [execute_eq_runCode] at h
-  exact runCode_allocatedInterval _ _ _ _ _ h (TMState.allocatedInterval_init tm input)
+    final.machine.AllocatedInterval :=
+  execute_preserves_allocatedInterval fuel p _ result final h
+    (TMState.allocatedInterval_init tm input)
 
 /-- Completed execution cannot reveal a tape symbol or control state through a Lean result. -/
-@[grind →] theorem execute_ret (p : Prog (TMQuery tm) α) (s : TMState tm) (fuel : Nat)
+@[grind →] theorem execute_ret (p : Prog (TMQuery tm) α) (s : TMState tm) (fuel : ℕ)
     (result : AddWriter TMCost α) (final : ExecutionState tm)
     (h : execute fuel p s = some (result, final)) : result.ret = returnValue p := by
   have hr := h
   rw [eq_bind_return p] at hr
-  simp only [execute_bind, h, execute_pure, Option.pure_def] at hr
+  simp only [FuelExecMonad.execute_bind, h, FuelExecMonad.execute_pure, Option.pure_def] at hr
   grind
 
 /-- Two successful runs have the same Lean return value, regardless of their machine inputs. -/
 theorem execute_ret_independent (p : Prog (TMQuery tm) α) (s t : TMState tm)
-    {fuel fuel' : Nat} {result result' : AddWriter TMCost α}
+    {fuel fuel' : ℕ} {result result' : AddWriter TMCost α}
     {final final' : ExecutionState tm}
     (h : execute fuel p s = some (result, final))
     (h' : execute fuel' p t = some (result', final')) : result.ret = result'.ret := by
   grind
 
 end TMQuery
-
-
 end Algorithms
-
 end Algolean

@@ -20,12 +20,16 @@ when the  memory and registers of the WordRAM model are hidden, we can still tra
 cells that are written to, which allows us to assign space complexity. The monad
 remains generic: stateful and probabilistic interpretations both retain the correlation
 between results and costs.
-- `Prog.evalStateM` evaluates a program,
-- `Prog.runStateM` records its result and accumulated cost, and
-- `Prog.costStateM` returns the accumulated cost.
 
 `ModelStateM.handler` and `ModelStateM.hasHandler` provide weakest-precondition semantics
 for `vcgen` when the monad has a `Std.WP.WPMonad` instance.
+
+## Main definitions and results
+
+* `Prog.evalStateM` evaluates a program.
+* `Prog.runStateM` records its result and accumulated cost.
+* `Prog.costStateM` returns the accumulated cost.
+* `Prog.runStateM_bind_stateT` describes sequencing with state and costs over any base monad.
 -/
 
 @[expose] public section
@@ -204,34 +208,16 @@ def costStateM [Monad m] [AddZero Cost]
 
 section State
 
-/-- Joint execution of a pure program preserves the state and records zero cost. -/
-@[grind =] theorem runStateM_pure_state [AddZero Cost]
-    (M : ModelStateM Q (StateM σ) Cost) (a : α) (s : σ) :
-    ((pure a : Prog Q α).runStateM M).run s = ((⟨a, 0⟩ : AddWriter Cost α), s) := rfl
-
-/-- Joint execution supplies the same query outcome to the continuation and the cost sum. -/
-@[grind =] theorem runStateM_liftBind_state [AddZero Cost]
-    (M : ModelStateM Q (StateM σ) Cost) (q : Q α) (f : α → Prog Q β) (s : σ) :
-    (runStateM (FreeM.liftBind q f) M).run s =
-      let first := (M.runQuery q).run s
-      let rest := ((f first.fst.ret).runStateM M).run first.snd
-      ((⟨rest.fst.ret, first.fst.tell + rest.fst.tell⟩ : AddWriter Cost β), rest.snd) := rfl
-
-/-- Joint execution rule for the lifted-query bind notation. -/
-@[grind =] theorem runStateM_lift_bind_state [AddZero Cost]
-    (M : ModelStateM Q (StateM σ) Cost) (q : Q α) (f : α → Prog Q β) (s : σ) :
-    (runStateM (FreeM.lift q >>= f) M).run s =
-      let first := (M.runQuery q).run s
-      let rest := ((f first.fst.ret).runStateM M).run first.snd
-      ((⟨rest.fst.ret, first.fst.tell + rest.fst.tell⟩ : AddWriter Cost β), rest.snd) := rfl
-
-/-- Execute the selected branch without hiding the conditional inside the interpreter. -/
-@[simp] theorem runStateM_ite_state [AddZero Cost]
-    (condition : Prop) [Decidable condition] (yes no : Prog Q α)
-    (M : ModelStateM Q (StateM σ) Cost) (s : σ) :
-    (runStateM (if condition then yes else no) M).run s =
-      if condition then (yes.runStateM M).run s else (no.runStateM M).run s := by
-  split <;> rfl
+/-- Execute two programs in sequence, passing the first result and state to the second
+and adding the costs produced by that same execution. -/
+theorem runStateM_bind_stateT [Monad m] [LawfulMonad m] [AddMonoid Cost]
+    (M : ModelStateM Q (StateT σ m) Cost) (p : Prog Q α) (next : α → Prog Q β) (s : σ) :
+    (runStateM (p >>= next) M).run s = (do
+      let (a, t) ← (p.runStateM M).run s
+      let (b, u) ← ((next a.ret).runStateM M).run t
+      pure (⟨b.ret, a.tell + b.tell⟩, u)) := by
+  rw [runStateM_bind]
+  rfl
 
 /-- Recover evaluation from joint execution at a concrete state. -/
 @[simp, grind =] theorem evalStateM_eq_runStateM_state [AddZero Cost]
