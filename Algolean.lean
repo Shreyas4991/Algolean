@@ -46,6 +46,10 @@ public import Algolean.Models.ReadOnlyVec
 public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
+public import Algolean.Models.SingleTapeTM.Alphabet.Basic
+public import Algolean.Models.SingleTapeTM.Alphabet.Encoding
+public import Algolean.Models.SingleTapeTM.Alphabet.List
+public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 public import Algolean.Models.SingleTapeTM.Composition.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.Component

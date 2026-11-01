@@ -17,6 +17,7 @@ public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples
 public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
+public import AlgoleanTests.SingleTapeTMAlphabet
 public import AlgoleanTests.SingleTapeTMComposition
 public import AlgoleanTests.SingleTapeTMExamples
 public import AlgoleanTests.SingleTapeTMReductions
