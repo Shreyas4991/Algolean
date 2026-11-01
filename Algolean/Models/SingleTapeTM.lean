@@ -13,37 +13,22 @@ public import Mathlib.Data.Int.Interval
 /-!
 # Deeply embedded single-tape TM programs
 
-`TMQuery tm` describes tape writes, control-state updates, head moves, branches, and loops.
-Every query returns `Unit`: tape symbols and control states remain inside `TMState`.
-`TMCondition` is a finite syntax for testing those values inside the interpreter.
-`TMQuery.branch` and `TMQuery.whileLoop` accept `Prog` bodies and compile them to finite code.
+A TM algorithm is a fixed program run on a single tape turing machine,
+independent of its input and input length to keep the Program uniform.
+The input is supplied through the initial machine state, not the Prog.
+The output is observed through the final configuration.
+Tape symbols and control states remain inside the model. Every query returns `Unit`.
 
-An algorithm is a fixed program, independent of its input and input length. Supply input only
-through the initial machine state, and observe output through the final configuration.
-`TMQuery.execute fuel program state` runs it through `TMModel`, which uses
-`StateT (TMQuery.ExecutionState tm) Option`. Each instruction, branch selection, and loop test
-consumes interpreter fuel. Exhaustion returns `none`, including for an empty infinite loop.
-Fuel is external to the program and separate from the machine's time and space costs.
-`TMQuery.execute_ret_independent` proves that successful runs of a fixed program cannot
-reveal machine data through their Lean return values.
+Each instruction, branch selection, and loop test consumes interpreter fuel.
+Exhaustion returns `none`, including for an empty infinite loop.
+Fuel is external to the program and separate from the machine's time and space costs. Successful
+runs of a fixed program cannot reveal machine data through their Lean return values.
 
-Space counts the length of the allocated tape, following the ordinary-machine case of
-Papadimitriou [§2.5, Definition 2.6, p. 35][papadimitriou1994]. The whole input counts from
-the start, including cells the head has not visited. Moving outside the allocated tape adds
-a blank cell. Erasing symbols and returning the head do not shorten the allocated tape.
-There are no separate read-only input and write-only output tapes to exclude from this count.
+Space complexity is counted as the range of cells visited by the tape head
+together with the cells holding the initial input, following the ordinary-machine case of
+Papadimitriou [§2.5, Definition 2.6, p. 35][papadimitriou1994].
 
-Our tape representation is bidirectional and has no left-end marker. Its initial allocated
-length is `max 1 input.length`, including the head cell for an empty input. The textbook uses
-a one-sided string with a left-end marker, initially of length `input.length + 1`.
-We use its storage-counting rule with this explicit difference in tape representation.
 
-`TMState.cellsAllocated` retains every initially stored or subsequently reached cell;
-its cardinality gives total space. `TMCost.cellsAllocated` measures additional allocated cells.
-`TMState.cellsVisited` separately records cells actually visited by the head and is not the
-space measure. Both records are retained when procedures are composed.
-Time continues to count `move` queries, including `Dir.Stop`.
-Writing, control-state updates, and condition tests carry no additional time cost.
 
 ## References
 
@@ -51,6 +36,19 @@ Writing, control-state updates, and condition tests carry no additional time cos
   1994, §2.5, Definition 2.6, p. 35. ISBN 0-201-53082-1.][papadimitriou1994]
 
 [papadimitriou1994]: https://www2.eecs.berkeley.edu/Pubs/Faculty/papadimitriou.html
+
+## Main definitions and results
+
+* `TMQuery tm` describes tape writes, control-state updates, head moves, branches, and loops.
+* `TMCondition` is syntax for testing tape symbols and control states inside the interpreter.
+* `TMQuery.branch` and `TMQuery.whileLoop` accept `Prog` bodies and compile them to finite code.
+* `TMState.cellsAllocated` retains every initially stored or subsequently reached cell;
+  its cardinality gives total space. `TMCost.cellsAllocated` counts cells added to this range.
+* `TMState.cellsVisited` records cells actually visited by the head, separately from space usage.
+* `TMQuery.execute fuel program state` runs a program through `TMModel`, which uses
+  `StateT (TMQuery.ExecutionState tm) Option`.
+* `TMQuery.execute_ret_independent` proves that successful runs of a fixed program cannot
+  reveal machine data through their Lean return values.
 -/
 
 @[expose] public section
@@ -180,17 +178,17 @@ inductive TMQuery (tm : SingleTapeTM Symbol) : Type → Type where
   /-- Repeat a code block while a machine condition holds. -/
   | whileCode (condition : TMCondition tm) (body : List (TMQuery tm Unit)) : TMQuery tm Unit
 
-/-- The configuration, allocated tape, and head visits of a single-tape query execution. -/
+/-- The configuration, tape range, and head visits of a single-tape query execution. -/
 @[ext, grind]
 structure TMState (tm : SingleTapeTM Symbol) where
   /-- The current machine configuration. -/
   config : tm.Cfg
   /-- Head position relative to its initial cell, with negative positions to the left. -/
   headPos : ℤ := 0
-  /-- Allocated positions. Initially these cover the stored tape and the head cell. -/
+  /-- The range of cells visited by the tape head together with the initially stored tape. -/
   cellsAllocated : Finset ℤ := Finset.Icc
     (headPos - config.BiTape.left.length) (headPos + config.BiTape.right.length)
-  /-- Distinct positions actually visited by the head, independent of allocated input cells. -/
+  /-- Distinct positions actually visited by the head, independent of unvisited input cells. -/
   cellsVisited : Finset ℤ := {headPos}
 
 /-- Initialize the machine on an input, with its head at position zero. -/
@@ -198,7 +196,7 @@ structure TMState (tm : SingleTapeTM Symbol) where
 def TMState.init (tm : SingleTapeTM Symbol) (input : List Symbol) : TMState tm where
   config := tm.initCfg input
 
-/-- Total storage includes allocated blank cells and unvisited input cells. -/
+/-- Total storage includes the range of cells visited by the tape head and the whole input. -/
 def TMState.spaceUsed {tm : SingleTapeTM Symbol} (s : TMState tm) : ℕ :=
   s.cellsAllocated.card
 
@@ -208,7 +206,7 @@ def TMState.spaceUsed {tm : SingleTapeTM Symbol} (s : TMState tm) : ℕ :=
   cases input <;> simp [TMState.init, SingleTapeTM.initCfg, BiTape.mk₁, BiTape.nil,
     TMState.spaceUsed, StackTape.length_nil, StackTape.length_mapSome, Int.card_Icc]
 
-/-- Allocated cells form one finite tape segment containing the head. -/
+/-- The recorded tape range is a single finite interval containing the head. -/
 def TMState.AllocatedInterval {tm : SingleTapeTM Symbol} (s : TMState tm) : Prop :=
   ∃ lo hi, s.cellsAllocated = Finset.Icc lo hi ∧ lo ≤ s.headPos ∧ s.headPos ≤ hi
 
@@ -232,7 +230,7 @@ The Turing machine cost structure.
 structure TMCost where
   /-- `steps` counts the number of moves in the TM -/
   steps : ℕ
-  /-- Number of additional allocated cells, beyond the initial state's stored tape. -/
+  /-- Number of cells added to the tape range beyond the initial state's stored tape. -/
   cellsAllocated : ℕ
 
 
@@ -340,7 +338,7 @@ def whileLoop (condition : TMCondition tm) (body : Prog (TMQuery tm) Unit) :
 /-- Interpreter fuel is kept separately from the physical machine state. -/
 @[ext, grind]
 structure ExecutionState (tm : SingleTapeTM Symbol) where
-  /-- Current configuration, head position, allocated tape, and visited-cell history. -/
+  /-- Current configuration, head position, tape range, and visited-cell history. -/
   machine : TMState tm
   /-- Remaining interpreter steps; inaccessible to programs. -/
   fuel : ℕ
@@ -408,10 +406,8 @@ theorem step_allocatedInterval (q : TMQuery tm Unit) (rest : List (TMQuery tm Un
       simpa [step, hs] using insert_Icc_adjacent (lo := lo) (hi := hi) (by lia) (by lia)
   | _ => exact ⟨lo, hi, hs, hlo, hhi⟩
 
-/-- Shared structured-code runner, parameterized only by its model's small-step semantics. -/
-@[simp] def runCodeWith
-    (nextStep : TMQuery tm Unit → List (TMQuery tm Unit) → TMState tm → Step tm) :
-    ℕ → List (TMQuery tm Unit) → TMState tm →
+/-- Run pending code with shared fuel; every instruction and control test consumes one unit. -/
+def runCode : ℕ → List (TMQuery tm Unit) → TMState tm →
     Option (AddWriter TMCost Unit × ExecutionState tm)
   | fuel, [], s => some (⟨(), 0⟩, ⟨s, fuel⟩)
   | 0, _ :: _, _ => none
@@ -571,7 +567,7 @@ theorem execute_add_fuel (fuel extra : Nat) (p : Prog (TMQuery tm) Unit) (s : TM
     runCode, runCodeWith, step]
   split <;> simp
 
-/-- A step's space charge is exactly the number of additional allocated cells. -/
+/-- A step's space charge is exactly the number of cells added to the tape range. -/
 @[grind ←] theorem step_cellsAllocated (q : TMQuery tm Unit) (rest : List (TMQuery tm Unit))
     (s : TMState tm) :
     s.cellsAllocated.card + (step q rest s).cost.cellsAllocated =
@@ -580,7 +576,7 @@ theorem execute_add_fuel (fuel extra : Nat) (p : Prog (TMQuery tm) Unit) (s : TM
   | move dir => cases dir <;> grind [step]
   | _ => simp [step]
 
-/-- Completed code charges each additional allocated cell once, through branches and loops. -/
+/-- Completed code charges each extension of the tape range once, through branches and loops. -/
 @[grind →] theorem runCode_cellsAllocated (fuel : ℕ) (code : List (TMQuery tm Unit))
     (s : TMState tm)
     (result : AddWriter TMCost Unit) (final : ExecutionState tm)
@@ -596,14 +592,14 @@ theorem execute_add_fuel (fuel extra : Nat) (p : Prog (TMQuery tm) Unit) (s : TM
         simp_all [runCode]
       grind
 
-/-- Total storage is the initially allocated tape plus the accumulated space cost. -/
+/-- Total storage is the initial tape range plus the accumulated space cost. -/
 @[grind →] theorem execute_cellsAllocated (fuel : ℕ) (p : Prog (TMQuery tm) Unit) (s : TMState tm)
     (result : AddWriter TMCost Unit) (final : ExecutionState tm)
     (h : execute fuel p s = some (result, final)) :
     s.cellsAllocated.card + result.tell.cellsAllocated = final.machine.cellsAllocated.card := by
   grind
 
-/-- A completed program retains a single allocated tape segment, even after erasure. -/
+/-- A completed program retains a single tape range, even after erasure. -/
 theorem runCode_allocatedInterval (fuel : ℕ) (code : List (TMQuery tm Unit)) (s : TMState tm)
     (result : AddWriter TMCost Unit) (final : ExecutionState tm)
     (h : runCode fuel code s = some (result, final)) (hs : s.AllocatedInterval) :
@@ -614,7 +610,7 @@ theorem runCode_allocatedInterval (fuel : ℕ) (code : List (TMQuery tm Unit)) (
     cases code with
     | nil => grind
     | cons q rest =>
-      cases hr : runCodeWith step fuel (step q rest s).code (step q rest s).machine with
+      cases hr : runCode fuel (step q rest s).code (step q rest s).machine with
       | none => simp [runCode, hr] at h
       | some pair =>
         obtain ⟨r, u⟩ := pair

@@ -110,7 +110,7 @@ example : (execute 4 roundTrip (TMState.init machine [])).map
     (fun r => (r.1.tell.steps, r.1.tell.cellsAllocated, r.2.machine.headPos,
       r.2.machine.cellsAllocated.card)) = some (4, 2, 0, 3) := by simp
 
--- Blank cells remain allocated even though the tape representation trims their contents.
+-- Blank cells remain in the visited range even though the tape representation trims their contents.
 example : (execute 4 roundTrip (TMState.init machine [])).map
     (fun (_, final) => (final.machine.config.BiTape.spaceUsed, final.machine.spaceUsed)) =
       some (1, 3) := by simp [BiTape.spaceUsed, TMState.spaceUsed, StackTape.cons]
@@ -121,7 +121,7 @@ example : (execute 4 roundTrip (TMState.init machine [])).map
   ext
   simp [or_comm, or_left_comm, or_assoc]
 
--- Moving through already allocated input cells adds no storage.
+-- Moving through input cells already included in the tape range adds no storage.
 example : (execute 4 roundTrip (TMState.init machine [true, false])).map
     (fun r => (r.1.tell.cellsAllocated, r.2.machine.config.BiTape.head)) =
       some (1, some true) := by simp
@@ -142,7 +142,7 @@ example : (execute 6 eraseAndRevisit (TMState.init machine [])).map
 -- The shared budget applies across queries, and exhaustion discards partial execution.
 example : execute 5 eraseAndRevisit (TMState.init machine []) = none := rfl
 
--- A second execution retains the allocated tape and charges no additional cells.
+-- A second execution retains the tape range and charges no additional cells.
 example : (do
     let (_, after) ← execute 4 roundTrip (TMState.init machine [])
     let (cost, _) ← execute 4 roundTrip after.machine
