@@ -44,6 +44,58 @@ denotes `PMF.pure`.
   simp only [PMF.monad_map_eq_map, PMF.map, Function.comp_def, PMF.bind_const]
   rfl
 
+namespace PMF
+
+variable {α β : Type*}
+
+/-- The monadic `pure` of `PMF` is `PMF.pure`. -/
+theorem monad_pure_eq_pure {α : Type u} (a : α) : (Pure.pure a : PMF α) = PMF.pure a := rfl
+
+/-- The monadic bind of `PMF` is `PMF.bind`. -/
+theorem monad_bind_eq_bind {α β : Type u} (p : PMF α) (f : α → PMF β) :
+    p >>= f = p.bind f := rfl
+
+/-! ### Expected values
+
+The expected value of `f : α → ℝ≥0∞` under `p : PMF α` is `∑' a, p a * f a`. -/
+
+open scoped ENNReal
+
+/-- The expected value of a constant `c` under any distribution is `c`. -/
+theorem tsum_mul_const (p : PMF α) (c : ℝ≥0∞) : ∑' a, p a * c = c := by
+  rw [ENNReal.tsum_mul_right, p.tsum_coe, one_mul]
+
+/-- The expected value of `f` under the point mass at `a` is `f a`. -/
+theorem tsum_pure_mul (a : α) (f : α → ℝ≥0∞) : ∑' b, PMF.pure a b * f b = f a := by
+  simp [pure_apply, ite_mul]
+
+/-- The expected value of `f` under `p.bind q` is the expected value under `p` of the function
+sending `a` to the expected value of `f` under `q a`. -/
+theorem tsum_bind_mul (p : PMF α) (q : α → PMF β) (f : β → ℝ≥0∞) :
+    ∑' b, p.bind q b * f b = ∑' a, p a * ∑' b, q a b * f b := by
+  simp_rw [bind_apply, ← ENNReal.tsum_mul_right, ← ENNReal.tsum_mul_left, mul_assoc]
+  exact ENNReal.tsum_comm
+
+/-- The expected value of `f` under `p.map g` is the expected value of `f ∘ g` under `p`. -/
+theorem tsum_map_mul (p : PMF α) (g : α → β) (f : β → ℝ≥0∞) :
+    ∑' b, p.map g b * f b = ∑' a, p a * f (g a) := by
+  rw [← bind_pure_comp, tsum_bind_mul]
+  simp
+
+/-- For `p : PMF ℕ` and `c : ℕ`, the expected value of `p.map (c + ·)` is `c` plus the expected
+value of `p`. -/
+theorem tsum_map_add_left_mul (p : PMF ℕ) (c : ℕ) :
+    ∑' k, p.map (c + ·) k * k = c + ∑' k, p k * k := by
+  simp_rw [tsum_map_mul, Nat.cast_add, mul_add, ENNReal.tsum_add, tsum_mul_const]
+
+/-- For `p q : PMF ℕ`, the expected value of the sum of independent draws from `p` and `q` is the
+sum of their expected values. -/
+theorem tsum_bind_map_add_mul (p q : PMF ℕ) :
+    ∑' k, (p.bind fun a => q.map (a + ·)) k * k = ∑' k, p k * k + ∑' k, q k * k := by
+  simp_rw [tsum_bind_mul, tsum_map_add_left_mul, mul_add, ENNReal.tsum_add, tsum_mul_const]
+
+end PMF
+
 namespace Algolean.Algorithms
 
 open Cslib Lean.Order Std.WP
