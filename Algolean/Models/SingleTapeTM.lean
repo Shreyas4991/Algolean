@@ -40,7 +40,7 @@ Papadimitriou [§2.5, Definition 2.6, p. 35][papadimitriou1994].
 ## Main definitions and results
 
 * `TMQuery tm` describes tape writes, control-state updates, head moves, branches, and loops.
-* `TMCondition` is a finite syntax for testing tape symbols and control states inside the interpreter.
+* `TMCondition` is syntax for testing tape symbols and control states inside the interpreter.
 * `TMQuery.branch` and `TMQuery.whileLoop` accept `Prog` bodies and compile them to finite code.
 * `TMState.cellsAllocated` retains every initially stored or subsequently reached cell;
   its cardinality gives total space. `TMCost.cellsAllocated` counts cells added to this range.
