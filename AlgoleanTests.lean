@@ -19,4 +19,5 @@ public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
 public import AlgoleanTests.SingleTapeTMComposition
 public import AlgoleanTests.SingleTapeTMExamples
+public import AlgoleanTests.SingleTapeTMReductions
 public import AlgoleanTests.WordRAMExamples

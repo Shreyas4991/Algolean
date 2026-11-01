@@ -9,16 +9,29 @@ module
 public import Algolean.Models.SingleTapeTM.Composition.Component
 
 /-!
-# Sequential composition of single-tape query procedures
+# Running procedures in sequence on the same machine
 
-Composed procedures retain the actual intermediate machine state and add their execution costs.
-The time bound for the second procedure is evaluated on the first procedure's output.
+This file joins procedures that already use the same machine and its state names. The first
+procedure finishes before the second begins. The second inherits the first procedure's tape,
+state label, head position, and records of tape use. The time and storage costs add up.
+
+The results combine proofs about individual procedures into proofs about the whole program. They
+also cover adding a single write or move before or after a procedure.
+
+[MachineComposition](Algolean/Models/SingleTapeTM/Composition/MachineComposition.html)
+handles independently defined machines. It gives their states distinct names, sets the second
+machine's initial state, and proves a combined bound in terms of the original input length.
 
 ## Main definitions and results
 
-* `TMQuery.Completes.seq` and `TMQuery.Runs.seq` compose execution contracts.
-* `Component.andThen` composes components whose preconditions and postconditions agree.
-* `EncodedComputer.seq` composes verified transformations, including ordinary word computers.
+* [Completes.seq](##Algolean.Algorithms.TMQuery.Completes.seq) joins two completed executions
+  and adds their costs.
+* [Runs.seq](##Algolean.Algorithms.TMQuery.Runs.seq) combines proofs about the output tape, head
+  position, and time.
+* [Component.andThen](##Algolean.Algorithms.Component.andThen) joins procedures when the first
+  establishes the conditions required by the second.
+* [EncodedComputer.seq](##Algolean.Algorithms.EncodedComputer.seq) joins procedures whose
+  representations of the intermediate result agree.
 -/
 
 @[expose] public section
@@ -30,7 +43,10 @@ open Cslib Cslib.Turing
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
-/-- Compose two procedures without resetting any machine state or space history. -/
+/--
+The second procedure starts from the state left by the first. Their completed executions
+combine, and their costs add up.
+-/
 theorem Completes.seq {p q : Prog (TMQuery tm) Unit} {s t u : TMState tm} {a b : TMCost}
     (hp : Completes p s a t) (hq : Completes q t b u) : Completes (do p; q) s (a + b) u := by
   obtain ⟨fuel, hp⟩ := hp
@@ -39,7 +55,10 @@ theorem Completes.seq {p q : Prog (TMQuery tm) Unit} {s t u : TMState tm} {a b :
   simp [FuelExecMonad.execute_add_fuel fuel extra p s _ _ hp, hq]
 
 
-/-- Compose contracts while retaining the intermediate execution state. -/
+/--
+The two procedures run in sequence, using the actual intermediate state. Their proofs of the
+output tape, head position, and execution time combine.
+-/
 theorem Runs.seq {p q : Prog (TMQuery tm) Unit} {s : TMState tm}
     {first second : BiTape Symbol} {pos₁ pos₂ : ℤ} {time₁ time₂ : ℕ}
     (hp : Runs p s first pos₁ time₁)
@@ -53,7 +72,10 @@ theorem Runs.seq {p q : Prog (TMQuery tm) Unit} {s : TMState tm}
 
 section PrimitiveComposition
 
-/-- Prepend a completed procedure that preserves the control state. -/
+/--
+A completed procedure can run before the given procedure if it preserves the state label. The
+time required adds up.
+-/
 theorem Runs.prepend {p q : Prog (TMQuery tm) Unit} {s t : TMState tm} {a : TMCost}
     {output : BiTape Symbol} {pos : ℤ} {time : ℕ} (h : Runs q t output pos time)
     (hp : Completes p s a t) (hc : t.config.state = s.config.state) :
@@ -61,21 +83,30 @@ theorem Runs.prepend {p q : Prog (TMQuery tm) Unit} {s t : TMState tm} {a : TMCo
   obtain ⟨b, u, hq, ht, hpos, hb⟩ := h
   exact ⟨a + b, u, hp.seq hq, by simpa [hc] using ht, hpos, by simp [hb]⟩
 
-/-- Prepend a write without introducing an intermediate-state proof. -/
+/--
+A write can run before the given procedure. The proof uses the tape after that write, and the
+write adds no head moves.
+-/
 theorem Runs.prepend_write {p : Prog (TMQuery tm) Unit} {s : TMState tm}
     {a : Option Symbol} {output : BiTape Symbol} {pos : ℤ} {time : ℕ}
     (h : Runs p (s.write a) output pos time) :
     Runs (do FreeM.lift (.write a); p) s output pos time := by
   simpa using h.prepend (completes_write s a) rfl
 
-/-- Prepend a head move, charging one move and retaining the actual storage history. -/
+/--
+A move can run before the given procedure. It adds one time step and updates the records of tape
+use.
+-/
 theorem Runs.prepend_move {p : Prog (TMQuery tm) Unit} {s : TMState tm}
     {direction : Dir} {output : BiTape Symbol} {pos : ℤ} {time : ℕ}
     (h : Runs p (s.move direction) output pos time) :
     Runs (do FreeM.lift (.move direction); p) s output pos (1 + time) := by
   simpa [TMState.moveCost] using h.prepend (completes_move s direction) rfl
 
-/-- Append a write to an existing tape and time contract. -/
+/--
+A write can run after the given procedure. It changes the output tape without adding a head
+move.
+-/
 theorem Runs.append_write {p : Prog (TMQuery tm) Unit} {s : TMState tm}
     {output : BiTape Symbol} {pos : ℤ} {time : ℕ} (h : Runs p s output pos time)
     (a : Option Symbol) : Runs (do p; FreeM.lift (.write a)) s (output.write a) pos time := by
@@ -84,7 +115,10 @@ theorem Runs.append_write {p : Prog (TMQuery tm) Unit} {s : TMState tm}
   · simpa using hp.seq (completes_write t a)
   · simp [TMState.write, ht, BiTape.write]
 
-/-- Append a head move to an existing tape and time contract. -/
+/--
+A move can run after the given procedure. The proof describes the resulting tape and head
+position, and the move adds one time step.
+-/
 theorem Runs.append_move {p : Prog (TMQuery tm) Unit} {s : TMState tm}
     {output : BiTape Symbol} {pos : ℤ} {time : ℕ} (h : Runs p s output pos time)
     (direction : Dir) :
@@ -111,8 +145,11 @@ open Cslib Cslib.Turing TMQuery
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
-/-- Run two components in sequence. The first component's postcondition must imply the second
-component's precondition. The index map is used only in the proof; both programs stay fixed. -/
+/--
+Two components run in sequence when the first establishes the conditions required by the second.
+The resulting proof records both executions and their combined cost. The input indices are used
+in the proof; both programs stay fixed.
+-/
 @[simps program]
 def andThen {ι κ : Type} {pre : ι → TMState tm → Prop}
     {post : ι → TMState tm → TMCost → TMState tm → Prop}
@@ -137,7 +174,10 @@ open Cslib Cslib.Turing TMQuery
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
-/-- Compose compatible encoded interfaces without performing any encoding operation for free. -/
+/--
+The two procedures run in sequence when the first output and second input use the same
+representation on tape. Their time bounds add up on the actual intermediate value.
+-/
 @[simps program]
 def seq {α β γ : Type} {ea : α → List Symbol} {eb : β → List Symbol} {ec : γ → List Symbol}
     {f : α → β} {g : β → γ} {a : α → ℕ} {b : β → ℕ}
@@ -161,7 +201,10 @@ open Cslib Cslib.Turing TMQuery
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
-/-- The generic verified identity component, with zero head moves and unchanged history. -/
+/--
+This procedure leaves the tape, head position, state label, and records unchanged. It makes no
+head moves.
+-/
 @[simps program]
 def identity : Computer tm id (fun _ => 0) where
   program := pure ()
@@ -169,7 +212,7 @@ def identity : Computer tm id (fun _ => 0) where
     simp only [id_eq] at hs
     exact ⟨0, s, completes_pure s, by simp [← hs], rfl, le_rfl⟩
 
-/-- Sequential composition of verified machines, read from left to right. -/
+/-- This notation runs two verified procedures in sequence, from left to right. -/
 scoped infixr:55 " ≫ₜ " => EncodedComputer.seq
 
 end Algolean.Algorithms.Computer
