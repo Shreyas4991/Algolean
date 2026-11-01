@@ -59,7 +59,94 @@ namespace Algorithms
 
 open Cslib Prog Turing
 
-variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
+variable {Symbol : Type}
+
+/-- Add a separator to an alphabet. Original symbols remain distinguishable from the separator;
+the tape's blank is still represented separately by `none`. -/
+inductive Augmented (Symbol : Type) where
+  | symbol : Symbol → Augmented Symbol
+  | separator : Augmented Symbol
+deriving DecidableEq
+
+namespace Augmented
+
+theorem symbol_injective : Function.Injective (@symbol Symbol) := fun _ _ h => symbol.inj h
+
+/-- Tagging every symbol preserves equality of words. -/
+@[simp, grind =] theorem map_symbol_inj {x y : List Symbol} :
+    x.map symbol = y.map symbol ↔ x = y :=
+  List.map_inj_right (fun _ _ h => symbol.inj h)
+
+instance : Inhabited (Augmented Symbol) := ⟨.separator⟩
+
+/-- Identify the augmented alphabet with an optional original symbol. -/
+def equivOption : Augmented Symbol ≃ Option Symbol where
+  toFun
+    | .symbol a => some a
+    | .separator => none
+  invFun
+    | some a => .symbol a
+    | none => .separator
+  left_inv a := by cases a <;> rfl
+  right_inv a := by cases a <;> rfl
+
+instance [Fintype Symbol] : Fintype (Augmented Symbol) :=
+  Fintype.ofEquiv (Option Symbol) equivOption.symm
+
+/-- Put two words on one tape with an explicit boundary between them. -/
+def encodePair (input certificate : List Symbol) : List (Augmented Symbol) :=
+  input.map .symbol ++ .separator :: certificate.map .symbol
+
+/-- Read the original symbols before the first separator, or the whole word if none occurs. -/
+def firstWord : List (Augmented Symbol) → List Symbol
+  | [] => []
+  | .symbol a :: rest => a :: firstWord rest
+  | .separator :: _ => []
+
+/-- The part after the first separator; empty when the separator is missing. -/
+def afterSeparator : List (Augmented Symbol) → List (Augmented Symbol)
+  | [] => []
+  | .symbol _ :: rest => afterSeparator rest
+  | .separator :: rest => rest
+
+@[simp] theorem firstWord_encodePair (input certificate : List Symbol) :
+    firstWord (encodePair input certificate) = input := by
+  induction input <;> simp_all [encodePair, firstWord]
+
+@[simp] theorem length_encodePair (input certificate : List Symbol) :
+    (encodePair input certificate).length = input.length + certificate.length + 1 := by
+  simp [encodePair]
+  lia
+
+theorem encodePair_injective :
+    Function.Injective (fun p : List Symbol × List Symbol => encodePair p.1 p.2) := by
+  rintro ⟨x, c⟩ ⟨y, d⟩ h
+  have hx : x = y := by simpa using congrArg firstWord h
+  subst y
+  have hc : c = d := by
+    have hm : c.map symbol = d.map symbol := by simpa [encodePair] using h
+    exact (List.map_inj_right (fun _ _ h => symbol.inj h)).mp hm
+  subst d
+  rfl
+
+/-- The two portions retained by the parser occupy at most the original word's length. -/
+theorem lengths_le (word : List (Augmented Symbol)) :
+    (firstWord word).length + (afterSeparator word).length ≤ word.length := by
+  induction word with
+  | nil => simp [firstWord, afterSeparator]
+  | cons a rest ih =>
+    cases a <;> simp_all [firstWord, afterSeparator]
+    lia
+
+/-- Removing the separator and certificate cannot lengthen the input word. -/
+@[grind! .] theorem length_firstWord_le (input : List (Augmented Symbol)) :
+    (firstWord input).length ≤ input.length := by
+  have := lengths_le input
+  lia
+
+end Augmented
+
+variable [Inhabited Symbol] [Fintype Symbol]
 
 /--
 The directions in which one can take move on the Turing Machine's tape.
@@ -325,9 +412,12 @@ def runCode : ℕ → List (TMQuery tm Unit) → TMState tm →
   | fuel, [], s => some (⟨(), 0⟩, ⟨s, fuel⟩)
   | 0, _ :: _, _ => none
   | fuel + 1, q :: rest, s => do
-    let next := step q rest s
-    let (result, final) ← runCode fuel next.code next.machine
+    let next := nextStep q rest s
+    let (result, final) ← runCodeWith nextStep fuel next.code next.machine
     pure (⟨(), next.cost + result.tell⟩, final)
+
+/-- Run pending code with shared fuel; every instruction and control test consumes one unit. -/
+def runCode := runCodeWith (step (tm := tm))
 
 /-- Interpret a finite block through the joint state-and-cost interface. -/
 def runBlock (code : List (TMQuery tm Unit)) : AddWriterT TMCost (ExecutionM tm) Unit :=
@@ -385,15 +475,28 @@ private theorem unit_ret (a : AddWriter TMCost Unit) : a.ret = () :=
     (⟨(), a.tell⟩ : AddWriter TMCost Unit) = a := by
   cases a with | mk ret tell => cases ret; rfl
 
+omit [DecidableEq Symbol] [DecidableEq tm.State] in
 /-- Executing concatenated code shares the budget and adds exactly the two execution costs. -/
+theorem runCodeWith_append
+    (nextStep : TMQuery tm Unit → List (TMQuery tm Unit) → TMState tm → Step tm)
+    (append : ∀ q rest tail s, nextStep q (rest ++ tail) s =
+      { nextStep q rest s with code := (nextStep q rest s).code ++ tail })
+    (fuel : ℕ) (code tail : List (TMQuery tm Unit)) (s : TMState tm) :
+    runCodeWith nextStep fuel (code ++ tail) s = (do
+      let (a, t) ← runCodeWith nextStep fuel code s
+      let (b, u) ← runCodeWith nextStep t.fuel tail t.machine
+      pure (⟨(), a.tell + b.tell⟩, u)) := by
+  induction fuel generalizing code s with
+  | zero => cases code <;> simp
+  | succ fuel ih => cases code <;> simp [append, ih, Option.bind_assoc, add_assoc]
+
+/-- Executing concatenated ordinary code adds costs and shares the remaining budget. -/
 theorem runCode_append (fuel : Nat) (code tail : List (TMQuery tm Unit)) (s : TMState tm) :
     runCode fuel (code ++ tail) s = (do
       let (a, t) ← runCode fuel code s
       let (b, u) ← runCode t.fuel tail t.machine
       pure (⟨(), a.tell + b.tell⟩, u)) := by
-  induction fuel generalizing code s with
-  | zero => cases code <;> simp [runCode]
-  | succ fuel ih => cases code <;> simp [runCode, ih, Option.bind_assoc, add_assoc]
+  exact runCodeWith_append step step_append fuel code tail s
 
 @[simp] theorem runBlock_nil : runBlock ([] : List (TMQuery tm Unit)) = pure () := by
   funext s
@@ -446,7 +549,7 @@ theorem execute_add_fuel (fuel extra : Nat) (p : Prog (TMQuery tm) Unit) (s : TM
     (yes no : Prog (TMQuery tm) Unit) (s : TMState tm) :
     execute (fuel + 1) (branch condition yes no) s =
       if condition.eval s.config then execute fuel yes s else execute fuel no s := by
-  simp only [execute_eq_runCode, branch, instructions_lift, runCode, step]
+  simp only [execute_eq_runCode, branch, instructions_lift, runCode, runCodeWith, step]
   split <;> simp
 
 @[simp, grind =] theorem execute_while_zero (condition : TMCondition tm)
@@ -460,7 +563,8 @@ theorem execute_add_fuel (fuel extra : Nat) (p : Prog (TMQuery tm) Unit) (s : TM
     execute (fuel + 1) (whileLoop condition body) s =
       if condition.eval s.config then execute fuel (do body; whileLoop condition body) s
       else some (⟨(), 0⟩, ⟨s, fuel⟩) := by
-  simp only [execute_eq_runCode, whileLoop, instructions_lift, instructions_bind, runCode, step]
+  simp only [execute_eq_runCode, whileLoop, instructions_lift, instructions_bind,
+    runCode, runCodeWith, step]
   split <;> simp
 
 /-- A step's space charge is exactly the number of cells added to the tape range. -/
