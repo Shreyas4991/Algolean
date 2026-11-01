@@ -64,7 +64,7 @@ theorem isBalanced_iff {n : ℕ} {f : (Fin n → Fin 2) → Bool} :
     (p := fun x : Fin n → Fin 2 => f x = true) (s := Finset.univ)
   simp only [Finset.card_univ, Fintype.card_fun, Fintype.card_fin] at h
   unfold IsBalanced markedCount
-  omega
+  lia
 
 /-- Summing `a` over the marked inputs and `b` over the unmarked ones gives `t·a + (2^n − t)·b`. -/
 theorem sum_ite_marked {R : Type*} [CommRing R] {n : ℕ}
