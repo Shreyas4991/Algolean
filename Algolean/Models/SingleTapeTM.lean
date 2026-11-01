@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.ModelStateM
+public import Algolean.FuelExecMonad
 public import Cslib.Computability.Machines.Turing.SingleTape.Deterministic
 public import Mathlib.Data.Int.Interval
 
@@ -46,7 +46,7 @@ Papadimitriou [§2.5, Definition 2.6, p. 35][papadimitriou1994].
   its cardinality gives total space. `TMCost.cellsAllocated` counts cells added to this range.
 * `TMState.cellsVisited` records cells actually visited by the head, separately from space usage.
 * `TMQuery.execute fuel program state` runs a program through `TMModel`, which uses
-  `StateT (TMQuery.ExecutionState tm) Option`.
+  `FuelExecMonad (TMState tm)`.
 * `TMQuery.execute_ret_independent` proves that successful runs of a fixed program cannot
   reveal machine data through their Lean return values.
 -/
@@ -248,25 +248,11 @@ def whileLoop (condition : TMCondition tm) (body : Prog (TMQuery tm) Unit) :
     Prog (TMQuery tm) Unit :=
   FreeM.lift (.whileCode condition (instructions body))
 
-/-- Interpreter fuel is kept separately from the physical machine state. -/
-@[ext, grind]
-structure ExecutionState (tm : SingleTapeTM Symbol) where
-  /-- Current configuration, head position, tape range, and visited-cell history. -/
-  machine : TMState tm
-  /-- Remaining interpreter steps; inaccessible to programs. -/
-  fuel : ℕ
+/-- TM machine state paired with its remaining interpreter fuel. -/
+abbrev ExecutionState (tm : SingleTapeTM Symbol) := FuelExecState (TMState tm)
 
 /-- Fuel exhaustion fails the whole execution rather than returning a partial result. -/
-abbrev ExecutionM (tm : SingleTapeTM Symbol) := StateT (ExecutionState tm) Option
-
-/-- Sequence fuelled actions, threading both the machine state and the remaining budget. -/
-@[simp, grind =] theorem run_bind_execution
-    (action : AddWriterT TMCost (ExecutionM tm) α)
-    (next : α → AddWriterT TMCost (ExecutionM tm) β) (s : ExecutionState tm) :
-    (action >>= next).run s = (do
-      let (a, t) ← action.run s
-      let (b, u) ← (next a.ret).run t
-      pure (⟨b.ret, a.tell + b.tell⟩, u)) := rfl
+abbrev ExecutionM (tm : SingleTapeTM Symbol) := FuelExecMonad (TMState tm)
 
 /-- One small step, with pending code kept outside the physical machine state. -/
 @[ext, grind]
@@ -347,7 +333,7 @@ variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 /-- Execute a fixed program on a separately supplied input state. -/
 def execute (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm) :
     Option (AddWriter TMCost α × ExecutionState tm) :=
-  (p.runStateM (TMModel tm)).run ⟨s, fuel⟩
+  FuelExecMonad.execute (TMModel tm) fuel p s
 
 theorem model_runQuery (q : TMQuery tm Unit) :
     (TMModel tm).runQuery q = runBlock [q] := rfl
@@ -369,7 +355,7 @@ theorem model_runQuery (q : TMQuery tm Unit) :
       let (a, t) ← execute fuel p s
       let (b, u) ← execute t.fuel (next a.ret) t.machine
       pure (⟨b.ret, a.tell + b.tell⟩, u)) := by
-  simp [execute, Prog.runStateM_bind]
+  exact FuelExecMonad.execute_bind (TMModel tm) fuel p next s
 
 /-- Appending code preserves the next physical step. -/
 @[simp, grind =] theorem step_append (q : TMQuery tm Unit) (rest tail : List (TMQuery tm Unit))
@@ -403,7 +389,7 @@ theorem runCode_append (fuel : Nat) (code tail : List (TMQuery tm Unit)) (s : TM
     runBlock (q :: rest) = ((TMModel tm).runQuery q >>= fun _ => runBlock rest) := by
   apply AddWriterT.ext
   funext s
-  simpa only [model_runQuery, run_bind_execution, runBlock, AddWriterT.run_mk,
+  simpa only [model_runQuery, FuelExecMonad.run_bind_cost, runBlock, AddWriterT.run_mk,
     unit_ret, List.singleton_append] using
     runCode_append s.fuel [q] rest s.machine
 
@@ -433,13 +419,14 @@ theorem execute_add_fuel (fuel extra : Nat) (p : Prog (TMQuery tm) Unit) (s : TM
     (result : AddWriter TMCost Unit) (final : ExecutionState tm)
     (h : execute fuel p s = some (result, final)) :
     execute (fuel + extra) p s = some (result, { final with fuel := final.fuel + extra }) := by
-  simp only [execute, ← runBlock_instructions, runBlock, AddWriterT.run_mk] at h ⊢
+  simp only [execute, FuelExecMonad.execute, ← runBlock_instructions,
+    runBlock, AddWriterT.run_mk] at h ⊢
   exact runCode_add_fuel fuel extra _ s result final h
 
 /-- At the execution boundary, compilation and `ModelStateM.runStateM` coincide. -/
 @[grind =] theorem execute_eq_runCode (fuel : Nat) (p : Prog (TMQuery tm) Unit) (s : TMState tm) :
     execute fuel p s = runCode fuel (instructions p) s := by
-  simp [execute, ← runBlock_instructions, runBlock]
+  simp [execute, FuelExecMonad.execute, ← runBlock_instructions, runBlock]
 
 /-- Branch selection consumes one unit of fuel and executes only the selected body. -/
 @[simp, grind =] theorem execute_branch_succ (fuel : ℕ) (condition : TMCondition tm)
