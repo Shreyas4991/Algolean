@@ -169,13 +169,13 @@ theorem agreeFrom_update_self {n k : ℕ} {x y : Fin n → Fin 2} {q : Fin n}
     AgreeFrom k (Function.update x q (y q)) y ↔ AgreeFrom (k + 1) x y := by
   constructor
   · intro h i hi
-    have hiq : i ≠ q := Fin.ne_of_val_ne (by omega)
-    rw [← Function.update_of_ne hiq (y q) x]; exact h i (by omega)
+    have hiq : i ≠ q := Fin.ne_of_val_ne (by lia)
+    rw [← Function.update_of_ne hiq (y q) x]; exact h i (by lia)
   · intro h i hi
     rcases eq_or_ne i q with rfl | hiq
     · rw [Function.update_self]
     · have := Fin.val_ne_of_ne hiq
-      rw [Function.update_of_ne hiq]; exact h i (by omega)
+      rw [Function.update_of_ne hiq]; exact h i (by lia)
 
 /-- Setting qubit `k` of `x` to a bit different from `y`'s breaks agreement from `k`. -/
 theorem not_agreeFrom_update {n k : ℕ} {x y : Fin n → Fin 2} {q : Fin n}
@@ -224,7 +224,7 @@ private theorem hadamardExponentUpTo_update {n k : ℕ} (x y : Fin n → Fin 2)
   intro i hi
   have hiq : i ≠ q := Fin.ne_of_val_ne (by
     have := (Finset.mem_filter.mp hi).2
-    omega)
+    lia)
   rw [Function.update_of_ne hiq]
 
 /-- Extending the exponent from `k` to `k + 1` adds the contribution of qubit `k`. -/
@@ -237,7 +237,7 @@ private theorem hadamardExponentUpTo_succ {n k : ℕ} (x y : Fin n → Fin 2)
     ext i
     simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_insert,
       Fin.ext_iff, hq]
-    omega
+    lia
   have hqnot : q ∉ Finset.univ.filter (fun i : Fin n => i.val < k) := by simp [hq]
   simp only [hadamardExponentUpTo, hs, Finset.sum_insert hqnot]
 
@@ -255,7 +255,7 @@ theorem hadamardsUpToUnitary_apply {n k : ℕ} (hk : k ≤ n)
     simp [hadamardsUpToUnitary, hadamardExponentUpTo, Matrix.one_apply, h0]
   | succ k ih =>
     obtain _ | n := n
-    · omega
+    · lia
     simp only [hadamardsUpToUnitary]
     set q : Fin (n + 1) := ⟨k, Nat.lt_of_succ_le hk⟩ with hq
     have hqk : q.val = k := by rw [hq]
