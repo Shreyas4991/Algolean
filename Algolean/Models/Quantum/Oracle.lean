@@ -241,7 +241,7 @@ noncomputable def measureQubitPOVM {n : ℕ} (q : Fin n) :
       funext x
       simp only [qubitIndicator, Pi.one_apply]
       have hq : x q = 0 ∨ x q = 1 := by
-        have : (x q).val = 0 ∨ (x q).val = 1 := by omega
+        have : (x q).val = 0 ∨ (x q).val = 1 := by lia
         rcases this with h | h
         · exact Or.inl (Fin.ext h)
         · exact Or.inr (Fin.ext h)

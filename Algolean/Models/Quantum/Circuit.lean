@@ -253,11 +253,8 @@ def QNCpoly (L : BoolLanguage) (k : ℕ) : Prop :=
 /-- EQP/poly ⊆ BQP/poly. -/
 theorem EQPpoly.toBQPpoly {L : BoolLanguage} (h : EQPpoly L) : BQPpoly L := by
   obtain ⟨fam, p, hExact, hSize⟩ := h
-  refine ⟨fam, p, ?_, hSize⟩
-  intro n hn f
-  refine ⟨fun hL => ?_, fun hL => ?_⟩
-  · rw [(hExact n hn f).1 hL]; norm_num
-  · rw [(hExact n hn f).2 hL]; norm_num
+  exact ⟨fam, p, fun n hn f => ⟨fun hL => by rw [(hExact n hn f).1 hL]; norm_num,
+    fun hL => by rw [(hExact n hn f).2 hL]; norm_num⟩, hSize⟩
 
 /-- QNC^k/poly ⊆ BQP/poly. -/
 theorem QNCpoly.toBQPpoly {L : BoolLanguage} {k : ℕ}
