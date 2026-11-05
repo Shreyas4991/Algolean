@@ -10,29 +10,36 @@ public import Algolean.Models.SingleTapeTM.Composition.Sequential
 public import Algolean.Complexity.PolytimeBasicClasses
 
 /-!
-# Reusing programs that compute functions
+# Reusing Turing machine programs that compute functions
 
 This file states when a tape program can be reused to compute a function. It must work with any
 starting state label and records of tape use, preserve that label, and finish at its
 starting head coordinate with the head at the first output cell.
 
-These requirements let procedures run in sequence using the actual tape left by the previous
-procedure. The file proves bounds on their combined time, tape use, and output length. It also
+These requirements let programs run in sequence using the actual tape left by the previous
+program. The file proves bounds on their combined time, tape use, and output length. It also
 packages these proofs as [TimeComputable](##Algolean.Algorithms.TMQuery.TimeComputable) and
 [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable) records.
+
+Those records are defined in
+[PolytimeBasicClasses.lean](Algolean/Complexity/PolytimeBasicClasses.html), where they are used
+to define `P` and `NP`. The theorem `Completes.outputsWithinTime` below connects completed
+executions to those records.
+The concrete examples in [TMComplexity.lean](Algolean/Complexity/TMComplexity.html) use these
+conversions to obtain witnesses for the same complexity definitions.
 
 ## Main definitions and results
 
 * [Computes](##Algolean.Algorithms.TMQuery.Computes) states the requirements for a reusable
-  procedure.
-* [Computes.comp](##Algolean.Algorithms.TMQuery.Computes.comp) composes two procedures and adds
+  program.
+* [Computes.comp](##Algolean.Algorithms.TMQuery.Computes.comp) composes two programs and adds
   their time bounds.
 * [Computes.space](##Algolean.Algorithms.TMQuery.Computes.space) bounds the number of cells
   added to the recorded tape range.
 * [Computes.output_length_le](##Algolean.Algorithms.TMQuery.Computes.output_length_le) bounds
   the output length.
 * [Computer.polyTimeComputable](##Algolean.Algorithms.Computer.polyTimeComputable) packages a
-  procedure with its polynomial time bound.
+  program with its polynomial time bound.
 * [EncodedComputer.polyTimeComputable](##Algolean.Algorithms.EncodedComputer.polyTimeComputable)
   does the same when the result is represented by a list of symbols.
 -/
@@ -45,6 +52,20 @@ open Cslib Cslib.Turing Polynomial
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
+
+/--
+A Turing machine program that completes on the initialized input tape with the required output
+and at most `time` head moves satisfies `OutputsWithinTime`. The proof reuses the completed
+execution's fuel and resource count; the final absolute head coordinate may differ from its
+initial value, provided the head points to the first output cell.
+-/
+theorem Completes.outputsWithinTime {program : Prog (TMQuery tm) Unit}
+    {input output : List Symbol} {cost : TMCost} {final : TMState tm} {time : ℕ}
+    (h : Completes program (TMState.init tm input) cost final)
+    (outputTape : final.config.BiTape = BiTape.mk₁ output) (bound : cost.steps ≤ time) :
+    OutputsWithinTime program input output time := by
+  obtain ⟨fuel, h⟩ := h
+  exact ⟨fuel, ⟨(), cost⟩, ⟨final, 0⟩, h, outputTape, bound⟩
 
 /--
 The program computes the specified function within the time allowed for each input. It must work
@@ -67,7 +88,7 @@ theorem Computes.mono {p : Prog (TMQuery tm) Unit} {f : List Symbol → List Sym
 
 /--
 The time bound also bounds the number of cells added to the recorded tape range. Cells counted
-before the procedure starts remain part of the final total.
+before the program starts remain part of the final total.
 -/
 theorem Computes.space {p : Prog (TMQuery tm) Unit} {f : List Symbol → List Symbol}
     {time : List Symbol → ℕ} (h : Computes p f time) (input : List Symbol) (s : TMState tm)
@@ -80,8 +101,8 @@ theorem Computes.space {p : Prog (TMQuery tm) Unit} {f : List Symbol → List Sy
   exact ⟨cost, final, hc, by lia, by lia, by lia⟩
 
 /--
-Running the two procedures in sequence computes the second function on the first function's
-output. The time required adds up, with the second procedure's time evaluated on that
+Running the two programs in sequence computes the second function on the first function's
+output. The time required adds up, with the second program's time evaluated on that
 intermediate output.
 -/
 theorem Computes.comp {p q : Prog (TMQuery tm) Unit} {f g : List Symbol → List Symbol}
@@ -152,7 +173,7 @@ theorem execute_tapeExtent_le (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMSta
         omega
 
 /--
-The output length is at most one plus the input length plus the procedure's time bound. The
+The output length is at most one plus the input length plus the program's time bound. The
 extra cell allows an empty input to become a one-symbol output without a head move.
 -/
 theorem Computes.output_length_le {p : Prog (TMQuery tm) Unit} {f : List Symbol → List Symbol}
@@ -165,7 +186,7 @@ theorem Computes.output_length_le {p : Prog (TMQuery tm) Unit} {f : List Symbol 
   lia
 
 /--
-This construction packages the procedure and its correctness proof as a
+This construction packages the program and its correctness proof as a
 [TimeComputable](##Algolean.Algorithms.TMQuery.TimeComputable) record. Its time bound depends
 only on the input length.
 -/
@@ -176,12 +197,12 @@ def Computes.timeComputable {p : Prog (TMQuery tm) Unit} {f : List Symbol → Li
   program := p
   timeBound := timeBound
   outputsFunInTime input := by
-    obtain ⟨moves, ⟨cost, final, ⟨fuel, hfuel⟩, hcfg, _, hc⟩, ht⟩ :=
+    obtain ⟨moves, ⟨cost, final, completed, hcfg, _, hc⟩, ht⟩ :=
       h input (TMState.init tm input) rfl
-    exact ⟨fuel, ⟨(), cost⟩, ⟨final, 0⟩, hfuel, by simp [hcfg], by lia⟩
+    exact completed.outputsWithinTime (by simp [hcfg]) (by lia)
 
 /--
-This construction packages the procedure and its polynomial time bound as a
+This construction packages the program and its polynomial time bound as a
 [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable) record.
 -/
 def Computes.polyTimeComputable {p : Prog (TMQuery tm) Unit} {f : List Symbol → List Symbol}
@@ -192,8 +213,8 @@ def Computes.polyTimeComputable {p : Prog (TMQuery tm) Unit} {f : List Symbol �
   bounds _ := le_rfl
 
 /--
-Two procedures can be composed with a polynomial time bound when each has a polynomial time
-bound and the first output's length has a polynomial bound. The second procedure's polynomial is
+Two programs can be composed with a polynomial time bound when each has a polynomial time
+bound and the first output's length has a polynomial bound. The second program's polynomial is
 evaluated at that output-length bound.
 -/
 theorem Computes.comp_polynomial {p q : Prog (TMQuery tm) Unit}
@@ -239,7 +260,7 @@ theorem computes (machine : Computer tm f time) : Computes machine.program f tim
   exact ⟨cost.steps, ⟨cost, final, hc, ht, hp, rfl⟩, hb⟩
 
 /--
-The procedure's polynomial time bound supplies a
+The program's polynomial time bound supplies a
 [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable) record for the same
 function.
 -/
@@ -272,7 +293,7 @@ def mono {α β : Type} {ea : α → List Symbol} {eb : β → List Symbol} {f :
 
 /--
 This construction gives a [TimeComputable](##Algolean.Algorithms.TMQuery.TimeComputable) record
-for the list of symbols representing the procedure's output. The head may finish at a different
+for the list of symbols representing the program's output. The head may finish at a different
 recorded coordinate, provided it points to the first output cell.
 -/
 def timeComputable {β : Type} {outputEncoding : β → List Symbol} {f : List Symbol → β}
@@ -283,12 +304,12 @@ def timeComputable {β : Type} {outputEncoding : β → List Symbol} {f : List S
   program := machine.program
   timeBound := timeBound
   outputsFunInTime input := by
-    obtain ⟨cost, final, ⟨fuel, hfuel⟩, hcfg, _, ht⟩ :=
+    obtain ⟨cost, final, completed, hcfg, _, ht⟩ :=
       machine.correct input (TMState.init tm input) rfl
-    exact ⟨fuel, ⟨(), cost⟩, ⟨final, 0⟩, hfuel, by simp [hcfg], ht⟩
+    exact completed.outputsWithinTime (by simp [hcfg]) ht
 
 /--
-The procedure's polynomial time bound gives a
+The program's polynomial time bound gives a
 [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable) record for the list of
 symbols representing its output.
 -/

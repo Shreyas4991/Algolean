@@ -7,18 +7,27 @@ Authors: Tanner Duve, Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM
+public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 public import Mathlib.Algebra.Polynomial.Eval.Defs
 
 /-!
-# Programs with polynomial time bounds
+# Turing machine programs with polynomial time bounds
 
-This file defines programs that compute functions within a time bound and uses them to describe
-yes/no problems. One fixed program must work on every input. It receives the input on the tape
-and leaves the output with the head at its first symbol.
+This file defines `OutputsWithinTime`, `TimeComputable`, and `PolyTimeComputable` for Turing
+machine programs, and uses `PolyTimeComputable` to define the language classes `P` and `NP`.
+One fixed program must work on every input. It receives the input on the tape and leaves the
+output with the head at its first symbol.
 
 Time counts tape-head move instructions. Fuel separately limits execution: every instruction and
 loop test uses fuel, even if it has no time cost. Running out of fuel does not count as
 producing an answer.
+
+[Functions.lean](Algolean/Models/SingleTapeTM/Composition/Functions.html) converts reusable
+Turing machine programs into these computability records. Its `Computes` proofs also preserve
+the control state and restore the head coordinate for any initial tape history, so programs can
+run in sequence on the same machine. The Boolean-tape examples in
+[TMComplexity.lean](Algolean/Complexity/TMComplexity.html) use those conversions.
+[NP.lean](Algolean/Complexity/NP.html) constructs the encoded-pair verifier used to prove `P ⊆ NP`.
 
 ## Main definitions and results
 
@@ -32,8 +41,6 @@ producing an answer.
   bounds.
 * [NP](##Algolean.Algorithms.NP) describes problems whose yes answers have certificates, or
   extra lists of symbols, that such programs can check.
-* [NP.ofP](##Algolean.Algorithms.NP.ofP) shows that every problem in the first class belongs to
-  the second by using an empty certificate.
 -/
 
 @[expose] public section
@@ -112,7 +119,8 @@ noncomputable def TimeComputable.id : TimeComputable (Symbol := Symbol) id := by
     tm := SingleTapeTM.idComputer
     program := pure ()
     timeBound := fun _ => 0
-    outputsFunInTime := fun input => ⟨0, ⟨(), 0⟩, ⟨TMState.init _ input, 0⟩, rfl, rfl, le_rfl⟩ }
+    outputsFunInTime := fun input =>
+      ⟨0, ⟨(), 0⟩, ⟨TMState.init _ input, 0⟩, rfl, rfl, le_rfl⟩ }
 
 /-- The program that leaves its input unchanged has a polynomial time bound of zero. -/
 noncomputable def PolyTimeComputable.id : PolyTimeComputable (Symbol := Symbol) id where
@@ -132,35 +140,20 @@ def P (L : Language Symbol) : Prop :=
     Nonempty (TMQuery.PolyTimeComputable f) ∧ ∀ x, f x = yes ↔ L x
 
 /--
-A problem belongs to this class when a program can check certificates in polynomial time. A
-polynomial in the input length bounds the permitted certificate length. An input has answer yes
-exactly when some permitted certificate makes the program accept.
+A language belongs to `NP` when a language in `P` checks encoded input-certificate pairs and a
+polynomial in the original input length bounds the certificate length. The pair encoding uses
+`Alphabet.Extended Symbol 1` and preserves the boundary with a dedicated separator, while the
+original language and certificates remain over `Symbol`.
 
-The checking program receives the input followed immediately by the certificate on one tape. The
-checking procedure must handle the boundary between them. Its time bound, specified by
-[PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable), uses the length of that
-combined input.
+The verifier receives `(Alphabet.wordPair Symbol).encode (input, certificate)`. Its polynomial
+runtime is measured in that encoded word's length, which is the two word lengths plus one.
+The proof that every language in `P` belongs to `NP` is in `Algolean.Complexity.NP`.
 -/
 def NP (L : Language Symbol) : Prop :=
-  ∃ (V : List Symbol → List Symbol) (yes : List Symbol) (q : Polynomial ℕ),
-    Nonempty (TMQuery.PolyTimeComputable V) ∧
-    ∀ x, L x ↔ ∃ c : List Symbol,
-      c.length ≤ q.eval x.length ∧ V (x ++ c) = yes
-
-/--
-Every problem in [P](##Algolean.Algorithms.P) belongs to [NP](##Algolean.Algorithms.NP). The
-same program checks the input with an empty certificate.
--/
-theorem NP.ofP {L : Language Symbol} (hP : P L) : NP L := by
-  obtain ⟨f, yes, hPTC, hEq⟩ := hP
-  refine ⟨f, yes, 0, hPTC, ?_⟩
-  intro x
-  refine ⟨fun hL => ⟨[], by simp, ?_⟩, ?_⟩
-  · simpa using (hEq x).mpr hL
-  · rintro ⟨c, hlen, hV⟩
-    have hc : c = [] := List.length_eq_zero_iff.mp (Nat.le_zero.mp (by simpa using hlen))
-    subst hc
-    exact (hEq x).mp (by simpa using hV)
+  ∃ (A : Language (Alphabet.Extended Symbol 1)) (q : Polynomial ℕ), P A ∧
+    ∀ input, L input ↔ ∃ certificate : List Symbol,
+      certificate.length ≤ q.eval input.length ∧
+        A ((Alphabet.wordPair Symbol).encode (input, certificate))
 
 end Algorithms
 
