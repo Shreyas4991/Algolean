@@ -7,6 +7,7 @@ Authors: Tanner Duve
 module
 
 public import Algolean.Models.ListComparisonSort
+public import Algolean.ModelStateM
 public import Std.Tactic.Do
 
 /-!
@@ -14,7 +15,8 @@ public import Std.Tactic.Do
 
 `minThree` finds the minimum of three integers with comparison queries. `minThree_spec` proves
 its correctness with `vcgen`. The four verification conditions correspond to the four
-root-to-leaf paths of its comparison tree.
+root-to-leaf paths of its comparison tree. `minThree_cost_spec` verifies correctness and
+exactly two comparisons together.
 -/
 
 @[expose] public section
@@ -51,5 +53,26 @@ theorem minThree_spec (a b c : Int) :
   vcgen [minThree, sortModelNat, Model.handler]
   all_goals simp_all [HasModel.model, comparisonModel, sortModelNat, min_def]
   all_goals split_ifs <;> lia
+
+section Costs
+
+local instance comparisonCostHandler : HasHandler (SortOps Int) (Nat → Prop) EStack⟨⟩ :=
+  (ModelStateM.ofModel comparisonModel).hasCostHandler
+
+/-- A comparison returns its Boolean answer and increments the accumulated cost. -/
+@[spec] theorem cmpLE_cost_spec (x y : Int) (post : Bool → Nat → Prop) :
+    ⦃ fun cost => post (decide (x ≤ y)) (cost + 1) ⦄
+      (lift (SortOps.cmpLE x y) : Prog (SortOps Int) Bool) ⦃ post ⦄ :=
+  ⟨fun _ h => h⟩
+
+/-- Each path returns the minimum and adds exactly two comparison costs. -/
+theorem minThree_cost_spec (a b c : Int) (initial : Nat) :
+    ⦃ fun cost => cost = initial ⦄ minThree a b c
+      ⦃ fun m cost => m = min a (min b c) ∧ cost = initial + 2 ⦄ := by
+  vcgen [minThree]
+  all_goals simp_all [min_def]
+  all_goals split_ifs <;> omega
+
+end Costs
 
 end AlgoleanTests.MinThree
