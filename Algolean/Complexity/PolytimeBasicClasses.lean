@@ -22,6 +22,11 @@ Time counts tape-head move instructions. Fuel separately limits execution: every
 loop test uses fuel, even if it has no time cost. Running out of fuel does not count as
 producing an answer.
 
+The language classes `P` and `NP` require at least two ordinary symbols. In `NP`, certificates
+use the input alphabet, so this assumption lets their symbols carry information beyond their
+length. The Turing machine model and the function-computability records also support alphabets
+with one symbol.
+
 [Functions.lean](Algolean/Models/SingleTapeTM/Composition/Functions.html) converts reusable
 Turing machine programs into these computability records. Its `Computes` proofs also preserve
 the control state and restore the head coordinate for any initial tape history, so programs can
@@ -134,8 +139,9 @@ end TMQuery
 A problem belongs to this class when one fixed program computes a function in polynomial time
 and produces a chosen acceptance word exactly on inputs whose answer is yes. Polynomial time is
 specified by [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable).
+The alphabet must contain at least two distinct symbols.
 -/
-def P (L : Language Symbol) : Prop :=
+def P [_symbols : Nontrivial Symbol] (L : Language Symbol) : Prop :=
   ∃ (f : List Symbol → List Symbol) (yes : List Symbol),
     Nonempty (TMQuery.PolyTimeComputable f) ∧ ∀ x, f x = yes ↔ L x
 
@@ -144,12 +150,14 @@ A language belongs to `NP` when a language in `P` checks encoded input-certifica
 polynomial in the original input length bounds the certificate length. The pair encoding uses
 `Alphabet.Extended Symbol 1` and preserves the boundary with a dedicated separator, while the
 original language and certificates remain over `Symbol`.
+The alphabet must contain at least two distinct symbols so that a certificate can carry
+information through its symbols as well as its length.
 
 The verifier receives `(Alphabet.wordPair Symbol).encode (input, certificate)`. Its polynomial
 runtime is measured in that encoded word's length, which is the two word lengths plus one.
 The proof that every language in `P` belongs to `NP` is in `Algolean.Complexity.NP`.
 -/
-def NP (L : Language Symbol) : Prop :=
+def NP [_symbols : Nontrivial Symbol] (L : Language Symbol) : Prop :=
   ∃ (A : Language (Alphabet.Extended Symbol 1)) (q : Polynomial ℕ), P A ∧
     ∀ input, L input ↔ ∃ certificate : List Symbol,
       certificate.length ≤ q.eval input.length ∧

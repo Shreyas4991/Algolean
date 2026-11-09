@@ -18,9 +18,11 @@ The definition of `NP` in `PolytimeBasicClasses` supplies a verifier with the se
 ignores the certificate: it erases the separator and suffix, restores the head to the first input
 cell, and runs the original decider with its tape symbols tagged by `Sum.inl`.
 
-The original tape alphabet and finite control remain generic. Preparing the first word costs at
-most `2 * n + 4` head moves on an encoded word of length `n`. The original polynomial is evaluated
-at that length, giving a polynomial bound for the complete verifier. The program also terminates
+The language classes require at least two ordinary symbols. The program constructions also work
+with an alphabet containing only one ordinary symbol, and the finite control remains generic.
+Preparing the first word costs at most `2 * n + 4` head moves on an encoded word of length `n`.
+The original polynomial is evaluated at that length, giving a polynomial bound for the complete
+verifier. The program also terminates
 on words with missing or repeated separators, so its polynomial-time witness covers every input
 over the extended alphabet.
 -/
@@ -90,6 +92,8 @@ noncomputable def PolyTimeComputable.onFirstWord {f : List Symbol → List Symbo
   bounds _ := by simp [PolyTimeComputable.polynomialBound]
 
 end TMQuery
+
+variable [Nontrivial Symbol]
 
 /--
 For a language in `P`, this theorem supplies a polynomial-time verifier language over the

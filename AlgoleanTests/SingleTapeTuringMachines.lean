@@ -11,13 +11,15 @@ public import Algolean.Complexity.TMComplexity
 /-!
 # Executing the append and complement programs
 
-These examples check appending and complementing Boolean words, including empty inputs and a
-composition of both programs. The observations retain the complete tape, the control label, the
-absolute head coordinate, and the head-move and allocation counts. A run with a shifted starting
-coordinate and existing allocation history checks that the programs preserve that context.
+These examples check appending and complementing Boolean words, including empty inputs and
+running both programs in sequence. Each observation records the complete tape, the control
+label, the head coordinate, the number of head-move instructions, and the tape-storage counts.
+A run that starts at coordinate 37 checks that the program preserves its starting label and
+coordinate and includes previously counted tape cells in its storage count.
 
-The generic examples exercise the reusable correctness proofs and their conversion to
-polynomial-time witnesses. The witnesses retain the actual executable programs.
+The examples with arbitrary input words check the correctness proofs for running the programs
+in sequence. The final examples check that the values proving polynomial-time computability
+store the original executable programs.
 -/
 
 @[expose] public section
@@ -39,25 +41,34 @@ abbrev machine : SingleTapeTM Bool where
   tr _ symbol := (⟨symbol, none⟩, none)
 
 /--
-This observation retains the head symbol, both complete tape stacks, the control label, the head
-coordinate, and the execution's resource counts. Internal blanks and cells left of the head remain
-visible, so stray symbols cannot be hidden by extracting only the nonblank output symbols.
+This value records the complete tape, control label, head coordinate, and execution counts.
+It includes blanks between occupied cells and all represented cells to the left of the head,
+so comparing observations can detect stray symbols anywhere on the tape.
 -/
 structure Observation where
+  /-- This is the symbol under the head, or `none` if that cell is blank. -/
   head : Option Bool
+  /-- These are the cells to the left of the head, nearest first, including internal blanks. -/
   left : List (Option Bool)
+  /-- These are the cells to the right of the head, nearest first, including internal blanks. -/
   right : List (Option Bool)
+  /-- This is the final control label, or `none` if the machine has no current label. -/
   label : Option Bool
+  /-- This is the final head coordinate, with coordinates increasing to the right. -/
   headPos : ℤ
+  /-- This is the number of head-move instructions executed by the program. -/
   moves : ℕ
+  /-- This is the number of tape cells added to the storage count during this run. -/
   newCells : ℕ
+  /-- This is the final storage count, including cells counted before this run began. -/
   totalCells : ℕ
 deriving DecidableEq
 
 /--
-This function runs a Boolean Turing machine program from the supplied state with 100 units of
-interpreter fuel and records its complete final tape, control label, position, and resource counts.
-It returns `none` if execution exhausts the fuel.
+This function runs a Boolean Turing machine program from the supplied state with a limit of
+100 execution steps. On success, it records the complete final tape, control label, head
+coordinate, number of head-move instructions, and tape-storage counts. It returns `none` if
+the limit is reached before the program finishes.
 -/
 def observe (p : Prog (TMQuery machine) Unit) (initial : TMState machine) : Option Observation :=
   (execute 100 p initial).map fun (result, final) =>
@@ -85,8 +96,9 @@ example : observe (complementBlock machine) (TMState.init machine [true, false, 
     some ⟨some false, [], [some true, some false], some false, 0, 8, 2, 5⟩ := by decide +kernel
 
 /--
-This verified Turing machine program appends `true` and then negates every bit of the resulting
-word. The second program runs on the tape and allocation history left by the first.
+This Turing machine program appends `true` and then negates every bit of the resulting word.
+It carries the correctness proofs for both programs. The second program uses the tape and the
+recorded storage and head visits left by the first.
 -/
 def pipeline :=
   appendBitComputer (tm := machine) true ≫ₜ complementBlockComputer (tm := machine)
@@ -118,7 +130,7 @@ example (input : List Bool) (s : TMState machine) (hs : s.config.BiTape = BiTape
       final.cellsAllocated.card ≤ s.cellsAllocated.card + (2 * input.length + 2) :=
   (appendBit_computes (tm := machine) true).space input s hs
 
--- Converting to a polynomial-time witness preserves the executable program definitionally.
+-- The values proving polynomial-time computability store the original executable programs.
 example : (appendBitPolyTimeComputable (tm := machine) true).program =
     appendBit machine true := rfl
 

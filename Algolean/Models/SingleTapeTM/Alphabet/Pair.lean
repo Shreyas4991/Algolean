@@ -147,4 +147,13 @@ def wordPair (Symbol : Type) :
     (wordPair Symbol).encode (first, second) =
       first.map Sum.inl ++ .inr 0 :: second.map Sum.inl := rfl
 
+/--
+Decoding two words separated by the added marker recovers both words, including when either is
+empty. The symbols of each word carry `Sum.inl` to distinguish them from the marker.
+-/
+@[simp] theorem wordPair_decode (first second : List Symbol) :
+    (wordPair Symbol).decode (first.map Sum.inl ++ .inr 0 :: second.map Sum.inl) =
+      some (first, second) := by
+  exact (wordPair Symbol).decode_encode (first, second)
+
 end Algolean.Algorithms.Alphabet

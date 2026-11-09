@@ -85,7 +85,7 @@ def complement (reduction : KarpReduction A B) :
 If the target problem belongs to [P](##Algolean.Algorithms.P), then the source problem does too.
 Its solver converts the input and then runs the target solver.
 -/
-theorem preservesP (reduction : KarpReduction A B) (target : P B) : P A := by
+theorem preservesP [Nontrivial Symbol] (reduction : KarpReduction A B) (target : P B) : P A := by
   obtain ⟨f, yes, ⟨machine⟩, h⟩ := target
   exact ⟨f ∘ reduction.transform, yes, ⟨reduction.computer.comp machine⟩,
     fun input => (h (reduction.transform input)).trans (reduction.correct input).symm⟩
