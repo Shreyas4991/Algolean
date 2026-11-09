@@ -21,6 +21,14 @@ public import Algolean.Models.SingleTapeTM.DescriptionEncoding
 
 The unary fields have exactly the specified lengths. Separators preserve the boundaries between
 the four fields, and the machine description includes its complete finite transition table.
+
+The encoder chooses one word for each instance. The decoder can also accept other words that
+describe the same instance. This lets us reuse the existing number decoders and follows the
+use of multiple machine descriptions in [Barak's lecture notes][barak2006]. All such words give
+the same yes or no answer. Their lengths can differ, so the size proofs use the length of the
+word supplied to the decoder and cover every word it accepts.
+
+[barak2006]: https://www.cs.princeton.edu/courses/archive/spr06/cos522/lec2.pdf
 -/
 
 @[expose] public section
