@@ -25,6 +25,8 @@ and adds one separator cell.
 * [readWord](##Algolean.Algorithms.Alphabet.readWord) reads up to the first added marker.
 * [Encoding.pair](##Computability.Encoding.pair) stores two encoded words with one separator.
 * [length_pair](##Computability.Encoding.length_pair) adds their lengths and one separator cell.
+* `decode_pair_eq_some_iff` recovers the two fields and separator from any successful decoding.
+* `Encoding.sigma` lets the first decoded value determine the second value's type and encoding.
 -/
 
 @[expose] public section
@@ -45,6 +47,22 @@ def readWord : List (Extended Symbol markers) →
     (rest : List (Extended Symbol markers)) :
     readWord (word.map Sum.inl ++ .inr marker :: rest) = (word, some (marker, rest)) := by
   induction word <;> simp_all [readWord]
+
+/-- The word returned by the reader and any remaining marker and suffix reconstruct the input. -/
+theorem readWord_reconstruct (word : List (Extended Symbol markers)) :
+    (readWord word).1.map Sum.inl ++
+      (match (readWord word).2 with
+      | none => []
+      | some (marker, rest) => .inr marker :: rest) = word := by
+  induction word with
+  | nil => rfl
+  | cons symbol rest ih =>
+    cases symbol with
+    | inr marker => rfl
+    | inl symbol =>
+      cases hread : readWord rest with
+      | mk first ending =>
+        simpa [readWord, hread] using congrArg (List.cons (.inl symbol)) ih
 
 /--
 This pure Lean function returns the ordinary symbols before the first added marker. It uses
@@ -123,11 +141,73 @@ def pair (first : Encoding α Γ) (second : Encoding β Γ) : Encoding (α × β
   decode_encode value := by
     simp only [readWord_append_marker, Encoding.decode_encode]
 
+/-- Successful pair decoding splits the entire word into two decoded fields and one separator. -/
+theorem decode_pair_eq_some_iff (first : Encoding α Γ) (second : Encoding β Γ)
+    {word : List (Extended Γ 1)} {a : α} {b : β} :
+    (first.pair second).decode word = some (a, b) ↔
+      ∃ left right, word = left.map Sum.inl ++ .inr 0 :: right.map Sum.inl ∧
+        first.decode left = some a ∧ second.decode right = some b := by
+  constructor
+  · intro h
+    cases hread : readWord word with
+    | mk left ending =>
+      cases ending with
+      | none => simp [pair, hread] at h
+      | some ending =>
+        obtain ⟨marker, rest⟩ := ending
+        have hmarker : marker = 0 := Subsingleton.elim _ _
+        subst marker
+        cases hfirst : first.decode left with
+        | none => simp [pair, hread, hfirst] at h
+        | some a' =>
+          cases hrest : (words Γ 1).decode rest with
+          | none => simp [pair, hread, hrest] at h
+          | some right =>
+            cases hsecond : second.decode right with
+            | none => simp [pair, hread, hfirst, hrest, hsecond] at h
+            | some b' =>
+              have heq : (a', b') = (a, b) := by
+                simpa [pair, hread, hfirst, hrest, hsecond] using h
+              cases heq
+              have hword := readWord_reconstruct word
+              rw [hread, decode_words_eq_some_iff.mp hrest] at hword
+              exact ⟨left, right, hword.symm, hfirst, hsecond⟩
+  · rintro ⟨left, right, rfl, hfirst, hsecond⟩
+    simp only [pair, readWord_append_marker, hfirst]
+    rw [show (words Γ 1).decode (right.map Sum.inl) = some right from
+      (words Γ 1).decode_encode right]
+    simp only [hsecond]
+
 /-- The encoded pair has the two component lengths plus one separator cell. -/
 @[simp] theorem length_pair (first : Encoding α Γ) (second : Encoding β Γ) (value : α × β) :
     ((first.pair second).encode value).length =
       (first.encode value.1).length + (second.encode value.2).length + 1 := by
   simp [pair]
+  omega
+
+/-- The first decoded value determines the type and encoding of the second value. -/
+def sigma {family : α → Type v} (first : Encoding α Γ)
+    (second : ∀ value, Encoding (family value) Γ) : Encoding (Sigma family) (Extended Γ 1) where
+  encode value :=
+    (first.encode value.1).map .inl ++
+      .inr 0 :: (words Γ 1).encode ((second value.1).encode value.2)
+  decode word :=
+    let (firstWord, ending) := readWord word
+    match ending with
+    | none => none
+    | some (_, rest) =>
+      match first.decode firstWord, (words Γ 1).decode rest with
+      | some value, some secondWord =>
+        ((second value).decode secondWord).map (Sigma.mk value)
+      | _, _ => none
+  decode_encode value := by simp [readWord_append_marker]
+
+/-- A dependent pair uses the two component lengths and one separator. -/
+@[simp] theorem length_sigma {family : α → Type v} (first : Encoding α Γ)
+    (second : ∀ value, Encoding (family value) Γ) (value : Sigma family) :
+    ((first.sigma second).encode value).length =
+      (first.encode value.1).length + ((second value.1).encode value.2).length + 1 := by
+  simp [sigma]
   omega
 
 end Computability.Encoding
