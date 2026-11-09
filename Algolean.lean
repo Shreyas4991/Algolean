@@ -65,6 +65,14 @@ public import Algolean.Models.SingleTapeTM.Alphabet.Encoding
 public import Algolean.Models.SingleTapeTM.Alphabet.Lift
 public import Algolean.Models.SingleTapeTM.Alphabet.List
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
+public import Algolean.Models.SingleTapeTM.Compiler
+public import Algolean.Models.SingleTapeTM.Compiler.Basic
+public import Algolean.Models.SingleTapeTM.Compiler.Internal.Control
+public import Algolean.Models.SingleTapeTM.Compiler.Internal.Correctness
+public import Algolean.Models.SingleTapeTM.Compiler.Internal.Description
+public import Algolean.Models.SingleTapeTM.Compiler.Internal.Machine
+public import Algolean.Models.SingleTapeTM.Compiler.Internal.Time
+public import Algolean.Models.SingleTapeTM.Compiler.Size
 public import Algolean.Models.SingleTapeTM.Composition.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.Component
