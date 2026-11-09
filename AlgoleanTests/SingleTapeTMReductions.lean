@@ -108,6 +108,16 @@ example : KarpReducible (fun input : List Bool => input.tail = [])
     (fun input => input = [true]) :=
   (show KarpReducible _ _ from ⟨shortWordReduction⟩).trans (KarpReducible.refl _)
 
+/-- This program executes one `.Stop` instruction, which costs one head move without moving. -/
+def stop : Prog (TMQuery writerControl) Unit := do [TMQuery writerControl]
+  moveₜ .Stop
+
+-- A completed program must still meet its time bound, even when its head stays in place.
+example (input : List Bool) : ¬OutputsWithinTime stop input input 0 := by
+  rintro ⟨fuel, result, final, h, _, htime⟩
+  cases fuel <;> simp_all [stop, step]
+  grind
+
 /-- This program repeatedly tests a condition that never changes and never moves the head. -/
 def forever : Prog (TMQuery writerControl) Unit := do [TMQuery writerControl]
   whileₜ (state =ₜ some ()) do

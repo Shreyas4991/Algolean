@@ -20,6 +20,7 @@ therefore return from the blank immediately after a block as well as from inside
 
 The correctness theorems state the final head position and exact number of head moves for each
 program. They apply with the tape and cell histories left by an earlier computation.
+The two `Component` values store the rightward scan and return-to-start program with these proofs.
 -/
 
 @[expose] public section
@@ -166,5 +167,31 @@ theorem seekLeftEnd_correct (left right : List Symbol) (s : TMState tm)
                 sub_eq_add_neg, add_assoc])
         simpa [Nat.add_assoc] using hret)
     simpa [seekLeftEnd, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hr
+
+/--
+This value stores the rightward scan with its proof that the tape is preserved and the head stops
+on the blank after `right`. The scan uses exactly `right.length` head moves.
+-/
+@[simps program]
+def seekRightBlankComponent :
+    Component tm (fun p : List Symbol × List Symbol => fun s => s.config.BiTape = cursor p.1 p.2)
+      (fun p s cost final =>
+        final.config = {s.config with BiTape := cursor (p.2.reverse ++ p.1) []} ∧
+        final.headPos = s.headPos + p.2.length ∧ cost.steps = p.2.length) where
+  program := seekRightBlank tm
+  correct p s hs := seekRightBlank_correct p.1 p.2 s hs
+
+/--
+This value stores the return-to-start program with its proof that the tape is preserved and the
+head returns to the first cell. The program uses exactly `left.length + 2` head moves.
+-/
+@[simps program]
+def seekLeftEndComponent :
+    Component tm (fun p : List Symbol × List Symbol => fun s => s.config.BiTape = cursor p.1 p.2)
+      (fun p s cost final =>
+        final.config = {s.config with BiTape := cursor [] (p.1.reverse ++ p.2)} ∧
+        final.headPos = s.headPos - p.1.length ∧ cost.steps = p.1.length + 2) where
+  program := seekLeftEnd tm
+  correct p s hs := seekLeftEnd_correct p.1 p.2 s hs
 
 end Algolean.Algorithms.SingleTapeTuringMachines

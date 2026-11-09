@@ -175,7 +175,7 @@ variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
 /--
-The two procedures run in sequence when the first output and second input use the same
+The two programs run in sequence when the first output and second input use the same
 representation on tape. Their time bounds add up on the actual intermediate value.
 -/
 @[simps program]
@@ -192,6 +192,16 @@ def seq {α β γ : Type} {ea : α → List Symbol} {eb : β → List Symbol} {e
     exact ⟨ca + cb, u, hp.seq hq, by simpa [ht] using hu, by simpa [hpos] using hup,
       by simpa using Nat.add_le_add ha hb⟩
 
+/-- Changing the parentheses around three programs in sequence leaves their program unchanged. -/
+theorem seq_assoc {α β γ δ : Type}
+    {ea : α → List Symbol} {eb : β → List Symbol} {ec : γ → List Symbol} {ed : δ → List Symbol}
+    {f : α → β} {g : β → γ} {h : γ → δ} {a : α → ℕ} {b : β → ℕ} {c : γ → ℕ}
+    {pa : α → ℤ → ℤ} {pb : β → ℤ → ℤ} {pc : γ → ℤ → ℤ}
+    (first : EncodedComputer tm ea eb f a pa) (second : EncodedComputer tm eb ec g b pb)
+    (third : EncodedComputer tm ec ed h c pc) :
+    ((first.seq second).seq third).program = (first.seq (second.seq third)).program := by
+  simp [bind_assoc]
+
 end Algolean.Algorithms.EncodedComputer
 
 namespace Algolean.Algorithms.Computer
@@ -202,8 +212,8 @@ variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
 /--
-This procedure leaves the tape, head position, state label, and records unchanged. It makes no
-head moves.
+This program leaves the tape, head position, control label, and cell histories unchanged.
+It makes no head moves.
 -/
 @[simps program]
 def identity : Computer tm id (fun _ => 0) where
@@ -212,7 +222,17 @@ def identity : Computer tm id (fun _ => 0) where
     simp only [id_eq] at hs
     exact ⟨0, s, completes_pure s, by simp [← hs], rfl, le_rfl⟩
 
-/-- This notation runs two verified procedures in sequence, from left to right. -/
+/-- Running the identity before a program leaves that program unchanged. -/
+theorem identity_seq {f : List Symbol → List Symbol} {time : List Symbol → ℕ}
+    (machine : Computer tm f time) :
+    (EncodedComputer.seq (identity (tm := tm)) machine).program = machine.program := by simp
+
+/-- Running the identity after a program leaves that program unchanged. -/
+theorem seq_identity {f : List Symbol → List Symbol} {time : List Symbol → ℕ}
+    (machine : Computer tm f time) :
+    (EncodedComputer.seq machine (identity (tm := tm))).program = machine.program := by simp
+
+/-- This notation runs two verified programs in sequence, from left to right. -/
 scoped infixr:55 " ≫ₜ " => EncodedComputer.seq
 
 end Algolean.Algorithms.Computer

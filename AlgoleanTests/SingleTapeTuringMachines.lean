@@ -119,6 +119,24 @@ example : (writeBitComputer (tm := machine) true).program = writeBit machine tru
 
 example : (flipBitComputer (tm := machine)).program = flipBit machine := rfl
 
+-- The stored scan programs can run in sequence on empty input and an earlier storage history.
+example : observe (do
+    (seekRightBlankComponent (tm := machine)).program
+    (seekLeftEndComponent (tm := machine)).program) (TMState.init machine []) =
+      some ⟨none, [], [], some false, 0, 2, 1, 2⟩ := by decide +kernel
+
+example :
+    let initial : TMState machine :=
+      {TMState.init machine [true, false] with
+        config.state := some true
+        headPos := 37
+        cellsAllocated := Finset.Icc 35 41
+        cellsVisited := {37, 40}}
+    observe (do
+      (seekRightBlankComponent (tm := machine)).program
+      (seekLeftEndComponent (tm := machine)).program) initial =
+        some ⟨some true, [], [some false], some true, 37, 6, 0, 7⟩ := by decide +kernel
+
 example : observe (appendBit machine true) (TMState.init machine []) =
     some ⟨some true, [], [], some false, 0, 2, 1, 2⟩ := by decide +kernel
 
