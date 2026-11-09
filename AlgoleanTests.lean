@@ -14,6 +14,7 @@ public import AlgoleanTests.ModelStateM
 public import AlgoleanTests.ModelStateMWP
 public import AlgoleanTests.NP
 public import AlgoleanTests.NaivePatternSearchExamples
+public import AlgoleanTests.Problems
 public import AlgoleanTests.ProgExamples
 public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples

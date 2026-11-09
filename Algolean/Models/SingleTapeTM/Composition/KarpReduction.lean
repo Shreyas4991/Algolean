@@ -49,7 +49,7 @@ structure KarpReduction (source target : Language Symbol) where
   /-- This program produces the specified converted input with a polynomial time bound. -/
   computer : TMQuery.PolyTimeComputable transform
   /-- The source answer is yes exactly when the target answer on the converted input is yes. -/
-  correct : ∀ input, source input ↔ target (transform input)
+  correct : ∀ input, input ∈ source ↔ transform input ∈ target
 
 /-- A [KarpReduction](##Algolean.Algorithms.KarpReduction) exists between the two problems. -/
 def KarpReducible (source target : Language Symbol) : Prop := Nonempty (KarpReduction source target)
@@ -76,7 +76,7 @@ noncomputable def trans (first : KarpReduction A B) (second : KarpReduction B C)
 
 /-- The same conversion gives a reduction when yes and no are reversed for both problems. -/
 def complement (reduction : KarpReduction A B) :
-    KarpReduction (fun input => ¬ A input) (fun input => ¬ B input) where
+    KarpReduction Aᶜ Bᶜ where
   transform := reduction.transform
   computer := reduction.computer
   correct input := not_congr (reduction.correct input)
@@ -85,7 +85,8 @@ def complement (reduction : KarpReduction A B) :
 If the target problem belongs to [P](##Algolean.Algorithms.P), then the source problem does too.
 Its solver converts the input and then runs the target solver.
 -/
-theorem preservesP [Nontrivial Symbol] (reduction : KarpReduction A B) (target : P B) : P A := by
+theorem preservesP [Nontrivial Symbol] (reduction : KarpReduction A B) (target : B ∈ P) :
+    A ∈ P := by
   obtain ⟨f, yes, ⟨machine⟩, h⟩ := target
   exact ⟨f ∘ reduction.transform, yes, ⟨reduction.computer.comp machine⟩,
     fun input => (h (reduction.transform input)).trans (reduction.correct input).symm⟩

@@ -80,5 +80,8 @@ public import Algolean.Models.SingleTapeTM.Composition.While
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
+public import Algolean.Problems.Basic
+public import Algolean.Problems.Encoding
+public import Algolean.Problems.SAT.Basic
 public import Algolean.QueryComposition
 public import Algolean.QueryModel

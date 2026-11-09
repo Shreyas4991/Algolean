@@ -39,7 +39,7 @@ belongs to that language.
 -/
 theorem singleton_inP {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [Nontrivial Symbol]
     (yes : List Symbol) :
-    P (fun input => input = yes) :=
+    {yes} ∈ P :=
   ⟨id, yes, ⟨TMQuery.PolyTimeComputable.id⟩, fun _ => Iff.rfl⟩
 
 -- These pairs have identical concatenations but distinct separator encodings.
@@ -59,10 +59,11 @@ exactly the encoded pair `([], [true])`, and its certificate-length bound is one
 certificate is nonempty, so this example checks that the separator preserves the boundary
 between the input and its certificate.
 -/
-theorem emptyWord_withCertificate : Algorithms.NP (fun input : List Bool => input = []) := by
-  refine ⟨fun word => word = (Alphabet.wordPair Bool).encode ([], [true]),
+theorem emptyWord_withCertificate : {([] : List Bool)} ∈ Algorithms.NP := by
+  refine ⟨{(Alphabet.wordPair Bool).encode ([], [true])},
     1, singleton_inP _, ?_⟩
   intro input
+  simp only [Set.mem_singleton_iff]
   constructor
   · rintro rfl
     exact ⟨[true], by simp, rfl⟩
@@ -75,7 +76,7 @@ example : Nonempty (TMQuery.PolyTimeComputable
   ⟨(TMQuery.PolyTimeComputable.id (Symbol := Unit)).onFirstWord⟩
 
 -- The inclusion of P in NP uses the two-symbol assumption of the language classes.
-example : Algorithms.NP (fun input : List Bool => input = []) := NP.ofP (singleton_inP [])
+example : {([] : List Bool)} ∈ Algorithms.NP := NP.ofP (singleton_inP [])
 
 /--
 This machine supplies two control labels for testing the verifier and the addition of alphabet
