@@ -46,6 +46,57 @@ def readWord : List (Extended Symbol markers) →
     readWord (word.map Sum.inl ++ .inr marker :: rest) = (word, some (marker, rest)) := by
   induction word <;> simp_all [readWord]
 
+/--
+This pure Lean function returns the ordinary symbols before the first added marker. It uses
+`readWord`, and returns the entire word if no marker occurs.
+-/
+def firstWord (word : List (Extended Symbol markers)) : List Symbol := (readWord word).1
+
+/--
+This pure Lean function returns the suffix after the first added marker. It uses the ending
+returned by `readWord`, and returns an empty list if no marker occurs.
+-/
+def afterMarker (word : List (Extended Symbol markers)) : List (Extended Symbol markers) :=
+  match (readWord word).2 with
+  | none => []
+  | some (_, rest) => rest
+
+@[simp] theorem firstWord_nil : firstWord ([] : List (Extended Symbol markers)) = [] := rfl
+
+@[simp] theorem firstWord_symbol (symbol : Symbol) (rest : List (Extended Symbol markers)) :
+    firstWord (.inl symbol :: rest) = symbol :: firstWord rest := rfl
+
+@[simp] theorem firstWord_marker (marker : Fin markers) (rest : List (Extended Symbol markers)) :
+    firstWord (.inr marker :: rest) = [] := rfl
+
+@[simp] theorem afterMarker_nil : afterMarker ([] : List (Extended Symbol markers)) = [] := rfl
+
+@[simp] theorem afterMarker_symbol (symbol : Symbol) (rest : List (Extended Symbol markers)) :
+    afterMarker (.inl symbol :: rest) = afterMarker rest := rfl
+
+@[simp] theorem afterMarker_marker (marker : Fin markers)
+    (rest : List (Extended Symbol markers)) : afterMarker (.inr marker :: rest) = rest := rfl
+
+@[simp] theorem firstWord_append_marker (word : List Symbol) (marker : Fin markers)
+    (rest : List (Extended Symbol markers)) :
+    firstWord (word.map Sum.inl ++ .inr marker :: rest) = word := by
+  simp [firstWord]
+
+@[simp] theorem afterMarker_append_marker (word : List Symbol) (marker : Fin markers)
+    (rest : List (Extended Symbol markers)) :
+    afterMarker (word.map Sum.inl ++ .inr marker :: rest) = rest := by
+  simp [afterMarker]
+
+/--
+The prefix before the first marker and the suffix after it together occupy at most the original
+word's length. The marker, when present, accounts for the omitted cell.
+-/
+theorem lengths_firstWord_afterMarker_le (word : List (Extended Symbol markers)) :
+    (firstWord word).length + (afterMarker word).length ≤ word.length := by
+  induction word with
+  | nil => simp
+  | cons symbol rest ih => cases symbol <;> simp_all; omega
+
 end Algolean.Algorithms.Alphabet
 
 namespace Computability.Encoding
@@ -80,3 +131,29 @@ def pair (first : Encoding α Γ) (second : Encoding β Γ) : Encoding (α × β
   omega
 
 end Computability.Encoding
+
+namespace Algolean.Algorithms.Alphabet
+
+/--
+This encoding stores two words over the same alphabet with one fresh separator between them.
+It specializes `Encoding.pair` to Mathlib's identity encoding of words, so empty words and the
+boundary between input and certificate remain unambiguous.
+-/
+def wordPair (Symbol : Type) :
+    Computability.Encoding (List Symbol × List Symbol) (Extended Symbol 1) :=
+  (Computability.encodingList Symbol).pair (Computability.encodingList Symbol)
+
+@[simp] theorem wordPair_encode (first second : List Symbol) :
+    (wordPair Symbol).encode (first, second) =
+      first.map Sum.inl ++ .inr 0 :: second.map Sum.inl := rfl
+
+/--
+Decoding two words separated by the added marker recovers both words, including when either is
+empty. The symbols of each word carry `Sum.inl` to distinguish them from the marker.
+-/
+@[simp] theorem wordPair_decode (first second : List Symbol) :
+    (wordPair Symbol).decode (first.map Sum.inl ++ .inr 0 :: second.map Sum.inl) =
+      some (first, second) := by
+  exact (wordPair Symbol).decode_encode (first, second)
+
+end Algolean.Algorithms.Alphabet

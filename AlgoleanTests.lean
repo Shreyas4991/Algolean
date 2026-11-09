@@ -12,6 +12,7 @@ public import AlgoleanTests.ModelM
 public import AlgoleanTests.ModelMWP
 public import AlgoleanTests.ModelStateM
 public import AlgoleanTests.ModelStateMWP
+public import AlgoleanTests.NP
 public import AlgoleanTests.NaivePatternSearchExamples
 public import AlgoleanTests.ProgExamples
 public import AlgoleanTests.QuantumExamples
@@ -22,4 +23,5 @@ public import AlgoleanTests.SingleTapeTMAlphabet
 public import AlgoleanTests.SingleTapeTMComposition
 public import AlgoleanTests.SingleTapeTMExamples
 public import AlgoleanTests.SingleTapeTMReductions
+public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.WordRAMExamples
