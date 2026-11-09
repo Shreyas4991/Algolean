@@ -101,8 +101,8 @@ extended alphabet. Its Turing machine program keeps the word before the first se
 runs the original decider on that word. The verifier is defined on all extended-alphabet words,
 including malformed pair encodings.
 -/
-theorem P.onFirstWord {L : Language Symbol} (h : P L) :
-    P (fun input : List (Alphabet.Extended Symbol 1) => L (Alphabet.firstWord input)) := by
+theorem P.onFirstWord {L : Language Symbol} (h : L ∈ P) :
+    Alphabet.firstWord ⁻¹' L ∈ P (Symbol := Alphabet.Extended Symbol 1) := by
   obtain ⟨f, yes, ⟨machine⟩, hcorrect⟩ := h
   refine ⟨_, yes.map Sum.inl, ⟨machine.onFirstWord⟩, ?_⟩
   intro input
@@ -118,7 +118,10 @@ Every language in `P` belongs to `NP`. The verifier receives the actual separato
 removes the separator and certificate with the first-word program, and runs the original decider.
 A certificate-length bound of zero makes the empty certificate sufficient.
 -/
-theorem NP.ofP {L : Language Symbol} (h : P L) : NP L := by
-  exact ⟨_, 0, h.onFirstWord, by simp⟩
+theorem NP.ofP {L : Language Symbol} (h : L ∈ P) : L ∈ NP := by
+  exact ⟨_, 0, P.onFirstWord h, by simp⟩
+
+/-- Every language in `P` belongs to `NP`. -/
+theorem P_subset_NP : (P : Set (Language Symbol)) ⊆ NP := fun _ h => NP.ofP h
 
 end Algolean.Algorithms

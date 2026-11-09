@@ -89,13 +89,13 @@ example : observe (boolIdentity.comp writer).toTimeComputable [] = some ([true],
 This reduction converts the question "Does the input have length at most one?" into "Is the
 converted input exactly the word containing one true bit?"
 -/
-noncomputable def shortWordReduction : KarpReduction (fun input : List Bool => input.tail = [])
-    (fun input => input = [true]) where
+noncomputable def shortWordReduction : KarpReduction {input : List Bool | input.tail = []}
+    {[true]} where
   transform input := true :: input.tail
   computer := writer
   correct input := by simp
 
-example : P (fun input : List Bool => input.tail = []) :=
+example : {input : List Bool | input.tail = []} ∈ P :=
   shortWordReduction.preservesP
     ⟨id, [true], ⟨TMQuery.PolyTimeComputable.id⟩, fun _ => Iff.rfl⟩
 
@@ -104,8 +104,7 @@ example (input : List Bool) :
       (shortWordReduction.trans (KarpReduction.refl _)).transform input = [true] :=
   (shortWordReduction.trans (KarpReduction.refl _)).correct input
 
-example : KarpReducible (fun input : List Bool => input.tail = [])
-    (fun input => input = [true]) :=
+example : KarpReducible {input : List Bool | input.tail = []} {[true]} :=
   (show KarpReducible _ _ from ⟨shortWordReduction⟩).trans (KarpReducible.refl _)
 
 /-- This program executes one `.Stop` instruction, which costs one head move without moving. -/

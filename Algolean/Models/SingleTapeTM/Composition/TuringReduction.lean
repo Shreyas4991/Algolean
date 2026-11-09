@@ -45,11 +45,11 @@ This function gives the correct yes or no answer for every input to the specifie
 describes the oracle's answers without requiring an algorithm for finding them.
 -/
 noncomputable def languageOracle (language : Language Bool) (input : List Bool) : Bool :=
-  @decide (language input) (Classical.propDecidable _)
+  @decide (input ∈ language) (Classical.propDecidable _)
 
 /-- The oracle returns true exactly when the problem's answer is yes. -/
 @[simp] theorem languageOracle_eq_true (language : Language Bool) (input : List Bool) :
-    languageOracle language input = true ↔ language input := by
+    languageOracle language input = true ↔ input ∈ language := by
   simp [languageOracle]
 
 /--
@@ -92,7 +92,7 @@ structure TuringReduction (source target : Language Bool) where
   solver answers the target problem correctly.
   -/
   correct : ∀ input, interface.DecidesWithin (languageOracle target) program input
-    (source input) (poly.eval input.length)
+    (input ∈ source) (poly.eval input.length)
 
 /-- A [TuringReduction](##Algolean.Algorithms.TuringReduction) exists between the two problems. -/
 def TuringReducible (source target : Language Bool) : Prop :=
@@ -133,8 +133,8 @@ noncomputable def refl (language : Language Bool) : TuringReduction language lan
     · have hquery : OracleInterface.queryWord s.config.BiTape = input :=
         OracleInterface.queryWord_mk₁ input
       rw [OracleInterface.execute_ask_succ _ _ 0 s, hquery]
-    · by_cases h : language input <;> simp [answer, languageOracle, h]
-    · by_cases h : language input <;> simp [answer, languageOracle, h, identityInterface]
+    · by_cases h : input ∈ language <;> simp [answer, languageOracle, h]
+    · by_cases h : input ∈ language <;> simp [answer, languageOracle, h, identityInterface]
     · simp
 
 end TuringReduction

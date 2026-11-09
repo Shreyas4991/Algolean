@@ -8,6 +8,7 @@ module
 
 public import Algolean.Models.SingleTapeTM
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
+public import Algolean.Problems.Basic
 public import Mathlib.Algebra.Polynomial.Eval.Defs
 
 /-!
@@ -57,12 +58,6 @@ namespace Algorithms
 open Cslib.Turing Polynomial
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
-
-/--
-A language specifies a yes/no problem about lists of symbols: it holds for exactly the inputs
-whose answer is yes.
--/
-abbrev Language (Symbol : Type) := List Symbol → Prop
 
 namespace TMQuery
 
@@ -141,9 +136,9 @@ and produces a chosen acceptance word exactly on inputs whose answer is yes. Pol
 specified by [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable).
 The alphabet must contain at least two distinct symbols.
 -/
-def P [_symbols : Nontrivial Symbol] (L : Language Symbol) : Prop :=
-  ∃ (f : List Symbol → List Symbol) (yes : List Symbol),
-    Nonempty (TMQuery.PolyTimeComputable f) ∧ ∀ x, f x = yes ↔ L x
+def P [_symbols : Nontrivial Symbol] : Set (Language Symbol) :=
+  {L | ∃ (f : List Symbol → List Symbol) (yes : List Symbol),
+    Nonempty (TMQuery.PolyTimeComputable f) ∧ ∀ x, f x = yes ↔ x ∈ L}
 
 /--
 A language belongs to `NP` when a language in `P` checks encoded input-certificate pairs and a
@@ -157,11 +152,11 @@ The verifier receives `(Alphabet.wordPair Symbol).encode (input, certificate)`. 
 runtime is measured in that encoded word's length, which is the two word lengths plus one.
 The proof that every language in `P` belongs to `NP` is in `Algolean.Complexity.NP`.
 -/
-def NP [_symbols : Nontrivial Symbol] (L : Language Symbol) : Prop :=
-  ∃ (A : Language (Alphabet.Extended Symbol 1)) (q : Polynomial ℕ), P A ∧
-    ∀ input, L input ↔ ∃ certificate : List Symbol,
+def NP [_symbols : Nontrivial Symbol] : Set (Language Symbol) :=
+  {L | ∃ (A : Language (Alphabet.Extended Symbol 1)) (q : Polynomial ℕ), A ∈ P ∧
+    ∀ input, input ∈ L ↔ ∃ certificate : List Symbol,
       certificate.length ≤ q.eval input.length ∧
-        A ((Alphabet.wordPair Symbol).encode (input, certificate))
+        (Alphabet.wordPair Symbol).encode (input, certificate) ∈ A}
 
 end Algorithms
 
