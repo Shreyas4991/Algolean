@@ -31,7 +31,7 @@ with one symbol.
 Turing machine programs into these computability records. Its `Computes` proofs also preserve
 the control state and restore the head coordinate for any initial tape history, so programs can
 run in sequence on the same machine. The Boolean-tape examples in
-[TMComplexity.lean](Algolean/Complexity/TMComplexity.html) use those conversions.
+[BasicTMs.lean](Algolean/Algorithms/SingleTapeTuringMachines/BasicTMs.html) use those conversions.
 [NP.lean](Algolean/Complexity/NP.html) constructs the encoded-pair verifier used to prove `P ⊆ NP`.
 
 ## Main definitions and results

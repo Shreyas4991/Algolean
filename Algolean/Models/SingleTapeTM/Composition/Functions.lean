@@ -25,8 +25,9 @@ Those records are defined in
 [PolytimeBasicClasses.lean](Algolean/Complexity/PolytimeBasicClasses.html), where they are used
 to define `P` and `NP`. The theorem `Completes.outputsWithinTime` below connects completed
 executions to those records.
-The concrete examples in [TMComplexity.lean](Algolean/Complexity/TMComplexity.html) use these
-conversions to obtain witnesses for the same complexity definitions.
+The concrete examples in
+[BasicTMs.lean](Algolean/Algorithms/SingleTapeTuringMachines/BasicTMs.html) use these conversions
+to obtain witnesses for the same complexity definitions.
 
 ## Main definitions and results
 

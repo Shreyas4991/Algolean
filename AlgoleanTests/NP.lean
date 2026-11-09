@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
+public import Algolean.Algorithms.SingleTapeTuringMachines.BasicTMs
 public import Algolean.Complexity.NP
-public import Algolean.Complexity.TMComplexity
 
 /-!
 # Checking encoded certificates and the verifier program
