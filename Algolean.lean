@@ -19,7 +19,13 @@ public import Algolean.Algorithms.Quantum.HadamardLayer
 public import Algolean.Algorithms.RandomQuicksort
 public import Algolean.Algorithms.SingleTapeTuringMachines.Augmented
 public import Algolean.Algorithms.SingleTapeTuringMachines.Basic
+public import Algolean.Algorithms.SingleTapeTuringMachines.BasicTMs
 public import Algolean.Algorithms.SingleTapeTuringMachines.BitOperations
+public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
+public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
+public import Algolean.Algorithms.SingleTapeTuringMachines.Framed
+public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
+public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
 public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
 public import Algolean.Algorithms.Strassen
@@ -29,7 +35,6 @@ public import Algolean.Algorithms.WordRAMLinearSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.NP
 public import Algolean.Complexity.PolytimeBasicClasses
-public import Algolean.Complexity.TMComplexity
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.FuelExecMonad
