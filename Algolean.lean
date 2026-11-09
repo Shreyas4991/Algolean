@@ -20,11 +20,6 @@ public import Algolean.Algorithms.RandomQuicksort
 public import Algolean.Algorithms.SingleTapeTuringMachines.Augmented
 public import Algolean.Algorithms.SingleTapeTuringMachines.Basic
 public import Algolean.Algorithms.SingleTapeTuringMachines.BitOperations
-public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
-public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
-public import Algolean.Algorithms.SingleTapeTuringMachines.Framed
-public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
-public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
 public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
 public import Algolean.Algorithms.Strassen

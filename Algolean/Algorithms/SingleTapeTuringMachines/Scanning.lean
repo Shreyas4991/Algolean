@@ -19,8 +19,7 @@ left, scans to the blank before the block, and then moves right onto its first s
 therefore return from the blank immediately after a block as well as from inside it.
 
 The correctness theorems state the final head position and exact number of head moves for each
-program. The bundled components attach these correctness statements to the programs so that other
-programs can reuse them with the tape and cell histories left by an earlier computation.
+program. They apply with the tape and cell histories left by an earlier computation.
 -/
 
 @[expose] public section
@@ -167,35 +166,5 @@ theorem seekLeftEnd_correct (left right : List Symbol) (s : TMState tm)
                 sub_eq_add_neg, add_assoc])
         simpa [Nat.add_assoc] using hret)
     simpa [seekLeftEnd, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hr
-
-/--
-This `Component` value packages the rightward-scanning Turing machine program with a proof that it
-preserves the tape and control state and stops on the blank after the supplied suffix. Its exact
-head-move cost is the suffix length. The prefix and suffix describe the specification; the running
-program obtains them only by inspecting the tape.
--/
-@[simps program]
-def seekRightBlankComponent :
-    Component tm (fun p : List Symbol × List Symbol => fun s => s.config.BiTape = cursor p.1 p.2)
-      (fun p s cost final =>
-        final.config = {s.config with BiTape := cursor (p.2.reverse ++ p.1) []} ∧
-        final.headPos = s.headPos + p.2.length ∧ cost.steps = p.2.length) where
-  program := seekRightBlank tm
-  correct p s hs := seekRightBlank_correct p.1 p.2 s hs
-
-/--
-This `Component` value packages a Turing machine program that returns to the beginning of a
-contiguous block. Its specification preserves the tape and control state and gives an exact cost of
-the left prefix length plus two head moves. It can run with the cell histories left by another
-component.
--/
-@[simps program]
-def seekLeftEndComponent :
-    Component tm (fun p : List Symbol × List Symbol => fun s => s.config.BiTape = cursor p.1 p.2)
-      (fun p s cost final =>
-        final.config = {s.config with BiTape := cursor [] (p.1.reverse ++ p.2)} ∧
-        final.headPos = s.headPos - p.1.length ∧ cost.steps = p.1.length + 2) where
-  program := seekLeftEnd tm
-  correct p s hs := seekLeftEnd_correct p.1 p.2 s hs
 
 end Algolean.Algorithms.SingleTapeTuringMachines

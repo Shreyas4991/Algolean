@@ -19,12 +19,10 @@ reverse order, and `right` starts at the head. If `right` is empty, the head is 
 immediately after the block. The view `before right` instead puts the head on the blank before the
 block.
 
-The Turing machine program `identity` leaves the machine unchanged, and `writeBit` writes a chosen
-Boolean value at the current cell without moving the head. The correctness lemmas use `Runs` to
-state the resulting tape, the absolute head position, preservation of the control state, and the
-number of head moves for these programs and the primitive write and move instructions. A write costs
-no head moves, although it still consumes interpreter fuel. Moving with direction `.Stop` counts as
-one move even though the head stays in place.
+The correctness lemmas use `Runs` to state the resulting tape, the absolute head position,
+preservation of the control state, and the number of head moves for primitive write and move
+instructions. A write costs no head moves, although it still consumes interpreter fuel. Moving
+with direction `.Stop` counts as one move even though the head stays in place.
 -/
 
 @[expose] public section
@@ -107,50 +105,11 @@ theorem cursor_start (bits : List Symbol) : cursor [] bits = BiTape.mk₁ bits :
 @[simp] theorem cursor_write_blank (left : List Symbol) (bit : Symbol) :
     (cursor left []).write (some bit) = cursor left [bit] := rfl
 
-/--
-Writing `bit` at the head replaces the first symbol of `right`, or extends the block by one cell
-when `right` is empty. The cells to the left and the remaining suffix are unchanged.
--/
-theorem cursor_write_any (left right : List Symbol) (bit : Symbol) :
-    (cursor left right).write (some bit) = cursor left (bit :: right.tail) := by
-  cases right <;> rfl
-
 @[simp] theorem cursor_erase_last (left : List Symbol) (bit : Symbol) :
     (cursor left [bit]).write none = cursor left [] := rfl
 
 variable [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
-
-/--
-`identity tm` is a Turing machine program that finishes immediately without reading, writing, or
-moving the head. It leaves the tape, control state, head position, and cell histories unchanged.
--/
-def identity (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
-  pure ()
-
-/--
-The identity program finishes on the original tape at the original head position. It preserves the
-control state and uses zero head moves.
--/
-theorem identity_correct (s : TMState tm) : Runs (identity tm) s s.config.BiTape s.headPos 0 := by
-  exact ⟨0, s, completes_pure s, by cases s.config; rfl, rfl, rfl⟩
-
-/--
-`writeBit tm bit` is a Turing machine program that writes the chosen Boolean value into the cell
-under the head, replacing its previous symbol or blank. It leaves every other cell unchanged and
-does not move the head.
--/
-def writeBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
-  tape ←ₜ some bit
-
-/--
-Writing `bit` changes the tape only at the current cell. The program finishes at the original head
-position, preserves the control state, and uses zero head moves.
--/
-theorem writeBit_correct {tm : SingleTapeTM Bool} [DecidableEq tm.State]
-    (s : TMState tm) (bit : Bool) :
-    Runs (writeBit tm bit) s (s.config.BiTape.write (some bit)) s.headPos 0 :=
-  ⟨0, s.write (some bit), completes_write s _, rfl, rfl, rfl⟩
 
 /--
 A primitive write replaces the current cell with `symbol` and leaves the head and control state
