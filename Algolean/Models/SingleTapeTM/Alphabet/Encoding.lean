@@ -25,6 +25,9 @@ and [list](##Computability.Encoding.list) formats give lengths in terms of the e
 
 ## Main definitions and results
 
+* `Encoding.ofEquiv` reuses an encoding across an equivalence of types.
+* `Encoding.subtype` rejects decoded values that fail a specified condition.
+* The decoding lemmas describe successful decoding through equivalences and compositions.
 * [Encoding.comp](##Computability.Encoding.comp) encodes a value and then encodes its word.
 * [Encoding.ofEncodable](##Computability.Encoding.ofEncodable) writes a numeric code in binary.
 * [words](##Algolean.Algorithms.Alphabet.words) includes a word in an extended alphabet.
@@ -37,6 +40,28 @@ namespace Computability.Encoding
 
 variable {α : Type u} {β : Type v} {Γ : Type w} {Δ : Type x}
 
+/-- An equivalence lets an encoding represent the same data using another type. -/
+def ofEquiv (encoding : Encoding α Γ) (equiv : β ≃ α) : Encoding β Γ where
+  encode value := encoding.encode (equiv value)
+  decode word := (encoding.decode word).map equiv.symm
+  decode_encode value := by simp
+
+/-- Successful decoding across an equivalence recovers the corresponding original value. -/
+theorem decode_ofEquiv_eq_some_iff (encoding : Encoding α Γ) (equiv : β ≃ α)
+    {word : List Γ} {value : β} :
+    (encoding.ofEquiv equiv).decode word = some value ↔
+      encoding.decode word = some (equiv value) := by
+  cases h : encoding.decode word <;> simp [ofEquiv, h, Equiv.symm_apply_eq]
+
+/-- The decoder accepts a value only when it satisfies the specified condition. -/
+def subtype (encoding : Encoding α Γ) (condition : α → Prop) [DecidablePred condition] :
+    Encoding {value // condition value} Γ where
+  encode value := encoding.encode value.val
+  decode word := do
+    let value ← encoding.decode word
+    if h : condition value then some ⟨value, h⟩ else none
+  decode_encode value := by simp [value.property]
+
 /-- The first encoding produces a word, and the second encoding represents that whole word. -/
 def comp (first : Encoding α Γ) (second : Encoding (List Γ) Δ) : Encoding α Δ where
   encode a := second.encode (first.encode a)
@@ -44,6 +69,14 @@ def comp (first : Encoding α Γ) (second : Encoding (List Γ) Δ) : Encoding α
     | none => none
     | some intermediate => first.decode intermediate
   decode_encode a := by simp
+
+/-- Successful decoding through a composition supplies a word decoded by each encoding. -/
+theorem decode_comp_eq_some_iff (first : Encoding α Γ) (second : Encoding (List Γ) Δ)
+    {word : List Δ} {value : α} :
+    (first.comp second).decode word = some value ↔
+      ∃ intermediate, second.decode word = some intermediate ∧
+        first.decode intermediate = some value := by
+  cases h : second.decode word <;> simp [comp, h]
 
 /--
 A value's existing natural-number code is written using Mathlib's
@@ -71,6 +104,29 @@ def words (Symbol : Type u) (markers : ℕ) : Encoding (List Symbol) (Extended S
 /-- Including a word in a larger alphabet preserves its length. -/
 @[simp] theorem length_words (word : List Symbol) (markers : ℕ) :
     ((words Symbol markers).encode word).length = word.length := by simp [words]
+
+/-- Successful decoding removes only the alphabet tags and recovers every symbol of the word. -/
+theorem decode_words_eq_some_iff {word : List (Extended Symbol markers)} {value : List Symbol} :
+    (words Symbol markers).decode word = some value ↔ word = value.map Sum.inl := by
+  constructor
+  · intro h
+    induction word generalizing value with
+    | nil =>
+      simp [words] at h
+      subst value
+      rfl
+    | cons symbol word ih =>
+      cases symbol with
+      | inr marker => simp [words] at h
+      | inl symbol =>
+        cases htail : word.mapM Sum.getLeft? with
+        | none => simp [words, htail] at h
+        | some tail =>
+          have heq : symbol :: tail = value := by simpa [words, htail] using h
+          subst value
+          simp [ih htail]
+  · rintro rfl
+    exact (words Symbol markers).decode_encode value
 
 end Algolean.Algorithms.Alphabet
 
