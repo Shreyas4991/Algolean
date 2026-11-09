@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Alphabet.Encoding
+public import Mathlib.Data.Vector.Basic
 
 /-!
 # Storing lists with two markers
@@ -23,6 +24,7 @@ The proof of the encoded length counts the original words and all added markers.
 
 * [Encoding.list](##Computability.Encoding.list) encodes lists over an alphabet with two markers.
 * [length_list](##Computability.Encoding.length_list) counts every encoded entry and marker.
+* `Encoding.finFunction` stores a finite table in index order and checks its size when decoding.
 -/
 
 @[expose] public section
@@ -82,5 +84,18 @@ def list (entry : Encoding α Γ) : Encoding (List α) (Extended Γ 2) where
       List.length_map, List.length_cons, List.length_nil] at ih ⊢
     simp only [List.map_cons, List.sum_cons]
     lia
+
+/-- A finite function is stored as its values in index order; other list lengths are rejected. -/
+def finFunction (entry : Encoding α Γ) (size : ℕ) :
+    Encoding (Fin size → α) (Extended Γ 2) :=
+  (entry.list.subtype (fun values => values.length = size)).ofEquiv
+    (Equiv.vectorEquivFin α size).symm
+
+/-- A finite table uses one entry marker per value and one final marker. -/
+@[simp] theorem length_finFunction (entry : Encoding α Γ) (size : ℕ) (table : Fin size → α) :
+    ((entry.finFunction size).encode table).length =
+      ((List.ofFn table).map (fun value => (entry.encode value).length)).sum + size + 1 := by
+  change (entry.list.encode (List.Vector.ofFn table).toList).length = _
+  simp
 
 end Computability.Encoding
