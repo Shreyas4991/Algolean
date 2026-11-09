@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Membership.NP.SAT
+public import Algolean.Problems.SAT.Verification
 
 /-!
 # Checking SAT encodings and certificates
