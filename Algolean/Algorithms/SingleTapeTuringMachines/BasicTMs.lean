@@ -12,19 +12,21 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
 public import Algolean.Models.SingleTapeTM.Composition.Functions
 
 /-!
-# Four basic Boolean Turing machine programs
+# Six basic Boolean Turing machine programs
 
-This file packages correctness proofs and time bounds for four Turing machine programs.
+This file packages correctness proofs and time bounds for six Turing machine programs.
 
+* `writeBit` replaces the first bit, or writes one bit when the input is empty.
+* `flipBit` negates the first bit and leaves empty input empty.
 * `appendBit` appends a chosen bit to the input word.
 * `complementBlock` negates every input bit.
 * `eraseBlock` erases the entire input word.
 * `increment` adds one to a binary number stored with its least significant bit first.
 
-Each program preserves the control state, restores the starting head coordinate, and uses at most
-`2 * input.length + 2` head moves. The `Computer` values carry these proofs so the programs can run
-in sequence. The `PolyTimeComputable` values prove polynomial-time computability, with time
-measured in head-move instructions.
+Each program preserves the control state and restores the starting head coordinate. Writing and
+flipping use zero head moves; the other four use at most `2 * input.length + 2`. The `Computer`
+values carry these proofs so the programs can run in sequence. The `PolyTimeComputable` values
+prove polynomial-time computability of the other four programs, counting head moves as time.
 -/
 
 @[expose] public section
@@ -34,6 +36,25 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 open Cslib.Turing TMQuery Polynomial
 
 variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+
+/-- Writing `bit` replaces the first input bit, or creates a one-bit word on empty input. -/
+theorem writeBit_computes (bit : Bool) :
+    Computes (writeBit tm bit) (fun bits => bit :: bits.tail) (fun _ => 0) := by
+  intro input s hs
+  refine ⟨0, ?_, le_rfl⟩
+  cases input <;> simpa [hs, BiTape.mk₁, BiTape.nil, BiTape.write] using writeBit_correct s bit
+
+/-- This Lean function negates the first bit and preserves the rest. Empty input stays empty. -/
+def flipFirst : List Bool → List Bool
+  | [] => []
+  | bit :: bits => bit.not :: bits
+
+/-- Flipping the first bit computes `flipFirst` without moving the head. -/
+theorem flipBit_computes : Computes (flipBit tm) flipFirst (fun _ => 0) := by
+  intro input s hs
+  refine ⟨0, ?_, le_rfl⟩
+  cases input <;>
+    simpa [flipFirst, hs, BiTape.mk₁, BiTape.nil, BiTape.write] using flipBit_correct s
 
 /--
 The append program computes `input ++ [bit]` for every input and returns the head to the starting
@@ -80,6 +101,14 @@ theorem increment_computes :
   · simpa [cursor_start] using increment_correct input s (by simpa [cursor_start] using hs)
   · have := carryCount_le_length input
     lia
+
+/-- This value pairs the bit-writing program with its correctness proof and zero head-move bound. -/
+def writeBitComputer (bit : Bool) : Computer tm (fun bits => bit :: bits.tail) (fun _ => 0) :=
+  Computer.ofComputes (writeBit_computes (tm := tm) bit)
+
+/-- This value pairs the bit-flipping program with its output proof and zero head-move bound. -/
+def flipBitComputer : Computer tm flipFirst (fun _ => 0) :=
+  Computer.ofComputes (flipBit_computes (tm := tm))
 
 /--
 This value contains a verified Turing machine program that appends `bit` to the input and restores

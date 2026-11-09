@@ -23,6 +23,7 @@ The correctness lemmas use `Runs` to state the resulting tape, the absolute head
 preservation of the control state, and the number of head moves for primitive write and move
 instructions. A write costs no head moves, although it still consumes interpreter fuel. Moving
 with direction `.Stop` counts as one move even though the head stays in place.
+The program `writeBit` writes a chosen Boolean value without moving the head.
 -/
 
 @[expose] public section
@@ -119,6 +120,16 @@ cases use zero head moves.
 theorem write_correct (s : TMState tm) (symbol : Option Symbol) :
     Runs (FreeM.lift (.write symbol)) s (s.config.BiTape.write symbol) s.headPos 0 :=
   ⟨0, s.write symbol, completes_write s _, rfl, rfl, rfl⟩
+
+/-- This Turing machine program writes `bit` under the head without changing other cells. -/
+def writeBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  tape ←ₜ some bit
+
+/-- Writing the bit preserves the head position and control state and uses no head moves. -/
+theorem writeBit_correct {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+    (s : TMState tm) (bit : Bool) :
+    Runs (writeBit tm bit) s (s.config.BiTape.write (some bit)) s.headPos 0 :=
+  write_correct s (some bit)
 
 /--
 A primitive move leaves the tape symbols and control state unchanged and changes the absolute head
