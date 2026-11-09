@@ -40,6 +40,43 @@ namespace Computability.Encoding
 
 variable {α : Type u} {β : Type v} {Γ : Type w} {Δ : Type x}
 
+/-- Renaming symbols bijectively preserves the represented values and word lengths. -/
+def mapSymbols (encoding : Encoding α Γ) (rename : Γ ≃ Δ) : Encoding α Δ where
+  encode value := (encoding.encode value).map rename
+  decode word := encoding.decode (word.map rename.symm)
+  decode_encode value := by simp
+
+/-- Renaming symbols does not change the number of symbols in an encoded word. -/
+@[simp] theorem length_mapSymbols (encoding : Encoding α Γ) (rename : Γ ≃ Δ) (value : α) :
+    ((encoding.mapSymbols rename).encode value).length = (encoding.encode value).length := by
+  simp [mapSymbols]
+
+/-- This decoder accepts only words that the encoder itself produces. -/
+def strict (encoding : Encoding α Γ) [DecidableEq Γ] : Encoding α Γ where
+  encode := encoding.encode
+  decode word := do
+    let value ← encoding.decode word
+    if encoding.encode value = word then some value else none
+  decode_encode value := by simp
+
+/-- Successful strict decoding identifies the entire supplied word with the encoded value. -/
+@[simp] theorem decode_strict_eq_some_iff (encoding : Encoding α Γ) [DecidableEq Γ]
+    {word : List Γ} {value : α} :
+    encoding.strict.decode word = some value ↔ word = encoding.encode value := by
+  constructor
+  · intro h
+    cases hdecode : encoding.decode word with
+    | none => simp [strict, hdecode] at h
+    | some decoded =>
+      simp only [strict, hdecode] at h
+      change (if encoding.encode decoded = word then some decoded else none) = some value at h
+      split at h
+      · cases Option.some.inj h
+        exact ‹encoding.encode value = word›.symm
+      · cases h
+  · rintro rfl
+    exact encoding.strict.decode_encode value
+
 /-- An equivalence lets an encoding represent the same data using another type. -/
 def ofEquiv (encoding : Encoding α Γ) (equiv : β ≃ α) : Encoding β Γ where
   encode value := encoding.encode (equiv value)

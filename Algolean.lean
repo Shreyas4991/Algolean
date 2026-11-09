@@ -33,6 +33,7 @@ public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Algorithms.WordRAMLinearSearch
 public import Algolean.Complexity.Basic
+public import Algolean.Complexity.Membership.NP.SAT
 public import Algolean.Complexity.NP
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
@@ -93,6 +94,7 @@ public import Algolean.Models.WordRAM
 public import Algolean.Problems.Basic
 public import Algolean.Problems.Encoding
 public import Algolean.Problems.SAT.Basic
+public import Algolean.Problems.SAT.Encoding
 public import Algolean.Problems.TMSAT.Basic
 public import Algolean.Problems.TMSAT.Compiler
 public import Algolean.Problems.TMSAT.Encoding
