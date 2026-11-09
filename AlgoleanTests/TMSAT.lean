@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.TMSAT.Encoding
+public import Algolean.Problems.TMSAT.Compiler
 
 /-!
 # Checking Turing machine satisfiability and its encoding
@@ -15,6 +15,7 @@ public import Algolean.Problems.TMSAT.Encoding
 * Certificate lengths and time bounds are independent, and a verifier can require a nonempty word.
 * Encodings preserve complete descriptions and reject invalid tables and malformed fields.
 * Size bounds apply to successfully decoded words with noncanonical machine descriptions.
+* Compiled query verifiers preserve acceptance and rejection on input-certificate words.
 -/
 
 @[expose] public section
@@ -23,6 +24,38 @@ namespace AlgoleanTests.TMSAT
 
 open Algolean.Problems Algolean.Problems.TMSAT Computability Cslib.Turing Relation
 open Algolean.Algorithms.Alphabet
+open Algolean.Algorithms
+
+/-- This source machine has one logical label and a table that writes false and halts. -/
+abbrev rejectingControl : SingleTapeTM TapeSymbol where
+  State := Fin 1
+  q₀ := 0
+  tr _ _ := (⟨some (.inl false), none⟩, none)
+
+/-- This query verifier leaves its input unchanged, despite its source table writing false. -/
+def identityVerifier : TMQuery.TimeComputable (id : List TapeSymbol → List TapeSymbol) where
+  tm := rejectingControl
+  program := pure ()
+  timeBound _ := 0
+  outputsFunInTime input :=
+    ⟨0, ⟨(), 0⟩, ⟨TMState.init rejectingControl input, 0⟩, rfl, rfl, le_rfl⟩
+
+-- A completed query program still needs the compiled machine's halting transition.
+example : Instance.ofQueryVerifier identityVerifier [true] 2 ∈ satisfiable := by
+  rw [mem_satisfiable_ofQueryVerifier_iff]
+  exact ⟨[false, false], rfl, rfl⟩
+
+-- An accepting bit in the certificate cannot replace a rejecting bit at the output head.
+example : Instance.ofQueryVerifier identityVerifier [false] 1 ∉ satisfiable := by
+  rw [mem_satisfiable_ofQueryVerifier_iff]
+  rintro ⟨certificate, _, hhead⟩
+  simp [wordPair_encode] at hhead
+
+-- Empty input leaves the separator at the head, which is distinct from an accepting bit.
+example : encoding.encode (Instance.ofQueryVerifier identityVerifier [] 1) ∉ language := by
+  rw [encode_ofQueryVerifier_mem_language_iff]
+  rintro ⟨certificate, _, hhead⟩
+  simp [wordPair_encode] at hhead
 
 /-- This verifier accepts in one stationary transition by writing a true bit and halting. -/
 def accept : SingleTapeTM.Description TapeSymbol where
@@ -96,7 +129,7 @@ example : (⟨readCertificate, [], 1, 1⟩ : Instance) ∉ satisfiable := by
 example : (⟨readCertificate, [], 0, 2⟩ : Instance) ∉ satisfiable := by
   rw [mem_satisfiable_zero_length]
   rintro ⟨final, hfinal, steps, hle, hrun⟩
-  have hcases : steps = 0 ∨ steps = 1 ∨ steps = 2 := by omega
+  have hcases : steps = 0 ∨ steps = 1 ∨ steps = 2 := by lia
   rcases hcases with h | h | h
   · subst steps
     exact not_acceptsWithin_zero _ _ ⟨final, hfinal, 0, le_rfl, hrun⟩

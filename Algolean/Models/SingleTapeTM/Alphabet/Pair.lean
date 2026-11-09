@@ -208,7 +208,7 @@ def sigma {family : α → Type v} (first : Encoding α Γ)
     ((first.sigma second).encode value).length =
       (first.encode value.1).length + ((second value.1).encode value.2).length + 1 := by
   simp [sigma]
-  omega
+  lia
 
 end Computability.Encoding
 

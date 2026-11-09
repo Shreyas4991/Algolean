@@ -82,7 +82,7 @@ theorem acceptsWithin_one_iff (verifier : SingleTapeTM.Description TapeSymbol)
       subst final
       simp [accepting, SingleTapeTM.initCfg] at hfinal
     | succ steps =>
-      have hzero : steps = 0 := by omega
+      have hzero : steps = 0 := by lia
       subst steps
       exact ⟨final, hfinal, by
         simpa [RelatesInSteps.succ_iff, SingleTapeTM.TransitionRelation] using hrun⟩
@@ -95,6 +95,35 @@ theorem AcceptsWithin.mono {verifier : SingleTapeTM.Description TapeSymbol}
     (hle : time ≤ time') : AcceptsWithin verifier word time' := by
   obtain ⟨final, hfinal, hrun⟩ := h
   exact ⟨final, hfinal, RelatesWithinSteps.mono hle hrun⟩
+
+/--
+If the verifier produces a specified output within the bound, it accepts exactly when that
+output starts with a true bit. Determinism prevents a different halting tape from accepting.
+-/
+theorem acceptsWithin_iff_of_outputsWithinTime (verifier : SingleTapeTM.Description TapeSymbol)
+    {word output : List TapeSymbol} {time : ℕ}
+    (houtput : verifier.machine.OutputsWithinTime word output time) :
+    AcceptsWithin verifier word time ↔ output.head? = some (.inl true) := by
+  have hhead : (BiTape.mk₁ output).head = output.head? := by cases output <;> rfl
+  have hterminal {a b : verifier.machine.Cfg} (ha : a.state = none)
+      (h : ReflTransGen verifier.machine.TransitionRelation a b) : a = b := by
+    rcases h.cases_head with heq | ⟨next, hstep, _⟩
+    · exact heq
+    · cases a
+      simp_all [SingleTapeTM.TransitionRelation]
+  constructor
+  · rintro ⟨final, hfinal, hrun⟩
+    have hdet : Relator.RightUnique verifier.machine.TransitionRelation := by
+      intro a b c hb hc
+      exact Option.some.inj (hb.symm.trans hc)
+    have hsame : final = verifier.machine.haltCfg output := by
+      rcases ReflTransGen.total_of_right_unique hdet hrun.choose_spec.2.reflTransGen
+          houtput.choose_spec.2.reflTransGen with h | h
+      · exact hterminal hfinal.1 h
+      · exact (hterminal rfl h).symm
+    simpa only [hsame, SingleTapeTM.haltCfg, hhead] using hfinal.2
+  · intro h
+    exact ⟨verifier.machine.haltCfg output, ⟨rfl, hhead.trans h⟩, houtput⟩
 
 /-- Allowing more time preserves acceptance without changing the required certificate length. -/
 theorem mem_satisfiable_mono {problem : Instance} (h : problem ∈ satisfiable)

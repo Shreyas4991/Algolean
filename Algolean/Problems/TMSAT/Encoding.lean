@@ -89,7 +89,7 @@ def encoding : Encoding Instance CodeSymbol :=
       (SingleTapeTM.Description.encoding.encode problem.verifier).length + problem.input.length +
         problem.certificateLength + problem.time + 3 := by
   simp [encoding, Encoding.ofEquiv, Instance.equiv, payloadEncoding, boundsEncoding, Encoding.comp]
-  omega
+  lia
 
 /--
 The decoded input, certificate length, time bound, and three separators fit in the supplied word.
@@ -117,25 +117,25 @@ theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {pr
   have htime := unary_eq_length_of_decode htime
   simp only [List.length_append, List.length_cons, List.length_map,
     SingleTapeTM.Description.length_bitEncoding]
-  omega
+  lia
 
 /-- A successfully decoded certificate length is bounded by the supplied word's length. -/
 theorem certificateLength_le_length_of_decode {word : List CodeSymbol} {problem : Instance}
     (h : encoding.decode word = some problem) : problem.certificateLength ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
-  omega
+  lia
 
 /-- A successfully decoded time bound is bounded by the supplied word's length. -/
 theorem time_le_length_of_decode {word : List CodeSymbol} {problem : Instance}
     (h : encoding.decode word = some problem) : problem.time ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
-  omega
+  lia
 
 /-- A successfully decoded input is no longer than the supplied word. -/
 theorem input_length_le_length_of_decode {word : List CodeSymbol} {problem : Instance}
     (h : encoding.decode word = some problem) : problem.input.length ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
-  omega
+  lia
 
 /-- The specified certificate length cannot exceed the length of the encoded instance. -/
 theorem certificateLength_le_length_encoding (problem : Instance) :
