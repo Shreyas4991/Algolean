@@ -11,9 +11,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Framed
 /-!
 # Executing Boolean-word programs and copying encoded pairs
 
-These examples check appending, complementing, erasing, and incrementing Boolean words, including
-empty inputs and running programs in sequence. Increment tests cover both a carry that stops
-within the word and an overflow that adds a new bit. Each observation records the complete tape,
+These examples check Boolean-word programs on empty and nonempty inputs and in sequence.
+Writing and flipping tests cover both bit values and blanks. Increment tests cover both a carry
+that stops within the word and an overflow that adds a new bit. Each observation records the tape,
 the control label, the head coordinate, the number of head-move instructions, and the tape-storage
 counts.
 A run that starts at coordinate 37 checks that the program preserves its starting label and
@@ -83,6 +83,41 @@ def observe (p : Prog (TMQuery machine) Unit) (initial : TMState machine) (fuel 
       final.machine.config.BiTape.right.toList, final.machine.config.state,
       final.machine.headPos, result.tell.steps, result.tell.cellsAllocated,
       final.machine.cellsAllocated.card⟩
+
+-- Writing creates a bit on empty input and replaces only the first bit of a nonempty word.
+example : observe (writeBit machine true) (TMState.init machine []) =
+    some ⟨some true, [], [], some false, 0, 0, 0, 1⟩ := by decide +kernel
+
+example : observe (writeBit machine false) (TMState.init machine []) =
+    some ⟨some false, [], [], some false, 0, 0, 0, 1⟩ := by decide +kernel
+
+example : observe (writeBit machine false) (TMState.init machine [true, false]) =
+    some ⟨some false, [], [some false], some false, 0, 0, 0, 2⟩ := by decide +kernel
+
+-- Flipping preserves a blank and exchanges both possible bit values.
+example : observe (flipBit machine) (TMState.init machine []) =
+    some ⟨none, [], [], some false, 0, 0, 0, 1⟩ := by decide +kernel
+
+example : observe (flipBit machine) (TMState.init machine [false, true]) =
+    some ⟨some true, [], [some true], some false, 0, 0, 0, 2⟩ := by decide +kernel
+
+example : observe (flipBit machine) (TMState.init machine [true, false]) =
+    some ⟨some false, [], [some false], some false, 0, 0, 0, 2⟩ := by decide +kernel
+
+-- The two verified programs can run in sequence without changing position or storage counts.
+example :
+    let initial : TMState machine :=
+      {TMState.init machine [true, false] with
+        config.state := some true
+        headPos := 37
+        cellsAllocated := Finset.Icc 35 41
+        cellsVisited := {37, 40}}
+    observe (writeBitComputer (tm := machine) true ≫ₜ flipBitComputer (tm := machine)).program
+      initial = some ⟨some false, [], [some false], some true, 37, 0, 0, 7⟩ := by decide +kernel
+
+example : (writeBitComputer (tm := machine) true).program = writeBit machine true := rfl
+
+example : (flipBitComputer (tm := machine)).program = flipBit machine := rfl
 
 example : observe (appendBit machine true) (TMState.init machine []) =
     some ⟨some true, [], [], some false, 0, 2, 1, 2⟩ := by decide +kernel
