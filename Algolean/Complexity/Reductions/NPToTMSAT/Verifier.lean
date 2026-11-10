@@ -13,7 +13,7 @@ public import Algolean.Problems.Certificates
 /-!
 # Preparing NP verifiers for TMSAT
 
-* `NP.exists_head_verifier` supplies a polynomial-time verifier that returns one answer symbol.
+* `NP.exists_head_verifier` provides a polynomial-time verifier that returns one answer symbol.
   It compares the original verifier's whole output with its acceptance word.
 * `NP.exists_exact_head_verifier` constructs a polynomial-time verifier with exact certificate
   lengths and one-symbol answers.
@@ -68,7 +68,7 @@ theorem NP.exists_head_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
 Every bounded certificate can be replaced by a certificate of exactly `2 * q(n) + 1` symbols.
 The fixed-length word records the original certificate and unused padding. Conversely, every
 successfully decoded word of that length gives a certificate within the original bound.
-This theorem describes the certificates; a machine must still perform the decoding.
+The decoder used in `NP.exists_exact_head_verifier` implements this certificate representation.
 -/
 theorem NP.fixed_length_certificates {L : Language Γ} (h : L ∈ NP)
     [DecidableEq Γ] (next stop : Γ) (hne : next ≠ stop) (yes : Γ) :

@@ -20,11 +20,11 @@ public import Algolean.Models.SingleTapeTM.Alphabet.Block
 * `encodingOver` and `languageOver` write the same problem over `Γ` when it has two distinct
   symbols.
 * Encoding an instance preserves its answer, and failed decoding gives a no answer.
-* Successfully decoded certificate lengths and time bounds cannot exceed the supplied word's length.
+* Successfully decoded certificate lengths and time bounds cannot exceed the input word's length.
 
 The alphabet `Γ` is fixed before defining this language. Input symbols are written as binary
 codes, while the instance encoding uses the same finite alphabet for every choice of `Γ`.
-The fixed `Encodable Γ` instance supplies those codes. Every finite alphabet admits such a
+The fixed `Encodable Γ` instance determines those codes. Every finite alphabet admits such a
 choice, and its symbol-code lengths have a common constant bound.
 The unary fields have exactly the specified lengths. Separators preserve the boundaries between
 the four fields, and the machine description includes its complete finite transition table.
@@ -33,7 +33,7 @@ The encoder chooses one word for each instance. The decoder can also accept othe
 describe the same instance. This lets us reuse the existing number decoders and follows the
 use of multiple machine descriptions in [Barak's lecture notes][barak2006]. All such words give
 the same yes or no answer. Their lengths can differ, so the size proofs use the length of the
-word supplied to the decoder and cover every word it accepts.
+word passed to the decoder and cover every word it accepts.
 
 [barak2006]: https://www.cs.princeton.edu/courses/archive/spr06/cos522/lec2.pdf
 -/
@@ -57,7 +57,7 @@ def unaryEncoding : Encoding ℕ Bool where
 @[simp] theorem length_unaryEncoding (value : ℕ) : (unaryEncoding.encode value).length = value := by
   induction value <;> simp_all [unaryEncoding, unaryEncodeNat]
 
-/-- A successfully decoded unary value equals the number of bits in the supplied word. -/
+/-- A successfully decoded unary value equals the number of bits in the input word. -/
 theorem unary_eq_length_of_decode {word : List Bool} {value : ℕ}
     (h : unaryEncoding.decode word = some value) : value = word.length := by
   simp only [unaryEncoding] at h
@@ -102,7 +102,7 @@ def encoding : Encoding (Instance Γ) CodeSymbol :=
   lia
 
 /--
-The decoded input, certificate length, time bound, and three separators fit in the supplied word.
+The decoded input, certificate length, time bound, and three separators fit in the input word.
 This holds for every successful decoding, including noncanonical machine descriptions.
 -/
 theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
@@ -129,19 +129,19 @@ theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {pr
     SingleTapeTM.Description.length_bitEncoding]
   lia
 
-/-- A successfully decoded certificate length is bounded by the supplied word's length. -/
+/-- A successfully decoded certificate length is bounded by the input word's length. -/
 theorem certificateLength_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.certificateLength ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
   lia
 
-/-- A successfully decoded time bound is bounded by the supplied word's length. -/
+/-- A successfully decoded time bound is bounded by the input word's length. -/
 theorem time_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.time ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
   lia
 
-/-- A successfully decoded input is no longer than the supplied word. -/
+/-- A successfully decoded input is no longer than the input word. -/
 theorem input_length_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.input.length ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h

@@ -45,6 +45,9 @@ variable {tm : SingleTapeTM (Extended Symbol 1)} [DecidableEq tm.State]
 `seekSeparator tm` is a Turing machine program that moves right across ordinary symbols and stops on
 the first separator. If it reaches a blank first, it writes a separator there and stops without
 moving past it. The symbols already crossed are preserved.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def seekSeparator (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
@@ -96,6 +99,9 @@ variable [Inhabited Symbol]
 first blank with `.inl default`, moving right after each write. It stops on that blank. Replacing
 every suffix symbol this way removes extra separators while keeping the suffix contiguous for
 backward erasure.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def fillRight (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -129,6 +135,9 @@ theorem fillRight_correct (left right : List (Extended Symbol 1)) (s : TMState t
 `eraseToSeparator tm` is a Turing machine program that erases the current cell and moves left until
 it reaches a separator, which it leaves in place under the head. In the intended use, the suffix has
 already been overwritten by `fillRight`, so no intervening separator can stop this scan early.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def eraseToSeparator (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
@@ -168,6 +177,9 @@ theorem eraseToSeparator_correct (n : ℕ) (left : List (Extended Symbol 1)) (s 
 `finishDiscard tm` is a Turing machine program that starts on the blank after an overwritten suffix.
 It moves left, erases back to the separator, and erases the separator too. It leaves the head at the
 separator's former coordinate, with the prefix to its left preserved.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def finishDiscard (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
@@ -202,6 +214,9 @@ theorem finishDiscard_correct (n : ℕ) (left : List (Extended Symbol 1)) (s : T
 entire suffix to its right. It first overwrites that suffix with ordinary symbols, then erases
 backward to the separator so that extra separators in the suffix cause no ambiguity. It finishes at
 the starting coordinate, now blank, and preserves all symbols to its left.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def discardRight (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
@@ -234,6 +249,9 @@ ordinary symbols before the first separator, and erases that separator and every
 finishes at the original head coordinate, with the retained symbols still tagged by `.inl`. A
 missing separator leaves the original word intact, and additional separators in the suffix are
 erased.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def firstWord (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]

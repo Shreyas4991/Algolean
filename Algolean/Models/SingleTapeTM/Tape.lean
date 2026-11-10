@@ -6,14 +6,18 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Cslib.Foundations.Data.StackTape
+public import Cslib.Foundations.Data.BiTape
 
 /-!
-# Adding blank cells to one side of a tape
+# Describing words and blank cells on a tape
 
-`StackTape.blanks` places a specified number of blank cells before an existing side of a tape.
-The lemmas combine consecutive sequences of blanks and show that adding blanks to an entirely
-blank side leaves it unchanged.
+* `StackTape.blanks` and `StackTape.prepend` put blank cells or symbols before existing contents.
+* `StackTape.separateWords` describes words separated by blank cells.
+* `BiTape.segment` describes a word beginning under the head, with other contents on either side.
+* `BiTape.mirror` exchanges the two sides of the tape.
+
+The lemmas describe how these tapes change when the head moves or writes. They support the
+correctness proofs of machines that copy, write, and encode words; they do not execute a machine.
 -/
 
 @[expose] public section
@@ -48,3 +52,102 @@ namespace Cslib.Turing.StackTape
     rfl
 
 end Cslib.Turing.StackTape
+
+namespace Cslib.Turing
+
+namespace StackTape
+
+/-- This puts the occupied cells of a word before an existing side of the tape. -/
+@[simp] def prepend {Symbol : Type} : List Symbol → StackTape Symbol → StackTape Symbol
+  | [], tail => tail
+  | symbol :: word, tail => cons (some symbol) (prepend word tail)
+
+/-- Prepending concatenated words is the same as prepending them in sequence. -/
+theorem prepend_append {Symbol : Type} (first second : List Symbol) (tail : StackTape Symbol) :
+    prepend (first ++ second) tail = prepend first (prepend second tail) := by
+  induction first <;> simp_all
+
+/-- Prepending a word to an empty side of a tape stores exactly that word. -/
+@[simp] theorem prepend_nil {Symbol : Type} (word : List Symbol) :
+    prepend word nil = mapSome word := by
+  induction word <;> simp_all [mapSome, cons, nil]
+
+/-- Prepending to a stored word stores the concatenation. -/
+@[simp] theorem prepend_mapSome {Symbol : Type} (first second : List Symbol) :
+    prepend first (mapSome second) = mapSome (first ++ second) := by
+  rw [← prepend_nil second, ← prepend_append, prepend_nil]
+
+/-- This puts the given words before a tape tail, with a blank after each word. -/
+@[simp] def separateWords {Symbol : Type} : List (List Symbol) → StackTape Symbol → StackTape Symbol
+  | [], tail => tail
+  | word :: rest, tail => prepend word (cons none (separateWords rest tail))
+
+end StackTape
+
+namespace BiTape
+
+/--
+This describes a word beginning under the head, with an arbitrary tape on its left and another
+region separated from it by a blank on its right. An empty word puts the head on that blank.
+-/
+@[simps head left right]
+def segment {Symbol : Type} (left : StackTape Symbol) (word : List Symbol)
+    (tail : StackTape Symbol) : BiTape Symbol where
+  head := word.head?
+  left := left
+  right := match word with
+    | [] => tail
+    | _ :: rest => StackTape.prepend rest (StackTape.cons none tail)
+
+/-- This reflects the tape about its head by exchanging its left and right sides. -/
+@[simps] def mirror {Symbol : Type} (contents : BiTape Symbol) : BiTape Symbol :=
+  ⟨contents.head, contents.right, contents.left⟩
+
+@[simp] theorem mirror_mirror {Symbol : Type} (contents : BiTape Symbol) :
+    contents.mirror.mirror = contents := rfl
+
+variable {Symbol : Type}
+
+@[simp] theorem segment_moveRight (left : StackTape Symbol) (symbol : Symbol) (word : List Symbol)
+    (tail : StackTape Symbol) :
+    (segment left (symbol :: word) tail).moveRight =
+      segment (StackTape.cons (some symbol) left) word tail := by
+  cases word <;> simp [segment, moveRight]
+
+@[simp] theorem segment_moveLeft (left : StackTape Symbol) (symbol : Symbol) (word : List Symbol)
+    (tail : StackTape Symbol) :
+    (segment (StackTape.cons (some symbol) left) word tail).moveLeft =
+      segment left (symbol :: word) tail := by
+  cases word <;> simp [segment, moveLeft]
+
+@[simp] theorem segment_write (left : StackTape Symbol) (old symbol : Symbol) (word : List Symbol)
+    (tail : StackTape Symbol) :
+    (segment left (old :: word) tail).write (some symbol) =
+      segment left (symbol :: word) tail := rfl
+
+@[simp] theorem segment_moveLeft_gap (left : StackTape Symbol) (word : List Symbol)
+    (tail : StackTape Symbol) :
+    (segment (StackTape.cons none left) word tail).moveLeft =
+      segment left [] (StackTape.prepend word (StackTape.cons none tail)) := by
+  cases word <;> simp [segment, moveLeft]
+
+@[simp] theorem segment_moveRight_gap (left : StackTape Symbol) (word : List Symbol)
+    (tail : StackTape Symbol) :
+    (segment left [] (StackTape.prepend word (StackTape.cons none tail))).moveRight =
+      segment (StackTape.cons none left) word tail := by
+  cases word <;> simp [segment, moveRight]
+
+@[simp] theorem segment_erase_advance (left : StackTape Symbol) (symbol : Symbol)
+    (word : List Symbol) (tail : StackTape Symbol) :
+    ((segment left (symbol :: word) tail).write none).moveRight =
+      segment (StackTape.cons none left) word tail := by
+  cases word <;> simp [segment, write, moveRight]
+
+@[simp] theorem segment_start (word : List Symbol) :
+    segment StackTape.nil word StackTape.nil = mk₁ word := by
+  have hempty : StackTape.cons none (StackTape.nil : StackTape Symbol) = StackTape.nil := rfl
+  cases word <;> simp [segment, mk₁, BiTape.nil, hempty]
+
+end BiTape
+
+end Cslib.Turing

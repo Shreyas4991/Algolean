@@ -442,10 +442,13 @@ private theorem process_correct (symbols : List Γ) (hsymbols : ∀ symbol, symb
 termination_by remaining.length
 
 /--
-This removes certificate padding from the word on the tape. The list `symbols` supplies the
+This removes certificate padding from the word on the tape. The list `symbols` provides the
 finite symbol comparisons and must cover the alphabet. It is chosen once with the program,
 independently of the input word and its length. A failed decoding gives an empty output.
 Successful decoding retains the input and recovered certificate and discards the unused suffix.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def unpad (tm : SingleTapeTM (Extended Γ 1)) (symbols : List Γ) (next stop : Γ) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]

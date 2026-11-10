@@ -30,6 +30,9 @@ variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 /--
 This Turing machine program changes `true` to `false` and `false` to `true` under the head.
 It leaves a blank cell blank and never moves the head.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def flipBit (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   ifₜ tape =ₜ some true then

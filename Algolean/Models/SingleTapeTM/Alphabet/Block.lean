@@ -118,7 +118,7 @@ def blockWords (code : Encoding α Γ) (width : Nat) (hwidth : 0 < width)
     ((blockWords code width hwidth hcode).encode word).length = word.length * width := by
   induction word <;> simp_all [blockWords, Nat.add_mul, Nat.add_comm]
 
-/-- A successfully decoded source word cannot be longer than the supplied target word. -/
+/-- A successfully decoded source word cannot be longer than the target word. -/
 theorem length_le_of_decode_blockWords (code : Encoding α Γ) (width : Nat) (hwidth : 0 < width)
     (hcode : ∀ symbol, (code.encode symbol).length = width) {word : List Γ} {decoded : List α}
     (h : (blockWords code width hwidth hcode).decode word = some decoded) :
@@ -215,5 +215,26 @@ theorem length_le_of_decode_finiteWordsOver [Fintype α] [Nonempty α] [Nontrivi
   classical
   dsimp only [finiteWordsOver] at h
   exact length_le_of_decode_finiteWords _ _ _ h
+
+omit [DecidableEq Γ] in
+/-- Encoding concatenated source words concatenates their encodings. -/
+theorem encode_finiteWordsOver_append [Fintype α] [Nonempty α] [Nontrivial Γ]
+    (first second : List α) :
+    (finiteWordsOver α Γ).encode (first ++ second) =
+      (finiteWordsOver α Γ).encode first ++ (finiteWordsOver α Γ).encode second := by
+  classical
+  simp [finiteWordsOver, finiteWords, Encoding.ofEquiv, Equiv.listEquivOfEquiv, blockWords]
+
+omit [DecidableEq Γ] in
+/-- A word's encoding concatenates the fixed code words of its symbols. -/
+theorem encode_finiteWordsOver [Fintype α] [Nonempty α] [Nontrivial Γ] (word : List α) :
+    (finiteWordsOver α Γ).encode word =
+      word.flatMap (fun symbol => (finiteWordsOver α Γ).encode [symbol]) := by
+  classical
+  induction word with
+  | nil => simp [finiteWordsOver, finiteWords, Encoding.ofEquiv,
+      Equiv.listEquivOfEquiv, blockWords]
+  | cons symbol word ih =>
+    simpa using (encode_finiteWordsOver_append (Γ := Γ) [symbol] word).trans (by rw [ih])
 
 end Algolean.Algorithms.Alphabet

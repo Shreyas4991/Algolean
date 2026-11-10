@@ -98,6 +98,31 @@ def wordEncoding : Encoding (List Symbol) CodeSymbol :=
     (words TableSymbol 1)).comp (words BodySymbol 1)
 
 omit [Fintype Symbol] in
+/-- This nonempty word stores one symbol in binary, followed by its ending separator. -/
+def wordSymbolCode (symbol : Symbol) : List CodeSymbol :=
+  ((Encoding.ofEncodable Symbol).encode symbol).map
+    (fun bit => .inl (.inl (.inl (.inl bit)))) ++ [.inl (.inl (.inl (.inr 0)))]
+
+/-- This symbol ends the entire encoded input word. -/
+def wordEnd : CodeSymbol := .inl (.inl (.inl (.inr 1)))
+
+omit [Fintype Symbol] in
+/-- Encoding an input concatenates its symbol codes and then writes the word ending. -/
+theorem encode_wordEncoding (input : List Symbol) :
+    wordEncoding.encode input = input.flatMap wordSymbolCode ++ [wordEnd] := by
+  induction input with
+  | nil => rfl
+  | cons symbol input ih =>
+    simp_all [wordEncoding, wordSymbolCode, wordEnd, Encoding.comp, Encoding.list,
+      words, List.map_flatMap, List.map_append, List.map_map,
+      Function.comp_def, List.append_assoc]
+
+omit [Fintype Symbol] in
+/-- Every symbol code contains at least its ending separator. -/
+theorem wordSymbolCode_ne_nil (symbol : Symbol) : wordSymbolCode symbol ≠ [] := by
+  simp [wordSymbolCode]
+
+omit [Fintype Symbol] in
 /-- The input encoding counts every symbol code, its ending, and the ending of the whole word. -/
 @[simp] theorem length_wordEncoding (word : List Symbol) :
     (wordEncoding.encode word).length =
@@ -106,7 +131,7 @@ omit [Fintype Symbol] in
   simp [wordEncoding, Encoding.comp]
 
 omit [Fintype Symbol] in
-/-- Every decoded input symbol needs an ending in the supplied word, so decoded words fit in it. -/
+/-- Every decoded input symbol needs an ending in the input word, so decoded words fit in it. -/
 theorem length_le_of_decode_wordEncoding {word : List CodeSymbol} {input : List Symbol}
     (h : wordEncoding.decode word = some input) : input.length + 1 ≤ word.length := by
   obtain ⟨body, hbody, h⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp h

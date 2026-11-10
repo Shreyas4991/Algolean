@@ -35,6 +35,9 @@ variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 /--
 This program erases the input and writes `yes` if it equals `expected`, or `no` otherwise.
 The comparison includes the end of the word, so a proper prefix does not count as a match.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def compareWord (tm : SingleTapeTM Symbol) (yes no : Symbol) :
     List Symbol → Prog (TMQuery tm) Unit
@@ -91,7 +94,7 @@ theorem compareWord_correct (yes no : Symbol) (expected input : List Symbol) (s 
       · simpa [htape, BiTape.mk₁, BiTape.nil, BiTape.write, heq] using hreject
 
 /--
-This machine has one control state. The comparison instructions supply all of its behavior.
+This machine has one control state. The comparison instructions define all of its behavior.
 -/
 abbrev comparisonControl (Symbol : Type) [Inhabited Symbol] [Fintype Symbol] :
     SingleTapeTM Symbol where

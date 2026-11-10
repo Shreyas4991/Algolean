@@ -21,7 +21,7 @@ movements that produce them.
 A `PairComputer` transforms such an encoded pair on one physical tape. `PairComputer.product` runs a
 program that transforms the left word and preserves the right, followed by one that transforms the
 right word and preserves the left. Their head-move costs add, with the second cost evaluated on the
-intermediate pair. `pairOutputs` first runs a supplied physical duplicator and then these two
+intermediate pair. `pairOutputs` first runs a chosen duplicator and then these two
 transformations, so its bound also includes the cost of copying the input.
 -/
 

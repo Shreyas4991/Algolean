@@ -23,6 +23,10 @@ This file packages correctness proofs and time bounds for six Turing machine pro
 * `eraseBlock` erases the entire input word.
 * `increment` adds one to a binary number stored with its least significant bit first.
 
+These programs are meta TMs, meaning templates used inside another Turing machine. Their
+parameters are fixed when constructing the containing machine and stay the same for every
+input length. Fixing them gives one finite program that handles every input size.
+
 Each program preserves the control state and restores the starting head coordinate. Writing and
 flipping use zero head moves; the other four use at most `2 * input.length + 2`. The `Computer`
 values carry these proofs so the programs can run in sequence. The `PolyTimeComputable` values

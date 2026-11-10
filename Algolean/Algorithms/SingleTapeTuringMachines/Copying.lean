@@ -10,6 +10,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
 public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.Functions
+public import Algolean.Models.SingleTapeTM.Tape
 
 /-!
 # Duplicating a Boolean word on one tape
@@ -40,20 +41,22 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines.Copying
 open Cslib Cslib.Turing TMQuery
 open scoped TMQuery
 
+section Generic
+
+variable {Symbol : Type}
+
 /--
 `stackAppend bits tail` is a pure Lean function that puts the occupied cells for `bits` before the
 existing stack `tail`. It preserves all cells of `tail`, including any internal blanks that separate
 the regions used during copying.
 -/
-@[simp] def stackAppend : List Bool → StackTape Bool → StackTape Bool
-  | [], tail => tail
-  | bit :: bits, tail => StackTape.cons (some bit) (stackAppend bits tail)
+abbrev stackAppend : List Symbol → StackTape Symbol → StackTape Symbol := StackTape.prepend
 
-theorem stackAppend_append (first second : List Bool) (tail : StackTape Bool) :
+theorem stackAppend_append (first second : List Symbol) (tail : StackTape Symbol) :
     stackAppend (first ++ second) tail = stackAppend first (stackAppend second tail) := by
   induction first <;> simp_all
 
-@[simp] theorem stackAppend_nil (bits : List Bool) :
+theorem stackAppend_nil (bits : List Symbol) :
     stackAppend bits StackTape.nil = StackTape.mapSome bits := by
   induction bits <;> simp_all
 
@@ -62,78 +65,77 @@ theorem stackAppend_append (first second : List Bool) (tail : StackTape Bool) :
 first cell of `bits`. The stack `left` lies to the head's left, and a blank separates `bits` from
 the region `tail` to its right. If `bits` is empty, the head is on that separating blank.
 -/
-@[simps head left right]
-def segment (left : StackTape Bool) (bits : List Bool) (tail : StackTape Bool) : BiTape Bool where
-  head := bits.head?
-  left := left
-  right := match bits with
-    | [] => tail
-    | _ :: rest => stackAppend rest (StackTape.cons none tail)
+abbrev segment (left : StackTape Symbol) (bits : List Symbol) (tail : StackTape Symbol) :
+    BiTape Symbol := BiTape.segment left bits tail
 
-@[simp] theorem segment_moveRight (left : StackTape Bool) (bit : Bool) (bits : List Bool)
-    (tail : StackTape Bool) :
+theorem segment_moveRight (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol) :
     (segment left (bit :: bits) tail).moveRight =
       segment (StackTape.cons (some bit) left) bits tail := by
-  cases bits <;> simp [segment, BiTape.moveRight]
+  cases bits <;> simp [segment, BiTape.segment, BiTape.moveRight]
 
-@[simp] theorem segment_moveLeft (left : StackTape Bool) (bit : Bool) (bits : List Bool)
-    (tail : StackTape Bool) :
+theorem segment_moveLeft (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol) :
     (segment (StackTape.cons (some bit) left) bits tail).moveLeft =
       segment left (bit :: bits) tail := by
-  cases bits <;> simp [segment, BiTape.moveLeft]
+  cases bits <;> simp [segment, BiTape.segment, BiTape.moveLeft]
 
-@[simp] theorem segment_write (left : StackTape Bool) (old bit : Bool) (bits : List Bool)
-    (tail : StackTape Bool) :
+theorem segment_write (left : StackTape Symbol) (old bit : Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol) :
     (segment left (old :: bits) tail).write (some bit) = segment left (bit :: bits) tail := rfl
 
-@[simp] theorem segment_moveLeft_gap (left : StackTape Bool) (bits : List Bool)
-    (tail : StackTape Bool) :
+theorem segment_moveLeft_gap (left : StackTape Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol) :
     (segment (StackTape.cons none left) bits tail).moveLeft =
       segment left [] (stackAppend bits (StackTape.cons none tail)) := by
-  cases bits <;> simp [segment, BiTape.moveLeft]
+  cases bits <;> simp [segment, BiTape.segment, BiTape.moveLeft]
 
-@[simp] theorem segment_moveRight_gap (left : StackTape Bool) (bits : List Bool)
-    (tail : StackTape Bool) :
+theorem segment_moveRight_gap (left : StackTape Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol) :
     (segment left [] (stackAppend bits (StackTape.cons none tail))).moveRight =
       segment (StackTape.cons none left) bits tail := by
-  cases bits <;> simp [segment, BiTape.moveRight]
+  cases bits <;> simp [segment, BiTape.segment, BiTape.moveRight]
 
-@[simp] theorem segment_moveRight_word (left : StackTape Bool) (bits : List Bool) :
+@[simp] theorem segment_moveRight_word (left : StackTape Symbol) (bits : List Symbol) :
     (segment left [] (StackTape.mapSome bits)).moveRight =
       segment (StackTape.cons none left) bits StackTape.nil := by
-  cases bits <;> simp [segment, BiTape.moveRight]
+  cases bits <;> simp [segment, BiTape.segment, BiTape.moveRight]
 
-@[simp] theorem segment_erase_advance (left : StackTape Bool) (bit : Bool) (bits : List Bool)
-    (tail : StackTape Bool) :
+theorem segment_erase_advance (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol) :
     ((segment left (bit :: bits) tail).write none).moveRight =
       segment (StackTape.cons none left) bits tail := by
-  cases bits <;> simp [segment, BiTape.write, BiTape.moveRight]
+  cases bits <;> simp [segment, BiTape.segment, BiTape.write, BiTape.moveRight]
 
-@[simp] theorem segment_write_gap (left : StackTape Bool) (bit : Bool) (bits : List Bool)
-    (tail : StackTape Bool) :
+@[simp] theorem segment_write_gap (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol) :
     (segment left [] (stackAppend bits (StackTape.cons none tail))).write (some bit) =
       segment left (bit :: bits) tail := rfl
 
-@[simp] theorem segment_write_end (left : StackTape Bool) (bit : Bool) :
+@[simp] theorem segment_write_end (left : StackTape Symbol) (bit : Symbol) :
     (segment left [] StackTape.nil).write (some bit) = segment left [bit] StackTape.nil := rfl
 
-@[simp] theorem segment_write_word (left : StackTape Bool) (bit : Bool) (bits : List Bool) :
+@[simp] theorem segment_write_word (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol) :
     (segment left [] (StackTape.mapSome bits)).write (some bit) =
       segment left (bit :: bits) StackTape.nil := by
-  simp [segment, BiTape.write]
+  simp [segment, BiTape.segment, BiTape.write]
 
-@[simp] theorem segment_start (bits : List Bool) :
+theorem segment_start (bits : List Symbol) :
     segment StackTape.nil bits StackTape.nil = BiTape.mk₁ bits := by
-  cases bits <;> simp [segment, BiTape.mk₁, BiTape.nil]
+  cases bits <;> simp [segment, BiTape.segment, BiTape.mk₁, BiTape.nil]
 
-variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+variable [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
+variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 
 /--
 `writeAdvance tm symbol` is a Turing machine program that writes `symbol` into the current cell and
 moves the head one cell to the right. Passing `none` erases the current cell before moving; passing
-`some bit` writes that Boolean value.
+`some symbol` writes that symbol.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
-def writeAdvance (tm : SingleTapeTM Bool) (symbol : Option Bool) : Prog (TMQuery tm) Unit :=
+def writeAdvance (tm : SingleTapeTM Symbol) (symbol : Option Symbol) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
   tape ←ₜ symbol
   moveₜ .Right
@@ -142,7 +144,7 @@ def writeAdvance (tm : SingleTapeTM Bool) (symbol : Option Bool) : Prog (TMQuery
 Writing and advancing changes only the original head cell and finishes one coordinate to its right.
 It preserves the control state and uses exactly one head move.
 -/
-theorem writeAdvance_correct (s : TMState tm) (symbol : Option Bool) :
+theorem writeAdvance_correct (s : TMState tm) (symbol : Option Symbol) :
     Runs (writeAdvance tm symbol) s ((s.config.BiTape.write symbol).moveRight) (s.headPos + 1) 1 :=
   ⟨_, _, ⟨2, rfl⟩, rfl, rfl, rfl⟩
 
@@ -150,7 +152,8 @@ theorem writeAdvance_correct (s : TMState tm) (symbol : Option Bool) :
 The rightward scan crosses the displayed `bits` and stops on the blank separating them from `tail`.
 It preserves the contents of both neighboring regions and uses exactly `bits.length` head moves.
 -/
-theorem seekRightBlank_segment (left : StackTape Bool) (bits : List Bool) (tail : StackTape Bool)
+theorem seekRightBlank_segment (left : StackTape Symbol) (bits : List Symbol)
+    (tail : StackTape Symbol)
     (s : TMState tm) (hs : s.config.BiTape = segment left bits tail) :
     Runs (seekRightBlank tm) s (segment (stackAppend bits.reverse left) [] tail)
       (s.headPos + bits.length) bits.length := by
@@ -177,8 +180,11 @@ theorem seekRightBlank_segment (left : StackTape Bool) (bits : List Bool) (tail 
 `seekLeftGap tm` is a Turing machine program that moves left at least once and then continues left
 until it reaches a blank. The initial move lets it leave the current boundary even when it starts on
 a blank. It never changes tape contents.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
-def seekLeftGap (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def seekLeftGap (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left
   seekLeftBlank tm
 
@@ -187,8 +193,8 @@ This leftward scan crosses the displayed left prefix and stops on its preceding 
 the regions on both sides of that blank and uses exactly `left.length + 1` head moves, including its
 required initial move.
 -/
-theorem seekLeftGap_segment (base : StackTape Bool) (left bits : List Bool)
-    (tail : StackTape Bool) (s : TMState tm)
+theorem seekLeftGap_segment (base : StackTape Symbol) (left bits : List Symbol)
+    (tail : StackTape Symbol) (s : TMState tm)
     (hs : s.config.BiTape = segment (stackAppend left (StackTape.cons none base)) bits tail) :
     Runs (seekLeftGap tm) s
       (segment base [] (stackAppend (left.reverse ++ bits) (StackTape.cons none tail)))
@@ -229,8 +235,8 @@ The return-to-start program finishes on the first cell of the current region, or
 the region is empty. It preserves the arbitrary regions beyond the separating blanks and uses
 exactly `left.length + 2` head moves.
 -/
-theorem seekLeftEnd_segment (base : StackTape Bool) (left bits : List Bool)
-    (tail : StackTape Bool) (s : TMState tm)
+theorem seekLeftEnd_segment (base : StackTape Symbol) (left bits : List Symbol)
+    (tail : StackTape Symbol) (s : TMState tm)
     (hs : s.config.BiTape = segment (stackAppend left (StackTape.cons none base)) bits tail) :
     Runs (seekLeftEnd tm) s (segment (StackTape.cons none base) (left.reverse ++ bits) tail)
       (s.headPos - left.length) (left.length + 2) := by
@@ -243,10 +249,17 @@ theorem seekLeftEnd_segment (base : StackTape Bool) (left bits : List Bool)
         simp [TMState.move, ht, hp, sub_eq_add_neg, add_assoc])
   simpa [seekLeftEnd, seekLeftGap, Nat.add_assoc] using hr
 
+end Generic
+
+variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+
 /--
 `shiftBitLeft tm bit` is a Turing machine program that expects the current cell to contain `bit` and
 the cell to its left to be blank. It erases the current cell, writes `bit` into that left blank, and
 finishes one cell to the right of its original position, ready to process the next source bit.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def shiftBitLeft (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   tape ←ₜ none
@@ -267,7 +280,9 @@ theorem shiftBitLeft_correct (left : StackTape Bool) (bit : Bool) (bits : List B
       (segment (StackTape.cons none (StackTape.cons (some bit) left)) bits tail)
       (s.headPos + 1) 3 := by
   refine ⟨_, _, ⟨5, rfl⟩, ?_, ?_, ?_⟩
-  · cases bits <;> simp [TMQuery.step, hs, segment, BiTape.write, BiTape.moveLeft, BiTape.moveRight]
+  · cases bits <;>
+      simp [TMQuery.step, hs, segment, BiTape.segment, BiTape.write, BiTape.moveLeft,
+        BiTape.moveRight]
   · simp [TMQuery.step, sub_eq_add_neg, add_assoc]
   · rfl
 
@@ -276,6 +291,9 @@ theorem shiftBitLeft_correct (left : StackTape Bool) (bit : Bool) (bits : List B
 blank immediately to its left. It moves each bit into the preceding blank, shifting the whole block
 left by one cell. It stops on the blank just after the block's original location, preserving the bit
 order.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def shiftLeft (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -365,6 +383,9 @@ def headerStart (doneBits rest : List Bool) (bit : Bool) : BiTape Bool :=
 right across the remaining source and the existing copy, and appends `bit` to the copy region. It
 finishes on the newly written copy bit. The erased source cell marks where the bit must later be
 restored.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def putCopy (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   writeAdvance tm none
@@ -378,6 +399,9 @@ def putCopy (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do
 four leftward scans to successive blanks. These scans cross the copy, the remaining source suffix,
 the processed source prefix, and the unary header. It finishes on the blank immediately before the
 header without changing any cells.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def returnHeader (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   seekLeftGap tm
@@ -390,6 +414,9 @@ def returnHeader (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuer
 and writes a new `true` there to extend it. It then scans right to the temporarily erased source
 cell, restores `bit`, and advances to the next source cell. The source word is intact again when it
 finishes.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def restoreSource (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   tape ←ₜ some true
@@ -508,7 +535,7 @@ theorem returnHeader_correct (doneBits rest : List Bool) (bit : Bool) (s : TMSta
       have h3 := hr.seq (by
         intro v hv hvp
         have hg := seekLeftGap_segment StackTape.nil (header doneBits) [] source v
-          (by simp [hv, source, stackAppend_nil])
+          (by simp [hv, source])
         simpa [hvp] using hg)
       simpa [hup] using h3)
     simpa [hp] using h2)
@@ -519,6 +546,9 @@ theorem returnHeader_correct (doneBits rest : List Bool) (bit : Bool) (s : TMSta
 `copyBit tm bit` is a Turing machine program that copies the current source bit into the separate
 region on the right, returns left to extend the unary header, and restores the original source bit.
 It finishes on the next source cell, ready for another iteration.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def copyBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   putCopy tm bit
@@ -548,6 +578,9 @@ theorem copyBit_correct (doneBits rest : List Bool) (bit : Bool) (s : TMState tm
 corresponding `copyBit` program through a tape-symbol test. Each iteration restores the source bit,
 grows the copy and header, and advances to the next source cell. The loop stops on the blank after
 the source word, leaving the copy separated from it by that blank.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def copyLoop (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -592,6 +625,9 @@ theorem copyLoop_correct (doneBits bits : List Bool) (s : TMState tm)
 and its copy. It shifts the copy one cell left to join the two words, then replaces the blank
 between the unary header and source with `false`. It returns to the first header cell, producing the
 contiguous Boolean pair encoding.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def finishCopy (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Right
@@ -606,6 +642,9 @@ def finishCopy (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery 
 encoding of two copies on the same tape. It first runs the copying loop and then joins the regions
 into a word of the form `true` repeated `input.length` times, followed by `false`, the input, and
 the input again. It finishes on the first output cell, to the left of the original input.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def duplicate (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   copyLoop tm

@@ -24,7 +24,7 @@ public import Algolean.Models.SingleTapeTM.Compiler.Basic
   the number of transitions.
 
 One fixed program handles every input. The formula, certificate, and their lengths are read from
-its tape, rather than supplied as parameters to its definition.
+its tape, rather than provided as parameters to its definition.
 -/
 
 public section
@@ -66,7 +66,7 @@ theorem result_wordPair (word certificate : List CodeSymbol) :
 
 /--
 This machine gives distinct state names to the format checker and the evaluator. Its transition
-rule preserves the current cell and halts; the query program `verify` supplies the instructions.
+rule preserves the current cell and halts; the query program `verify` provides the instructions.
 The existing query compiler can turn that program into a transition-table Turing machine.
 -/
 abbrev machine : SingleTapeTM Symbol where

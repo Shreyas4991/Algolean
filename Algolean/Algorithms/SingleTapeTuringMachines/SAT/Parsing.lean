@@ -57,7 +57,7 @@ private def formatNext : FormatState → Symbol → FormatState
   | _, _ => .reject
 
 /--
-This machine supplies the state names for the format-checking query program. Its transition table
+This machine provides the state names for the format-checking query program. Its transition table
 preserves the current symbol and halts. Query execution instead follows the instructions of
 `checkFormat`; the query compiler can construct a transition table from those instructions.
 -/
