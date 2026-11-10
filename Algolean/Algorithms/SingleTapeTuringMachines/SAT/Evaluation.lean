@@ -20,7 +20,9 @@ public import Algolean.Models.SingleTapeTM.Composition.Relabel
   A clause with no true literal makes the whole formula false.
 * Lookup preserves the unread formula and the certificate. The same certificate assignment
   therefore supplies every variable's value throughout the computation.
-* The proofs below cover literal and clause checking. The whole-formula proof is unfinished.
+* `evaluate_correct` proves that the program leaves only the formula's truth value on the tape,
+  with the head on that value. On an encoded pair of length `n`, it makes at most
+  `25 * (n + 1) ^ 4` head moves.
 
 The program receives its formula and certificate on the tape. Its definitions have no parameters
 for either value or their lengths. The Boolean parameter on literal checking selects one of two
@@ -493,5 +495,215 @@ private theorem checkClause_correct (clause : Clause Variable) (between : List S
     initial hbetween (by simpa [initial] using htape) hsize rfl
   exact ⟨0 + cost, final, (completes_update s (.inr Flag.checking)).seq hr, hf, hp,
     by simpa using ht⟩
+
+/-- Erasing an unread formula stops on its ending and leaves the certificate unchanged. -/
+private theorem eraseFormula_correct (formula : CNF Variable) (certificate : Certificate)
+    (s : TMState machine)
+    (htape : s.config.BiTape = cursor [] (tailWord (formulaSymbols formula) certificate)) :
+    Runs (eraseUntil machine formulaEnd) s (cursor [] (tailWord [formulaEnd] certificate))
+      (s.headPos + ((formulaSymbols formula).length - 1 : ℕ))
+      ((formulaSymbols formula).length - 1) := by
+  obtain ⟨before, hbefore, hnot⟩ := formulaSymbols_end formula
+  have hlength : (formulaSymbols formula).length - 1 = before.length := by
+    simp [hbefore]
+  simpa [hlength, tailWord] using eraseUntil_correct formulaEnd before
+    (certificateSeparator :: certificateSymbols certificate) s
+    (by simpa [tailWord, hbefore, List.append_assoc] using htape) hnot
+
+/--
+The formula loop checks clauses until one is false or all have been checked. It erases the
+formula except for its ending and keeps the certificate unchanged. The initial state records
+true, so a formula with no clauses returns true. The size bound is used only in this proof.
+-/
+private theorem formulaLoop_correct (formula : CNF Variable) (certificate : Certificate)
+    (budget : ℕ) (s : TMState machine)
+    (htape : s.config.BiTape = cursor [] (tailWord (formulaSymbols formula) certificate))
+    (hsize : (tailWord (formulaSymbols formula) certificate).length ≤ budget)
+    (hstate : s.config.state = some (.inr Flag.satisfied)) :
+    ∃ cost final, Completes formulaLoop s cost final ∧
+      final.config = ⟨some (resultState (formula.eval (Certificate.assignment certificate))),
+        cursor [] (tailWord [formulaEnd] certificate)⟩ ∧
+      final.headPos = s.headPos + ((formulaSymbols formula).length - 1 : ℕ) ∧
+      cost.steps ≤ 24 * (budget + 1) ^ 3 * (formula.flatten.length + formula.length) := by
+  induction formula generalizing s with
+  | nil =>
+    refine ⟨0, s, ?_, ?_, ?_, by simp⟩
+    · exact completes_while_false _ _ s (by simp [htape, tailWord, formulaSymbols_nil])
+    · have hc : s.config = ⟨s.config.state, s.config.BiTape⟩ := by cases s.config; rfl
+      conv_lhs => rw [hc]
+      simp [hstate, htape, formulaSymbols_nil, resultState]
+    · simp [formulaSymbols_nil]
+  | cons clause rest ih =>
+    have hbetween : certificateSeparator ∉ formulaSymbols rest :=
+      certificateSeparator_not_mem _
+    obtain ⟨a, middle, hclause, hmiddle, hpos, ha⟩ :=
+      checkClause_correct clause (formulaSymbols rest) certificate budget s hbetween
+        (by simpa [tailWord, formulaSymbols_cons, List.append_assoc] using htape)
+        (by simpa [tailWord, formulaSymbols_cons, List.append_assoc] using hsize)
+    have hrestTape : middle.config.BiTape =
+        cursor [] (tailWord (formulaSymbols rest) certificate) := by
+      simp [hmiddle]
+    have hrestSize : (tailWord (formulaSymbols rest) certificate).length ≤ budget := by
+      simp only [tailWord, formulaSymbols_cons, List.length_append, List.length_cons] at hsize ⊢
+      lia
+    have hcondition :
+        (TMCondition.not (.tapeIs (some formulaEnd))).eval s.config = true := by
+      cases clause with
+      | nil => simp [htape, tailWord, formulaSymbols_cons, certificateSymbols_nil,
+          formulaEnd, clauseEnd]
+      | cons literal rest =>
+        cases literal <;>
+          simp [htape, tailWord, formulaSymbols_cons, certificateSymbols_pos,
+            certificateSymbols_neg, formulaEnd, positiveSign, negativeSign]
+    cases hvalue : clause.eval (Certificate.assignment certificate) with
+    | false =>
+      obtain ⟨b, final, herase, hfinal, hfinalPos, hb⟩ :=
+        eraseFormula_correct rest certificate middle hrestTape
+      have hbranch : Completes
+          (branch (.stateIs (some (Sum.inr Flag.unsatisfied)))
+            (eraseUntil machine formulaEnd) (pure ())) middle b final := by
+        apply Completes.branch
+        simpa [hmiddle, resultState, hvalue] using herase
+      have hbody : Completes formulaBody s (a + b) final := by
+        simpa [formulaBody] using hclause.seq hbranch
+      have hfalse := completes_while_false (.not (.tapeIs (some formulaEnd))) formulaBody final
+        (by simp [hfinal, tailWord])
+      refine ⟨a + b + 0, final, ?_, ?_, ?_, ?_⟩
+      · exact Completes.while_step hcondition hbody hfalse
+      · simp [hfinal, hmiddle, resultState, hvalue, CNF.eval]
+      · rw [hfinalPos, hpos]
+        have hlength := formula_length rest
+        simp only [formulaSymbols_cons, List.length_append, List.length_cons]
+        lia
+      · let R := (budget + 1) ^ 3
+        have hsmall : b.steps ≤ R := by
+          rw [hb]
+          have hlength : (formulaSymbols rest).length ≤ budget := by
+            simp only [tailWord, List.length_append, List.length_cons] at hrestSize
+            lia
+          exact (Nat.sub_le _ _).trans (hlength.trans
+            ((Nat.le_succ budget).trans (Nat.le_self_pow (by decide) (budget + 1))))
+        have hsum : a.steps + b.steps + 0 ≤ 24 * R * (clause.length + 1) := by
+          calc
+            a.steps + b.steps + 0 ≤ 22 * R * (clause.length + 1) + R := by
+              simpa using Nat.add_le_add ha hsmall
+            _ ≤ 24 * R * (clause.length + 1) := by nlinarith
+        apply hsum.trans
+        apply Nat.mul_le_mul_left
+        simp only [List.flatten_cons, List.length_append, List.length_cons]
+        lia
+    | true =>
+      have hbranch : Completes
+          (branch (.stateIs (some (Sum.inr Flag.unsatisfied)))
+            (eraseUntil machine formulaEnd) (pure ())) middle 0 middle := by
+        apply Completes.branch
+        simp [hmiddle, resultState, hvalue]
+      have hbody : Completes formulaBody s (a + 0) middle := by
+        simpa [formulaBody] using hclause.seq hbranch
+      obtain ⟨b, final, hr, hf, hp, hb⟩ := ih middle hrestTape hrestSize
+        (by simp [hmiddle, hvalue, resultState])
+      refine ⟨a + 0 + b, final, Completes.while_step hcondition hbody hr, ?_, ?_, ?_⟩
+      · simpa [CNF.eval, hvalue] using hf
+      · rw [hp, hpos]
+        have hlength := formula_length rest
+        simp only [formulaSymbols_cons, List.length_append, List.length_cons]
+        lia
+      · let R := (budget + 1) ^ 3
+        have hfirst : a.steps ≤ 24 * R * (clause.length + 1) := by
+          exact ha.trans (Nat.mul_le_mul_right _ (Nat.mul_le_mul_right R (by decide)))
+        calc
+          (a + 0 + b).steps ≤
+              24 * R * (clause.length + 1) +
+                24 * R * (rest.flatten.length + rest.length) := by
+            simpa using Nat.add_le_add hfirst hb
+          _ = 24 * R * ((clause :: rest).flatten.length + (clause :: rest).length) := by
+            simp only [List.flatten_cons, List.length_append, List.length_cons]
+            ring
+
+/-- Resetting the evaluator's state makes the formula proof apply to any incoming state. -/
+private theorem checkFormula_correct (formula : CNF Variable) (certificate : Certificate)
+    (s : TMState machine)
+    (htape : s.config.BiTape = cursor [] (tailWord (formulaSymbols formula) certificate)) :
+    let size := (tailWord (formulaSymbols formula) certificate).length
+    ∃ cost final, Completes checkFormula s cost final ∧
+      final.config = ⟨some (resultState (formula.eval (Certificate.assignment certificate))),
+        cursor [] (tailWord [formulaEnd] certificate)⟩ ∧
+      final.headPos = s.headPos + ((formulaSymbols formula).length - 1 : ℕ) ∧
+      cost.steps ≤ 24 * (size + 1) ^ 3 * (formula.flatten.length + formula.length) := by
+  let initial : TMState machine := {s with config.state := some (Sum.inr Flag.satisfied)}
+  obtain ⟨cost, final, hr, hf, hp, ht⟩ :=
+    formulaLoop_correct formula certificate _ initial (by simpa [initial] using htape) le_rfl rfl
+  exact ⟨0 + cost, final, (completes_update s (.inr Flag.satisfied)).seq hr, hf, hp,
+    by simpa using ht⟩
+
+/--
+Starting at the first symbol of an encoded formula-certificate pair on an otherwise blank tape,
+`evaluate` finishes with the formula's value under the assignment described by the certificate.
+The result is the only symbol left on the tape, and the head rests on it, one cell past the
+original input. Missing variable values mean false, and repeated entries use the first value.
+For an input of length `n`, the program uses at most `25 * (n + 1) ^ 4` head moves.
+-/
+theorem evaluate_correct (formula : CNF Variable) (certificate : Certificate)
+    (s : TMState machine) :
+    let input := verifierEncoding.encode (formula, certificate)
+    let value := formula.eval (Certificate.assignment certificate)
+    s.config.BiTape = BiTape.mk₁ input →
+    ∃ cost final, Completes evaluate s cost final ∧
+      final.config.BiTape = BiTape.mk₁ [digit value] ∧
+      final.headPos = s.headPos + input.length ∧
+      cost.steps ≤ 25 * (input.length + 1) ^ 4 := by
+  dsimp only
+  intro htape
+  let input := tailWord (formulaSymbols formula) certificate
+  have hinput : verifierEncoding.encode (formula, certificate) = input :=
+    verifierEncoding_symbols formula certificate
+  have hinitial : s.config.BiTape = cursor [] input := by
+    simpa [hinput, cursor_start] using htape
+  obtain ⟨a, middle, hformula, hmiddle, hpos, ha⟩ :=
+    checkFormula_correct formula certificate s hinitial
+  obtain ⟨b, ready, herase, hready, hreadyPos, hb⟩ :=
+    eraseRight_correct (tailWord [formulaEnd] certificate) middle (by simp [hmiddle])
+  let value := formula.eval (Certificate.assignment certificate)
+  have hwrite : Completes
+      (branch (.stateIs (some (Sum.inr Flag.satisfied)))
+        (FreeM.lift (.write (some (digit true))))
+        (FreeM.lift (.write (some (digit false)))))
+      ready 0 (ready.write (some (digit value))) := by
+    apply Completes.branch
+    cases hv : value <;>
+      simpa [hready, hmiddle, resultState, value, hv] using
+        completes_write ready (some (digit value))
+  refine ⟨a + b + 0, ready.write (some (digit value)), ?_, ?_, ?_, ?_⟩
+  · simpa [evaluate, bind_assoc] using (hformula.seq herase).seq hwrite
+  · simp [TMState.write, hready, BiTape.nil, BiTape.mk₁, BiTape.write, value]
+  · change ready.headPos = _
+    rw [hreadyPos, hpos, hinput]
+    have hlength := formula_length formula
+    simp only [input, tailWord, List.length_append, List.length_cons, List.length_nil]
+    lia
+  · let n := input.length
+    have hmeasure : formula.flatten.length + formula.length ≤ n + 1 := by
+      have hlength := formula_length formula
+      dsimp [n, input, tailWord]
+      simp only [List.length_append, List.length_cons]
+      lia
+    have hcleanup : b.steps ≤ n + 1 := by
+      rw [hb]
+      have hlength := formula_length formula
+      dsimp [n, input, tailWord]
+      simp only [List.length_append, List.length_cons]
+      lia
+    have hcheck : a.steps ≤ 24 * (n + 1) ^ 4 := by
+      calc
+        a.steps ≤ 24 * (n + 1) ^ 3 * (formula.flatten.length + formula.length) := ha
+        _ ≤ 24 * (n + 1) ^ 3 * (n + 1) := Nat.mul_le_mul_left _ hmeasure
+        _ = 24 * (n + 1) ^ 4 := by ring
+    have hpower : n + 1 ≤ (n + 1) ^ 4 := Nat.le_self_pow (by decide) _
+    rw [hinput]
+    change a.steps + b.steps + 0 ≤ 25 * (n + 1) ^ 4
+    calc
+      a.steps + b.steps + 0 ≤ 24 * (n + 1) ^ 4 + (n + 1) ^ 4 := by
+        simpa using Nat.add_le_add hcheck (hcleanup.trans hpower)
+      _ = 25 * (n + 1) ^ 4 := by ring
 
 end Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
