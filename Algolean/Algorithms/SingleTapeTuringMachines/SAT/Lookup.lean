@@ -283,6 +283,7 @@ private def compareBody (value : Bool) : Prog (TMQuery machine) Unit := do [TMQu
         finishComparison true value
       else
         finishComparison false value
+
 /-- This loop repeats the digit comparisons until they record equal or different names. -/
 private def compareLoop (value : Bool) : Prog (TMQuery machine) Unit :=
   whileLoop (.stateIs (some State.comparing)) (compareBody value)
@@ -319,6 +320,7 @@ private def lookupBody : Prog (TMQuery machine) Unit := do [TMQuery machine]
       checkEntry true
     else
       checkEntry false
+
 /-- This loop continues checking entries while the state says the name has not been found. -/
 private def lookupLoop : Prog (TMQuery machine) Unit :=
   whileLoop (.stateIs (some State.searching)) lookupBody
