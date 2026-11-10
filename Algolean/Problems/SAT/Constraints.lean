@@ -101,6 +101,27 @@ def CNF.exactlyOne (names : List α) : CNF α := Clause.atLeastOne names :: atMo
     ← satisfiedBy_iff_forall_clause, Clause.atLeastOne_satisfiedBy, atMostOne_satisfiedBy]
   grind [ExistsUnique]
 
+/--
+When every possible choice is listed and different choices have different variable names,
+the formula requires a unique choice whose variable is true.
+-/
+theorem CNF.exactlyOne_map_satisfiedBy {β : Type v} (values : List β)
+    (hvalues : ∀ value, value ∈ values) (name : β → α) (hinj : Function.Injective name)
+    (assignment : α → Bool) :
+    (exactlyOne (values.map name)).SatisfiedBy assignment ↔
+      ∃! value, assignment (name value) = true := by
+  rw [exactlyOne_satisfiedBy]
+  constructor
+  · rintro ⟨entry, ⟨hmem, htrue⟩, hunique⟩
+    obtain ⟨value, _, rfl⟩ := List.mem_map.mp hmem
+    exact ⟨value, htrue, fun other hother =>
+      hinj (hunique (name other) ⟨List.mem_map.mpr ⟨other, hvalues other, rfl⟩, hother⟩)⟩
+  · rintro ⟨value, htrue, hunique⟩
+    refine ⟨name value, ⟨List.mem_map.mpr ⟨value, hvalues value, rfl⟩, htrue⟩, ?_⟩
+    rintro entry ⟨hmem, hother⟩
+    obtain ⟨other, _, rfl⟩ := List.mem_map.mp hmem
+    exact congrArg name (hunique other hother)
+
 /-- The pair comparisons produce at most the square of the number of listed choices. -/
 theorem CNF.length_atMostOne_le (names : List α) :
     (atMostOne names).length ≤ names.length ^ 2 := by
@@ -127,6 +148,16 @@ theorem CNF.length_flatten_atMostOne (names : List α) :
 theorem CNF.length_exactlyOne_le (names : List α) :
     (exactlyOne names).length ≤ names.length ^ 2 + 1 := by
   simpa [exactlyOne] using Nat.add_le_add_right (length_atMostOne_le names) 1
+
+/-- Each clause either lists all choices or compares two choices, so its length is bounded. -/
+theorem CNF.clause_length_exactlyOne_le (names : List α) :
+    ∀ clause ∈ exactlyOne names, clause.length ≤ names.length + 2 := by
+  simp only [exactlyOne, List.forall_mem_cons, Clause.length_atLeastOne]
+  constructor
+  · lia
+  · simp only [atMostOne, List.forall_mem_flatMap, List.forall_mem_map,
+      Clause.length_forbid, List.length_cons, List.length_nil]
+    simp
 
 /-- The choice clause and pair comparisons have a quadratic bound on their literal occurrences. -/
 theorem CNF.length_flatten_exactlyOne_le (names : List α) :

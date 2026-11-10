@@ -10,6 +10,8 @@ public import Algolean.Problems.SAT.Basic
 public import Algolean.Problems.Encodings.Alphabet
 public import Algolean.Models.SingleTapeTM.Alphabet.List
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Mathlib.Algebra.Order.Group.Nat
 
 /-!
 # Encoding Boolean formulas with binary variable names
@@ -124,6 +126,33 @@ Each clause adds its encoded length and one separating symbol; one final symbol 
   induction formula with
   | nil => simp
   | cons clause rest ih => simp_all [Nat.add_assoc]; lia
+
+/--
+If clauses contain at most `literals` literals and variable names contain at most `digits`
+digits, this bounds the encoded formula length in terms of its number of clauses. The extra
+symbols record literal signs and the endings of variable names, clauses, and the formula.
+-/
+theorem length_encoding_le (formula : CNF Variable) (literals digits : Nat)
+    (hclause : ∀ clause ∈ formula, clause.length ≤ literals)
+    (hname : ∀ literal ∈ formula.flatten, literal.name.length ≤ digits) :
+    (encoding.encode formula).length ≤
+      formula.length * (literals * (digits + 2) + 2) + 1 := by
+  rw [length_encoding]
+  have h := List.sum_le_length_nsmul
+    (formula.map fun clause => (clauseEncoding.encode clause).length + 1)
+    (literals * (digits + 2) + 2) (by
+      intro n hn
+      obtain ⟨clause, hc, rfl⟩ := List.mem_map.mp hn
+      have hsum := List.sum_le_length_nsmul
+        (clause.map fun literal => literal.name.length + 2) (digits + 2) (by
+          intro m hm
+          obtain ⟨literal, hl, rfl⟩ := List.mem_map.mp hm
+          exact Nat.add_le_add_right (hname _ (List.mem_flatten.mpr ⟨clause, hc, hl⟩)) 2)
+      have hmul := Nat.mul_le_mul_right (digits + 2) (hclause clause hc)
+      simp only [List.length_map, nsmul_eq_mul] at hsum
+      rw [length_clauseEncoding]
+      lia)
+  simpa [nsmul_eq_mul] using Nat.add_le_add_right h 1
 
 /--
 With no assignments to record, the encoding is just `Sum.inr 3`, which ends the assignment list.

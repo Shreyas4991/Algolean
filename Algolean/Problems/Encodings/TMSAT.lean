@@ -107,18 +107,21 @@ def encoding : Encoding (Instance Γ) CodeSymbol :=
   lia
 
 /--
-The decoded input, certificate length, time bound, and three separators fit in the input word.
+The number of states, decoded input, certificate length, time bound, and three separators fit
+in the input word.
 This holds for every successful decoding, including other words describing the same machine.
 -/
-theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
+theorem states_add_input_length_add_bounds_le_length_of_decode
+    {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) :
-    problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
+    problem.verifier.states + 1 + problem.input.length + problem.certificateLength +
+      problem.time + 3 ≤ word.length := by
   have hfields := (Encoding.decode_ofEquiv_eq_some_iff _ _).mp h
   change (payloadEncoding.pair boundsEncoding).decode word =
     some ((problem.verifier, problem.input), (problem.certificateLength, problem.time)) at hfields
   obtain ⟨payload, bounds, rfl, hpayload, hbounds⟩ :=
     (Encoding.decode_pair_eq_some_iff _ _).mp hfields
-  obtain ⟨machine, inputWord, rfl, _, hinput⟩ :=
+  obtain ⟨machine, inputWord, rfl, hmachine, hinput⟩ :=
     (Encoding.decode_pair_eq_some_iff _ _).mp hpayload
   obtain ⟨certificateWord, timeWord, rfl, hcertificate, htime⟩ :=
     (Encoding.decode_pair_eq_some_iff _ _).mp hbounds
@@ -126,12 +129,20 @@ theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {pr
     (Encoding.decode_comp_eq_some_iff _ _).mp hcertificate
   obtain ⟨timeBits, htimeWord, htime⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp htime
   have hinputLength := SingleTapeTM.Description.length_le_of_decode_wordEncoding hinput
+  have hmachineLength := SingleTapeTM.Description.states_le_length_of_decode hmachine
   rw [SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp hcertificateWord,
     SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp htimeWord]
   have hlength := unary_eq_length_of_decode hcertificate
   have htime := unary_eq_length_of_decode htime
   simp only [List.length_append, List.length_cons, List.length_map,
     SingleTapeTM.Description.length_bitEncoding]
+  lia
+
+/-- The decoded input and the two unary bounds fit in every word accepted by the decoder. -/
+theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
+    (h : encoding.decode word = some problem) :
+    problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
+  have := states_add_input_length_add_bounds_le_length_of_decode h
   lia
 
 /-- A successfully decoded certificate length is bounded by the input word's length. -/
@@ -189,6 +200,22 @@ theorem length_encodingOver [Nontrivial Γ] (problem : Instance Γ) :
 
 omit [Encodable Γ] in
 /--
+The decoded number of states, input, and unary bounds all fit in the word over `Γ`. This holds
+for every accepted spelling of the machine description, not only the encoder's chosen spelling.
+-/
+theorem states_add_input_length_add_bounds_le_length_of_decodeOver [Nontrivial Γ]
+    {word : List Γ} {problem : Instance Γ} (h : encodingOver.decode word = some problem) :
+    problem.verifier.states + 1 + problem.input.length + problem.certificateLength +
+      problem.time + 3 ≤ word.length := by
+  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+  change encoding.over.decode word = some problem at h
+  obtain ⟨raw, hword, hproblem⟩ := (Encoding.decode_over_eq_some_iff _).mp h
+  rw [hword, length_finiteWordsOver]
+  exact (states_add_input_length_add_bounds_le_length_of_decode hproblem).trans
+    (Nat.le_mul_of_pos_right _ Fintype.card_pos)
+
+omit [Encodable Γ] in
+/--
 Every successfully decoded word over `Γ` has room for its input, certificate length, and time
 bound. This covers every word accepted by the decoder, including different words describing
 the same instance.
@@ -196,12 +223,8 @@ the same instance.
 theorem input_length_add_bounds_le_length_of_decodeOver [Nontrivial Γ]
     {word : List Γ} {problem : Instance Γ} (h : encodingOver.decode word = some problem) :
     problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
-  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
-  change encoding.over.decode word = some problem at h
-  obtain ⟨raw, hword, hproblem⟩ := (Encoding.decode_over_eq_some_iff _).mp h
-  rw [hword, length_finiteWordsOver]
-  exact (input_length_add_bounds_le_length_of_decode hproblem).trans
-    (Nat.le_mul_of_pos_right _ Fintype.card_pos)
+  have := states_add_input_length_add_bounds_le_length_of_decodeOver h
+  lia
 
 /-- This is TMSAT with its instances, as well as their inputs and certificates, encoded over `Γ`. -/
 noncomputable def languageOver [Nontrivial Γ] (yes : Γ) : Language Γ :=

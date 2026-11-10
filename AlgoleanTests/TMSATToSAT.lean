@@ -6,8 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.SAT.Constraints
-public import Algolean.Complexity.Reductions.TMSATToSAT.Computation
+public import Algolean.Complexity.Reductions.TMSATToSAT.Reduction
 public import Mathlib.Tactic.FinCases
 
 /-!
@@ -16,6 +15,7 @@ public import Mathlib.Tactic.FinCases
 These examples check repeated variable names, empty choices, early halting, and movement at
 the edge of the recorded tape. They also distinguish writing an accepting symbol from halting
 with that symbol under the head after a movement.
+The complete CNF construction is also checked against these acceptance conventions.
 -/
 
 @[expose] public section
@@ -94,6 +94,40 @@ private def earlyHaltComputation : Computation earlyHaltProblem where
 example : earlyHaltProblem ∈ satisfiable true := by
   rw [mem_satisfiable_iff_exists_computation]
   exact ⟨earlyHaltComputation, ⟨rfl, rfl⟩⟩
+
+/-- The complete CNF formula remains satisfiable when acceptance happens before the time bound. -/
+example : formula earlyHaltProblem true ∈ CNF.satisfiable := by
+  rw [formula_satisfiable_iff, mem_satisfiable_iff_exists_computation]
+  exact ⟨earlyHaltComputation, ⟨rfl, rfl⟩⟩
+
+/-- The complete formula is unsatisfiable when there is no time for the first transition. -/
+example : formula (⟨writeAndHalt, [], 0, 0⟩ : Instance Bool) true ∉ CNF.satisfiable := by
+  rw [formula_satisfiable_iff]
+  simp
+
+/-- Writing true does not make the formula satisfiable when the head then halts over false. -/
+example : formula (⟨writeThenMove, [false, false], 0, 1⟩ : Instance Bool) true ∉
+    CNF.satisfiable := by
+  rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
+  intro h
+  obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
+  have hhead := congrArg (fun result => result.map (fun cfg => cfg.BiTape.head)) hstep
+  rw [Option.map_some, hfinal.2] at hhead
+  simp [SingleTapeTM.Description.machine, writeThenMove, SingleTapeTM.initCfg,
+    Algolean.Algorithms.Alphabet.wordPair_encode, BiTape.mk₁, BiTape.optionMove,
+    BiTape.move, BiTape.moveRight, BiTape.write, StackTape.head, StackTape.mapSome] at hhead
+
+/-- This verifier uses one ordinary symbol and accepts by writing that symbol and halting. -/
+private def unaryAccept : SingleTapeTM.Description (TapeSymbol Unit) where
+  states := 0
+  initial := 0
+  transition _ _ := (some (.inl ()), none, none)
+
+/-- A verifier over a one-symbol alphabet still gives a satisfiable formula when it accepts. -/
+example : formula (⟨unaryAccept, [], 0, 1⟩ : Instance Unit) () ∈ CNF.satisfiable := by
+  rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
+  apply (acceptsWithin_one_iff () _ _).mpr
+  exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl ()))⟩, ⟨rfl, rfl⟩, rfl⟩
 
 /-- Even an immediately accepting verifier has no accepting description with zero transitions. -/
 example : ¬∃ computation : Computation (⟨writeAndHalt, [], 0, 0⟩ : Instance Bool),

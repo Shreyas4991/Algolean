@@ -88,6 +88,33 @@ def ofCells (state : Option (Fin (verifier.states + 1)))
   cases row
   simp [ofCells, cells, headIndex, List.drop_append]
 
+/-- Building a row from its numbered cells preserves their order and values. -/
+@[simp] theorem cells_ofCells (state : Option (Fin (verifier.states + 1)))
+    (contents : List.Vector (Option (TapeSymbol Γ)) width) (head : Fin width) :
+    (ofCells state contents head).cells = contents.val := by
+  simp only [ofCells, cells, List.reverse_reverse]
+  rw [List.getElem_cons_drop, List.take_append_drop]
+
+/-- Building a row at a numbered cell places its head at that cell. -/
+@[simp] theorem headIndex_ofCells (state : Option (Fin (verifier.states + 1)))
+    (contents : List.Vector (Option (TapeSymbol Γ)) width) (head : Fin width) :
+    (ofCells state contents head).headIndex = head := by
+  apply Fin.ext
+  simp [ofCells, headIndex]
+
+/-- The head scans the cell at its numbered position in the complete list of cells. -/
+@[simp] theorem cells_headIndex (row : Row verifier width) :
+    row.cells[row.headIndex.val]'(by simp) = row.symbol := by
+  simp [cells, headIndex]
+
+/-- The state, head position, and numbered cells together determine the entire row. -/
+theorem eq_of_cells {first second : Row verifier width} (hstate : first.state = second.state)
+    (hhead : first.headIndex = second.headIndex) (hcells : first.cells = second.cells) :
+    first = second := by
+  rw [← ofCells_self first, ← ofCells_self second]
+  congr 1
+  exact Subtype.ext hcells
+
 /--
 There are finitely many rows because the state, head position, and each recorded cell are finite.
 -/
@@ -300,6 +327,17 @@ private theorem initialRow_toCfg (problem : Instance Γ)
   simp only [StackTape.ofList_replicate_none, StackTape.ofList_append_blanks,
     StackTape.ofList_map_some]
   cases word <;> rfl
+
+omit [Fintype Γ] in
+/-- The initial row lists the input and certificate between the two regions of blank cells. -/
+theorem cells_initialRow (problem : Instance Γ)
+    (certificate : List.Vector Γ problem.certificateLength) :
+    (initialRow problem certificate).cells =
+      List.replicate problem.time none ++
+        ((Alphabet.wordPair Γ).encode (problem.input, certificate.val)).map some ++
+          List.replicate problem.time none := by
+  cases hinput : problem.input <;>
+    simp [initialRow, Row.cells, Alphabet.wordPair_encode, hinput, List.append_assoc]
 
 omit [Fintype Γ] in
 private theorem step_iterate_initial (problem : Instance Γ)

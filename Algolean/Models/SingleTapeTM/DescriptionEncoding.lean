@@ -71,6 +71,22 @@ def encoding : Encoding (Description Symbol) CodeSymbol :=
   ((((encodingNatBool.comp (words Bool 2)).comp (words RowSymbol 2)).comp
     (words TableSymbol 1)).sigma (bodyEncoding (Symbol := Symbol))).ofEquiv equiv
 
+/--
+Every decoded machine description contains the full table, with one row for each state.
+The number of states, plus the table's final separator, therefore fits in the encoded word.
+This applies to every word accepted by the decoder, including alternative numeric spellings.
+-/
+theorem states_le_length_of_decode {word : List CodeSymbol} {machine : Description Symbol}
+    (h : encoding.decode word = some machine) : machine.states + 2 ≤ word.length := by
+  rw [encoding, Encoding.decode_ofEquiv_eq_some_iff] at h
+  obtain ⟨header, body, rfl, _, hbody⟩ := (Encoding.decode_sigma_eq_some_iff _ _).mp h
+  obtain ⟨initial, table, rfl, _, htable⟩ := (Encoding.decode_pair_eq_some_iff _ _).mp hbody
+  have hlength := Encoding.length_le_of_decode_finFunction (rowEncoding machine.states)
+    (machine.states + 1) htable
+  simp only [List.length_append, List.length_map, List.length_cons]
+  change machine.states + 2 ≤ header.length + (initial.length + (table.length + 1) + 1)
+  lia
+
 /-- Boolean words use the original bits of the description alphabet and contain no markers. -/
 def bitEncoding : Encoding (List Bool) CodeSymbol :=
   ((((encodingList Bool).comp (words Bool 2)).comp (words RowSymbol 2)).comp

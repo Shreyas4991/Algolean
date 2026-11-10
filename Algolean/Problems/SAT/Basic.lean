@@ -182,6 +182,22 @@ theorem CNF.satisfiedBy_iff_forall_clause (formula : CNF α) (assignment : α �
       first.SatisfiedBy assignment ∧ second.SatisfiedBy assignment := by
   simp [CNF.SatisfiedBy, CNF.eval, List.and]
 
+/-- A first clause and the remaining clauses must all hold under the same assignment. -/
+@[simp] theorem CNF.satisfiedBy_cons (clause : Clause α) (formula : CNF α)
+    (assignment : α → Bool) :
+    CNF.SatisfiedBy (clause :: formula) assignment ↔
+      clause.SatisfiedBy assignment ∧ formula.SatisfiedBy assignment := by
+  simp [CNF.SatisfiedBy, CNF.eval, Clause.SatisfiedBy]
+
+/--
+Joining a list of formulas requires every listed formula to use the same satisfying assignment.
+-/
+@[simp] theorem CNF.satisfiedBy_flatMap {ι : Type w} (entries : List ι) (formula : ι → CNF α)
+    (assignment : α → Bool) :
+    CNF.SatisfiedBy (entries.flatMap formula) assignment ↔
+      ∀ entry ∈ entries, (formula entry).SatisfiedBy assignment := by
+  simp only [satisfiedBy_iff_forall_clause, List.forall_mem_flatMap]
+
 /-- Every clause of a satisfiable formula is satisfiable. -/
 theorem CNF.clause_mem_satisfiable {formula : CNF α} (h : formula ∈ CNF.satisfiable)
     {clause : Clause α} (hmem : clause ∈ formula) : clause ∈ Clause.satisfiable := by
