@@ -55,6 +55,7 @@ public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
 public import Algolean.Complexity.Reductions.NPToTMSAT.Reduction
 public import Algolean.Complexity.Reductions.NPToTMSAT.Verifier
+public import Algolean.Complexity.Reductions.TMSATToSAT.Computation
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.FuelExecMonad
@@ -120,6 +121,7 @@ public import Algolean.Problems.Encodings.Basic
 public import Algolean.Problems.Encodings.SAT
 public import Algolean.Problems.Encodings.TMSAT
 public import Algolean.Problems.SAT.Basic
+public import Algolean.Problems.SAT.Constraints
 public import Algolean.Problems.SAT.Verification
 public import Algolean.Problems.TMSAT.Basic
 public import Algolean.Problems.TMSAT.Compiler
