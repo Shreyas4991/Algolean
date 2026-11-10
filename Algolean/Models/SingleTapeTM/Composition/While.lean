@@ -91,6 +91,17 @@ theorem runs_while_step {condition : TMCondition tm} {body : Prog (TMQuery tm) U
   exact ⟨cost, final, ⟨fuel + 1, by simpa [execute_while_succ, h] using hfuel⟩, hc, hp, ht⟩
 
 
+/-- One loop iteration can be followed by the remaining loop and a final program. -/
+theorem Runs.while_step_seq {condition : TMCondition tm}
+    {body next : Prog (TMQuery tm) Unit} {s : TMState tm}
+    {output : BiTape Symbol} {pos : ℤ} {time : ℕ}
+    (hcondition : condition.eval s.config = true)
+    (h : Runs (do body; whileLoop condition body; next) s output pos time) :
+    Runs (do whileLoop condition body; next) s output pos time := by
+  obtain ⟨cost, final, hc, ht, hp, hs⟩ := h
+  exact ⟨cost, final, hc.while_step_seq hcondition, ht, hp, hs⟩
+
+
 end TMQuery
 
 end Algolean.Algorithms

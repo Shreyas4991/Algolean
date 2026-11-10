@@ -21,10 +21,13 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Augmented
 public import Algolean.Algorithms.SingleTapeTuringMachines.Basic
 public import Algolean.Algorithms.SingleTapeTuringMachines.BasicTMs
 public import Algolean.Algorithms.SingleTapeTuringMachines.BitOperations
+public import Algolean.Algorithms.SingleTapeTuringMachines.CertificatePadding
+public import Algolean.Algorithms.SingleTapeTuringMachines.Comparison
 public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
 public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
 public import Algolean.Algorithms.SingleTapeTuringMachines.FiniteState
 public import Algolean.Algorithms.SingleTapeTuringMachines.Framed
+public import Algolean.Algorithms.SingleTapeTuringMachines.Gaps
 public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
 public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
@@ -42,6 +45,8 @@ public import Algolean.Complexity.Basic
 public import Algolean.Complexity.Membership.NP.SAT
 public import Algolean.Complexity.NP
 public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
+public import Algolean.Complexity.Reductions.NPToTMSAT.Verifier
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.FuelExecMonad
@@ -68,6 +73,7 @@ public import Algolean.Models.ReadWriteVec
 public import Algolean.Models.RobertsonWebb
 public import Algolean.Models.SingleTapeTM
 public import Algolean.Models.SingleTapeTM.Alphabet.Basic
+public import Algolean.Models.SingleTapeTM.Alphabet.Block
 public import Algolean.Models.SingleTapeTM.Alphabet.Encoding
 public import Algolean.Models.SingleTapeTM.Alphabet.Lift
 public import Algolean.Models.SingleTapeTM.Alphabet.List
@@ -95,10 +101,12 @@ public import Algolean.Models.SingleTapeTM.Composition.TuringReduction
 public import Algolean.Models.SingleTapeTM.Composition.While
 public import Algolean.Models.SingleTapeTM.Description
 public import Algolean.Models.SingleTapeTM.DescriptionEncoding
+public import Algolean.Models.SingleTapeTM.Tape
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
 public import Algolean.Problems.Basic
+public import Algolean.Problems.Certificates
 public import Algolean.Problems.Encoding
 public import Algolean.Problems.SAT.Basic
 public import Algolean.Problems.SAT.Encoding

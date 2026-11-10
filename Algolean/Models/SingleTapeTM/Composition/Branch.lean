@@ -99,6 +99,19 @@ theorem select_correct {α : Type} [DecidableEq α] (cases : List α)
     · have hrest : chosen ∈ rest := by simpa [Ne.symm heq] using hmem
       simpa [htest, heq] using ih hrest
 
+/-- If every test fails, selecting from the fixed list leaves the whole machine unchanged. -/
+theorem select_none {α : Type} (cases : List α) (test : α → TMCondition tm)
+    (action : α → Prog (TMQuery tm) Unit) (s : TMState tm)
+    (htest : ∀ candidate ∈ cases, (test candidate).eval s.config = false) :
+    Completes (select cases test action) s 0 s := by
+  induction cases with
+  | nil => exact completes_pure s
+  | cons candidate rest ih =>
+    unfold select
+    apply Completes.branch
+    simpa [htest candidate (by simp)] using
+      ih (fun a ha => htest a (by simp [ha]))
+
 end TMQuery
 
 end Algolean.Algorithms

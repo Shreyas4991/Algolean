@@ -9,6 +9,7 @@ module
 public import Algolean.Problems.TMSAT.Basic
 public import Algolean.Problems.Encoding
 public import Algolean.Models.SingleTapeTM.DescriptionEncoding
+public import Algolean.Models.SingleTapeTM.Alphabet.Block
 
 /-!
 # Encoding Turing machine satisfiability
@@ -16,6 +17,8 @@ public import Algolean.Models.SingleTapeTM.DescriptionEncoding
 * `encoding` stores the machine, input, certificate length, and time bound in that order.
 * Both the certificate length and time bound are written in unary.
 * `language` contains the words that decode to satisfiable instances.
+* `encodingOver` and `languageOver` write the same problem over `Γ` when it has two distinct
+  symbols.
 * Encoding an instance preserves its answer, and failed decoding gives a no answer.
 * Successfully decoded certificate lengths and time bounds cannot exceed the supplied word's length.
 
@@ -161,5 +164,46 @@ def language (yes : Γ) : Language CodeSymbol := encodedLanguage (satisfiable ye
 @[simp] theorem encode_mem_language (yes : Γ) (problem : Instance Γ) :
     encoding.encode problem ∈ language yes ↔ problem ∈ satisfiable yes := by
   simp [language]
+
+/--
+This writes a TMSAT instance using only symbols of `Γ`. Each symbol of the existing instance
+encoding becomes a fixed-length word over two chosen symbols of `Γ`. The symbol choices and
+the numbering of the finite alphabet are fixed independently of the instance.
+-/
+noncomputable def encodingOver [Nontrivial Γ] : Encoding (Instance Γ) Γ :=
+  letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+  encoding.comp (finiteWordsOver CodeSymbol Γ)
+
+omit [Encodable Γ] in
+/-- Writing the instance over `Γ` multiplies its existing encoded length by one fixed constant. -/
+theorem length_encodingOver [Nontrivial Γ] (problem : Instance Γ) :
+    (encodingOver.encode problem).length =
+      letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+      (encoding.encode problem).length * Fintype.card CodeSymbol := by
+  simp [encodingOver, Encoding.comp]
+
+omit [Encodable Γ] in
+/--
+Every successfully decoded word over `Γ` has room for its input, certificate length, and time
+bound. This covers all words accepted by the decoder, including noncanonical descriptions.
+-/
+theorem input_length_add_bounds_le_length_of_decodeOver [Nontrivial Γ]
+    {word : List Γ} {problem : Instance Γ} (h : encodingOver.decode word = some problem) :
+    problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
+  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+  change (encoding.comp (finiteWordsOver CodeSymbol Γ)).decode word = some problem at h
+  obtain ⟨raw, hblocks, hproblem⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp h
+  exact (input_length_add_bounds_le_length_of_decode hproblem).trans
+    (length_le_of_decode_finiteWordsOver hblocks)
+
+/-- This is TMSAT with its instances, as well as their inputs and certificates, encoded over `Γ`. -/
+noncomputable def languageOver [Nontrivial Γ] (yes : Γ) : Language Γ :=
+  encodedLanguage (satisfiable yes) encodingOver
+
+omit [Encodable Γ] in
+/-- Encoding an instance as a word over `Γ` preserves whether it is satisfiable. -/
+@[simp] theorem encode_mem_languageOver [Nontrivial Γ] (yes : Γ) (problem : Instance Γ) :
+    encodingOver.encode problem ∈ languageOver yes ↔ problem ∈ satisfiable yes := by
+  simp [languageOver]
 
 end Algolean.Problems.TMSAT

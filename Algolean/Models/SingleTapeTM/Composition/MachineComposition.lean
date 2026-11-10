@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Composition.Functions
+public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.Relabel
 public import Algolean.Models.SingleTapeTM.Composition.Frame
 public import Algolean.Models.SingleTapeTMSyntax
@@ -171,5 +172,47 @@ noncomputable def PolyTimeComputable.comp {f g : List Symbol → List Symbol}
     (fun _ _ h => second.poly.eval_mono h)
   poly := first.poly + second.poly.comp (1 + X + first.poly)
   bounds _ := by simp [TimeComputable.comp, polynomialBound]
+
+/--
+This runs the original computation on nonempty inputs. On the empty input it writes the single
+symbol `fallback` instead. The initial test and this stationary write add no head moves.
+-/
+def TimeComputable.onNonempty {f : List Symbol → List Symbol} (computer : TimeComputable f)
+    (fallback : Symbol) :
+    TimeComputable (fun input => if input.isEmpty then [fallback] else f input) := by
+  letI := computer.symbolDecidableEq
+  letI := computer.stateDecidableEq
+  exact {
+    tm := computer.tm
+    program := branch (.tapeIs none) (FreeM.lift (.write (some fallback))) computer.program
+    timeBound := computer.timeBound
+    outputsFunInTime input := by
+      cases input with
+      | nil =>
+        let s := TMState.init computer.tm []
+        have hc : Completes
+            (branch (.tapeIs none) (FreeM.lift (.write (some fallback))) computer.program)
+            s 0 (s.write (some fallback)) := by
+          apply Completes.branch
+          simpa [s, TMState.init, SingleTapeTM.initCfg, BiTape.mk₁, BiTape.nil] using
+            completes_write s (some fallback)
+        exact hc.outputsWithinTime rfl (Nat.zero_le _)
+      | cons symbol rest =>
+        obtain ⟨fuel, result, final, hr, htape, htime⟩ :=
+          computer.outputsFunInTime (symbol :: rest)
+        have hc : Completes
+            (branch (.tapeIs none) (FreeM.lift (.write (some fallback))) computer.program)
+            (TMState.init computer.tm (symbol :: rest)) result.tell final.machine := by
+          apply Completes.branch
+          simpa [TMState.init, SingleTapeTM.initCfg, BiTape.mk₁] using completes_of_execute hr
+        exact hc.outputsWithinTime htape htime }
+
+/-- Replacing a polynomial-time computation's answer on the empty input preserves its time bound. -/
+def PolyTimeComputable.onNonempty {f : List Symbol → List Symbol}
+    (computer : PolyTimeComputable f) (fallback : Symbol) :
+    PolyTimeComputable (fun input => if input.isEmpty then [fallback] else f input) where
+  toTimeComputable := computer.toTimeComputable.onNonempty fallback
+  poly := computer.poly
+  bounds := computer.bounds
 
 end Algolean.Algorithms.TMQuery
