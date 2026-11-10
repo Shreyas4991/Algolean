@@ -12,8 +12,8 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Expanding
 # Replacing input symbols with fixed words
 
 The encoder processes the input from right to left. Each symbol is replaced by its nonempty
-code word, and the already encoded suffix is shifted to make room. A blank separates the
-unprocessed input from that suffix. The output retains the original symbol order.
+code word, and the already written output is shifted to make room. A blank separates the
+unprocessed input from that output. The output retains the original symbol order.
 
 These are machine templates. A containing machine fixes the symbol codes and the finite list
 of alphabet comparisons once. Those choices do not depend on the input or its length.
@@ -30,10 +30,14 @@ variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 
 /--
-This machine template encodes the input to the left of the head, starting with its last symbol.
-A blank must separate that symbol from the already written output to its right. The head stops
-one cell to the left of the blank before the resulting output. The containing machine fixes
-`code` and all alphabet comparisons once and uses the same program for every input length.
+This machine starts on the last input symbol and replaces symbols while moving left. A blank
+must separate the last input symbol from the output already written to its right. Every
+replacement word must be nonempty, and `symbols` must contain every alphabet symbol. The head
+finishes one cell to the left of the blank before the completed output.
+
+The containing machine fixes all replacement words and the list of symbols once. It includes
+one fixed case for each symbol and uses tape tests to choose a case during execution. The
+input and its length never change the program.
 -/
 def encodeLeft (tm : SingleTapeTM Symbol) (symbols : List Symbol) (code : Symbol → List Symbol) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]

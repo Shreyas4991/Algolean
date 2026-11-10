@@ -53,12 +53,12 @@ the regions used during copying.
 abbrev stackAppend : List Symbol → StackTape Symbol → StackTape Symbol := StackTape.prepend
 
 theorem stackAppend_append (first second : List Symbol) (tail : StackTape Symbol) :
-    stackAppend (first ++ second) tail = stackAppend first (stackAppend second tail) := by
-  induction first <;> simp_all
+    stackAppend (first ++ second) tail = stackAppend first (stackAppend second tail) :=
+  StackTape.prepend_append first second tail
 
 theorem stackAppend_nil (bits : List Symbol) :
-    stackAppend bits StackTape.nil = StackTape.mapSome bits := by
-  induction bits <;> simp_all
+    stackAppend bits StackTape.nil = StackTape.mapSome bits :=
+  StackTape.prepend_nil bits
 
 /--
 `segment left bits tail` is a pure Lean function that describes a tape whose head starts on the
@@ -71,30 +71,31 @@ abbrev segment (left : StackTape Symbol) (bits : List Symbol) (tail : StackTape 
 theorem segment_moveRight (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
     (tail : StackTape Symbol) :
     (segment left (bit :: bits) tail).moveRight =
-      segment (StackTape.cons (some bit) left) bits tail := by
-  cases bits <;> simp [segment, BiTape.segment, BiTape.moveRight]
+      segment (StackTape.cons (some bit) left) bits tail :=
+  BiTape.segment_moveRight left bit bits tail
 
 theorem segment_moveLeft (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
     (tail : StackTape Symbol) :
     (segment (StackTape.cons (some bit) left) bits tail).moveLeft =
-      segment left (bit :: bits) tail := by
-  cases bits <;> simp [segment, BiTape.segment, BiTape.moveLeft]
+      segment left (bit :: bits) tail :=
+  BiTape.segment_moveLeft left bit bits tail
 
 theorem segment_write (left : StackTape Symbol) (old bit : Symbol) (bits : List Symbol)
     (tail : StackTape Symbol) :
-    (segment left (old :: bits) tail).write (some bit) = segment left (bit :: bits) tail := rfl
+    (segment left (old :: bits) tail).write (some bit) = segment left (bit :: bits) tail :=
+  BiTape.segment_write left old bit bits tail
 
 theorem segment_moveLeft_gap (left : StackTape Symbol) (bits : List Symbol)
     (tail : StackTape Symbol) :
     (segment (StackTape.cons none left) bits tail).moveLeft =
-      segment left [] (stackAppend bits (StackTape.cons none tail)) := by
-  cases bits <;> simp [segment, BiTape.segment, BiTape.moveLeft]
+      segment left [] (stackAppend bits (StackTape.cons none tail)) :=
+  BiTape.segment_moveLeft_gap left bits tail
 
 theorem segment_moveRight_gap (left : StackTape Symbol) (bits : List Symbol)
     (tail : StackTape Symbol) :
     (segment left [] (stackAppend bits (StackTape.cons none tail))).moveRight =
-      segment (StackTape.cons none left) bits tail := by
-  cases bits <;> simp [segment, BiTape.segment, BiTape.moveRight]
+      segment (StackTape.cons none left) bits tail :=
+  BiTape.segment_moveRight_gap left bits tail
 
 @[simp] theorem segment_moveRight_word (left : StackTape Symbol) (bits : List Symbol) :
     (segment left [] (StackTape.mapSome bits)).moveRight =
@@ -104,8 +105,8 @@ theorem segment_moveRight_gap (left : StackTape Symbol) (bits : List Symbol)
 theorem segment_erase_advance (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
     (tail : StackTape Symbol) :
     ((segment left (bit :: bits) tail).write none).moveRight =
-      segment (StackTape.cons none left) bits tail := by
-  cases bits <;> simp [segment, BiTape.segment, BiTape.write, BiTape.moveRight]
+      segment (StackTape.cons none left) bits tail :=
+  BiTape.segment_erase_advance left bit bits tail
 
 @[simp] theorem segment_write_gap (left : StackTape Symbol) (bit : Symbol) (bits : List Symbol)
     (tail : StackTape Symbol) :
@@ -121,8 +122,8 @@ theorem segment_erase_advance (left : StackTape Symbol) (bit : Symbol) (bits : L
   simp [segment, BiTape.segment, BiTape.write]
 
 theorem segment_start (bits : List Symbol) :
-    segment StackTape.nil bits StackTape.nil = BiTape.mk₁ bits := by
-  cases bits <;> simp [segment, BiTape.segment, BiTape.mk₁, BiTape.nil]
+    segment StackTape.nil bits StackTape.nil = BiTape.mk₁ bits :=
+  BiTape.segment_start bits
 
 variable [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]

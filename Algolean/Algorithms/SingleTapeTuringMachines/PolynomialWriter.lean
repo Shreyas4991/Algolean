@@ -140,7 +140,7 @@ private theorem copies_add (word : List Symbol) (a b : Nat) :
 omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
 @[simp] private theorem length_copies (word : List Symbol) (count : Nat) :
     (copies word count).length = count * word.length := by
-  induction count <;> simp_all [copies, List.replicate_succ, Nat.add_mul, Nat.add_comm]
+  simp [copies, List.length_flatten]
 
 private def sums (depth start count : Nat) : Nat :=
   ∑ i ∈ Finset.range count, (start + i).choose depth
@@ -300,6 +300,29 @@ including it. The same finite program runs on every input length.
 def writeChoose (tm : SingleTapeTM Symbol) (symbols word : List Symbol) (count : Nat) :
     Prog (TMQuery tm) Unit := chooseProgram symbols word count count
 
+
+/-- This polynomial bounds the head moves when writing one copy for each set of input positions. -/
+noncomputable def writeChooseTime (count : Nat) : Polynomial Nat := runtime count
+
+/--
+The machine writes exactly one copy for every set of `count` input positions. It preserves the
+input and the old output, and stops on the blank after the input. The time bound uses the input
+length, the final output length, and the length of the word being copied.
+-/
+theorem writeChoose_correct (symbols word : List Symbol)
+    (hcover : ∀ symbol, symbol ∈ symbols) (count : Nat) (input output : List Symbol)
+    (s : TMState tm)
+    (hs : s.config.BiTape = segment StackTape.nil input (StackTape.mapSome output)) :
+    let result := output ++ (List.replicate (input.length.choose count) word).flatten
+    ∃ moves, Runs (writeChoose tm symbols word count) s
+      (segment (StackTape.mapSome input.reverse) [] (StackTape.mapSome result))
+      (s.headPos + input.length) moves ∧
+      moves ≤ (writeChooseTime count).eval (input.length + result.length + word.length + 1) := by
+  simpa [writeChoose, writeChooseTime, chain, copies, span] using
+    choose_correct symbols word hcover count count
+      (input.length + (output ++ copies word (input.length.choose count)).length + word.length + 1)
+      input [] output s (by simp) (by simpa [chain] using hs) (by simp [span])
+
 private noncomputable def terms (p : Polynomial Nat) : List Nat :=
   p.support.toList.flatMap fun degree =>
     (List.range (degree + 1)).flatMap fun k =>
@@ -364,15 +387,15 @@ private theorem writeTerms_correct (symbols word : List Symbol)
       {s.config with BiTape := Copying.segment StackTape.nil input (StackTape.mapSome output)}
     rw [← hs]
   | cons k rest ih =>
-    have hfirstN : input.length + span (Symbol := Symbol) [] +
+    have hfirstN : input.length +
         (output ++ copies word (input.length.choose k)).length + word.length + 1 ≤ N := by
       simp only [count, List.map_cons, List.sum_cons, List.length_append,
         length_copies, Nat.add_mul] at hN
-      simp only [span, List.map_nil, List.sum_nil, List.length_nil, Nat.add_zero,
-        List.length_append, length_copies]
+      simp only [List.length_append, length_copies]
       lia
-    obtain ⟨firstMoves, hf, hb⟩ := choose_correct symbols word hcover k k N input [] output s
-      (by simp) (by simpa [chain] using hs) hfirstN
+    obtain ⟨firstMoves, hf, hfirst⟩ := writeChoose_correct symbols word hcover k input output s hs
+    have hb : firstMoves ≤ (runtime k).eval N :=
+      hfirst.trans ((runtime k).eval_mono hfirstN)
     have hreturn := hf.seq (q := seekLeftEnd tm)
       (second := segment StackTape.nil input
         (StackTape.mapSome (output ++ copies word (input.length.choose k))))
@@ -380,7 +403,7 @@ private theorem writeTerms_correct (symbols word : List Symbol)
         intro middle ht hp
         convert seekLeftEnd_segment StackTape.nil input.reverse []
           (StackTape.mapSome (output ++ copies word (input.length.choose k))) middle
-          (by simpa [chain] using congrArg SingleTapeTM.Cfg.BiTape ht) using 1 <;>
+          (by simpa [copies] using congrArg SingleTapeTM.Cfg.BiTape ht) using 1 <;>
           simp [hp])
     obtain ⟨cost, middle, hc, ht, hp, hm⟩ := hreturn
     obtain ⟨restMoves, hr, hrb⟩ := ih (output ++ copies word (input.length.choose k)) middle

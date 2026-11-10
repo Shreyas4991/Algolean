@@ -84,10 +84,11 @@ theorem NP.fixed_length_certificates {L : Language Γ} (h : L ∈ NP)
     (Problems.CertificatePadding.exists_fixed_length_iff next stop hne _ _)
 
 /--
-An NP language has a polynomial-time verifier that accepts certificates of exactly a polynomial
-length and leaves the chosen accepting symbol under its head. The fixed program removes the
-certificate padding, rejects failed decoding, runs the original verifier, and compares its whole
-output with the acceptance word. Its time bound includes the preprocessing and comparison.
+An input belongs to an NP language exactly when some certificate of the stated polynomial
+length makes this verifier leave the accepting symbol under its head. The length condition
+restricts the certificates considered in this theorem. The fixed program removes the added
+certificate symbols, rejects failed decoding, runs the original verifier, and compares its
+whole output with the acceptance word. Its time bound includes all these operations.
 -/
 theorem NP.exists_exact_head_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
     ∃ (f : List (Extended Γ 1) → List (Extended Γ 1)) (q : Polynomial ℕ),

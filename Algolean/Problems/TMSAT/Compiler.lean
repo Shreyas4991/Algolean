@@ -33,7 +33,7 @@ variable {Γ : Type} [Fintype Γ]
 variable {f : List (TapeSymbol Γ) → List (TapeSymbol Γ)}
 
 /--
-This instance uses the compiled query verifier and its affine transition bound. The certificate
+This instance uses the compiled query verifier and its proved transition bound. The certificate
 length stays fixed, and the time bound uses the length of the full input-certificate word.
 -/
 noncomputable def Instance.ofQueryVerifier (computer : TMQuery.TimeComputable f)

@@ -11,16 +11,18 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialFields
 public import Mathlib.Tactic.GCongr
 
 /-!
-# Serializing an input with fixed and polynomially sized fields
+# Writing an input together with fixed words and polynomial-length parts
 
-The machine first writes fields whose lengths are polynomials in the input length. It inserts
-the fixed input ending before those fields, encodes the input from right to left, and writes
-the fixed header.
-The final tape contains exactly the serialized word, with the head at its first symbol.
+The machine replaces each input symbol with a fixed nonempty word. It leaves a chosen word
+before the replaced input, another chosen word after it, and then the extra output parts.
+Each extra part repeats a fixed word a polynomial number of times in the original input length.
 
-All symbol codes, words, polynomials, and alphabet comparisons are fixed when constructing the
-machine. One finite program handles every input length. The serializer uses only its original
-finite tape alphabet and blank cells.
+The machine writes the extra parts first, while the original input remains available for
+counting. It then works through the input from right to left and writes the word that must
+appear at the start. The head finishes at the first symbol of the completed output.
+
+All words, polynomials, and symbol comparisons are fixed when constructing the machine. One
+finite program handles every input length and uses only the original tape alphabet and blanks.
 -/
 
 public section
@@ -132,10 +134,13 @@ private theorem finishEncoding_correct (symbols : List Symbol) (code : Symbol �
     lia
 
 /--
-This machine template serializes the input as a fixed header, the input symbol codes, a fixed
-ending, and polynomially sized fields. The containing machine fixes all these parameters once.
-Neither the input nor its length is a program parameter; one finite program reads every input
-from the tape and computes the field lengths there.
+This machine leaves `header`, the replaced input, `ending`, and the extra output parts in that
+order. Every input symbol must have a nonempty replacement word, and `symbols` must contain
+every alphabet symbol. The head finishes at the first output symbol.
+
+The containing machine fixes all words, polynomials, and comparisons once. The machine reads
+the input from its tape and counts its length there. It uses the same finite program on every
+input length.
 -/
 noncomputable def serialize (tm : SingleTapeTM Symbol) (symbols : List Symbol)
     (code : Symbol → List Symbol) (header ending : List Symbol)
@@ -144,9 +149,10 @@ noncomputable def serialize (tm : SingleTapeTM Symbol) (symbols : List Symbol)
   finishEncoding symbols code header ending
 
 /--
-The specified serialization is computable in polynomial time over the same finite alphabet.
-All input symbols must have a nonempty code. The resulting machine is fixed for the chosen
-format and works on every input, including the empty word.
+This constructs a machine with a proved polynomial time bound for writing the specified output.
+The function `code` assigns a fixed nonempty word to each alphabet symbol. The machine contains
+one fixed case for each symbol; tape tests select the case during execution. It works on every
+input, including the empty word. All words and polynomials are fixed when constructing it.
 -/
 noncomputable def serializerComputer (code : Symbol → List Symbol)
     (hne : ∀ symbol, code symbol ≠ []) (header ending : List Symbol)

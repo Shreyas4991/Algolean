@@ -34,10 +34,44 @@ abbrev control (Symbol : Type) [Inhabited Symbol] [Fintype Symbol] : SingleTapeT
   tr _ symbol := (⟨symbol, none⟩, none)
 
 /--
+This checks that shifting a word and changing its left neighbor preserve the other tape contents.
+The words on both sides include internal blanks, so an accidental erasure is visible. Each
+fixed program is tested on every Boolean word of length at most four, including the empty word.
+-/
+def checkTapePreservation : IO Unit := do
+  let tm := control Bool
+  let shift := shiftRight tm [false, true]
+  let changeLeft := setLeftCell tm (some false)
+  let left := StackTape.cons (some false) (StackTape.cons none (StackTape.mapSome [true]))
+  let tail := StackTape.cons (some true) (StackTape.cons none (StackTape.mapSome [false]))
+  let mut words := [[]]
+  for _ in [:5] do
+    for word in words do
+      let contents := BiTape.segment (StackTape.cons none left) word tail
+      let initial : TMState tm := { config := ⟨some (), contents⟩, headPos := -7 }
+      let expected := BiTape.segment (StackTape.cons none left) [] (StackTape.prepend word tail)
+      match execute 10000 shift initial with
+      | none => throw (IO.userError "Shifting a word ran out of fuel.")
+      | some (result, final) =>
+        unless tapeView final.machine.config.BiTape = tapeView expected ∧
+            final.machine.headPos = -7 ∧ result.tell.steps = 4 * word.length + 2 do
+          throw (IO.userError "Shifting damaged another word or gave the wrong position or cost.")
+      let original := BiTape.segment (StackTape.cons (some true) left) word tail
+      let before : TMState tm := { config := ⟨some (), original⟩, headPos := 5 }
+      let after := BiTape.segment (StackTape.cons (some false) left) word tail
+      match execute 100 changeLeft before with
+      | none => throw (IO.userError "Changing a neighboring cell ran out of fuel.")
+      | some (result, final) =>
+        unless tapeView final.machine.config.BiTape = tapeView after ∧
+            final.machine.headPos = 5 ∧ result.tell.steps = 2 do
+          throw (IO.userError "Changing a neighboring cell damaged another part of the tape.")
+    words := words.flatMap (fun word => [false :: word, true :: word])
+
+/--
 This runs each fixed counting program on every Boolean word of length at most five. It checks
 that the input is restored and exactly one copy is written for each selected set of positions.
-The old output includes both an empty word and an occupied word. Empty copied words are also
-checked, as are zero selected positions and more selected positions than the input contains.
+Both empty and nonempty previous outputs are tested. Empty copied words are also checked,
+as are zero selected positions and more selected positions than the input contains.
 -/
 def checkCounting : IO Unit := do
   for count in [:5] do
@@ -62,7 +96,7 @@ def checkCounting : IO Unit := do
 
 /--
 This checks one fixed symbol encoder against all short words over its alphabet. The encoder
-starts at the input's last symbol and must preserve an existing suffix while retaining the
+starts at the input's last symbol and must preserve the word to its right while retaining the
 original input order in the encoded word.
 -/
 def checkEncoding {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
@@ -86,6 +120,7 @@ def checkEncoding {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [Decidable
     words := words.flatMap (fun word => symbols.map (fun symbol => symbol :: word))
 
 run_cmd Lean.Elab.Command.liftIO do
+  checkTapePreservation
   checkCounting
   checkEncoding [false, true] (fun bit => if bit then [true, false, true] else [false]) []
   checkEncoding ([0, 1, 2] : List (Fin 3)) (fun symbol => [symbol, 2, symbol]) [2, 0]

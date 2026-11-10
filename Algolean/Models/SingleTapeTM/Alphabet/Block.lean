@@ -237,4 +237,31 @@ theorem encode_finiteWordsOver [Fintype α] [Nonempty α] [Nontrivial Γ] (word 
   | cons symbol word ih =>
     simpa using (encode_finiteWordsOver_append (Γ := Γ) [symbol] word).trans (by rw [ih])
 
+
+omit [DecidableEq Γ] in
+/-- Encoding an empty word writes no symbols. -/
+@[simp] theorem encode_finiteWordsOver_nil [Fintype α] [Nonempty α] [Nontrivial Γ] :
+    (finiteWordsOver α Γ).encode [] = [] := by
+  rw [encode_finiteWordsOver]
+  rfl
+
+omit [DecidableEq Γ] in
+/-- Encoding a concatenation of words encodes each word and then concatenates the results. -/
+theorem encode_finiteWordsOver_flatMap {β : Type} [Fintype α] [Nonempty α] [Nontrivial Γ]
+    (input : List β) (f : β → List α) :
+    (finiteWordsOver α Γ).encode (input.flatMap f) =
+      input.flatMap (fun a => (finiteWordsOver α Γ).encode (f a)) := by
+  induction input with
+  | nil => simp
+  | cons a input ih => simp only [List.flatMap_cons, encode_finiteWordsOver_append, ih]
+
+omit [DecidableEq Γ] in
+/-- Encoding repeated symbols repeats their fixed code word the same number of times. -/
+theorem encode_finiteWordsOver_replicate [Fintype α] [Nonempty α] [Nontrivial Γ]
+    (n : Nat) (symbol : α) :
+    (finiteWordsOver α Γ).encode (List.replicate n symbol) =
+      (List.replicate n ((finiteWordsOver α Γ).encode [symbol])).flatten := by
+  rw [encode_finiteWordsOver]
+  simp only [List.flatMap_replicate]
+
 end Algolean.Algorithms.Alphabet

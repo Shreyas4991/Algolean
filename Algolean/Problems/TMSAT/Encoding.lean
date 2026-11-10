@@ -12,22 +12,24 @@ public import Algolean.Models.SingleTapeTM.DescriptionEncoding
 public import Algolean.Models.SingleTapeTM.Alphabet.Block
 
 /-!
-# Encoding Turing machine satisfiability
+# Writing TMSAT instances as words
 
-* `encoding` stores the machine, input, certificate length, and time bound in that order.
-* Both the certificate length and time bound are written in unary.
-* `language` contains the words that decode to satisfiable instances.
-* `encodingOver` and `languageOver` write the same problem over `Γ` when it has two distinct
-  symbols.
-* Encoding an instance preserves its answer, and failed decoding gives a no answer.
-* Successfully decoded certificate lengths and time bounds cannot exceed the input word's length.
+* `encoding` writes the machine, input, certificate length, and time bound in that order.
+* The machine description contains the complete finite transition table.
+* `language` contains the words that decode to satisfiable instances. Failed decoding gives a
+  no answer.
+* `encodingOver` and `languageOver` represent the same problem using only symbols of `Γ`.
+  This requires two distinct symbols of `Γ`, chosen once for the whole language.
+* Encoding an instance preserves its answer. Every decoded certificate length and time bound
+  fits within the length of the word given to the decoder.
 
-The alphabet `Γ` is fixed before defining this language. Input symbols are written as binary
-codes, while the instance encoding uses the same finite alphabet for every choice of `Γ`.
-The fixed `Encodable Γ` instance determines those codes. Every finite alphabet admits such a
-choice, and its symbol-code lengths have a common constant bound.
-The unary fields have exactly the specified lengths. Separators preserve the boundaries between
-the four fields, and the machine description includes its complete finite transition table.
+The alphabet `Γ` is fixed. Input symbols are represented by binary words determined by a fixed
+`Encodable Γ` instance. Since `Γ` is finite, one constant bounds all these symbol-code lengths.
+Extra symbols separate the four parts of the instance.
+
+In `encoding`, a bound of `k` is written as exactly `k` symbols. In `encodingOver`, each of those
+symbols is replaced by a fixed-length word over `Γ`. This multiplies the length of each bound
+by one fixed constant. The bound's value stays the same.
 
 The encoder chooses one word for each instance. The decoder can also accept other words that
 describe the same instance. This lets us reuse the existing number decoders and follows the
@@ -53,9 +55,13 @@ def unaryEncoding : Encoding ℕ Bool where
     | zero => rfl
     | succ time ih => simpa [unaryEncodeNat] using congrArg (Option.map Nat.succ) ih
 
+/-- A unary bound of `n` is written as `n` true bits. -/
+theorem encode_unaryEncoding (n : Nat) : unaryEncoding.encode n = List.replicate n true := by
+  induction n <;> simp_all [unaryEncoding, unaryEncodeNat, List.replicate_succ]
+
 /-- The unary representation has exactly the specified length. -/
 @[simp] theorem length_unaryEncoding (value : ℕ) : (unaryEncoding.encode value).length = value := by
-  induction value <;> simp_all [unaryEncoding, unaryEncodeNat]
+  rw [encode_unaryEncoding, List.length_replicate]
 
 /-- A successfully decoded unary value equals the number of bits in the input word. -/
 theorem unary_eq_length_of_decode {word : List Bool} {value : ℕ}
@@ -71,7 +77,7 @@ abbrev CodeSymbol := Extended PayloadSymbol 1
 
 variable {Γ : Type} [Fintype Γ] [Encodable Γ]
 
-/-- The payload stores the complete verifier description and then the encoded input word. -/
+/-- This encoding stores the complete verifier description and then the encoded input word. -/
 def payloadEncoding : Encoding (SingleTapeTM.Description (TapeSymbol Γ) × List Γ) PayloadSymbol :=
   SingleTapeTM.Description.encoding.pair SingleTapeTM.Description.wordEncoding
 
@@ -103,7 +109,7 @@ def encoding : Encoding (Instance Γ) CodeSymbol :=
 
 /--
 The decoded input, certificate length, time bound, and three separators fit in the input word.
-This holds for every successful decoding, including noncanonical machine descriptions.
+This holds for every successful decoding, including other words describing the same machine.
 -/
 theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) :
@@ -185,7 +191,8 @@ theorem length_encodingOver [Nontrivial Γ] (problem : Instance Γ) :
 omit [Encodable Γ] in
 /--
 Every successfully decoded word over `Γ` has room for its input, certificate length, and time
-bound. This covers all words accepted by the decoder, including noncanonical descriptions.
+bound. This covers every word accepted by the decoder, including different words describing
+the same instance.
 -/
 theorem input_length_add_bounds_le_length_of_decodeOver [Nontrivial Γ]
     {word : List Γ} {problem : Instance Γ} (h : encodingOver.decode word = some problem) :

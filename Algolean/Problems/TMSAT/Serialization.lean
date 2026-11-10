@@ -11,10 +11,13 @@ public import Algolean.Problems.TMSAT.Encoding
 /-!
 # The fixed words used to write a TMSAT instance
 
-The instance encoding consists of a fixed machine description, the input symbol codes, an
-input ending, and two unary fields separated by a fixed word. This file identifies those
-pieces over the chosen alphabet. The equality with `encodingOver` lets the serializer write
-these pieces separately while producing exactly the existing encoding.
+The instance encoding contains the verifier description, the encoded input, the certificate
+length, and the time bound. Fixed words separate these four parts. Each input symbol is
+replaced by a fixed word. Each numeric bound is written by repeating another fixed word.
+
+This file identifies those words and proves that writing the parts in this order gives exactly
+the result of `encodingOver`. The machine can therefore write the parts separately and still
+produce the required representation of the instance.
 -/
 
 public section
@@ -41,17 +44,9 @@ private theorem translate_append (first second : List CodeSymbol) :
   encode_finiteWordsOver_append first second
 
 omit [Fintype Γ] in
-@[simp] private theorem translate_nil : translate (Γ := Γ) [] = [] := by
-  unfold translate
-  rw [encode_finiteWordsOver]
-  rfl
-
-omit [Fintype Γ] in
 private theorem translate_flatMap {α : Type} (input : List α) (f : α → List CodeSymbol) :
-    translate (Γ := Γ) (input.flatMap f) = input.flatMap (fun a => translate (f a)) := by
-  induction input with
-  | nil => simp
-  | cons a input ih => simp only [List.flatMap_cons, translate_append, ih]
+    translate (Γ := Γ) (input.flatMap f) = input.flatMap (fun a => translate (f a)) :=
+  encode_finiteWordsOver_flatMap input f
 
 /-- This word stores the fixed verifier description and the separator before the input. -/
 noncomputable def header (verifier : SingleTapeTM.Description (TapeSymbol Γ)) : List Γ :=
@@ -65,7 +60,10 @@ noncomputable def symbolCode (symbol : Γ) : List Γ :=
 noncomputable def ending : List Γ :=
   translate [tag SingleTapeTM.Description.wordEnd, .inr 0]
 
-/-- Each unary unit in either bound is represented by this fixed word. -/
+/--
+This is the fixed word repeated to write either numeric bound. A bound of `k` is written as
+exactly `k` copies of this word.
+-/
 noncomputable def unary : List Γ :=
   translate ((SingleTapeTM.Description.bitEncoding.encode [true]).map tag)
 
@@ -74,39 +72,27 @@ noncomputable def separator : List Γ := translate [.inl (.inr 0)]
 
 /-- Every input symbol code has positive length. -/
 theorem symbolCode_ne_nil (symbol : Γ) : symbolCode symbol ≠ [] := by
-  have hpos := Fintype.card_pos (α := CodeSymbol)
-  intro h
-  have hlen := congrArg List.length h
-  simp only [symbolCode, translate, length_finiteWordsOver, List.length_map,
-    SingleTapeTM.Description.wordSymbolCode, List.length_append, List.length_map,
-    List.length_singleton, List.length_nil] at hlen
-  have : 0 < (((Encoding.ofEncodable Γ).encode symbol).length + 1) *
-      Fintype.card CodeSymbol := Nat.mul_pos (by lia) hpos
-  lia
-
-private theorem unary_eq_replicate (n : Nat) : unaryEncodeNat n = List.replicate n true := by
-  induction n <;> simp_all [unaryEncodeNat, List.replicate_succ]
+  apply List.ne_nil_of_length_pos
+  simp only [symbolCode, translate, length_finiteWordsOver, List.length_map]
+  exact Nat.mul_pos
+    (List.length_pos_of_ne_nil (SingleTapeTM.Description.wordSymbolCode_ne_nil symbol))
+    Fintype.card_pos
 
 omit [Fintype Γ] in
 private theorem translate_unary (n : Nat) :
     translate (Γ := Γ) ((SingleTapeTM.Description.bitEncoding.encode (unaryEncodeNat n)).map tag) =
       (List.replicate n (unary (Γ := Γ))).flatten := by
-  induction n with
-  | zero =>
-    have hempty : SingleTapeTM.Description.bitEncoding.encode [] = [] := rfl
-    simp only [unaryEncodeNat, hempty, List.map_nil, translate_nil,
-      List.replicate_zero, List.flatten_nil]
-  | succ n ih =>
-    have hcons : SingleTapeTM.Description.bitEncoding.encode (true :: unaryEncodeNat n) =
-        SingleTapeTM.Description.bitEncoding.encode [true] ++
-          SingleTapeTM.Description.bitEncoding.encode (unaryEncodeNat n) := by
-      simp [SingleTapeTM.Description.bitEncoding, Encoding.comp, words, encodingList]
-    simp only [unaryEncodeNat, hcons, List.map_append, translate_append, ih,
-      List.replicate_succ, List.flatten_cons, unary]
+  change translate
+    ((SingleTapeTM.Description.bitEncoding.encode (unaryEncoding.encode n)).map tag) = _
+  rw [encode_unaryEncoding, SingleTapeTM.Description.encode_bitEncoding]
+  simp only [List.map_replicate, translate]
+  rw [encode_finiteWordsOver_replicate]
+  rfl
 
 /--
-The canonical instance encoding is exactly the fixed header, the input codes, the input ending,
-the unary certificate length, the separator, and the unary time bound, in that order.
+The word produced by `encodingOver` contains the fixed verifier description, the input symbol
+codes, the input ending, the certificate length, the separator, and the time bound, in that
+order. Each bound is written as the specified number of copies of one fixed word.
 -/
 theorem encode_instance (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (input : List Γ) (m t : Nat) :
@@ -133,6 +119,5 @@ theorem encode_instance (verifier : SingleTapeTM.Description (TapeSymbol Γ))
   simp only [header, ending, separator, translate_append, translate_flatMap,
     translate_unary, List.append_assoc]
   rfl
-
 
 end Algolean.Problems.TMSAT.Serialization

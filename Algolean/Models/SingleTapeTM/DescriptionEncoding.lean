@@ -76,10 +76,18 @@ def bitEncoding : Encoding (List Bool) CodeSymbol :=
   ((((encodingList Bool).comp (words Bool 2)).comp (words RowSymbol 2)).comp
     (words TableSymbol 1)).comp (words BodySymbol 1)
 
+/-- This represents a bit as an ordinary symbol of the machine-description alphabet. -/
+def bitSymbol (bit : Bool) : CodeSymbol := .inl (.inl (.inl (.inl bit)))
+
+/-- Encoding a Boolean word replaces each bit with its corresponding description symbol. -/
+theorem encode_bitEncoding (bits : List Bool) :
+    bitEncoding.encode bits = bits.map bitSymbol := by
+  simp [bitEncoding, bitSymbol, Encoding.comp, words, encodingList, List.map_map, Function.comp_def]
+
 /-- Adding the description markers to the alphabet preserves the length of a Boolean word. -/
 @[simp] theorem length_bitEncoding (word : List Bool) :
     (bitEncoding.encode word).length = word.length := by
-  simp [bitEncoding, Encoding.comp, words, encodingList]
+  rw [encode_bitEncoding, List.length_map]
 
 /-- A successfully decoded Boolean word consists of its bits with the alphabet tags added. -/
 theorem decode_bitEncoding_eq_some_iff {word : List CodeSymbol} {bits : List Bool} :
@@ -100,8 +108,7 @@ def wordEncoding : Encoding (List Symbol) CodeSymbol :=
 omit [Fintype Symbol] in
 /-- This nonempty word stores one symbol in binary, followed by its ending separator. -/
 def wordSymbolCode (symbol : Symbol) : List CodeSymbol :=
-  ((Encoding.ofEncodable Symbol).encode symbol).map
-    (fun bit => .inl (.inl (.inl (.inl bit)))) ++ [.inl (.inl (.inl (.inr 0)))]
+  ((Encoding.ofEncodable Symbol).encode symbol).map bitSymbol ++ [.inl (.inl (.inl (.inr 0)))]
 
 /-- This symbol ends the entire encoded input word. -/
 def wordEnd : CodeSymbol := .inl (.inl (.inl (.inr 1)))
@@ -113,7 +120,7 @@ theorem encode_wordEncoding (input : List Symbol) :
   induction input with
   | nil => rfl
   | cons symbol input ih =>
-    simp_all [wordEncoding, wordSymbolCode, wordEnd, Encoding.comp, Encoding.list,
+    simp_all [wordEncoding, wordSymbolCode, bitSymbol, wordEnd, Encoding.comp, Encoding.list,
       words, List.map_flatMap, List.map_append, List.map_map,
       Function.comp_def, List.append_assoc]
 

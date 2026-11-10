@@ -79,11 +79,11 @@ def setLeftCell (tm : SingleTapeTM Symbol) (value : Option Symbol) : Prog (TMQue
   tape ←ₜ value
   moveₜ .Right
 
-/-- Changing the left neighboring cell preserves the current region and uses two head moves. -/
+/-- Changing the left neighboring cell preserves every other cell and uses two head moves. -/
 theorem setLeftCell_correct (old value : Option Symbol) (left : StackTape Symbol)
-    (word : List Symbol) (s : TMState tm)
-    (hs : s.config.BiTape = segment (StackTape.cons old left) word StackTape.nil) :
-    Runs (setLeftCell tm value) s (segment (StackTape.cons value left) word StackTape.nil)
+    (word : List Symbol) (tail : StackTape Symbol) (s : TMState tm)
+    (hs : s.config.BiTape = segment (StackTape.cons old left) word tail) :
+    Runs (setLeftCell tm value) s (segment (StackTape.cons value left) word tail)
       s.headPos 2 := by
   refine ⟨_, _, ⟨3, rfl⟩, ?_, ?_, ?_⟩
   · cases word <;>
@@ -118,7 +118,7 @@ theorem appendWord_correct (separator : Option Symbol) (left : StackTape Symbol)
     Runs (appendWord tm separator word) s
       (segment (StackTape.cons separator left) (input ++ word) StackTape.nil)
       s.headPos (2 * (input.length + word.length) + 6) := by
-  have hm := setLeftCell_correct separator none left input s hs
+  have hm := setLeftCell_correct separator none left input StackTape.nil s hs
   have hr := hm.seq (q := seekRightBlank tm)
     (second := segment (stackAppend input.reverse (StackTape.cons none left)) [] StackTape.nil)
     (pos₂ := s.headPos + input.length) (time₂ := input.length) (by
@@ -144,7 +144,7 @@ theorem appendWord_correct (separator : Option Symbol) (left : StackTape Symbol)
     (second := segment (StackTape.cons separator left) (input ++ word) StackTape.nil)
     (pos₂ := s.headPos) (time₂ := 2) (by
       intro middle ht hp
-      simpa [hp] using setLeftCell_correct none separator left (input ++ word) middle
+      simpa [hp] using setLeftCell_correct none separator left (input ++ word) StackTape.nil middle
         (congrArg SingleTapeTM.Cfg.BiTape ht))
   convert hf using 1
   · simp [appendWord, bind_assoc]

@@ -12,12 +12,13 @@ public import Algolean.Problems.TMSAT.Serialization
 /-!
 # Writing TMSAT instances in polynomial time
 
-The serializer writes a fixed verifier description, the encoded input, and unary certificate
-and time bounds. Both bounds are fixed polynomials evaluated at the input length. Its output
-is exactly the canonical TMSAT encoding over the input alphabet.
+The machine writes a fixed verifier description, the encoded input, and the certificate and
+time bounds. Each bound is a fixed polynomial evaluated at the input length. The bound is
+written as that many copies of a fixed word. The complete result is exactly the word produced
+by `encodingOver`.
 
-The verifier and both polynomials are chosen once for the entire reduction. One finite machine
-runs on every input; it computes the lengths of the unary fields from the word on its tape.
+The verifier and both polynomials are chosen once for the whole reduction. One finite machine
+handles every input length and uses the same alphabet for its input and output.
 -/
 
 public section
@@ -30,10 +31,10 @@ open PolynomialWriter
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 
 /--
-This is a polynomial-time Turing machine that writes the canonical TMSAT instance for
-its input. The verifier and both polynomials are fixed when constructing the machine and are
-independent of every runtime input. The tape alphabet is the same `Γ` used for the input,
-certificates, and encoded instances.
+This constructs a machine with a proved polynomial time bound for writing the word that
+`encodingOver` assigns to its TMSAT instance. The verifier and both polynomials are fixed when
+constructing the machine. The machine reads the input from its tape and computes both bounds
+from the input length. It uses the same alphabet `Γ` for the input and the encoded instance.
 -/
 noncomputable def tmsatSerializer (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (m t : Polynomial Nat) :

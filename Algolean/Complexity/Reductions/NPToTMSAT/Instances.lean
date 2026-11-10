@@ -20,8 +20,9 @@ public import Algolean.Problems.TMSAT.Compiler
   polynomial in the original input length.
 
 The machine description is fixed for the language, independently of the input. The query compiler
-adds its constant factor and constant term to the verifier's polynomial time bound. The bounds
-are evaluated at the length of the full input-certificate pair, not just the original input.
+adds a constant factor and a constant term to the verifier's time bound. The verifier's polynomial
+is evaluated at the length of the input and certificate together, including their separator.
+The resulting certificate and transition bounds depend only on the original input length.
 -/
 
 @[expose] public section
@@ -35,7 +36,7 @@ variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 /--
 Every NP language has one fixed Turing machine description and polynomial certificate and time
 bounds that give equivalent TMSAT instances. Both bounds depend only on the original input length.
-The description is compiled once from the normalized verifier; it does not depend on the input.
+The description is compiled once from the prepared verifier; it does not depend on the input.
 This statement gives the instances and proves their correctness. The serializer in
 `Algorithms/SingleTapeTuringMachines/TMSAT.lean` writes their encoded words for the final
 Karp reduction.

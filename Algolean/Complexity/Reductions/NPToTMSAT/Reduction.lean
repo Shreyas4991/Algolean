@@ -31,25 +31,22 @@ open Cslib.Turing Problems.TMSAT SingleTapeTuringMachines
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 
 /--
-Every language in NP has a polynomial-time Karp reduction to TMSAT over the same finite
-alphabet. The reduction writes one fixed verifier description, the original input, and unary
-polynomial bounds. The serializer's machine and its finite program are fixed for the language
-and work on every input length.
+This reduction writes the input's TMSAT instance using one fixed verifier and two fixed
+polynomials. The verifier, polynomials, and writing program are chosen once for the language.
+The same finite program handles every input length and uses the original alphabet.
 -/
-theorem NP.karpReducible_tmsat {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
-    Nonempty (KarpReduction L (languageOver yes)) := by
+noncomputable def NP.tmsatReduction {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
+    KarpReduction L (languageOver yes) := by
   classical
-  obtain ⟨verifier, m, t, hcorrect⟩ := NP.exists_tmsat_instances h yes
-  refine ⟨{
+  choose verifier m t hcorrect using NP.exists_tmsat_instances h yes
+  exact {
     transform := fun input => encodingOver.encode
       (⟨verifier, input, m.eval input.length, t.eval input.length⟩ : Instance Γ)
     computer := tmsatSerializer verifier m t
-    correct := ?_ }⟩
-  intro input
-  simpa using hcorrect input
+    correct := fun input => by simpa using hcorrect input }
 
-/-- This chooses one verified polynomial-time reduction to TMSAT for the given NP language. -/
-noncomputable def NP.tmsatReduction {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
-    KarpReduction L (languageOver yes) := Classical.choice (NP.karpReducible_tmsat h yes)
+/-- Every language in NP has a polynomial-time Karp reduction to TMSAT over the same alphabet. -/
+theorem NP.karpReducible_tmsat {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
+    KarpReducible L (languageOver yes) := ⟨NP.tmsatReduction h yes⟩
 
 end Algolean.Algorithms

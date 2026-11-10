@@ -9,11 +9,12 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter
 
 /-!
-# Writing several polynomially sized fields
+# Writing several parts whose lengths depend on the input length
 
-Each field specifies a fixed word and a polynomial in the input length. The machine appends
-that many copies beyond a blank after the input, preserving the input for subsequent fields.
-The field list is fixed when constructing the machine and is independent of every runtime input.
+Each pair `(word, p)` describes one output part. On an input of length `n`, the machine writes
+`p.eval n` copies of `word`. It writes the parts in order beyond the blank after the input and
+preserves the input. The list of pairs is fixed when constructing the machine and remains the
+same for every input length.
 -/
 
 public section

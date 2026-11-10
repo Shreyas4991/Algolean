@@ -84,9 +84,10 @@ private theorem shiftRightLoop_correct (symbols : List Symbol)
     simpa [shiftRightLoop, Nat.mul_add, Nat.add_comm] using hr
 
 /--
-This shifts the word under the head one cell to the right. A blank must separate it from the
-region to its left. The head finishes on the blank at the word's former starting coordinate.
-The fixed list `symbols` determines all alphabet comparisons.
+This machine shifts the word under the head one cell to the right. A blank must lie immediately
+before the word and another immediately after it. The blank after the word becomes the blank
+at its old starting position. All other cells on either side are preserved. The head finishes
+at that old starting position. The list `symbols` must contain every alphabet symbol.
 
 This is a machine template. The containing Turing machine fixes its parameters once when
 including it. The same finite program runs on every input length.
@@ -100,23 +101,23 @@ def shiftRight (tm : SingleTapeTM Symbol) (symbols : List Symbol) : Prog (TMQuer
 
 /-- Shifting preserves the word and the left region and uses `4 * word.length + 2` head moves. -/
 theorem shiftRight_correct (symbols : List Symbol) (hcover : ∀ symbol, symbol ∈ symbols)
-    (left : StackTape Symbol) (word : List Symbol) (s : TMState tm)
-    (hs : s.config.BiTape = segment (StackTape.cons none left) word StackTape.nil) :
+    (left : StackTape Symbol) (word : List Symbol) (tail : StackTape Symbol) (s : TMState tm)
+    (hs : s.config.BiTape = segment (StackTape.cons none left) word tail) :
     Runs (shiftRight tm symbols) s
-      (segment (StackTape.cons none left) [] (StackTape.mapSome word))
+      (segment (StackTape.cons none left) [] (stackAppend word tail))
       s.headPos (4 * word.length + 2) := by
-  have hr := seekRightBlank_segment (StackTape.cons none left) word StackTape.nil s hs
+  have hr := seekRightBlank_segment (StackTape.cons none left) word tail s hs
   have hm := hr.append_move .Left
   have hl := hm.seq (q := shiftRightLoop symbols)
-    (second := (segment (StackTape.cons none (StackTape.mapSome word)) [] left).mirror)
+    (second := (segment (StackTape.cons none (stackAppend word tail)) [] left).mirror)
     (pos₂ := s.headPos - 1) (time₂ := 3 * word.length) (by
       intro middle ht hp
       have htape : middle.config.BiTape =
-          (segment (StackTape.cons none StackTape.nil) word.reverse left).mirror := by
+          (segment (StackTape.cons none tail) word.reverse left).mirror := by
         have h := congrArg SingleTapeTM.Cfg.BiTape ht
         cases hw : word.reverse <;>
           simpa [hw, Copying.segment, BiTape.segment, BiTape.mirror, BiTape.moveLeft] using h
-      have h := shiftRightLoop_correct symbols hcover StackTape.nil word.reverse left middle htape
+      have h := shiftRightLoop_correct symbols hcover tail word.reverse left middle htape
       convert h using 1 <;>
         simp [hp, sub_eq_add_neg, add_assoc, add_comm, add_left_comm])
   have hf := hl.append_move .Right
@@ -196,7 +197,7 @@ private theorem widen_correct (symbols : List Symbol) (hcover : ∀ symbol, symb
       (second := segment (StackTape.cons none left) [] (StackTape.mapSome suffix))
       (pos₂ := s.headPos + 1) (time₂ := 4 * suffix.length + 2) (by
         intro middle ht hp
-        simpa [hp] using shiftRight_correct symbols hcover left suffix middle
+        simpa [hp] using shiftRight_correct symbols hcover left suffix StackTape.nil middle
           (congrArg SingleTapeTM.Cfg.BiTape ht))
     have hr := hshift.seq (q := widen symbols k)
       (second := segment (StackTape.blanks (k + 1) left) [] (StackTape.mapSome suffix))
@@ -213,7 +214,7 @@ private theorem widen_correct (symbols : List Symbol) (hcover : ∀ symbol, symb
 /--
 This machine template inserts a fixed word just beyond the blank under the head. It shifts the
 word already to the right to make room, then returns to the same blank. The containing machine
-fixes the inserted word and alphabet comparisons once, independently of every runtime input.
+fixes the inserted word and alphabet comparisons once for all inputs.
 -/
 def insertAfterBlank (tm : SingleTapeTM Symbol) (symbols word : List Symbol) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
