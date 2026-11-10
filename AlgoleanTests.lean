@@ -13,6 +13,7 @@ public import AlgoleanTests.ModelMWP
 public import AlgoleanTests.ModelStateM
 public import AlgoleanTests.ModelStateMWP
 public import AlgoleanTests.NP
+public import AlgoleanTests.NPToTMSAT
 public import AlgoleanTests.NaivePatternSearchExamples
 public import AlgoleanTests.Problems
 public import AlgoleanTests.ProgExamples
