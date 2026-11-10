@@ -23,6 +23,8 @@ appear at the start. The head finishes at the first symbol of the completed outp
 
 All words, polynomials, and symbol comparisons are fixed when constructing the machine. One
 finite program handles every input length and uses only the original tape alphabet and blanks.
+The stored time polynomial is a constant times the square of the input length plus `fieldsWork`
+plus one. Each bound polynomial is evaluated at the original input length.
 -/
 
 public section
@@ -49,6 +51,33 @@ private noncomputable def encodingTime (W : Nat) (header ending : List Symbol) :
   X + C ending.length * (4 * X + 3) + C ending.length + 1 +
     X * (C W * (4 * (C W * X + C ending.length + X) + 3) + C W + 2) +
       1 + C header.length + 1
+
+omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
+private theorem encodingTime_le (W : Nat) (header ending : List Symbol) (n : Nat) :
+    (encodingTime W header ending).eval n ≤
+      (encodingTime W header ending).eval 1 * (n + 1) ^ 2 := by
+  let a := 4 * W * (W + 1)
+  let b := 3 + 4 * ending.length + 4 * W * ending.length + 4 * W
+  let c := 4 * ending.length + header.length + 3
+  have heq (x : Nat) : (encodingTime W header ending).eval x = a * x ^ 2 + b * x + c := by
+    simp only [encodingTime, eval_add, eval_mul, eval_C, eval_X, eval_ofNat, eval_one]
+    dsimp only [a, b, c]
+    ring
+  rw [heq n, heq 1]
+  simp only [one_pow, Nat.mul_one]
+  have hsquare : n ^ 2 ≤ (n + 1) ^ 2 := Nat.pow_le_pow_left (by lia) 2
+  have hlinear : n ≤ (n + 1) ^ 2 := by
+    have h := Nat.le_mul_of_pos_right (n + 1) (show 0 < n + 1 by lia)
+    rw [pow_two]
+    lia
+  have hconstant := Nat.mul_le_mul_left c (show 1 ≤ (n + 1) ^ 2 from Nat.pow_pos (by lia))
+  simp only [Nat.mul_one] at hconstant
+  calc
+    a * n ^ 2 + b * n + c ≤
+        a * (n + 1) ^ 2 + b * (n + 1) ^ 2 + c * (n + 1) ^ 2 :=
+      Nat.add_le_add (Nat.add_le_add (Nat.mul_le_mul_left a hsquare)
+        (Nat.mul_le_mul_left b hlinear)) hconstant
+    _ = (a + b + c) * (n + 1) ^ 2 := by ring
 
 omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
 private theorem length_codes_le (code : Symbol → List Symbol) (W : Nat)
@@ -148,6 +177,12 @@ noncomputable def serialize (tm : SingleTapeTM Symbol) (symbols : List Symbol)
   writeFields tm symbols fields
   finishEncoding symbols code header ending
 
+/-- This constant depends only on the fixed output words, polynomials, and symbol replacements. -/
+noncomputable def serializerTimeFactor (code : Symbol → List Symbol)
+    (header ending : List Symbol) (fields : List (List Symbol × Polynomial Nat)) : Nat :=
+  fieldsTimeFactor fields + (encodingTime (∑ symbol : Symbol, (code symbol).length)
+    header ending).eval 1
+
 /--
 This constructs a machine with a proved polynomial time bound for writing the specified output.
 The function `code` assigns a fixed nonempty word to each alphabet symbol. The machine contains
@@ -171,7 +206,8 @@ noncomputable def serializerComputer (code : Symbol → List Symbol)
     intro symbol
     exact Finset.single_le_sum (fun s _ => Nat.zero_le ((code s).length))
       (Finset.mem_univ symbol)
-  let time := fieldsTime fields + (encodingTime W header ending).comp (X + fieldsSize fields)
+  let time := C (serializerTimeFactor code header ending fields) *
+    (X + fieldsWork fields + 1) ^ 2
   refine {
     tm := control
     program := serialize control symbols code header ending fields
@@ -188,8 +224,35 @@ noncomputable def serializerComputer (code : Symbol → List Symbol)
     (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht)
   obtain ⟨total, final, hcomplete, htape, _, htime⟩ := hl.prepend hc (by simp [ht])
   apply hcomplete.outputsWithinTime (by simpa using congrArg SingleTapeTM.Cfg.BiTape htape)
-  have hsum := Nat.add_le_add hb hlast
+  have hencoding := encodingTime_le W header ending
+    (input.length + (fieldsWord fields input.length).length)
+  have hsize := fieldsSize_le_fieldsWork fields input.length
+  have hlast' : lastMoves ≤ (encodingTime W header ending).eval 1 *
+      (input.length + (fieldsWork fields).eval input.length + 1) ^ 2 := by
+    apply (hlast.trans hencoding).trans
+    apply Nat.mul_le_mul_left
+    apply Nat.pow_le_pow_left
+    simpa using Nat.add_le_add_right (Nat.add_le_add_left hsize input.length) 1
+  have hsum := Nat.add_le_add hb hlast'
   rw [htime, hm]
-  simpa [time, eval_comp] using hsum
+  simpa [time, serializerTimeFactor, W, Nat.add_mul] using hsum
+
+private theorem serializerComputer_poly_impl (code : Symbol → List Symbol)
+    (hne : ∀ symbol, code symbol ≠ []) (header ending : List Symbol)
+    (fields : List (List Symbol × Polynomial Nat)) :
+    (serializerComputer code hne header ending fields).poly =
+      C (serializerTimeFactor code header ending fields) * (X + fieldsWork fields + 1) ^ 2 := rfl
+
+
+/--
+The stored polynomial is quadratic in the input length plus the requested writing work.
+The constant depends only on the chosen words, polynomials, and symbol replacements.
+-/
+theorem serializerComputer_poly (code : Symbol → List Symbol)
+    (hne : ∀ symbol, code symbol ≠ []) (header ending : List Symbol)
+    (fields : List (List Symbol × Polynomial Nat)) :
+    (serializerComputer code hne header ending fields).poly =
+      C (serializerTimeFactor code header ending fields) * (X + fieldsWork fields + 1) ^ 2 :=
+  serializerComputer_poly_impl code hne header ending fields
 
 end Algolean.Algorithms.SingleTapeTuringMachines

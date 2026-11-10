@@ -71,7 +71,8 @@ def checkTapePreservation : IO Unit := do
 This runs each fixed counting program on every Boolean word of length at most five. It checks
 that the input is restored and exactly one copy is written for each selected set of positions.
 Both empty and nonempty previous outputs are tested. Empty copied words are also checked,
-as are zero selected positions and more selected positions than the input contains.
+as are zero selected positions and more selected positions than the input contains. Each run
+also checks the proved quadratic bound on head moves.
 -/
 def checkCounting : IO Unit := do
   for count in [:5] do
@@ -83,15 +84,18 @@ def checkCounting : IO Unit := do
           for input in words do
             let initial := { TMState.init (control Bool) input with
               config.BiTape := BiTape.segment StackTape.nil input (StackTape.mapSome oldOutput) }
+            let copies := input.length.choose count
+            let output := oldOutput ++ (List.replicate copies block).flatten
             let expected := BiTape.segment (StackTape.mapSome input.reverse) []
-              (StackTape.mapSome (oldOutput ++
-                (List.replicate (input.length.choose count) block).flatten))
+              (StackTape.mapSome output)
+            let size := input.length + output.length + block.length + copies + 3
+            let bound := (2 * count + 4) * 2 ^ count * size ^ 2
             match execute 200000 program initial with
             | none => throw (IO.userError "The counting program ran out of fuel.")
-            | some (_, final) =>
+            | some (result, final) =>
               unless tapeView final.machine.config.BiTape = tapeView expected ∧
-                  final.machine.headPos = (input.length : Int) do
-                throw (IO.userError "The counting program gave the wrong tape or head position.")
+                  final.machine.headPos = (input.length : Int) ∧ result.tell.steps ≤ bound do
+                throw (IO.userError "The counter gave an incorrect tape, position, or cost.")
           words := words.flatMap (fun word => [false :: word, true :: word])
 
 /--
@@ -136,5 +140,17 @@ example (verifier : SingleTapeTM.Description (Problems.TMSAT.TapeSymbol Bool))
 example {L : Algorithms.Language (Fin 3)} (h : L ∈ NP) :
     Nonempty (KarpReduction L (Problems.TMSAT.languageOver (1 : Fin 3))) :=
   NP.karpReducible_tmsat h 1
+
+-- Quadratic bounds give a time polynomial of degree at most four.
+example (verifier : SingleTapeTM.Description (Problems.TMSAT.TapeSymbol Bool)) :
+    (tmsatSerializer verifier (Polynomial.X ^ 2) (Polynomial.X ^ 2)).poly.natDegree ≤ 4 := by
+  have h := tmsatSerializer_natDegree_le verifier (Polynomial.X ^ 2) (Polynomial.X ^ 2)
+  rw [Polynomial.natDegree_X_pow] at h
+  simpa using h
+
+-- Constant bounds still require reading and encoding inputs of arbitrary length.
+example (verifier : SingleTapeTM.Description (Problems.TMSAT.TapeSymbol Bool)) :
+    (tmsatSerializer verifier 0 0).poly.natDegree ≤ 2 := by
+  simpa using tmsatSerializer_natDegree_le verifier 0 0
 
 end AlgoleanTests.Serialization

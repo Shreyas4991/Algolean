@@ -21,6 +21,10 @@ has natural-number coefficients.
 
 The selected positions are temporarily blank. Each selected symbol is restored before the loop
 continues. The loop depth and the finite alphabet comparisons are fixed with the program.
+
+The time bound is quadratic in the input length, the final output length, the copied word
+length, and the number of requested copies. The coefficient depends only on the chosen
+polynomial. Counting copies separately also covers an empty word, whose copies add no symbols.
 -/
 
 public section
@@ -124,9 +128,58 @@ private def chooseProgram (symbols : List Symbol) (word : List Symbol) (total : 
       select symbols (fun symbol => .tapeIs (some symbol))
         (picked (chooseProgram symbols word total depth))
 
-private noncomputable def runtime : Nat → Polynomial Nat
-  | 0 => 4 * (X + 2)
-  | depth + 1 => (X + 1) * (runtime depth + X + 3)
+private def visits (depth n : Nat) : Nat :=
+  ∑ k ∈ Finset.range (depth + 1), n.choose k
+
+private def visitSums (depth start count : Nat) : Nat :=
+  ∑ i ∈ Finset.range count, visits depth (start + i)
+
+private def runtime (depth N n : Nat) : Nat := (2 * depth + 4) * (N + 2) * visits depth n
+
+private def chooseFactor (depth : Nat) : Nat := (2 * depth + 4) * 2 ^ depth
+
+private theorem visits_pos (depth n : Nat) : 1 ≤ visits depth n := by
+  have h := Finset.single_le_sum (fun k _ => Nat.zero_le (n.choose k))
+    (show 0 ∈ Finset.range (depth + 1) by simp)
+  simpa [visits] using h
+
+private theorem visits_le (depth n : Nat) :
+    visits depth n ≤ 2 ^ depth * (n.choose depth + 1) := by
+  by_cases hn : depth ≤ n
+  · calc
+      visits depth n ≤ ∑ k ∈ Finset.range (depth + 1), n.choose depth * depth.choose k := by
+        apply Finset.sum_le_sum
+        intro k hk
+        have hk' : k ≤ depth := by simpa using hk
+        have hpos := Nat.choose_pos (Nat.sub_le_sub_right hn k)
+        have h := Nat.mul_le_mul_left (n.choose k) hpos
+        simpa only [Nat.mul_one, ← Nat.choose_mul hk'] using h
+      _ = n.choose depth * 2 ^ depth := by rw [← Finset.mul_sum, Nat.sum_range_choose]
+      _ ≤ 2 ^ depth * (n.choose depth + 1) := by rw [Nat.mul_add]; lia
+  · calc
+      visits depth n ≤ ∑ k ∈ Finset.range (depth + 1), depth.choose k :=
+        Finset.sum_le_sum fun k _ => Nat.choose_le_choose k (by lia)
+      _ = 2 ^ depth := Nat.sum_range_choose depth
+      _ ≤ 2 ^ depth * (n.choose depth + 1) := Nat.le_mul_of_pos_right _ (by lia)
+
+private theorem visitSums_succ (depth start count : Nat) :
+    visitSums depth start (count + 1) =
+      visits depth start + visitSums depth (start + 1) count := by
+  simp [visitSums, Finset.sum_range_succ', Nat.add_comm, Nat.add_left_comm]
+
+private theorem runtime_le_quadratic (depth N n : Nat) :
+    runtime depth N n ≤ chooseFactor depth * (N + n.choose depth + 2) ^ 2 := by
+  calc
+    runtime depth N n ≤ (2 * depth + 4) * (N + 2) *
+        (2 ^ depth * (n.choose depth + 1)) :=
+      Nat.mul_le_mul_left _ (visits_le depth n)
+    _ = chooseFactor depth * ((N + 2) * (n.choose depth + 1)) := by
+      unfold chooseFactor
+      ring
+    _ ≤ chooseFactor depth * ((N + n.choose depth + 2) * (N + n.choose depth + 2)) := by
+      apply Nat.mul_le_mul_left
+      exact Nat.mul_le_mul (by lia) (by lia)
+    _ = chooseFactor depth * (N + n.choose depth + 2) ^ 2 := by rw [pow_two]
 
 private def copies (word : List Symbol) (count : Nat) : List Symbol :=
   (List.replicate count word).flatten
@@ -160,6 +213,18 @@ private theorem sums_root (depth count : Nat) : sums depth 0 count = count.choos
       _ = (count + 1).choose (depth + 1) := by
         simp [Nat.choose_succ_succ, Nat.add_comm]
 
+private theorem visitSums_root (depth n : Nat) :
+    visitSums depth 0 n + 1 = visits (depth + 1) n := by
+  have heq : visitSums depth 0 n =
+      ∑ k ∈ Finset.range (depth + 1), n.choose (k + 1) := by
+    unfold visitSums visits
+    rw [Finset.sum_comm]
+    apply Finset.sum_congr rfl
+    intro k hk
+    exact sums_root k n
+  rw [heq, visits, Finset.sum_range_succ' (fun k => n.choose k) (depth + 1)]
+  simp only [Nat.choose_zero_right]
+
 private def Correct (symbols word : List Symbol) (total depth N : Nat) : Prop :=
   ∀ (input : List Symbol) (parts : List (List Symbol)) (output : List Symbol) (s : TMState tm),
     total = parts.length + depth →
@@ -169,7 +234,7 @@ private def Correct (symbols word : List Symbol) (total depth N : Nat) : Prop :=
     ∃ moves, Runs (chooseProgram (tm := tm) symbols word total depth) s
       (segment (StackTape.mapSome input.reverse) []
         (chain parts (output ++ copies word (input.length.choose depth))))
-      (s.headPos + input.length) moves ∧ moves ≤ (runtime depth).eval N
+      (s.headPos + input.length) moves ∧ moves ≤ runtime depth N input.length
 
 private theorem choose_zero (symbols word : List Symbol) (total N : Nat) :
     Correct (tm := tm) symbols word total 0 N := by
@@ -185,7 +250,7 @@ private theorem choose_zero (symbols word : List Symbol) (total N : Nat) :
   refine ⟨input.length + (2 * (span parts + output.length + word.length) + 8), ?_, ?_⟩
   · simpa [chooseProgram, copies] using hf
   · simp only [Nat.choose_zero_right, List.length_append, length_copies, Nat.one_mul] at hN
-    simp only [runtime, eval_mul, eval_ofNat, eval_add, eval_X] at *
+    simp [runtime, visits]
     lia
 
 private theorem choose_loop (symbols word : List Symbol)
@@ -201,10 +266,10 @@ private theorem choose_loop (symbols word : List Symbol)
       (segment (StackTape.mapSome (done ++ remaining).reverse) []
         (chain parts (output ++ copies word (sums depth done.length remaining.length))))
       (s.headPos + remaining.length) moves ∧
-      moves ≤ remaining.length * ((runtime depth).eval N + N + 3) := by
+      moves ≤ (2 * depth + 6) * (N + 2) * visitSums depth done.length remaining.length := by
   induction remaining generalizing done output s with
   | nil =>
-    refine ⟨0, ?_, by simp⟩
+    refine ⟨0, ?_, by simp [visitSums]⟩
     simp [chooseProgram, hs, sums, copies]
   | cons symbol remaining ih =>
     have hm : Runs (FreeM.lift (.write none)) s
@@ -268,12 +333,21 @@ private theorem choose_loop (symbols word : List Symbol)
     · convert hloop using 1
       · simp [List.append_assoc, sums_succ, copies_add, nextOutput]
       · simp [hpos, add_comm, add_left_comm]
-    · have hcostBound : cost.steps ≤ (runtime depth).eval N + N + 3 := by
-        have hdone : done.length ≤ N := by lia
-        lia
+    · have hdone : done.length ≤ N := by lia
+      have hunit : done.length + 3 ≤ 2 * (N + 2) := by lia
+      have hcharged := Nat.mul_le_mul_left (2 * (N + 2)) (visits_pos depth done.length)
+      have hcostBound : cost.steps ≤
+          (2 * depth + 6) * (N + 2) * visits depth done.length := by
+        calc
+          cost.steps = innerMoves + (done.length + 3) := by lia
+          _ ≤ runtime depth N done.length +
+              2 * (N + 2) * visits depth done.length :=
+            Nat.add_le_add hb (hunit.trans (by simpa using hcharged))
+          _ = (2 * depth + 6) * (N + 2) * visits depth done.length := by
+            unfold runtime
+            ring
       have hsum := Nat.add_le_add hcostBound hbound
-      simpa only [List.length_cons, List.length_append, List.length_singleton,
-        Nat.add_mul, Nat.one_mul, Nat.add_comm] using hsum
+      simpa [visitSums_succ, Nat.mul_add] using hsum
 
 private theorem choose_correct (symbols word : List Symbol)
     (hcover : ∀ symbol, symbol ∈ symbols) (depth : Nat) :
@@ -285,9 +359,11 @@ private theorem choose_correct (symbols word : List Symbol)
     obtain ⟨moves, hr, hb⟩ := choose_loop symbols word hcover total depth N (ih total N)
       [] input parts output s htotal (by simpa using hs) (by simpa [sums_root] using hN)
     refine ⟨moves, by simpa [sums_root] using hr, ?_⟩
-    have hn : input.length ≤ N + 1 := by lia
-    exact hb.trans (by simpa [runtime] using
-      Nat.mul_le_mul_right ((runtime depth).eval N + N + 3) hn)
+    have hsum : visitSums depth 0 input.length ≤ visits (depth + 1) input.length := by
+      have := visitSums_root depth input.length
+      lia
+    exact hb.trans (by simpa [runtime, Nat.mul_add, Nat.add_assoc] using
+      Nat.mul_le_mul_left ((2 * depth + 6) * (N + 2)) hsum)
 
 /--
 This appends one copy of `word` for every choice of `count` input positions. The copies are
@@ -300,14 +376,14 @@ including it. The same finite program runs on every input length.
 def writeChoose (tm : SingleTapeTM Symbol) (symbols word : List Symbol) (count : Nat) :
     Prog (TMQuery tm) Unit := chooseProgram symbols word count count
 
-
 /-- This polynomial bounds the head moves when writing one copy for each set of input positions. -/
-noncomputable def writeChooseTime (count : Nat) : Polynomial Nat := runtime count
+noncomputable def writeChooseTime (count : Nat) : Polynomial Nat :=
+  C (chooseFactor count) * (X + 2) ^ 2
 
 /--
 The machine writes exactly one copy for every set of `count` input positions. It preserves the
 input and the old output, and stops on the blank after the input. The time bound uses the input
-length, the final output length, and the length of the word being copied.
+length, the final output length, the copied word length, and the number of copies requested.
 -/
 theorem writeChoose_correct (symbols word : List Symbol)
     (hcover : ∀ symbol, symbol ∈ symbols) (count : Nat) (input output : List Symbol)
@@ -317,11 +393,15 @@ theorem writeChoose_correct (symbols word : List Symbol)
     ∃ moves, Runs (writeChoose tm symbols word count) s
       (segment (StackTape.mapSome input.reverse) [] (StackTape.mapSome result))
       (s.headPos + input.length) moves ∧
-      moves ≤ (writeChooseTime count).eval (input.length + result.length + word.length + 1) := by
-  simpa [writeChoose, writeChooseTime, chain, copies, span] using
-    choose_correct symbols word hcover count count
-      (input.length + (output ++ copies word (input.length.choose count)).length + word.length + 1)
-      input [] output s (by simp) (by simpa [chain] using hs) (by simp [span])
+      moves ≤ (writeChooseTime count).eval
+        (input.length + result.length + word.length + input.length.choose count + 1) := by
+  let N := input.length + (output ++ copies word (input.length.choose count)).length +
+    word.length + 1
+  obtain ⟨moves, hr, hb⟩ := choose_correct symbols word hcover count count N
+    input [] output s (by simp) (by simpa [chain] using hs) (by simp [N, span])
+  refine ⟨moves, by simpa [writeChoose, chain, copies] using hr, ?_⟩
+  have h := hb.trans (runtime_le_quadratic count N input.length)
+  simpa [writeChooseTime, N, copies, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h
 
 private noncomputable def terms (p : Polynomial Nat) : List Nat :=
   p.support.toList.flatMap fun degree =>
@@ -364,15 +444,18 @@ private def writeTerms (symbols word : List Symbol) : List Nat → Prog (TMQuery
     seekLeftEnd tm
     writeTerms symbols word rest
 
+private def termsFactor (terms : List Nat) : Nat :=
+  (terms.map fun k => chooseFactor k + 1).sum
+
 private noncomputable def termsTime (terms : List Nat) : Polynomial Nat :=
-  (terms.map fun k => runtime k + X + 2).sum
+  C (termsFactor terms) * (X + 2) ^ 2
 
 private theorem writeTerms_correct (symbols word : List Symbol)
     (hcover : ∀ symbol, symbol ∈ symbols) (terms : List Nat) (input output : List Symbol)
     (N : Nat) (s : TMState tm)
     (hs : s.config.BiTape = segment StackTape.nil input (StackTape.mapSome output))
     (hN : input.length + (output ++ copies word (count terms input.length)).length +
-      word.length + 1 ≤ N) :
+      word.length + count terms input.length + 1 ≤ N) :
     ∃ moves, Runs (writeTerms (tm := tm) symbols word terms) s
       (segment StackTape.nil input
         (StackTape.mapSome (output ++ copies word (count terms input.length))))
@@ -388,14 +471,15 @@ private theorem writeTerms_correct (symbols word : List Symbol)
     rw [← hs]
   | cons k rest ih =>
     have hfirstN : input.length +
-        (output ++ copies word (input.length.choose k)).length + word.length + 1 ≤ N := by
+        (output ++ copies word (input.length.choose k)).length + word.length +
+          input.length.choose k + 1 ≤ N := by
       simp only [count, List.map_cons, List.sum_cons, List.length_append,
         length_copies, Nat.add_mul] at hN
       simp only [List.length_append, length_copies]
       lia
     obtain ⟨firstMoves, hf, hfirst⟩ := writeChoose_correct symbols word hcover k input output s hs
-    have hb : firstMoves ≤ (runtime k).eval N :=
-      hfirst.trans ((runtime k).eval_mono hfirstN)
+    have hb : firstMoves ≤ (writeChooseTime k).eval N :=
+      hfirst.trans ((writeChooseTime k).eval_mono hfirstN)
     have hreturn := hf.seq (q := seekLeftEnd tm)
       (second := segment StackTape.nil input
         (StackTape.mapSome (output ++ copies word (input.length.choose k))))
@@ -408,16 +492,24 @@ private theorem writeTerms_correct (symbols word : List Symbol)
     obtain ⟨cost, middle, hc, ht, hp, hm⟩ := hreturn
     obtain ⟨restMoves, hr, hrb⟩ := ih (output ++ copies word (input.length.choose k)) middle
       (congrArg SingleTapeTM.Cfg.BiTape ht) (by
-        simpa [count, copies_add, List.append_assoc] using hN)
+        simp only [count, List.map_cons, List.sum_cons, List.length_append,
+          length_copies, Nat.add_mul] at hN ⊢
+        lia)
     have hjoined := hr.prepend hc (by simp [ht])
     refine ⟨cost.steps + restMoves, ?_, ?_⟩
     · simpa [writeTerms, writeChoose, count, copies_add, List.append_assoc, hp,
         bind_assoc] using hjoined
     · have hn : input.length ≤ N := by lia
-      simp only [termsTime, List.map_cons, List.sum_cons, eval_add,
-        eval_X, eval_ofNat]
-      have hrest : restMoves ≤ (termsTime rest).eval N := hrb
-      change cost.steps + restMoves ≤ (runtime k).eval N + N + 2 + (termsTime rest).eval N
+      have hlinear : input.length + 2 ≤ (N + 2) ^ 2 := by
+        have h := Nat.le_mul_of_pos_right (N + 2) (show 0 < N + 2 by lia)
+        rw [pow_two]
+        lia
+      simp only [writeChooseTime, eval_mul, eval_C, eval_pow, eval_add, eval_X, eval_ofNat] at hb
+      simp only [termsTime, eval_mul, eval_C, eval_pow, eval_add, eval_X, eval_ofNat] at hrb ⊢
+      simp only [termsFactor, List.map_cons, List.sum_cons]
+      change cost.steps + restMoves ≤ (chooseFactor k + 1 + termsFactor rest) * (N + 2) ^ 2
+      have hsum := Nat.add_le_add (Nat.add_le_add hb hlinear) hrb
+      rw [Nat.add_mul, Nat.add_mul, Nat.one_mul]
       lia
 
 /--
@@ -430,27 +522,36 @@ tape and does not select a different program.
 noncomputable def writePolynomial (tm : SingleTapeTM Symbol) (symbols word : List Symbol)
     (p : Polynomial Nat) : Prog (TMQuery tm) Unit := writeTerms symbols word (terms p)
 
-/-- The number of moves has a polynomial bound in the input length and the final output length. -/
-noncomputable def writePolynomialTime (p : Polynomial Nat) : Polynomial Nat := termsTime (terms p)
+/-- This constant depends only on the fixed polynomial and counts the costs of its loops. -/
+noncomputable def writePolynomialFactor (p : Polynomial Nat) : Nat := termsFactor (terms p)
+
+/-- This quadratic polynomial bounds the writing time in the stated input and output size. -/
+noncomputable def writePolynomialTime (p : Polynomial Nat) : Polynomial Nat :=
+  C (writePolynomialFactor p) * (X + 2) ^ 2
+
+/-- The writing-time polynomial is quadratic, with a constant fixed by the chosen polynomial. -/
+@[simp] theorem eval_writePolynomialTime (p : Polynomial Nat) (n : Nat) :
+    (writePolynomialTime p).eval n = writePolynomialFactor p * (n + 2) ^ 2 := by
+  simp [writePolynomialTime]
 
 /--
 The template appends exactly `p.eval input.length` copies and restores the input and starting
-head position. The bound includes the old output, the new copies, and the fixed word length.
+head position. The bound counts the old output, the new output, the fixed word length, and
+the requested copies. Counting copies also covers an empty word, whose copies add no symbols.
 -/
 theorem writePolynomial_correct (symbols word : List Symbol)
     (hcover : ∀ symbol, symbol ∈ symbols) (p : Polynomial Nat) (input output : List Symbol)
     (s : TMState tm)
     (hs : s.config.BiTape = segment StackTape.nil input (StackTape.mapSome output)) :
+    let result := output ++ (List.replicate (p.eval input.length) word).flatten
     ∃ moves, Runs (writePolynomial tm symbols word p) s
-      (segment StackTape.nil input
-        (StackTape.mapSome (output ++ (List.replicate (p.eval input.length) word).flatten)))
-      s.headPos moves ∧
-      moves ≤ (writePolynomialTime p).eval (input.length +
-        (output ++ (List.replicate (p.eval input.length) word).flatten).length +
-          word.length + 1) := by
-  simpa [writePolynomial, writePolynomialTime, count_terms, copies] using
+      (segment StackTape.nil input (StackTape.mapSome result)) s.headPos moves ∧
+      moves ≤ (writePolynomialTime p).eval
+        (input.length + result.length + word.length + p.eval input.length + 1) := by
+  simpa [writePolynomial, writePolynomialTime, writePolynomialFactor, termsTime,
+    count_terms, copies] using
     writeTerms_correct symbols word hcover (terms p) input output
       (input.length + (output ++ copies word (p.eval input.length)).length +
-        word.length + 1) s hs (by rw [count_terms])
+        word.length + p.eval input.length + 1) s hs (by rw [count_terms])
 
 end Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter
