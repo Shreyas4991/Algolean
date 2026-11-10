@@ -18,7 +18,8 @@ execution costs and changes the machine state.
 
 * `TMQuery.Completes.branch` and `TMQuery.Runs.branch` lift the selected branch's contract.
 * `TMQuery.Runs.branch_seq` carries the selected branch's contract through a continuation.
-* `Component.branch` builds a verified component from contracts for both guarded branches.
+* `Component.branch` builds a verified component from proofs for both guarded branches.
+* `TMQuery.select` tests a fixed finite list of cases and runs the first matching case.
 -/
 
 @[expose] public section
@@ -47,7 +48,6 @@ theorem Runs.branch {condition : TMCondition tm} {yes no : Prog (TMQuery tm) Uni
   obtain ⟨cost, final, hc, ht, hp, hm⟩ := h
   exact ⟨cost, final, hc.branch, ht, hp, hm⟩
 
-
 /-- Select a branch and then execute its continuation, keeping the shared state and cost. -/
 theorem Runs.branch_seq {condition : TMCondition tm} {yes no p : Prog (TMQuery tm) Unit}
     {s : TMState tm} {output : BiTape Symbol} {pos : ℤ} {time : ℕ}
@@ -57,6 +57,47 @@ theorem Runs.branch_seq {condition : TMCondition tm} {yes no p : Prog (TMQuery t
   refine ⟨cost, u, ⟨fuel + 1, ?_⟩, hc, hp, ht⟩
   cases hguard : condition.eval s.config <;>
     simpa [FuelExecMonad.execute_bind, execute_branch_succ, hguard] using hr
+
+/--
+This constructs a Turing machine program containing nested conditionals. For `cases = [a, b, c]`,
+the program first checks `test a` against the current tape and state. If it is true, the program
+runs `action a` and skips the remaining tests. Otherwise it checks `test b`, then `test c` if
+needed. If all tests are false, it finishes without changing the machine.
+
+The list `cases` and the functions `test` and `action` are supplied when constructing the program.
+They are part of that program's definition and are not read from the tape during execution.
+Fixing these three arguments gives one finite program that can run on every input length.
+For a single machine, they must be chosen independently of the input and its length. Choosing
+different lists or instructions for different input lengths would give a family of programs.
+-/
+def select {α : Type} (cases : List α) (test : α → TMCondition tm)
+    (action : α → Prog (TMQuery tm) Unit) : Prog (TMQuery tm) Unit :=
+  match cases with
+  | [] => pure ()
+  | candidate :: rest => branch (test candidate) (action candidate) (select rest test action)
+
+/--
+If `chosen` appears in `cases` and the tests succeed exactly for values equal to `chosen`,
+the program runs `action chosen`. It has the same final machine state, head moves, and extra
+tape cells as that action.
+-/
+theorem select_correct {α : Type} [DecidableEq α] (cases : List α)
+    (test : α → TMCondition tm) (action : α → Prog (TMQuery tm) Unit)
+    (chosen : α) (s final : TMState tm) (cost : TMCost)
+    (hmem : chosen ∈ cases)
+    (htest : ∀ candidate, (test candidate).eval s.config = decide (candidate = chosen))
+    (haction : Completes (action chosen) s cost final) :
+    Completes (select cases test action) s cost final := by
+  induction cases with
+  | nil => simp at hmem
+  | cons candidate rest ih =>
+    simp only [select]
+    apply Completes.branch
+    by_cases heq : candidate = chosen
+    · subst candidate
+      simpa [htest] using haction
+    · have hrest : chosen ∈ rest := by simpa [Ne.symm heq] using hmem
+      simpa [htest, heq] using ih hrest
 
 end TMQuery
 
