@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.TMSAT.Encoding
+public import Algolean.Problems.Encodings.TMSAT
 
 /-!
 # The fixed words used to write a TMSAT instance

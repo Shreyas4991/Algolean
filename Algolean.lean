@@ -115,13 +115,14 @@ public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
 public import Algolean.Problems.Basic
 public import Algolean.Problems.Certificates
-public import Algolean.Problems.Encoding
+public import Algolean.Problems.Encodings.Alphabet
+public import Algolean.Problems.Encodings.Basic
+public import Algolean.Problems.Encodings.SAT
+public import Algolean.Problems.Encodings.TMSAT
 public import Algolean.Problems.SAT.Basic
-public import Algolean.Problems.SAT.Encoding
 public import Algolean.Problems.SAT.Verification
 public import Algolean.Problems.TMSAT.Basic
 public import Algolean.Problems.TMSAT.Compiler
-public import Algolean.Problems.TMSAT.Encoding
 public import Algolean.Problems.TMSAT.Serialization
 public import Algolean.QueryComposition
 public import Algolean.QueryModel

@@ -97,6 +97,38 @@ private theorem readBlocks_length_le (width : Nat) (hwidth : 0 < width)
             lia
       · cases h
 
+private theorem readBlocks_eq_encode (code : Encoding α Γ) (width : Nat)
+    (hread : ∀ {word symbol}, code.decode word = some symbol → word = code.encode symbol)
+    (fuel : Nat) (word : List Γ) (decoded : List α)
+    (h : readBlocks width code.decode fuel word = some decoded) :
+    word = decoded.flatMap code.encode := by
+  induction fuel generalizing word decoded with
+  | zero =>
+    simp only [readBlocks] at h
+    split at h
+    · cases Option.some.inj h
+      simpa using List.isEmpty_iff.mp ‹word.isEmpty = true›
+    · cases h
+  | succ fuel ih =>
+    simp only [readBlocks] at h
+    split at h
+    · cases Option.some.inj h
+      simpa using List.isEmpty_iff.mp ‹word.isEmpty = true›
+    · split at h
+      · cases hs : code.decode (word.take width) with
+        | none => simp [hs] at h
+        | some symbol =>
+          cases hr : readBlocks width code.decode fuel (word.drop width) with
+          | none => simp [hs, hr] at h
+          | some rest =>
+            change Option.bind (code.decode (word.take width)) (fun symbol =>
+              Option.bind (readBlocks width code.decode fuel (word.drop width))
+                (fun rest => some (symbol :: rest))) = some decoded at h
+            simp only [hs, hr, Option.bind_some, Option.some.injEq] at h
+            subst decoded
+            rw [List.flatMap_cons, ← hread hs, ← ih _ _ hr, List.take_append_drop]
+      · cases h
+
 /--
 This represents a list by concatenating its symbol encodings. Every symbol encoding must have
 exactly `width` symbols, with positive width. The decoder reads one whole block at a time.
@@ -124,6 +156,21 @@ theorem length_le_of_decode_blockWords (code : Encoding α Γ) (width : Nat) (hw
     (h : (blockWords code width hwidth hcode).decode word = some decoded) :
     decoded.length ≤ word.length :=
   readBlocks_length_le width hwidth code.decode word.length word decoded h
+
+/--
+If each symbol decoder accepts only its encoder's words, decoding a list also accepts only the
+complete word produced by its encoder. Incomplete or unrecognized symbol encodings are rejected.
+-/
+theorem decode_blockWords_eq_some_iff (code : Encoding α Γ) (width : Nat) (hwidth : 0 < width)
+    (hcode : ∀ symbol, (code.encode symbol).length = width)
+    (hread : ∀ {word symbol}, code.decode word = some symbol → word = code.encode symbol)
+    {word : List Γ} {decoded : List α} :
+    (blockWords code width hwidth hcode).decode word = some decoded ↔
+      word = (blockWords code width hwidth hcode).encode decoded := by
+  constructor
+  · exact readBlocks_eq_encode code width hread word.length word decoded
+  · rintro rfl
+    exact (blockWords code width hwidth hcode).decode_encode decoded
 
 private def blockSymbol (zero one : Γ) {width : Nat} (symbol : Fin width) : List Γ :=
   List.ofFn fun position => if position = symbol then one else zero
@@ -159,6 +206,15 @@ private def symbolCode (zero one : Γ) (hne : zero ≠ one) (width : Nat) :
           simpa [hcode] using ih (by simpa [Ne.symm hsame] using hmem)
     exact hfind _ (by simp)
 
+private theorem symbolCode_eq_encode (zero one : Γ) (hne : zero ≠ one) (width : Nat)
+    {word : List Γ} {symbol : Fin width}
+    (h : (symbolCode zero one hne width).decode word = some symbol) :
+    word = (symbolCode zero one hne width).encode symbol := by
+  change (List.finRange width).find?
+    (fun symbol => decide (blockSymbol zero one symbol = word)) = some symbol at h
+  have hsymbol := List.find?_some h
+  exact (of_decide_eq_true hsymbol).symm
+
 /--
 This encodes words over a nonempty finite source alphabet using only `zero` and `one` on the
 target alphabet. A source alphabet with `k` symbols uses blocks of length `k`. The choice of
@@ -176,6 +232,14 @@ noncomputable def finiteWords [Fintype α] [Nonempty α] (zero one : Γ) (hne : 
     (zero one : Γ) (hne : zero ≠ one) (word : List α) :
     ((finiteWords zero one hne).encode word).length = word.length * Fintype.card α := by
   simp [finiteWords, Encoding.ofEquiv, Equiv.listEquivOfEquiv]
+
+/-- Decoding succeeds exactly on the complete representation of the recovered word. -/
+theorem decode_finiteWords_eq_some_iff [Fintype α] [Nonempty α]
+    (zero one : Γ) (hne : zero ≠ one) {word : List Γ} {decoded : List α} :
+    (finiteWords zero one hne).decode word = some decoded ↔
+      word = (finiteWords zero one hne).encode decoded := by
+  rw [finiteWords, Encoding.decode_ofEquiv_eq_some_iff]
+  exact decode_blockWords_eq_some_iff _ _ _ _ (fun h => symbolCode_eq_encode _ _ _ _ h)
 
 /-- Decoding words between finite alphabets cannot increase their lengths. -/
 theorem length_le_of_decode_finiteWords [Fintype α] [Nonempty α]
@@ -206,6 +270,19 @@ omit [DecidableEq Γ] in
     (word : List α) :
     ((finiteWordsOver α Γ).encode word).length = word.length * Fintype.card α := by
   simp [finiteWordsOver]
+
+omit [DecidableEq Γ] in
+/--
+Decoding succeeds exactly on the recovered word's complete encoding. This also rejects symbols
+outside the two chosen target symbols and incomplete symbol encodings.
+-/
+theorem decode_finiteWordsOver_eq_some_iff [Fintype α] [Nonempty α] [Nontrivial Γ]
+    {word : List Γ} {decoded : List α} :
+    (finiteWordsOver α Γ).decode word = some decoded ↔
+      word = (finiteWordsOver α Γ).encode decoded := by
+  classical
+  dsimp only [finiteWordsOver]
+  exact decode_finiteWords_eq_some_iff _ _ _
 
 omit [DecidableEq Γ] in
 /-- Choosing the target symbols also preserves the length bound for every successful decoding. -/

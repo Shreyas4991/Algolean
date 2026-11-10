@@ -16,7 +16,7 @@ public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public meta import Algolean.Models.SingleTapeTM.Alphabet.Pair
-public meta import Algolean.Problems.SAT.Encoding
+public meta import Algolean.Problems.Encodings.SAT
 
 /-!
 # Checking SAT encodings and certificates
@@ -29,6 +29,7 @@ public meta import Algolean.Problems.SAT.Encoding
 * Variable lookup compares complete names, uses the first listed value, and restores every symbol.
 * Formula evaluation leaves only its answer on the tape and puts the head on that answer.
 * The complete verifier rejects malformed inputs and checks correctly written pairs.
+* Encoding over another alphabet preserves answers and rejects incomplete symbol encodings.
 -/
 
 @[expose] public section
@@ -57,6 +58,72 @@ example : encoding.decode [(.inr 5 : CodeSymbol), .inl true] = none := by decide
 -- Every formula survives encoding and decoding, including all binary variable names.
 example (formula : CNF Variable) : encoding.decode (encoding.encode formula) = some formula := by
   simp
+
+section EncodingOver
+
+variable {Γ : Type} [Nontrivial Γ]
+
+/-- Every formula can be encoded and recovered over any alphabet with two distinct symbols. -/
+example (formula : CNF Variable) :
+    (encodingOver (Γ := Γ)).decode (encodingOver.encode formula) = some formula := by simp
+
+/-- The new encoding takes exactly eight times as many symbols as the existing encoding. -/
+example (formula : CNF Variable) :
+    ((encodingOver (Γ := Γ)).encode formula).length = (encoding.encode formula).length * 8 := by
+  simp
+
+/-- The encoding does not require the target alphabet to be finite or to have a numeric encoding. -/
+example (formula : CNF Variable) :
+    (encodingOver (Γ := Nat)).decode (encodingOver.encode formula) = some formula := by simp
+
+/-- A formula with no clauses remains satisfiable after changing alphabets. -/
+example : (encodingOver (Γ := Γ)).encode [] ∈ languageOver := by
+  simp [CNF.satisfiable, CNF.SatisfiedBy]
+
+/-- A formula containing an empty clause remains unsatisfiable after changing alphabets. -/
+example : (encodingOver (Γ := Γ)).encode [[]] ∉ languageOver := by
+  simp [CNF.satisfiable, CNF.SatisfiedBy, CNF.eval, Clause.eval]
+
+/-- Different clauses cannot give the same variable contradictory truth values. -/
+example : (encodingOver (Γ := Γ)).encode [[.pos [true]], [.neg [true]]] ∉ languageOver := by
+  simp [CNF.satisfiable, CNF.SatisfiedBy, CNF.eval, Clause.eval]
+
+/-- An extra initial zero still distinguishes two variable names after changing alphabets. -/
+example : (encodingOver (Γ := Γ)).encode [[.pos [true]], [.neg [false, true]]] ∈ languageOver := by
+  rw [encode_mem_languageOver]
+  exact ⟨fun name => decide (name = [true]), by
+    simp [CNF.SatisfiedBy, CNF.eval, Clause.eval]⟩
+
+/-- An empty word still lacks the required formula ending after changing alphabets. -/
+example : (encodingOver (Γ := Γ)).decode [] = none := by
+  have h := Computability.Encoding.decode_over_encode_word (Γ := Γ) encoding []
+  simpa [encodingOver, show encoding.decode [] = none from rfl] using h
+
+/-- Correctly encoding trailing data over another alphabet does not turn it into a valid formula. -/
+example : (encodingOver (Γ := Γ)).decode
+    ((Algolean.Algorithms.Alphabet.finiteWordsOver CodeSymbol Γ).encode [.inr 5, .inl true]) =
+      none := by
+  rw [encodingOver, Computability.Encoding.decode_over_encode_word]
+  rfl
+
+/-- A word whose length is not a multiple of eight cannot contain complete symbol encodings. -/
+example (word : List Γ) (h : word.length % 8 ≠ 0) : encodingOver.decode word = none := by
+  cases hd : encodingOver.decode word with
+  | none => rfl
+  | some formula =>
+    have hlength := length_eq_of_decodeOver hd
+    exact (h (by simp [hlength])).elim
+
+/-- Appending one extra symbol to a correctly encoded formula makes decoding fail. -/
+example (formula : CNF Variable) (symbol : Γ) :
+    encodingOver.decode (encodingOver.encode formula ++ [symbol]) = none := by
+  cases hd : encodingOver.decode (encodingOver.encode formula ++ [symbol]) with
+  | none => rfl
+  | some decoded =>
+    have hlength := congrArg (fun n => n % 8) (length_eq_of_decodeOver hd)
+    simp at hlength
+
+end EncodingOver
 
 -- An empty assignment suffices for the empty conjunction.
 example : verify (encoding.encode []) (certificateEncoding.encode []) = true := by decide +kernel
@@ -125,7 +192,7 @@ private def testFormat : IO Unit := do
 run_cmd Lean.Elab.Command.liftIO testFormat
 
 /--
-This executes lookup from the supplied coordinate and an arbitrary incoming state. It checks the
+This executes lookup from a chosen coordinate and an arbitrary incoming state. It checks the
 returned value, every restored tape cell, the restored head position, and the cubic move bound.
 -/
 private def checkLookupRun (name : Variable) (certificate : Certificate) (expected : Bool)
@@ -211,7 +278,7 @@ private def testEvaluation : IO Unit := do
 run_cmd Lean.Elab.Command.liftIO testEvaluation
 
 /--
-This executes the complete verifier on a supplied word and checks its answer, the absence of
+This executes the complete verifier on an input word and checks its answer, the absence of
 other occupied cells, its final head coordinate, and the polynomial move bound. The starting
 state says that the format is correct, so rejection also checks that the program resets its state.
 -/

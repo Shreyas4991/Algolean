@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Problems.SAT.Basic
-public import Algolean.Problems.Encoding
+public import Algolean.Problems.Encodings.Alphabet
 public import Algolean.Models.SingleTapeTM.Alphabet.List
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 
@@ -20,6 +20,10 @@ public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 * `language` contains the encodings of satisfiable formulas.
   Incorrectly formatted lists are rejected.
 * `verifierEncoding` stores a formula and its certificate with one symbol between them.
+* `encodingOver` represents each of the eight formula symbols by eight symbols of `Γ`.
+  It uses two distinct symbols chosen once for the whole encoding. Its decoder rejects
+  incomplete symbol encodings and incorrectly written formulas.
+* `languageOver` represents SAT over `Γ`. Encoding a formula preserves whether it is satisfiable.
 
 A certificate lists variables and proposed truth values. Only variables occurring in the formula
 need to be listed, and the length bound counts the actual binary digits of their names.
@@ -165,13 +169,13 @@ theorem encoding_encode_cons (clause : Clause Variable) (rest : CNF Variable) :
     Encoding.comp, Encoding.list, words, List.map_append, List.map_map,
     Function.comp_def, Extended.flattenThreeEquiv, Extended.flattenEquiv, finSumFinEquiv]
 
-/-- Decoding returns a formula exactly when the supplied list is that formula's full encoding. -/
+/-- Decoding returns a formula exactly when the whole word is that formula's encoding. -/
 @[simp] theorem decode_encoding_eq_some_iff {word : List CodeSymbol} {formula : CNF Variable} :
     encoding.decode word = some formula ↔ word = encoding.encode formula :=
   Encoding.decode_strict_eq_some_iff
     (clauseEncoding.list.mapSymbols (Extended.flattenThreeEquiv Bool 2 2 2))
 
-/-- Decoding returns a certificate exactly when the supplied list is its full encoding. -/
+/-- Decoding returns a certificate exactly when the whole word is its encoding. -/
 @[simp] theorem decode_certificateEncoding_eq_some_iff
     {word : List CodeSymbol} {certificate : Certificate} :
     certificateEncoding.decode word = some certificate ↔
@@ -201,6 +205,51 @@ def language : Language CodeSymbol := encodedLanguage CNF.satisfiable encoding
 /-- Encoding preserves whether a formula has a satisfying assignment. -/
 @[simp] theorem encode_mem_language (formula : CNF Variable) :
     encoding.encode formula ∈ language ↔ formula ∈ CNF.satisfiable := by simp [language]
+
+variable {Γ : Type} [Nontrivial Γ]
+
+/--
+This represents a formula using only symbols of `Γ`. Each of the eight symbols in the existing
+formula encoding becomes a word of length eight over two chosen symbols of `Γ`. These choices
+are fixed for all formulas. Decoding first recovers the formula symbols and then checks the
+complete formula. The alphabet needs only two distinct symbols; no numbering of `Γ` is needed.
+-/
+noncomputable def encodingOver : Encoding (CNF Variable) Γ :=
+  encoding.over
+
+/-- Writing a formula over `Γ` multiplies the length of its existing encoding by eight. -/
+@[simp] theorem length_encodingOver (formula : CNF Variable) :
+    ((encodingOver (Γ := Γ)).encode formula).length = (encoding.encode formula).length * 8 := by
+  simp [encodingOver, CodeSymbol, Extended]
+
+/-- Decoding succeeds exactly when the whole word is the recovered formula's encoding. -/
+@[simp] theorem decode_encodingOver_eq_some_iff {word : List Γ} {formula : CNF Variable} :
+    encodingOver.decode word = some formula ↔ word = encodingOver.encode formula := by
+  rw [encodingOver, Encoding.decode_over_eq_some_iff]
+  simp only [decode_encoding_eq_some_iff, exists_eq_right]
+  rfl
+
+/-- A successfully decoded word has eight times the length of the formula's existing encoding. -/
+theorem length_eq_of_decodeOver {word : List Γ} {formula : CNF Variable}
+    (h : encodingOver.decode word = some formula) :
+    word.length = (encoding.encode formula).length * 8 := by
+  rw [decode_encodingOver_eq_some_iff.mp h, length_encodingOver]
+
+/--
+This is SAT represented over `Γ`. A word belongs when it decodes to a satisfiable formula;
+words that fail to decode do not belong.
+-/
+noncomputable def languageOver : Language Γ := encodedLanguage CNF.satisfiable encodingOver
+
+/-- Encoding a formula over `Γ` preserves whether it has a satisfying assignment. -/
+@[simp] theorem encode_mem_languageOver (formula : CNF Variable) :
+    encodingOver.encode formula ∈ languageOver (Γ := Γ) ↔ formula ∈ CNF.satisfiable := by
+  simp [languageOver]
+
+/-- Changing the alphabet of a word of formula symbols preserves its SAT membership. -/
+@[simp] theorem encode_word_mem_languageOver (word : List CodeSymbol) :
+    (finiteWordsOver CodeSymbol Γ).encode word ∈ languageOver ↔ word ∈ language := by
+  simp [languageOver, encodingOver, language]
 
 end Algolean.Problems.SAT
 

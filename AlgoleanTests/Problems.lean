@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.Encoding
+public import Algolean.Problems.Encodings.Basic
 public import Algolean.Problems.SAT.Basic
 
 /-!
