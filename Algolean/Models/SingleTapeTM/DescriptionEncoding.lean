@@ -17,6 +17,8 @@ public import Mathlib.Logic.Equiv.Finset
 * `Description.encoding` stores the largest state number, initial state, and every transition.
 * Each table is a list of rows, and each row lists the cases for the scanned cell.
 * Decoding checks the table dimensions and rejects references to nonexistent states.
+* `wordEncoding` stores words over a fixed finite alphabet using binary symbol codes. Its size
+  grows at most linearly with the number of input symbols.
 
 Each transition uses a binary numeric code. Separate markers delimit rows, tables, and fields.
 The machine's states are numbered from zero through `states`.
@@ -84,5 +86,58 @@ theorem decode_bitEncoding_eq_some_iff {word : List CodeSymbol} {bits : List Boo
     bitEncoding.decode word = some bits ↔ word = bitEncoding.encode bits := by
   simp only [bitEncoding, Encoding.decode_comp_eq_some_iff, decode_words_eq_some_iff]
   simp [encodingList, Encoding.comp, words]
+
+omit [Fintype Symbol] in
+/--
+A word over the fixed finite alphabet is stored as a list of binary symbol codes. Each symbol
+code has an ending, and the list has its own ending. The description alphabet stays the same
+when the input alphabet changes.
+-/
+def wordEncoding : Encoding (List Symbol) CodeSymbol :=
+  (((Encoding.ofEncodable Symbol).list.comp (words RowSymbol 2)).comp
+    (words TableSymbol 1)).comp (words BodySymbol 1)
+
+omit [Fintype Symbol] in
+/-- The input encoding counts every symbol code, its ending, and the ending of the whole word. -/
+@[simp] theorem length_wordEncoding (word : List Symbol) :
+    (wordEncoding.encode word).length =
+      (word.map (fun symbol => ((Encoding.ofEncodable Symbol).encode symbol).length)).sum +
+        word.length + 1 := by
+  simp [wordEncoding, Encoding.comp]
+
+omit [Fintype Symbol] in
+/-- Every decoded input symbol needs an ending in the supplied word, so decoded words fit in it. -/
+theorem length_le_of_decode_wordEncoding {word : List CodeSymbol} {input : List Symbol}
+    (h : wordEncoding.decode word = some input) : input.length + 1 ≤ word.length := by
+  obtain ⟨body, hbody, h⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp h
+  obtain ⟨table, htable, h⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp h
+  obtain ⟨row, hrow, h⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp h
+  rw [decode_words_eq_some_iff.mp hbody, decode_words_eq_some_iff.mp htable,
+    decode_words_eq_some_iff.mp hrow]
+  simpa using Encoding.length_le_of_decode_list (Encoding.ofEncodable Symbol) h
+
+omit [Fintype Symbol] in
+/--
+For a fixed finite alphabet, encoding a word increases its length by at most a constant factor
+and one ending symbol. The factor depends on the alphabet's chosen symbol codes, not on the word.
+-/
+theorem exists_wordEncoding_length_bound [Finite Symbol] :
+    ∃ factor : ℕ, ∀ word : List Symbol,
+      (wordEncoding.encode word).length ≤ factor * word.length + 1 := by
+  classical
+  let := Fintype.ofFinite Symbol
+  let width := Finset.univ.sup (fun symbol : Symbol =>
+    ((Encoding.ofEncodable Symbol).encode symbol).length)
+  refine ⟨width + 1, ?_⟩
+  intro word
+  induction word with
+  | nil => simp
+  | cons symbol rest ih =>
+    have hsymbol : ((Encoding.ofEncodable Symbol).encode symbol).length ≤ width :=
+      Finset.le_sup (f := fun symbol : Symbol =>
+        ((Encoding.ofEncodable Symbol).encode symbol).length) (Finset.mem_univ symbol)
+    simp only [length_wordEncoding, List.map_cons, List.sum_cons, List.length_cons] at ih ⊢
+    simp only [Nat.mul_add, Nat.mul_one]
+    lia
 
 end Cslib.Turing.SingleTapeTM.Description
