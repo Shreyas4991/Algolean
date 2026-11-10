@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
+public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
 
 /-!
 # Adding one to a binary word
@@ -20,6 +21,10 @@ The machine changes each initial one bit to zero while moving right. It then wri
 zero or blank and returns to the first cell. It preserves the control state and uses exactly twice
 the number of initial one bits plus two head moves. The pure Lean functions in this file describe
 the expected output, the carry length, and the numeric value used in the correctness proof.
+
+`incrementLeft` stores the most significant bit first and adds a cell on the left on overflow.
+It works over two chosen symbols of any fixed alphabet and preserves the region beyond the
+blank on the right. This lets a counter grow away from an input stored to its right.
 -/
 
 @[expose] public section
@@ -222,5 +227,144 @@ theorem increment_complexity (bits : List Bool) (s : TMState tm)
   obtain ⟨cost, final, hc, ht, hspace, htotal⟩ := (increment_correct bits s hs).space
   have := carryCount_le_length bits
   exact ⟨cost, final, hc, by lia, by lia, by lia⟩
+
+private theorem carryTail_shape (bits : List Bool) :
+    carryTail bits = [] ∨ ∃ rest, carryTail bits = false :: rest := by
+  induction bits with
+  | nil => exact Or.inl rfl
+  | cons bit bits ih => cases bit <;> simp_all
+
+section LeftCounter
+
+open Copying
+
+variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
+variable {counter : SingleTapeTM Γ} [DecidableEq counter.State]
+
+/--
+This machine template changes consecutive one bits to zero while moving left. It stops on
+the first zero or blank. The containing machine fixes both digit symbols once for all inputs.
+-/
+def carryLeft (counter : SingleTapeTM Γ) (zero one : Γ) :
+    Prog (TMQuery counter) Unit := do [TMQuery counter]
+  whileₜ (tape =ₜ some one) do
+    tape ←ₜ some zero
+    moveₜ .Left
+
+/-- Propagating the carry preserves both neighboring regions and uses one move per changed bit. -/
+theorem carryLeft_correct (zero one : Γ) (hne : zero ≠ one)
+    (left tail : StackTape Γ) (bits : List Bool) (s : TMState counter)
+    (htape : s.config.BiTape =
+      (BiTape.segment left (bits.map (fun bit => if bit then one else zero)) tail).mirror) :
+    Runs (carryLeft counter zero one) s
+      (BiTape.segment (StackTape.prepend (List.replicate (carryCount bits) zero) left)
+        ((carryTail bits).map (fun bit => if bit then one else zero)) tail).mirror
+      (s.headPos - carryCount bits) (carryCount bits) := by
+  induction bits generalizing left s with
+  | nil => simp [carryLeft, htape]
+  | cons bit bits ih =>
+    cases bit with
+    | false => simp [carryLeft, htape, hne]
+    | true =>
+      unfold carryLeft
+      apply runs_while_step (by simp [htape])
+      have hb : Runs (do
+          FreeM.lift (.write (some zero))
+          FreeM.lift (.move .Left)) s
+          (BiTape.segment (StackTape.cons (some zero) left)
+            (bits.map (fun bit => if bit then one else zero)) tail).mirror
+          (s.headPos - 1) 1 := by
+        cases bits <;>
+          simpa [htape, BiTape.segment, BiTape.mirror, BiTape.write, BiTape.moveLeft,
+            sub_eq_add_neg] using (write_correct s (some zero)).append_move .Left
+      have hr := hb.seq (q := carryLeft counter zero one)
+        (second := (BiTape.segment
+          (StackTape.prepend (List.replicate (carryCount (true :: bits)) zero) left)
+          ((carryTail (true :: bits)).map (fun bit => if bit then one else zero)) tail).mirror)
+        (pos₂ := s.headPos - carryCount (true :: bits)) (time₂ := carryCount bits) (by
+          intro middle hmiddle hpos
+          simpa [hpos, List.replicate_succ', StackTape.prepend_append, sub_eq_add_neg,
+            Int.add_assoc, Int.add_comm, Int.add_left_comm] using
+            ih (StackTape.cons (some zero) left) middle
+              (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
+      simpa [carryLeft, Nat.add_comm] using hr
+
+/--
+This machine template adds one to a binary word whose most significant bit comes first.
+The containing machine fixes the two distinct digit symbols once for every input length.
+It starts and finishes at the word's first cell. Overflow adds a cell on the left, where the
+tape must be blank; the region beyond the blank on the right remains unchanged.
+-/
+def incrementLeft (counter : SingleTapeTM Γ) (zero one : Γ) :
+    Prog (TMQuery counter) Unit := do [TMQuery counter]
+  seekRightBlank counter
+  moveₜ .Left
+  carryLeft counter zero one
+  tape ←ₜ some one
+  seekRightBlank counter
+  seekLeftEnd counter
+
+/--
+Incrementing preserves the neighboring region and control state. The head finishes at the
+first output bit, and the number of moves is at most four times the input length plus five.
+-/
+theorem incrementLeft_correct (zero one : Γ) (hne : zero ≠ one) (bits : List Bool)
+    (tail : StackTape Γ) (s : TMState counter)
+    (htape : s.config.BiTape = BiTape.segment StackTape.nil
+      (bits.map (fun bit => if bit then one else zero)) tail) :
+    let output := (incrementBits bits.reverse).reverse.map (fun bit => if bit then one else zero)
+    ∃ moves, Runs (incrementLeft counter zero one) s
+      (BiTape.segment StackTape.nil output tail)
+      (s.headPos + bits.length - output.length) moves ∧ moves ≤ 4 * bits.length + 5 := by
+  let digit := fun bit : Bool => if bit then one else zero
+  let count := carryCount bits.reverse
+  let higher := (carryTail bits.reverse).tail.map digit
+  let output := (incrementBits bits.reverse).reverse.map digit
+  have houtput : output.reverse = List.replicate count zero ++ one :: higher := by
+    simp only [output, List.map_reverse, List.reverse_reverse]
+    rw [← incrementBits_eq]
+    simp [digit, count, higher]
+  have hstart := (seekRightBlank_segment StackTape.nil (bits.map digit) tail s htape).append_move
+    .Left
+  have hc := hstart.seq (q := do
+      carryLeft counter zero one
+      FreeM.lift (.write (some one)))
+    (second := BiTape.segment (StackTape.mapSome higher) (one :: List.replicate count zero) tail)
+    (pos₂ := s.headPos + bits.length - 1 - count) (time₂ := count) (by
+      intro middle hmiddle hpos
+      have hmirror : middle.config.BiTape =
+          (BiTape.segment (StackTape.cons none tail)
+            (bits.reverse.map digit) StackTape.nil).mirror := by
+        have ht := congrArg SingleTapeTM.Cfg.BiTape hmiddle
+        cases hx : (bits.map digit).reverse <;>
+          simpa [List.map_reverse, hx, BiTape.segment, BiTape.mirror, BiTape.moveLeft] using ht
+      have hw := (carryLeft_correct zero one hne (StackTape.cons none tail) StackTape.nil
+        bits.reverse middle hmirror).append_write (some one)
+      rcases carryTail_shape bits.reverse with htail | ⟨rest, htail⟩ <;>
+        simpa [digit, count, higher, htail, hpos, BiTape.segment, BiTape.mirror, BiTape.write,
+          sub_eq_add_neg, add_assoc] using hw)
+  have he := hc.seq (q := seekRightBlank counter)
+    (second := BiTape.segment (StackTape.mapSome output.reverse) [] tail)
+    (pos₂ := s.headPos + bits.length) (time₂ := count + 1) (by
+      intro middle hmiddle hpos
+      simpa [houtput, hpos, sub_eq_add_neg, add_assoc] using
+        seekRightBlank_segment (StackTape.mapSome higher) (one :: List.replicate count zero) tail
+          middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
+  have hr := he.seq (q := seekLeftEnd counter)
+    (second := BiTape.segment StackTape.nil output tail)
+    (pos₂ := s.headPos + bits.length - output.length) (time₂ := output.length + 2) (by
+      intro middle hmiddle hpos
+      simpa [hpos] using seekLeftEnd_segment StackTape.nil output.reverse [] tail middle
+        (by simpa using congrArg SingleTapeTM.Cfg.BiTape hmiddle))
+  refine ⟨(bits.map digit).length + 1 + count + (count + 1) + (output.length + 2), ?_, ?_⟩
+  · simpa [incrementLeft, bind_assoc, digit, output] using hr
+  · have hc := carryCount_le_length bits.reverse
+    have hl := length_incrementBits_le bits.reverse
+    simp only [List.length_map, List.length_reverse] at *
+    dsimp only [count, output] at *
+    simp only [List.length_map, List.length_reverse] at *
+    lia
+
+end LeftCounter
 
 end Algolean.Algorithms.SingleTapeTuringMachines

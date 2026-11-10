@@ -147,6 +147,17 @@ variable {Symbol : Type}
       segment left (symbol :: word) tail := by
   cases word <;> simp [segment, moveLeft]
 
+/-- Crossing a word puts its symbols in reverse order to the left of the head. -/
+theorem segment_moveRight_iterate (left : StackTape Symbol) (crossed suffix : List Symbol)
+    (tail : StackTape Symbol) :
+    moveRight^[crossed.length] (segment left (crossed ++ suffix) tail) =
+      segment (StackTape.prepend crossed.reverse left) suffix tail := by
+  induction crossed generalizing left with
+  | nil => simp
+  | cons symbol crossed ih =>
+    simpa [Function.iterate_succ_apply, List.reverse_cons, StackTape.prepend_append] using
+      ih (StackTape.cons (some symbol) left)
+
 @[simp] theorem segment_write (left : StackTape Symbol) (old symbol : Symbol) (word : List Symbol)
     (tail : StackTape Symbol) :
     (segment left (old :: word) tail).write (some symbol) =

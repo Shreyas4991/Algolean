@@ -30,6 +30,7 @@ public import AlgoleanTests.SingleTapeTMExamples
 public import AlgoleanTests.SingleTapeTMReductions
 public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.TMSAT
+public import AlgoleanTests.TMSATParsing
 public import AlgoleanTests.TMSATToSAT
 public import AlgoleanTests.TMSATToSATTape
 public import AlgoleanTests.WordRAMExamples

@@ -33,6 +33,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
 public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
 public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialFields
 public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter
+public import Algolean.Algorithms.SingleTapeTuringMachines.Reading
 public import Algolean.Algorithms.SingleTapeTuringMachines.Regions
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
@@ -59,7 +60,9 @@ public import Algolean.Complexity.Reductions.NPToTMSAT.Verifier
 public import Algolean.Complexity.Reductions.TMSATToSAT.Computation
 public import Algolean.Complexity.Reductions.TMSATToSAT.Formula
 public import Algolean.Complexity.Reductions.TMSATToSAT.Initial
+public import Algolean.Complexity.Reductions.TMSATToSAT.Parsing
 public import Algolean.Complexity.Reductions.TMSATToSAT.Reduction
+public import Algolean.Complexity.Reductions.TMSATToSAT.Rows
 public import Algolean.Complexity.Reductions.TMSATToSAT.Size
 public import Algolean.Complexity.Reductions.TMSATToSAT.Tape
 public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
