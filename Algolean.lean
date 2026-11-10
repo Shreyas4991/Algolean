@@ -33,6 +33,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
 public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
 public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialFields
 public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter
+public import Algolean.Algorithms.SingleTapeTuringMachines.Regions
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
@@ -60,6 +61,7 @@ public import Algolean.Complexity.Reductions.TMSATToSAT.Formula
 public import Algolean.Complexity.Reductions.TMSATToSAT.Initial
 public import Algolean.Complexity.Reductions.TMSATToSAT.Reduction
 public import Algolean.Complexity.Reductions.TMSATToSAT.Size
+public import Algolean.Complexity.Reductions.TMSATToSAT.Tape
 public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
 public import Algolean.Complexity.Reductions.TMSATToSAT.Variables
 public import Algolean.FreeWP.Effects

@@ -19,7 +19,6 @@ public import Algolean.Complexity.Reductions.TMSATToSAT.Size
 * `reduceWord_length_polynomial` bounds the output length by a polynomial in the input length.
 
 The construction and supporting proofs are in `Formula`. The length estimates are in `Size`.
-The machine that writes the formula and its running-time proof are not yet implemented.
 -/
 
 public section
