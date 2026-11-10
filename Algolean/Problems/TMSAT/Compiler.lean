@@ -12,7 +12,7 @@ public import Algolean.Problems.TMSAT.Encoding
 /-!
 # Building TMSAT instances from query verifiers
 
-* `Instance.ofQueryVerifier` compiles a query verifier and supplies its transition bound.
+* `Instance.ofQueryVerifier` compiles a query verifier and provides its transition bound.
 * A compiled instance is satisfiable exactly when some certificate of the specified length
   makes the query verifier produce an output starting with the chosen accepting symbol.
 * The same equivalence holds for the encoded TMSAT language.
@@ -33,7 +33,7 @@ variable {Γ : Type} [Fintype Γ]
 variable {f : List (TapeSymbol Γ) → List (TapeSymbol Γ)}
 
 /--
-This instance uses the compiled query verifier and its affine transition bound. The certificate
+This instance uses the compiled query verifier and its proved transition bound. The certificate
 length stays fixed, and the time bound uses the length of the full input-certificate word.
 -/
 noncomputable def Instance.ofQueryVerifier (computer : TMQuery.TimeComputable f)

@@ -19,7 +19,7 @@ public import Algolean.Models.SingleTapeTM.Composition.Relabel
 * A true literal makes its clause true. The program then erases the rest of that clause.
   A clause with no true literal makes the whole formula false.
 * Lookup preserves the unread formula and the certificate. The same certificate assignment
-  therefore supplies every variable's value throughout the computation.
+  therefore provides every variable's value throughout the computation.
 * `evaluate_correct` proves that the program leaves only the formula's truth value on the tape,
   with the head on that value. On an encoded pair of length `n`, it makes at most
   `25 * (n + 1) ^ 4` head moves.
@@ -51,7 +51,7 @@ instance : Fintype Flag := .ofList [.checking, .satisfied, .unsatisfied]
 
 /--
 This machine gives distinct names to lookup's states and to the evaluator's three states.
-Its transition table preserves the current symbol and halts; the query program supplies the
+Its transition table preserves the current symbol and halts; the query program provides the
 instructions used during evaluation.
 -/
 abbrev machine : SingleTapeTM Symbol where

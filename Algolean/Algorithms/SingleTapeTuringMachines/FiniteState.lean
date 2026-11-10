@@ -35,7 +35,7 @@ variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 
 /--
-This supplies a rule for changing state while reading a tape: `next q a` is the state to enter
+This defines a rule for changing state while reading a tape: `next q a` is the state to enter
 after reading symbol `a` in state `q`. The lists `states` and `symbols` let the program find the
 current state and symbol by comparing them with each list element, from first to last.
 -/
@@ -57,6 +57,9 @@ namespace FiniteState
 This Turing machine program compares the symbol under the head with each element of
 `table.symbols`, from first to last. When it finds a match `a`, it sets the state to
 `table.next label a`. It leaves the head and tape symbols unchanged. On a blank, it does nothing.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def updateForSymbol (table : ScanTable tm) (label : tm.State) : Prog (TMQuery tm) Unit :=
   select table.symbols (fun symbol => .tapeIs (some symbol))
@@ -80,6 +83,9 @@ theorem updateForSymbol_correct (table : ScanTable tm)
 This Turing machine program compares the current state with each name in `table.states`, from
 first to last. When it finds a match `q`, it runs `updateForSymbol table q` to read the current
 tape symbol and change the state. If the state is `none`, it leaves the machine unchanged.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def updateFromTable (table : ScanTable tm) : Prog (TMQuery tm) Unit :=
   select table.states (fun label => .stateIs (some label)) (updateForSymbol table)
@@ -108,7 +114,10 @@ This Turing machine program repeatedly reads the symbol under the head, changes 
 and preserves every tape symbol. If the state is `none`, it moves without changing the state.
 
 The lists and state-change rule in `table` are chosen when constructing the program. This one
-program handles all input lengths. Its input is supplied through the initial tape and state.
+program handles all input lengths. It reads the initial tape and state during execution.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def scan (table : ScanTable tm) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do

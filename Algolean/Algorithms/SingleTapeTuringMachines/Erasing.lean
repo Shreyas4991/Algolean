@@ -46,6 +46,9 @@ variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 /--
 This Turing machine program erases the current cell and moves right. If all cells to its left
 are blank, the remaining word then begins under the head.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def eraseAndMove (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   tape ←ₜ none
@@ -61,6 +64,9 @@ theorem eraseAndMove_correct (symbol : Symbol) (rest : List Symbol) (s : TMState
 /--
 This Turing machine program erases symbols while moving right and stops on the first blank.
 When started at the first symbol of a word on an otherwise blank tape, it clears the whole tape.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def eraseRight (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -87,6 +93,9 @@ theorem eraseRight_correct (word : List Symbol) (s : TMState tm)
 This Turing machine program erases cells while moving right until it reaches `ending`.
 It leaves that symbol and everything after it untouched. Its correctness theorem requires
 that an occurrence of `ending` lies at or to the right of the starting cell.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def eraseUntil (tm : SingleTapeTM Symbol) (ending : Symbol) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
@@ -118,6 +127,9 @@ theorem eraseUntil_correct (ending : Symbol) (crossed rest : List Symbol) (s : T
 `eraseLeft tm` is a Turing machine program that replaces the current occupied cell with a blank and
 moves left, repeating until it reaches an already blank cell. Starting on the last symbol of a
 contiguous block erases the whole block and leaves the head on the blank just before it.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def eraseLeft (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -174,6 +186,9 @@ theorem eraseLeft_correct (left : List Symbol) (bit : Symbol) (s : TMState tm)
 block. It moves left, erases the block while moving backward, and then moves right onto the cell
 that used to hold the first symbol. For an empty block, it returns to the starting blank after two
 moves.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def eraseToLeft (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left
@@ -223,6 +238,9 @@ theorem eraseToLeft_correct (left : List Symbol) (s : TMState tm)
 `eraseBlock tm` is a Turing machine program that starts at the beginning of the input block, scans
 to the blank after it, and erases the symbols on the way back. It finishes at the original head
 coordinate on a blank tape. The recorded allocation and visit histories are retained.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def eraseBlock (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   seekRightBlank tm

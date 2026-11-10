@@ -29,12 +29,22 @@ open scoped TMQuery
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 
-/-- This moves left while the current cell is blank. An occupied cell must exist to its left. -/
+/--
+This moves left while the current cell is blank. An occupied cell must exist to its left.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
+-/
 def seekLeftOccupied (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (tape =ₜ none) do
     moveₜ .Left
 
-/-- This moves right while the current cell is blank. An occupied cell must exist to its right. -/
+/--
+This moves right while the current cell is blank. An occupied cell must exist to its right.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
+-/
 def seekRightOccupied (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (tape =ₜ none) do
     moveₜ .Right

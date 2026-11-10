@@ -120,7 +120,7 @@ theorem length_le_of_decode (next stop : Γ) {word certificate : List Γ}
           lia
       · simp at h
 
-/-- A recovered certificate fits the original bound when the supplied word has the fixed length. -/
+/-- A recovered certificate fits the original bound when the encoded word has the fixed length. -/
 theorem length_le_bound_of_decode (next stop : Γ) {bound : Nat} {word certificate : List Γ}
     (h : decode next stop word = some certificate) (hlen : word.length = 2 * bound + 1) :
     certificate.length ≤ bound := by

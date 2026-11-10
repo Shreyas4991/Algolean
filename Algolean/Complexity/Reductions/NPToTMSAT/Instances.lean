@@ -12,7 +12,7 @@ public import Algolean.Problems.TMSAT.Compiler
 /-!
 # Turning an NP verifier into TMSAT instances
 
-* `NP.exists_tmsat_instances` supplies one finite transition table and two polynomials for an
+* `NP.exists_tmsat_instances` provides one finite transition table and two polynomials for an
   NP language. On input `x`, the resulting instance contains that table, `x`, the certificate
   length, and the transition bound.
 * The instance is satisfiable exactly when `x` belongs to the original language.
@@ -20,8 +20,9 @@ public import Algolean.Problems.TMSAT.Compiler
   polynomial in the original input length.
 
 The machine description is fixed for the language, independently of the input. The query compiler
-adds its constant factor and constant term to the verifier's polynomial time bound. The bounds
-are evaluated at the length of the full input-certificate pair, not just the original input.
+adds a constant factor and a constant term to the verifier's time bound. The verifier's polynomial
+is evaluated at the length of the input and certificate together, including their separator.
+The resulting certificate and transition bounds depend only on the original input length.
 -/
 
 @[expose] public section
@@ -35,9 +36,10 @@ variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 /--
 Every NP language has one fixed Turing machine description and polynomial certificate and time
 bounds that give equivalent TMSAT instances. Both bounds depend only on the original input length.
-The description is compiled once from the normalized verifier; it does not depend on the input.
-This statement supplies the instances and their correctness. Producing their encoded words still
-requires a Turing machine implementation.
+The description is compiled once from the prepared verifier; it does not depend on the input.
+This statement gives the instances and proves their correctness. The serializer in
+`Algorithms/SingleTapeTuringMachines/TMSAT.lean` writes their encoded words for the final
+Karp reduction.
 -/
 theorem NP.exists_tmsat_instances {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
     ∃ (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (m t : Polynomial ℕ),
@@ -62,8 +64,8 @@ theorem NP.exists_tmsat_instances {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
 /--
 The equivalent TMSAT instances can be encoded over the original alphabet with polynomially
 bounded length. The fixed machine description contributes a constant; the input contributes
-linearly, and the two unary fields contribute their polynomial values. This is a size bound,
-not yet a proof that a Turing machine writes the encoding in polynomial time.
+linearly, and the two unary fields contribute their polynomial values. The serializer's
+polynomial running time is proved separately in `Algorithms/SingleTapeTuringMachines/TMSAT.lean`.
 -/
 theorem NP.exists_tmsat_instances_with_size {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
     ∃ (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (m t p : Polynomial ℕ),

@@ -22,6 +22,7 @@ public import AlgoleanTests.QueryExamples
 public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
 public import AlgoleanTests.SAT
+public import AlgoleanTests.Serialization
 public import AlgoleanTests.SingleTapeTMAlphabet
 public import AlgoleanTests.SingleTapeTMCompiler
 public import AlgoleanTests.SingleTapeTMComposition

@@ -77,11 +77,11 @@ This record stores one program that computes the specified function on every inp
 with a bound on its time as a function of input length.
 -/
 structure TimeComputable (f : List Symbol → List Symbol) where
-  /-- This machine supplies the tape symbols, the named states, and the initial state. -/
+  /-- This machine specifies the tape symbols, the named states, and the initial state. -/
   tm : SingleTapeTM Symbol
-  /-- This field supplies a way to check whether two tape symbols are equal. -/
+  /-- This field defines a way to check whether two tape symbols are equal. -/
   [symbolDecidableEq : DecidableEq Symbol]
-  /-- This field supplies a way to check whether two machine states are equal. -/
+  /-- This field defines a way to check whether two machine states are equal. -/
   [stateDecidableEq : DecidableEq tm.State]
   /-- The same program runs for every input and receives the input through its initial tape. -/
   program : Prog (TMQuery tm) Unit
