@@ -12,12 +12,12 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Writing
 /-!
 # Tape regions for writing the TMSAT-to-SAT reduction
 
-The tape contains working words, the original input, and the output, in that order. A blank
-separates consecutive words. Each word begins with one fixed symbol `marker : Γ`, so an empty
-working word or output still has an occupied first cell. The marker is part of the storage
-format; the original input follows its marker without any changes to its symbols.
+The machine uses one tape. From left to right, it stores temporary data, the original input,
+and the output in separate regions. A blank separates consecutive regions. Each region begins
+with one fixed symbol `marker : Γ`, so even an empty region has an occupied first cell.
+The original input follows its marker without any changes to its symbols.
 
-`prepare` creates empty working words and an empty output region, preserving every input
+`prepare` creates empty working regions and an empty output region, preserving every input
 symbol. It finishes on the first region's marker. With `k` working regions and an input of
 length `n`, it uses exactly `2 * n + 2 * k + 7` head moves.
 
