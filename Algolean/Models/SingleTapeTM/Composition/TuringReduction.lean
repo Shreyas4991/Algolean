@@ -13,8 +13,9 @@ public import Algolean.Complexity.PolytimeBasicClasses
 # Solving one problem by asking questions about another
 
 This file describes Turing reductions with polynomial time bounds. A fixed tape program solves
-one yes/no problem using an assumed solver for another. The solver is called an oracle. The
-program may ask several questions, and earlier answers may determine later questions.
+one yes/no problem using an assumed solver for another. Both problems and the reduction machine
+use the same fixed finite alphabet. The solver is called an oracle. The program may ask several
+questions, and earlier answers may determine later questions.
 
 [OracleInterface](##Algolean.Algorithms.OracleInterface) explains how a program asks a question
 and receives its answer. Each request and each head move costs one time step; the oracle's own
@@ -40,15 +41,18 @@ namespace Algolean.Algorithms
 
 open Cslib Cslib.Turing Polynomial TMQuery
 
+variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
+
 /--
 This function gives the correct yes or no answer for every input to the specified problem. It
 describes the oracle's answers without requiring an algorithm for finding them.
 -/
-noncomputable def languageOracle (language : Language Bool) (input : List Bool) : Bool :=
+noncomputable def languageOracle (language : Language Symbol) (input : List Symbol) : Bool :=
   @decide (input ∈ language) (Classical.propDecidable _)
 
+omit [Inhabited Symbol] [Fintype Symbol] in
 /-- The oracle returns true exactly when the problem's answer is yes. -/
-@[simp] theorem languageOracle_eq_true (language : Language Bool) (input : List Bool) :
+@[simp] theorem languageOracle_eq_true (language : Language Symbol) (input : List Symbol) :
     languageOracle language input = true ↔ input ∈ language := by
   simp [languageOracle]
 
@@ -56,9 +60,10 @@ noncomputable def languageOracle (language : Language Bool) (input : List Bool) 
 The program finishes in a yes or no state within the allowed time, and its answer agrees with
 the required answer. The supplied solver answers any requests during execution.
 -/
-def OracleInterface.DecidesWithin {tm : SingleTapeTM Bool} [DecidableEq tm.State]
-    (interface : OracleInterface tm) (oracle : List Bool → Bool)
-    (program : Prog (TMQuery tm) Unit) (input : List Bool) (accept : Prop) (time : ℕ) : Prop :=
+def OracleInterface.DecidesWithin {tm : SingleTapeTM Symbol}
+    [DecidableEq Symbol] [DecidableEq tm.State]
+    (interface : OracleInterface tm) (oracle : List Symbol → Bool)
+    (program : Prog (TMQuery tm) Unit) (input : List Symbol) (accept : Prop) (time : ℕ) : Prop :=
   ∃ fuel result final, interface.execute oracle fuel program (TMState.init tm input) =
       some (result, final) ∧
     (final.machine.config.state = some interface.yes ∨
@@ -67,11 +72,15 @@ def OracleInterface.DecidesWithin {tm : SingleTapeTM Bool} [DecidableEq tm.State
 
 /--
 One fixed program solves the source problem using a solver for the target problem. Its head
-moves and requests together have a polynomial time bound.
+moves and requests together have a polynomial time bound. The source inputs, oracle queries,
+and machine tape all use the same alphabet `Symbol`. The oracle records its Boolean answer in
+one of two distinct control states, so the tape alphabet may even have only one symbol.
 -/
-structure TuringReduction (source target : Language Bool) where
+structure TuringReduction (source target : Language Symbol) where
   /-- This machine supplies the named states and the starting state. -/
-  tm : SingleTapeTM Bool
+  tm : SingleTapeTM Symbol
+  /-- This field supplies a way to check whether two tape symbols are equal. -/
+  [symbolDecidableEq : DecidableEq Symbol]
   /-- This field supplies a way to check whether two machine states are equal. -/
   [stateDecidableEq : DecidableEq tm.State]
   /--
@@ -95,40 +104,45 @@ structure TuringReduction (source target : Language Bool) where
     (input ∈ source) (poly.eval input.length)
 
 /-- A [TuringReduction](##Algolean.Algorithms.TuringReduction) exists between the two problems. -/
-def TuringReducible (source target : Language Bool) : Prop :=
+def TuringReducible (source target : Language Symbol) : Prop :=
   Nonempty (TuringReduction source target)
 
 namespace TuringReduction
 
 /-- This machine has three states, enough to issue a request and record either answer. -/
-abbrev identityControl : SingleTapeTM Bool where
+abbrev identityControl (Symbol : Type) [Inhabited Symbol] [Fintype Symbol] :
+    SingleTapeTM Symbol where
   State := Fin 3
   q₀ := 2
   tr _ symbol := (⟨symbol, none⟩, none)
 
 /-- State 0 issues a request, state 1 records yes, and state 2 records no. -/
-def identityInterface : OracleInterface identityControl where
+def identityInterface (Symbol : Type) [Inhabited Symbol] [Fintype Symbol] :
+    OracleInterface (identityControl Symbol) where
   request := 0
   yes := 1
   no := 2
-  request_ne_yes := by decide
-  request_ne_no := by decide
-  yes_ne_no := by decide
+  request_ne_yes := (by decide : (0 : Fin 3) ≠ 1)
+  request_ne_no := (by decide : (0 : Fin 3) ≠ 2)
+  yes_ne_no := (by decide : (1 : Fin 3) ≠ 2)
 
 /--
 A problem reduces to itself by asking its oracle about the unchanged input. This program makes
 one request and costs one time step.
 -/
-noncomputable def refl (language : Language Bool) : TuringReduction language language where
-  tm := identityControl
+noncomputable def refl (language : Language Symbol) : TuringReduction language language where
+  tm := identityControl Symbol
+  symbolDecidableEq := Classical.decEq Symbol
   stateDecidableEq := inferInstanceAs (DecidableEq (Fin 3))
-  interface := identityInterface
-  program := identityInterface.ask
+  interface := identityInterface Symbol
+  program := (identityInterface Symbol).ask
   poly := 1
   correct input := by
-    let s := TMState.init identityControl input
+    classical
+    let s := TMState.init (identityControl Symbol) input
     let answer :=
-      if languageOracle language input then identityInterface.yes else identityInterface.no
+      if languageOracle language input then (identityInterface Symbol).yes
+      else (identityInterface Symbol).no
     refine ⟨1, ⟨(), ⟨1, 0⟩⟩, ⟨{s with config.state := some answer}, 0⟩, ?_, ?_, ?_, ?_⟩
     · have hquery : OracleInterface.queryWord s.config.BiTape = input :=
         OracleInterface.queryWord_mk₁ input
@@ -140,7 +154,7 @@ noncomputable def refl (language : Language Bool) : TuringReduction language lan
 end TuringReduction
 
 /-- Every problem has a Turing reduction to itself. -/
-theorem TuringReducible.refl (language : Language Bool) : TuringReducible language language :=
+theorem TuringReducible.refl (language : Language Symbol) : TuringReducible language language :=
   ⟨TuringReduction.refl language⟩
 
 end Algolean.Algorithms
