@@ -203,3 +203,13 @@ def language : Language CodeSymbol := encodedLanguage CNF.satisfiable encoding
     encoding.encode formula ∈ language ↔ formula ∈ CNF.satisfiable := by simp [language]
 
 end Algolean.Problems.SAT
+
+namespace Algolean.Problems
+
+/--
+SAT is the language of encoded CNF formulas that have a satisfying assignment. Its variable names
+are binary words, and incorrectly encoded words do not belong to it.
+-/
+abbrev SAT : Language SAT.CodeSymbol := SAT.language
+
+end Algolean.Problems
