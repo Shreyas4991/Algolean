@@ -203,27 +203,30 @@ example (input output : List Bool) (time : ℕ) :
   simp [forever_fails] at h
 
 /-- This program asks about successive suffixes of the input until the solver answers yes. -/
-def suffixSearch : Prog (TMQuery TuringReduction.identityControl) Unit :=
-    do [TMQuery TuringReduction.identityControl]
-  whileₜ (notₜ state =ₜ some TuringReduction.identityInterface.yes) do
-    TuringReduction.identityInterface.ask
-    ifₜ state =ₜ some TuringReduction.identityInterface.no then
+def suffixSearch (Symbol : Type) [Inhabited Symbol] [Fintype Symbol] :
+    Prog (TMQuery (TuringReduction.identityControl Symbol)) Unit :=
+    do [TMQuery (TuringReduction.identityControl Symbol)]
+  whileₜ (notₜ state =ₜ some (TuringReduction.identityInterface Symbol).yes) do
+    (TuringReduction.identityInterface Symbol).ask
+    ifₜ state =ₜ some (TuringReduction.identityInterface Symbol).no then
       moveₜ .Right
     else
       pure ()
 
 -- Two requests and one head move cost three steps. Both requests run inside structured control.
 example :
-    (TuringReduction.identityInterface.execute (fun input => input == [false]) 8 suffixSearch
-      (TMState.init TuringReduction.identityControl [true, false])).map
+    ((TuringReduction.identityInterface Bool).execute (fun input => input == [false]) 8
+      (suffixSearch Bool)
+      (TMState.init (TuringReduction.identityControl Bool) [true, false])).map
       (fun (result, final) => (final.machine.config.state, final.machine.headPos,
         result.tell.steps, result.tell.cellsAllocated, final.machine.cellsAllocated.card,
         final.fuel)) = some (some 1, 1, 3, 0, 2, 0) := by
   decide +kernel
 
 -- Losing the fuel needed for the last loop test fails the whole execution.
-example : TuringReduction.identityInterface.execute (fun input => input == [false]) 7
-    suffixSearch (TMState.init TuringReduction.identityControl [true, false]) = none := by
+example : (TuringReduction.identityInterface Bool).execute (fun input => input == [false]) 7
+    (suffixSearch Bool) (TMState.init (TuringReduction.identityControl Bool) [true, false]) =
+    none := by
   rfl
 
 -- Query extraction stops at a blank even when later cells contain data.
@@ -231,7 +234,32 @@ example : OracleInterface.queryWord
     ⟨some true, ∅, StackTape.cons none (StackTape.mapSome [false])⟩ = [true] := by
   simp [OracleInterface.queryWord, StackTape.cons, StackTape.mapSome]
 
-example (language : Algorithms.Language Bool) : TuringReducible language language :=
+example {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
+    (language : Algorithms.Language Symbol) : TuringReducible language language :=
   TuringReducible.refl language
+
+-- The same program asks about words over three symbols without converting them to bits.
+example :
+    ((TuringReduction.identityInterface (Fin 3)).execute (fun input => input == [2]) 8
+      (suffixSearch (Fin 3))
+      (TMState.init (TuringReduction.identityControl (Fin 3)) [1, 2])).map
+      (fun (result, final) => (final.machine.config.state, final.machine.headPos,
+        result.tell.steps, result.tell.cellsAllocated, final.machine.cellsAllocated.card,
+        final.fuel)) = some (some 1, 1, 3, 0, 2, 0) := by
+  decide +kernel
+
+-- Even over one symbol, the control states distinguish yes from no. The last query is empty.
+example :
+    ((TuringReduction.identityInterface Unit).execute (fun input => input.isEmpty) 12
+      (suffixSearch Unit) (TMState.init (TuringReduction.identityControl Unit) [(), ()])).map
+      (fun (result, final) => (final.machine.config.state, final.machine.headPos,
+        result.tell.steps, result.tell.cellsAllocated, final.machine.cellsAllocated.card,
+        final.fuel)) = some (some 1, 2, 5, 1, 3, 0) := by
+  decide +kernel
+
+-- A blank ends a query over any alphabet, including one with more than two symbols.
+example : OracleInterface.queryWord
+    ⟨some (2 : Fin 3), ∅, StackTape.cons none (StackTape.mapSome [0, 1])⟩ = [2] := by
+  simp [OracleInterface.queryWord, StackTape.cons, StackTape.mapSome]
 
 end AlgoleanTests.SingleTapeTMReductions

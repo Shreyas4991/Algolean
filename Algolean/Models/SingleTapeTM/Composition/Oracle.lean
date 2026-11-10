@@ -14,8 +14,9 @@ public import Algolean.Models.SingleTapeTMSyntax
 
 This file lets a tape program ask an assumed solver for answers to a yes/no problem. Such a
 solver is called an oracle. The program asks about the word under the tape head, ending at the
-first blank. Its answer is recorded in the machine state, so later branches and loops can depend
-on it.
+first blank. The query word and the reduction machine use the same fixed finite alphabet;
+only the oracle's answer is Boolean. Its answer is recorded in the machine state, so later
+branches and loops can depend on it.
 
 A request costs one time step and leaves the tape and head unchanged. Head moves also cost one
 time step. Every instruction and loop test uses fuel. The solver's own work is outside this
@@ -42,11 +43,13 @@ namespace Algolean.Algorithms
 
 open Cslib Cslib.Turing TMQuery
 
+variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
+
 /--
 This interface chooses three distinct machine states for issuing a request and recording a yes
 or no answer.
 -/
-structure OracleInterface (tm : SingleTapeTM Bool) where
+structure OracleInterface (tm : SingleTapeTM Symbol) where
   /--
   Setting this state with an update instruction asks the solver about the word under the head.
   -/
@@ -64,22 +67,23 @@ structure OracleInterface (tm : SingleTapeTM Bool) where
 
 namespace OracleInterface
 
-variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
-
 /-- The question is the word starting under the head and ending before the first blank. -/
-def queryWord (contents : BiTape Bool) : List Bool :=
+def queryWord (contents : BiTape Symbol) : List Symbol :=
   match contents.head with
   | none => []
-  | some bit => bit :: (contents.right.toList.takeWhile Option.isSome).filterMap id
+  | some symbol => symbol :: (contents.right.toList.takeWhile Option.isSome).filterMap id
 
+omit [Inhabited Symbol] [Fintype Symbol] in
 /-- Reading a word placed on the initial tape gives back exactly that word. -/
-@[simp] theorem queryWord_mk₁ (input : List Bool) : queryWord (BiTape.mk₁ input) = input := by
-  have h (bits : List Bool) :
-      ((bits.map some).takeWhile Option.isSome).filterMap id = bits := by
-    induction bits <;> simp_all
+@[simp] theorem queryWord_mk₁ (input : List Symbol) : queryWord (BiTape.mk₁ input) = input := by
+  have h (word : List Symbol) :
+      ((word.map some).takeWhile Option.isSome).filterMap id = word := by
+    induction word <;> simp_all
   cases input with
   | nil => rfl
-  | cons bit bits => exact congrArg (List.cons bit) (h bits)
+  | cons symbol rest => exact congrArg (List.cons symbol) (h rest)
+
+variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
 
 open scoped TMQuery
 
@@ -91,7 +95,7 @@ def ask (interface : OracleInterface tm) : Prog (TMQuery tm) Unit := do [TMQuery
 One instruction follows the [ordinary rules](##Algolean.Algorithms.TMQuery.step), except that
 setting the request state obtains an answer from the solver.
 -/
-def step (interface : OracleInterface tm) (oracle : List Bool → Bool)
+def step (interface : OracleInterface tm) (oracle : List Symbol → Bool)
     (q : TMQuery tm α) (next : α → Prog (TMQuery tm) β) (s : TMState tm) :
     FuelExecMonad.Step (TMQuery tm) (TMState tm) TMCost β :=
   match q with
@@ -110,7 +114,7 @@ These execution rules use the [shared
 runner](##Algolean.Algorithms.FuelExecMonad.Interpreter.run) to handle fuel, program sequencing,
 and costs. Requests work inside branches and loops.
 -/
-abbrev interpreter (interface : OracleInterface tm) (oracle : List Bool → Bool) :
+abbrev interpreter (interface : OracleInterface tm) (oracle : List Symbol → Bool) :
     FuelExecMonad.Interpreter (TMQuery tm) (TMState tm) TMCost where
   step := interface.step oracle
   step_bind := by
@@ -119,7 +123,7 @@ abbrev interpreter (interface : OracleInterface tm) (oracle : List Bool → Bool
     all_goals split <;> simp
 
 /-- This model records the results and costs of executing programs with access to the solver. -/
-abbrev model (interface : OracleInterface tm) (oracle : List Bool → Bool) :
+abbrev model (interface : OracleInterface tm) (oracle : List Symbol → Bool) :
     ModelStateM (TMQuery tm) (ExecutionM tm) TMCost :=
   (interface.interpreter oracle).toModel
 
@@ -127,7 +131,7 @@ abbrev model (interface : OracleInterface tm) (oracle : List Bool → Bool) :
 The [shared execution function](##Algolean.Algorithms.FuelExecMonad.execute) runs the program
 with the supplied solver, starting state, and fuel.
 -/
-abbrev execute (interface : OracleInterface tm) (oracle : List Bool → Bool)
+abbrev execute (interface : OracleInterface tm) (oracle : List Symbol → Bool)
     (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm) :=
   FuelExecMonad.execute (interface.model oracle) fuel p s
 
@@ -135,7 +139,7 @@ abbrev execute (interface : OracleInterface tm) (oracle : List Bool → Bool)
 A request costs one time step and one unit of fuel. The answer is recorded in the machine state,
 while the tape and head position stay unchanged.
 -/
-@[simp] theorem execute_ask_succ (interface : OracleInterface tm) (oracle : List Bool → Bool)
+@[simp] theorem execute_ask_succ (interface : OracleInterface tm) (oracle : List Symbol → Bool)
     (fuel : ℕ) (s : TMState tm) :
     interface.execute oracle (fuel + 1) interface.ask s =
       let answer := if oracle (queryWord s.config.BiTape) then interface.yes else interface.no
@@ -146,7 +150,7 @@ while the tape and head position stay unchanged.
   simp [interpreter, step]
 
 /-- One instruction counts exactly the cells it adds to the recorded tape range. -/
-theorem step_cellsAllocated (interface : OracleInterface tm) (oracle : List Bool → Bool)
+theorem step_cellsAllocated (interface : OracleInterface tm) (oracle : List Symbol → Bool)
     (q : TMQuery tm α) (next : α → Prog (TMQuery tm) β) (s : TMState tm) :
     s.cellsAllocated.card + (interface.step oracle q next s).cost.cellsAllocated =
       (interface.step oracle q next s).machine.cellsAllocated.card := by
@@ -158,7 +162,7 @@ theorem step_cellsAllocated (interface : OracleInterface tm) (oracle : List Bool
 The final number of recorded tape cells is the initial number plus the cells newly counted
 during execution. Requests preserve this accounting.
 -/
-theorem execute_cellsAllocated (interface : OracleInterface tm) (oracle : List Bool → Bool)
+theorem execute_cellsAllocated (interface : OracleInterface tm) (oracle : List Symbol → Bool)
     (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm)
     (result : AddWriter TMCost α) (final : ExecutionState tm)
     (h : interface.execute oracle fuel p s = some (result, final)) :
@@ -191,7 +195,7 @@ theorem execute_cellsAllocated (interface : OracleInterface tm) (oracle : List B
         have hu := ih _ _ _ _ hr
         have hs := interface.step_cellsAllocated oracle q next s
         simp only [TMCost.add_cellsAllocated]
-        omega
+        lia
 
 end OracleInterface
 
