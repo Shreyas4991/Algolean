@@ -6,6 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
+public import Algolean.Algorithms.SingleTapeTuringMachines.BasicTMs
 public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 public import Algolean.Models.SingleTapeTM.Composition.TuringReduction
 
@@ -100,12 +101,78 @@ example : {input : List Bool | input.tail = []} ∈ P :=
     ⟨id, [true], ⟨TMQuery.PolyTimeComputable.id⟩, fun _ => Iff.rfl⟩
 
 example (input : List Bool) :
-    input.tail = [] ↔
-      (shortWordReduction.trans (KarpReduction.refl _)).transform input = [true] :=
-  (shortWordReduction.trans (KarpReduction.refl _)).correct input
+    let reduction := shortWordReduction.trans
+      (KarpReduction.refl ({[true]} : Algorithms.Language Bool))
+    input.tail = [] ↔ reduction.transform input = [true] := by
+  simp [KarpReduction.trans, KarpReduction.refl, shortWordReduction]
 
 example : KarpReducible {input : List Bool | input.tail = []} {[true]} :=
-  (show KarpReducible _ _ from ⟨shortWordReduction⟩).trans (KarpReducible.refl _)
+  (show KarpReducible {input : List Bool | input.tail = []} {[true]} from
+    ⟨shortWordReduction⟩).trans (KarpReducible.refl ({[true]} : Algorithms.Language Bool))
+
+/-- This represents the only source symbol by symbol two on a three-symbol shared tape. -/
+def unitSymbol : Unit ↪ Fin 3 := ⟨fun _ => 2, fun _ _ _ => Subsingleton.elim _ _⟩
+
+/--
+This reduction relates a language over one symbol to a language over three symbols. Their
+representations on the shared tape coincide, so its fixed program leaves the tape unchanged.
+-/
+noncomputable def differentAlphabets :
+    KarpReduction {([()] : List Unit)} {([2] : List (Fin 3))}
+      unitSymbol (Function.Embedding.refl (Fin 3)) where
+  transform := id
+  computer := TMQuery.PolyTimeComputable.id
+  correct input := by
+    simp [Problems.symbolLanguage, unitSymbol]
+    rfl
+
+/-- The source word is accepted exactly when its represented target word is accepted. -/
+theorem differentAlphabets_correct (input : List Unit) :
+    input = [()] ↔ differentAlphabets.transform (input.map unitSymbol) = [2] := by
+  simpa using differentAlphabets.correct_input input
+
+/-- Composition keeps the common representation of the middle problem on the same tape. -/
+theorem differentAlphabets_comp :
+    KarpReducible {([()] : List Unit)} {([2] : List (Fin 3))}
+      unitSymbol (Function.Embedding.refl (Fin 3)) := by
+  exact ⟨differentAlphabets.trans (KarpReduction.refl {([2] : List (Fin 3))}
+    (Function.Embedding.refl (Fin 3)))⟩
+
+/-- A tape word using symbol zero is outside the source representation and remains a no answer. -/
+theorem differentAlphabets_invalid :
+    differentAlphabets.transform [0] ∉ Problems.symbolLanguage
+      (Function.Embedding.refl (Fin 3)) {([2] : List (Fin 3))} := by
+  simp [differentAlphabets]
+
+/-- Complementing the represented problems reverses their answers on every shared tape word. -/
+theorem differentAlphabets_complement (input : List (Fin 3)) :
+    input ∉ Problems.symbolLanguage unitSymbol {([()] : List Unit)} ↔
+      differentAlphabets.complementOnTape.transform input ≠ [2] := by
+  simpa using differentAlphabets.complementOnTape.correct input
+
+/-- A polynomial-time target solver gives a solver for the source represented on the shared tape. -/
+theorem differentAlphabets_inP :
+    Problems.symbolLanguage unitSymbol {([()] : List Unit)} ∈ P := by
+  apply differentAlphabets.preservesP_onTape
+  exact ⟨id, [2], ⟨TMQuery.PolyTimeComputable.id⟩, by simp⟩
+
+/--
+Composing the zero-move word conversion with appending false gives a linear time bound.
+The bound includes the possible extra output symbol produced by the first program.
+-/
+theorem reduction_then_append_bound (input : List Bool) :
+    let combined := shortWordReduction.computer.comp
+      (SingleTapeTuringMachines.appendBitPolyTimeComputable (tm := writerControl) false)
+    let := combined.symbolDecidableEq
+    let := combined.stateDecidableEq
+    OutputsWithinTime combined.program input ((true :: input.tail) ++ [false])
+      (2 * input.length + 4) := by
+  have hpoly : (SingleTapeTuringMachines.appendBitPolyTimeComputable
+      (tm := writerControl) false).poly = 2 * Polynomial.X + 2 := rfl
+  convert shortWordReduction.composition_time_bound
+    (SingleTapeTuringMachines.appendBitPolyTimeComputable (tm := writerControl) false) input using 1
+  simp [shortWordReduction, writer, hpoly, Nat.mul_add]
+  lia
 
 /-- This program executes one `.Stop` instruction, which costs one head move without moving. -/
 def stop : Prog (TMQuery writerControl) Unit := do [TMQuery writerControl]

@@ -6,6 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
+public import Mathlib.Control.Basic
 public import Mathlib.Data.Fintype.Sum
 public import Mathlib.Data.Fintype.Option
 public import Mathlib.Logic.Equiv.Fin.Basic
@@ -41,6 +42,10 @@ namespace Algolean.Algorithms.Alphabet
 abbrev Extended (Symbol : Type u) (markers : ℕ) := Symbol ⊕ Fin markers
 
 namespace Extended
+
+/-- At least one fresh marker supplies a chosen symbol of the extended alphabet. -/
+instance [NeZero markers] : Inhabited (Extended Symbol markers) :=
+  inferInstanceAs (Inhabited (Symbol ⊕ Fin markers))
 
 /-- Adding two groups of markers is equivalent to adding their combined number in one step. -/
 def flattenEquiv (Symbol : Type u) (first second : ℕ) :

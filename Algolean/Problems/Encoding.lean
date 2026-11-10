@@ -8,6 +8,7 @@ module
 
 public import Algolean.Problems.Basic
 public import Mathlib.Computability.Encoding
+public import Mathlib.Data.List.Basic
 
 /-!
 # Representing decision problems as languages
@@ -46,5 +47,24 @@ theorem not_mem_encodedLanguage_of_decode_eq_none (problem : DecisionProblem α)
     (encoding : Computability.Encoding α Symbol) {word : List Symbol}
     (h : encoding.decode word = none) : word ∉ encodedLanguage problem encoding := by
   simp [encodedLanguage, h]
+
+/--
+This represents a language on a shared tape alphabet by replacing each symbol with its chosen
+image. Words containing symbols outside that image do not belong to the represented language.
+-/
+def symbolLanguage {Γ Δ : Type} (symbols : Γ ↪ Δ) (language : Language Γ) : Language Δ :=
+  List.map symbols '' language
+
+/-- An injective change of symbols preserves membership of every represented word. -/
+@[simp] theorem mem_symbolLanguage_map {Γ Δ : Type} (symbols : Γ ↪ Δ)
+    (language : Language Γ) (word : List Γ) :
+    word.map symbols ∈ symbolLanguage symbols language ↔ word ∈ language := by
+  simp [symbolLanguage, (List.map_injective_iff.mpr symbols.injective).eq_iff]
+
+/-- Keeping each symbol unchanged leaves the language unchanged. -/
+@[simp] theorem symbolLanguage_refl {Γ : Type} (language : Language Γ) :
+    symbolLanguage (Function.Embedding.refl Γ) language = language := by
+  change List.map id '' language = language
+  simp
 
 end Algolean.Problems

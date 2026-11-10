@@ -85,6 +85,44 @@ def list (entry : Encoding α Γ) : Encoding (List α) (Extended Γ 2) where
     simp only [List.map_cons, List.sum_cons]
     lia
 
+/--
+Successful list decoding requires one ending for each entry and one ending for the whole list.
+Thus the number of decoded entries plus one cannot exceed the supplied word's length, even
+when an entry's decoder accepts more than one spelling of the same value.
+-/
+theorem length_le_of_decode_list (entry : Encoding α Γ)
+    {word : List (Extended Γ 2)} {values : List α}
+    (h : entry.list.decode word = some values) : values.length + 1 ≤ word.length := by
+  have bound (word : List (Extended Γ 2)) (reversed : List Γ) (values : List α)
+      (h : decodeEntries entry word reversed = some values) :
+      values.length + 1 ≤ word.length := by
+    induction word generalizing reversed values with
+    | nil => simp [decodeEntries] at h
+    | cons symbol rest ih =>
+      cases symbol with
+      | inl symbol =>
+        have hb := ih (symbol :: reversed) values h
+        simp only [List.length_cons]
+        lia
+      | inr marker =>
+        by_cases hm : marker = 0
+        · cases hd : entry.decode reversed.reverse with
+          | none => simp [decodeEntries, hm, hd] at h
+          | some value =>
+            cases hr : decodeEntries entry rest [] with
+            | none => simp [decodeEntries, hm, hd, hr] at h
+            | some tail =>
+              have heq : value :: tail = values := by
+                simpa [decodeEntries, hm, hd, hr] using h
+              subst values
+              have hb := ih [] tail hr
+              simp only [List.length_cons]
+              lia
+        · have heq : (reversed = [] ∧ rest = []) ∧ values = [] := by
+            simpa [decodeEntries, hm] using h.symm
+          simp [heq.2]
+  exact bound word [] values h
+
 /-- A finite function is stored as its values in index order; other list lengths are rejected. -/
 def finFunction (entry : Encoding α Γ) (size : ℕ) :
     Encoding (Fin size → α) (Extended Γ 2) :=

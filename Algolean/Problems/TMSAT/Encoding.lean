@@ -19,6 +19,10 @@ public import Algolean.Models.SingleTapeTM.DescriptionEncoding
 * Encoding an instance preserves its answer, and failed decoding gives a no answer.
 * Successfully decoded certificate lengths and time bounds cannot exceed the supplied word's length.
 
+The alphabet `Γ` is fixed before defining this language. Input symbols are written as binary
+codes, while the instance encoding uses the same finite alphabet for every choice of `Γ`.
+The fixed `Encodable Γ` instance supplies those codes. Every finite alphabet admits such a
+choice, and its symbol-code lengths have a common constant bound.
 The unary fields have exactly the specified lengths. Separators preserve the boundaries between
 the four fields, and the machine description includes its complete finite transition table.
 
@@ -62,9 +66,11 @@ abbrev PayloadSymbol := Extended SingleTapeTM.Description.CodeSymbol 1
 /-- This alphabet separates the machine-input pair from the two unary bounds. -/
 abbrev CodeSymbol := Extended PayloadSymbol 1
 
-/-- The payload stores the complete verifier description and then the input word. -/
-def payloadEncoding : Encoding (SingleTapeTM.Description TapeSymbol × List Bool) PayloadSymbol :=
-  SingleTapeTM.Description.encoding.pair SingleTapeTM.Description.bitEncoding
+variable {Γ : Type} [Fintype Γ] [Encodable Γ]
+
+/-- The payload stores the complete verifier description and then the encoded input word. -/
+def payloadEncoding : Encoding (SingleTapeTM.Description (TapeSymbol Γ) × List Γ) PayloadSymbol :=
+  SingleTapeTM.Description.encoding.pair SingleTapeTM.Description.wordEncoding
 
 /-- The certificate length and time bound are stored independently, with one separator. -/
 def boundsEncoding : Encoding (ℕ × ℕ) PayloadSymbol :=
@@ -72,21 +78,22 @@ def boundsEncoding : Encoding (ℕ × ℕ) PayloadSymbol :=
     (unaryEncoding.comp SingleTapeTM.Description.bitEncoding)
 
 /-- The field order is the verifier, input, certificate length, and time bound. -/
-def Instance.equiv : Instance ≃
-    (SingleTapeTM.Description TapeSymbol × List Bool) × (ℕ × ℕ) where
+def Instance.equiv : Instance Γ ≃
+    (SingleTapeTM.Description (TapeSymbol Γ) × List Γ) × (ℕ × ℕ) where
   toFun problem := ((problem.verifier, problem.input), (problem.certificateLength, problem.time))
   invFun problem := ⟨problem.1.1, problem.1.2, problem.2.1, problem.2.2⟩
   left_inv _ := rfl
   right_inv _ := rfl
 
 /-- The certificate length and time are unary, and three separators delimit the fields. -/
-def encoding : Encoding Instance CodeSymbol :=
+def encoding : Encoding (Instance Γ) CodeSymbol :=
   (payloadEncoding.pair boundsEncoding).ofEquiv Instance.equiv
 
 /-- The length counts the machine code, input, two unary fields, and three separators. -/
-@[simp] theorem length_encoding (problem : Instance) :
+@[simp] theorem length_encoding (problem : Instance Γ) :
     (encoding.encode problem).length =
-      (SingleTapeTM.Description.encoding.encode problem.verifier).length + problem.input.length +
+      (SingleTapeTM.Description.encoding.encode problem.verifier).length +
+        (SingleTapeTM.Description.wordEncoding.encode problem.input).length +
         problem.certificateLength + problem.time + 3 := by
   simp [encoding, Encoding.ofEquiv, Instance.equiv, payloadEncoding, boundsEncoding, Encoding.comp]
   lia
@@ -95,7 +102,7 @@ def encoding : Encoding Instance CodeSymbol :=
 The decoded input, certificate length, time bound, and three separators fit in the supplied word.
 This holds for every successful decoding, including noncanonical machine descriptions.
 -/
-theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance}
+theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) :
     problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
   have hfields := (Encoding.decode_ofEquiv_eq_some_iff _ _).mp h
@@ -110,8 +117,8 @@ theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {pr
   obtain ⟨certificateBits, hcertificateWord, hcertificate⟩ :=
     (Encoding.decode_comp_eq_some_iff _ _).mp hcertificate
   obtain ⟨timeBits, htimeWord, htime⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp htime
-  rw [SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp hinput,
-    SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp hcertificateWord,
+  have hinputLength := SingleTapeTM.Description.length_le_of_decode_wordEncoding hinput
+  rw [SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp hcertificateWord,
     SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp htimeWord]
   have hlength := unary_eq_length_of_decode hcertificate
   have htime := unary_eq_length_of_decode htime
@@ -120,39 +127,39 @@ theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {pr
   lia
 
 /-- A successfully decoded certificate length is bounded by the supplied word's length. -/
-theorem certificateLength_le_length_of_decode {word : List CodeSymbol} {problem : Instance}
+theorem certificateLength_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.certificateLength ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
   lia
 
 /-- A successfully decoded time bound is bounded by the supplied word's length. -/
-theorem time_le_length_of_decode {word : List CodeSymbol} {problem : Instance}
+theorem time_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.time ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
   lia
 
 /-- A successfully decoded input is no longer than the supplied word. -/
-theorem input_length_le_length_of_decode {word : List CodeSymbol} {problem : Instance}
+theorem input_length_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.input.length ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
   lia
 
 /-- The specified certificate length cannot exceed the length of the encoded instance. -/
-theorem certificateLength_le_length_encoding (problem : Instance) :
+theorem certificateLength_le_length_encoding (problem : Instance Γ) :
     problem.certificateLength ≤ (encoding.encode problem).length :=
   certificateLength_le_length_of_decode (encoding.decode_encode problem)
 
 /-- The unary bound cannot exceed the length of the encoded instance. -/
-theorem time_le_length_encoding (problem : Instance) :
+theorem time_le_length_encoding (problem : Instance Γ) :
     problem.time ≤ (encoding.encode problem).length :=
   time_le_length_of_decode (encoding.decode_encode problem)
 
 /-- This language consists of words that decode to instances with an accepting certificate. -/
-def language : Language CodeSymbol := encodedLanguage satisfiable encoding
+def language (yes : Γ) : Language CodeSymbol := encodedLanguage (satisfiable yes) encoding
 
 /-- Encoding a structured instance preserves whether it has an accepting certificate. -/
-@[simp] theorem encode_mem_language (problem : Instance) :
-    encoding.encode problem ∈ language ↔ problem ∈ satisfiable := by
+@[simp] theorem encode_mem_language (yes : Γ) (problem : Instance Γ) :
+    encoding.encode problem ∈ language yes ↔ problem ∈ satisfiable yes := by
   simp [language]
 
 end Algolean.Problems.TMSAT
