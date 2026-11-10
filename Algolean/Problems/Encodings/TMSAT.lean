@@ -7,9 +7,8 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Problems.TMSAT.Basic
-public import Algolean.Problems.Encoding
+public import Algolean.Problems.Encodings.Alphabet
 public import Algolean.Models.SingleTapeTM.DescriptionEncoding
-public import Algolean.Models.SingleTapeTM.Alphabet.Block
 
 /-!
 # Writing TMSAT instances as words
@@ -178,7 +177,7 @@ the numbering of the finite alphabet are fixed independently of the instance.
 -/
 noncomputable def encodingOver [Nontrivial Γ] : Encoding (Instance Γ) Γ :=
   letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
-  encoding.comp (finiteWordsOver CodeSymbol Γ)
+  encoding.over
 
 omit [Encodable Γ] in
 /-- Writing the instance over `Γ` multiplies its existing encoded length by one fixed constant. -/
@@ -186,7 +185,7 @@ theorem length_encodingOver [Nontrivial Γ] (problem : Instance Γ) :
     (encodingOver.encode problem).length =
       letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
       (encoding.encode problem).length * Fintype.card CodeSymbol := by
-  simp [encodingOver, Encoding.comp]
+  simp [encodingOver]
 
 omit [Encodable Γ] in
 /--
@@ -198,10 +197,11 @@ theorem input_length_add_bounds_le_length_of_decodeOver [Nontrivial Γ]
     {word : List Γ} {problem : Instance Γ} (h : encodingOver.decode word = some problem) :
     problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
   let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
-  change (encoding.comp (finiteWordsOver CodeSymbol Γ)).decode word = some problem at h
-  obtain ⟨raw, hblocks, hproblem⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp h
+  change encoding.over.decode word = some problem at h
+  obtain ⟨raw, hword, hproblem⟩ := (Encoding.decode_over_eq_some_iff _).mp h
+  rw [hword, length_finiteWordsOver]
   exact (input_length_add_bounds_le_length_of_decode hproblem).trans
-    (length_le_of_decode_finiteWordsOver hblocks)
+    (Nat.le_mul_of_pos_right _ Fintype.card_pos)
 
 /-- This is TMSAT with its instances, as well as their inputs and certificates, encoded over `Γ`. -/
 noncomputable def languageOver [Nontrivial Γ] (yes : Γ) : Language Γ :=
@@ -212,5 +212,13 @@ omit [Encodable Γ] in
 @[simp] theorem encode_mem_languageOver [Nontrivial Γ] (yes : Γ) (problem : Instance Γ) :
     encodingOver.encode problem ∈ languageOver yes ↔ problem ∈ satisfiable yes := by
   simp [languageOver]
+
+omit [Encodable Γ] in
+/-- Changing a word of instance symbols to `Γ` preserves its TMSAT membership. -/
+@[simp] theorem encode_word_mem_languageOver [Nontrivial Γ] (yes : Γ) (word : List CodeSymbol) :
+    (finiteWordsOver CodeSymbol Γ).encode word ∈ languageOver yes ↔
+      letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+      word ∈ language yes := by
+  simp [languageOver, encodingOver, language]
 
 end Algolean.Problems.TMSAT

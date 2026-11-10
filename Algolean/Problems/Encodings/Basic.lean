@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Problems.Basic
+public import Algolean.Models.SingleTapeTM.Alphabet.Encoding
 public import Mathlib.Computability.Encoding
 public import Mathlib.Data.List.Basic
 
@@ -28,6 +29,15 @@ variable {α : Type u} {Symbol : Type v}
 def encodedLanguage (problem : DecisionProblem α) (encoding : Computability.Encoding α Symbol) :
     Language Symbol :=
   encoding.decode ⁻¹' (some '' problem)
+
+/-- Encoding an input and then its word gives the same language as those two steps in succession. -/
+theorem encodedLanguage_comp {Γ : Type w} (problem : DecisionProblem α)
+    (first : Computability.Encoding α Symbol) (second : Computability.Encoding (List Symbol) Γ) :
+    encodedLanguage problem (first.comp second) =
+      encodedLanguage (encodedLanguage problem first) second := by
+  ext word
+  cases h : second.decode word <;>
+    simp [encodedLanguage, Computability.Encoding.comp, h]
 
 /-- Encoding an input preserves its answer to the problem. -/
 @[simp] theorem mem_encodedLanguage_encode (problem : DecisionProblem α)

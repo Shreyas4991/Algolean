@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Compiler
-public import Algolean.Problems.TMSAT.Encoding
+public import Algolean.Problems.Encodings.TMSAT
 
 /-!
 # Building TMSAT instances from query verifiers
