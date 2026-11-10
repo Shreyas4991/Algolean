@@ -9,8 +9,10 @@ module
 public import Algolean.Problems.SAT.Verification
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
+public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
 public meta import Algolean.Models.SingleTapeTM.Alphabet.Pair
 public meta import Algolean.Problems.SAT.Encoding
 
@@ -23,6 +25,7 @@ public meta import Algolean.Problems.SAT.Encoding
 * Certificates use one assignment consistently across all clauses.
 * The Turing machine rejects unfinished inputs and trailing data without changing the tape.
 * Variable lookup compares complete names, uses the first listed value, and restores every symbol.
+* Formula evaluation leaves only its answer on the tape and puts the head on that answer.
 -/
 
 @[expose] public section
@@ -155,5 +158,53 @@ private def testLookup : IO Unit := do
     throw (IO.userError "Variable lookup failed when started at coordinate 37.")
 
 run_cmd Lean.Elab.Command.liftIO testLookup
+
+/--
+This runs the evaluator from a chosen coordinate with an incoming state that records false.
+It checks the expected answer, that all other tape cells are blank, that the head has moved to
+one cell past the original input, and that the number of head moves satisfies the proved bound.
+-/
+private def checkEvaluationRun (formula : CNF Variable) (certificate : Certificate)
+    (expected : Bool) (origin : ℤ := 0) : Bool :=
+  let input := verifierEncoding.encode (formula, certificate)
+  let initial : TMState Evaluation.machine :=
+    {config := ⟨some (.inr .unsatisfied), BiTape.mk₁ input⟩, headPos := origin}
+  match TMQuery.execute 100000 Evaluation.evaluate initial with
+  | none => false
+  | some (result, final) =>
+    decide (final.machine.config.BiTape.head = some (digit expected)) &&
+      decide (final.machine.config.BiTape.left.toList = []) &&
+      decide (final.machine.config.BiTape.right.toList = []) &&
+      decide (final.machine.headPos = origin + input.length) &&
+      decide (result.tell.steps ≤ 25 * (input.length + 1) ^ 4)
+
+/--
+These runs check empty formulas, empty clauses, negation, and clauses that stop at a true literal.
+They also check that every clause uses the same assignment, that missing values mean false, and
+that the first listed value takes precedence when a certificate repeats a variable.
+-/
+private def testEvaluation : IO Unit := do
+  let cases : List (CNF Variable × Certificate × Bool) := [
+    ([], [], true),
+    ([], [.pos [true]], true),
+    ([[]], [], false),
+    ([[], [.pos [true]]], [.pos [true]], false),
+    ([[.pos [true]], []], [.pos [true]], false),
+    ([[.pos []]], [.pos []], true),
+    ([[.pos [true]]], [], false),
+    ([[.neg [true]]], [], true),
+    ([[.neg [true]]], [.pos [true]], false),
+    ([[.pos [false], .pos [true]], [.neg [true]]], [.pos [false]], true),
+    ([[.pos [true]], [.neg [true]]], [.pos [true], .neg [true]], false),
+    ([[.pos [true]]], [.neg [true], .pos [true]], false),
+    ([[.pos [true]], [.neg [false, true]]], [.pos [true], .neg [false, true]], true),
+    ([[.pos [false, true]]], [.pos [false]], false)]
+  for ((formula, certificate, expected), index) in cases.zipIdx do
+    unless checkEvaluationRun formula certificate expected do
+      throw (IO.userError s!"Formula evaluation case {index} failed.")
+  unless checkEvaluationRun [[.neg []], [.pos [false]]] [.pos [false]] true (-37) do
+    throw (IO.userError "Formula evaluation failed when started at coordinate -37.")
+
+run_cmd Lean.Elab.Command.liftIO testEvaluation
 
 end AlgoleanTests.SAT
