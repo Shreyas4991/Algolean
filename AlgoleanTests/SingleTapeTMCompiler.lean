@@ -10,12 +10,14 @@ public import Algolean.Models.SingleTapeTM.Compiler
 public import Algolean.Models.SingleTapeTMSyntax
 
 /-!
-# Checking compilation from query programs to transition tables
+# Checking both Turing machine compilers
 
 * The compiled table executes the query program even when the original table does different work.
 * Nested branches and loops preserve their output and receive an affine transition bound.
 * A loop with no head moves still cannot produce an output when it never finishes.
 * Ordinary compiler imports provide the public theorems without importing implementation helpers.
+* The reverse compiler handles stationary transitions, blank cells, and movement in both directions.
+* A stationary infinite source computation cannot give a completed query computation.
 -/
 
 @[expose] public section
@@ -123,6 +125,95 @@ example (input output : List Bool) : ¬(Compiler.compile forever).machine.Output
 -- Existing polynomial-time records can be converted directly to transition-table records.
 example : SingleTapeTM.PolyTimeComputable (id : List Bool → List Bool) :=
   TMQuery.PolyTimeComputable.id.toTransitionTable
+
+/--
+The reverse compiler follows the table, which writes false and halts without moving. The stationary
+transition still costs one query move instruction. On an empty input it creates a one-bit output.
+-/
+theorem reverse_stationary (input : List Bool) :
+    OutputsWithinTime (Compiler.ToQuery.compile control) input (false :: input.tail) 1 := by
+  apply (Compiler.ToQuery.time_bound control).mpr
+  apply Relation.RelatesWithinSteps.single
+  cases input <;> rfl
+
+/-- A stationary source transition cannot finish within a zero-transition bound. -/
+theorem reverse_stationary_not_zero (input : List Bool) :
+    ¬OutputsWithinTime (Compiler.ToQuery.compile control) input (false :: input.tail) 0 := by
+  rw [Compiler.ToQuery.time_bound control]
+  intro h
+  have hstate := congrArg SingleTapeTM.Cfg.state (Relation.RelatesWithinSteps.zero h)
+  simp [SingleTapeTM.initCfg, SingleTapeTM.haltCfg] at hstate
+
+/-- This table moves right, moves left, then writes false and halts on its original cell. -/
+abbrev roundTrip : SingleTapeTM Bool where
+  State := Fin 3
+  q₀ := 0
+  tr label symbol :=
+    if label = 0 then (⟨symbol, some .right⟩, some 1)
+    else if label = 1 then (⟨symbol, some .left⟩, some 2)
+    else (⟨some false, none⟩, none)
+
+/-- The reverse compiler preserves both directions of movement and the final stationary write. -/
+theorem reverse_roundTrip :
+    OutputsWithinTime (Compiler.ToQuery.compile roundTrip) [true, false] [false, false] 3 := by
+  apply (Compiler.ToQuery.time_bound roundTrip).mpr
+  let middle := (roundTrip.step (roundTrip.initCfg [true, false])).getD default
+  let ready := (roundTrip.step middle).getD default
+  exact ⟨3, le_rfl,
+    ((Relation.RelatesInSteps.single (r := roundTrip.TransitionRelation)
+      (b := middle) rfl).tail _ _ ready _ rfl).tail _ _ _ _ rfl⟩
+
+/-- This table keeps its state and current tape symbol forever, without moving the head. -/
+abbrev stationaryForever : SingleTapeTM Bool where
+  State := Unit
+  q₀ := ()
+  tr _ symbol := (⟨symbol, none⟩, some ())
+
+/-- Every reachable source configuration still has an active state, so the table never halts. -/
+private theorem stationaryForever_active (input : List Bool) (cfg : stationaryForever.Cfg)
+    (h : Relation.ReflTransGen stationaryForever.TransitionRelation
+      (stationaryForever.initCfg input) cfg) : cfg.state = some () := by
+  induction h with
+  | refl => rfl
+  | @tail cfg final h hstep ih =>
+    cases cfg with
+    | mk label cells =>
+      cases label with
+      | none => simp_all
+      | some label =>
+        have hf : final = ⟨some (), (cells.write cells.head).optionMove none⟩ := by
+          simpa [SingleTapeTM.TransitionRelation, stationaryForever] using hstep.symm
+        rw [hf]
+
+/-- The reverse compiler cannot make a stationary infinite source computation finish. -/
+theorem reverse_forever (input output : List Bool) :
+    ¬∃ time, OutputsWithinTime (Compiler.ToQuery.compile stationaryForever) input output time := by
+  rw [← Compiler.ToQuery.correct]
+  intro h
+  have hactive := stationaryForever_active input _ h
+  simp [SingleTapeTM.haltCfg] at hactive
+
+/-- Compiling a query program to a table and back preserves its output and affine time bound. -/
+theorem compile_both_ways :
+    letI : DecidableEq (Compiler.compile writeTrue).machine.State := Classical.decEq _
+    OutputsWithinTime (Compiler.ToQuery.compile (Compiler.compile writeTrue).machine)
+      [false] [true] (Compiler.transitionFactor writeTrue) := by
+  classical
+  apply (Compiler.ToQuery.time_bound _).mpr
+  simpa using Compiler.time_bound writeTrue writeTrue_outputs
+
+-- A two-state source machine gives exactly three query control labels.
+example : Fintype.card (Compiler.ToQuery.machine control).State = 3 := by
+  simp
+
+-- Both record conversions can be applied successively.
+example : TMQuery.PolyTimeComputable (id : List Bool → List Bool) :=
+  SingleTapeTM.PolyTimeComputable.id.toQuery.toTransitionTable.toQuery
+
+-- Polynomial-time computability is independent of the choice of either model.
+example (f : List Bool → List Bool) :
+    Nonempty (TMQuery.PolyTimeComputable f) ↔ Nonempty (SingleTapeTM.PolyTimeComputable f) :=
+  TMQuery.polyTimeComputable_iff f
 
 /-- error: Unknown identifier `Compiler.Internal.programPositions` -/
 #guard_msgs in

@@ -10,9 +10,11 @@ public import Algolean.Problems.SAT.Verification
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
+public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public meta import Algolean.Models.SingleTapeTM.Alphabet.Pair
 public meta import Algolean.Problems.SAT.Encoding
 
@@ -26,6 +28,7 @@ public meta import Algolean.Problems.SAT.Encoding
 * The Turing machine rejects unfinished inputs and trailing data without changing the tape.
 * Variable lookup compares complete names, uses the first listed value, and restores every symbol.
 * Formula evaluation leaves only its answer on the tape and puts the head on that answer.
+* The complete verifier rejects malformed inputs and checks correctly written pairs.
 -/
 
 @[expose] public section
@@ -206,5 +209,60 @@ private def testEvaluation : IO Unit := do
     throw (IO.userError "Formula evaluation failed when started at coordinate -37.")
 
 run_cmd Lean.Elab.Command.liftIO testEvaluation
+
+/--
+This executes the complete verifier on a supplied word and checks its answer, the absence of
+other occupied cells, its final head coordinate, and the polynomial move bound. The starting
+state says that the format is correct, so rejection also checks that the program resets its state.
+-/
+private def checkVerifierRun (word : List Symbol) (expected : Bool) (origin : ℤ := 0) : Bool :=
+  let initial : TMState Verifier.machine :=
+    {config := ⟨some (.inl .inputEnd), BiTape.mk₁ word⟩, headPos := origin}
+  match TMQuery.execute 100000 Verifier.verify initial with
+  | none => false
+  | some (result, final) =>
+    decide (final.machine.config.BiTape.head = some (digit expected)) &&
+      decide (final.machine.config.BiTape.left.toList = []) &&
+      decide (final.machine.config.BiTape.right.toList = []) &&
+      decide (final.machine.headPos = origin + word.length) &&
+      decide (result.tell.steps ≤ 27 * (word.length + 1) ^ 4)
+
+/--
+These runs check the complete program on true and false formulas and on incorrectly written
+inputs. Rejection cases include missing endings, missing or repeated separators, trailing data,
+and digits outside a variable name. The accepted cases include incomplete and repeated assignments.
+-/
+private def testVerifier : IO Unit := do
+  let emptyPair := verifierEncoding.encode ([], [])
+  let cases : List (List Symbol × Bool) := [
+    (emptyPair, true),
+    (verifierEncoding.encode ([[]], []), false),
+    (verifierEncoding.encode ([[.pos []]], [.pos []]), true),
+    (verifierEncoding.encode ([[.pos [true]]], []), false),
+    (verifierEncoding.encode ([[.neg [true]]], []), true),
+    (verifierEncoding.encode ([[.pos [true]]], [.pos [true], .neg [true]]), true),
+    (verifierEncoding.encode ([[.pos [true]]], [.neg [true], .pos [true]]), false),
+    (verifierEncoding.encode ([[.pos [true]], [.neg [true]]], [.pos [true]]), false),
+    ([], false),
+    ([digit true], false),
+    ([certificateSeparator], false),
+    ([formulaEnd, clauseEnd], false),
+    ([certificateSeparator, clauseEnd], false),
+    (emptyPair.dropLast, false),
+    (emptyPair ++ [digit true], false),
+    (emptyPair ++ [certificateSeparator], false),
+    ([positiveSign, formulaEnd, certificateSeparator, clauseEnd], false),
+    ([clauseEnd, formulaEnd, certificateSeparator, clauseEnd], false),
+    ([formulaEnd, certificateSeparator, positiveSign, clauseEnd], false),
+    ([formulaEnd, certificateSeparator, digit true, clauseEnd], false)]
+  for ((word, expected), index) in cases.zipIdx do
+    unless checkVerifierRun word expected do
+      throw (IO.userError s!"SAT verifier case {index} failed.")
+  unless checkVerifierRun emptyPair true (-37) do
+    throw (IO.userError "SAT verifier acceptance failed when started at coordinate -37.")
+  unless checkVerifierRun (emptyPair ++ [digit false]) false 37 do
+    throw (IO.userError "SAT verifier rejection failed when started at coordinate 37.")
+
+run_cmd Lean.Elab.Command.liftIO testVerifier
 
 end AlgoleanTests.SAT

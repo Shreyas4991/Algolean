@@ -31,6 +31,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
 public import Algolean.Algorithms.Strassen
@@ -79,6 +80,7 @@ public import Algolean.Models.SingleTapeTM.Compiler.Internal.Description
 public import Algolean.Models.SingleTapeTM.Compiler.Internal.Machine
 public import Algolean.Models.SingleTapeTM.Compiler.Internal.Time
 public import Algolean.Models.SingleTapeTM.Compiler.Size
+public import Algolean.Models.SingleTapeTM.Compiler.ToQuery
 public import Algolean.Models.SingleTapeTM.Composition.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.Component

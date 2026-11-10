@@ -34,51 +34,6 @@ open scoped TMQuery
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 
-namespace FiniteState
-
-/--
-This constructs a Turing machine program containing nested conditionals. For `cases = [a, b, c]`,
-the program first checks `test a` against the current tape and state. If it is true, the program
-runs `action a` and skips the remaining tests. Otherwise it checks `test b`, then `test c` if
-needed. If all tests are false, it finishes without changing the machine.
-
-The list `cases` and the functions `test` and `action` are supplied when constructing the program.
-They are part of that program's definition and are not read from the tape during execution.
-Fixing these three arguments gives one finite program that can run on every input length.
-For a single verifier, they must be chosen independently of the input and its length. Choosing
-different lists or instructions for different input lengths would give a family of programs.
--/
-def select {α : Type} (cases : List α) (test : α → TMCondition tm)
-    (action : α → Prog (TMQuery tm) Unit) : Prog (TMQuery tm) Unit :=
-  match cases with
-  | [] => pure ()
-  | candidate :: rest => branch (test candidate) (action candidate) (select rest test action)
-
-/--
-If `chosen` appears in `cases` and the tests succeed exactly for values equal to `chosen`,
-the program runs `action chosen`. It has the same final machine state, head moves, and extra
-tape cells as that action.
--/
-theorem select_correct {α : Type} [DecidableEq α] (cases : List α)
-    (test : α → TMCondition tm) (action : α → Prog (TMQuery tm) Unit)
-    (chosen : α) (s final : TMState tm) (cost : TMCost)
-    (hmem : chosen ∈ cases)
-    (htest : ∀ candidate, (test candidate).eval s.config = decide (candidate = chosen))
-    (haction : Completes (action chosen) s cost final) :
-    Completes (select cases test action) s cost final := by
-  induction cases with
-  | nil => simp at hmem
-  | cons candidate rest ih =>
-    simp only [select]
-    apply Completes.branch
-    by_cases heq : candidate = chosen
-    · subst candidate
-      simpa [htest] using haction
-    · have hrest : chosen ∈ rest := by simpa [Ne.symm heq] using hmem
-      simpa [htest, heq] using ih hrest
-
-end FiniteState
-
 /--
 This supplies a rule for changing state while reading a tape: `next q a` is the state to enter
 after reading symbol `a` in state `q`. The lists `states` and `symbols` let the program find the
