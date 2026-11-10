@@ -9,6 +9,7 @@ module
 public import Algolean.Models.SingleTapeTM.Alphabet.Basic
 public import Mathlib.Computability.Encoding
 public import Mathlib.Logic.Equiv.List
+public import Mathlib.Data.Nat.Size
 
 /-!
 # Reusing encodings on tape alphabets
@@ -35,6 +36,18 @@ and [list](##Computability.Encoding.list) formats give lengths in terms of the e
 -/
 
 @[expose] public section
+
+namespace Computability
+
+/-- The binary encoding uses exactly the number of digits measured by `Nat.size`. -/
+@[simp] theorem length_encodingNatBool (n : Nat) : (encodingNatBool.encode n).length = n.size := by
+  have hp (p : PosNum) : (encodePosNum p).length = p.natSize := by
+    induction p <;> simp_all [encodePosNum, PosNum.natSize]
+  have hn (m : Num) : (encodeNum m).length = m.natSize := by
+    cases m <;> simp [encodeNum, Num.natSize, hp]
+  simpa [encodingNatBool, encodeNat, Num.natSize_to_nat] using hn (n : Num)
+
+end Computability
 
 namespace Computability.Encoding
 

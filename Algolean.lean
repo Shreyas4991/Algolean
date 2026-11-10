@@ -56,6 +56,12 @@ public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
 public import Algolean.Complexity.Reductions.NPToTMSAT.Reduction
 public import Algolean.Complexity.Reductions.NPToTMSAT.Verifier
 public import Algolean.Complexity.Reductions.TMSATToSAT.Computation
+public import Algolean.Complexity.Reductions.TMSATToSAT.Formula
+public import Algolean.Complexity.Reductions.TMSATToSAT.Initial
+public import Algolean.Complexity.Reductions.TMSATToSAT.Reduction
+public import Algolean.Complexity.Reductions.TMSATToSAT.Size
+public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
+public import Algolean.Complexity.Reductions.TMSATToSAT.Variables
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.FuelExecMonad
