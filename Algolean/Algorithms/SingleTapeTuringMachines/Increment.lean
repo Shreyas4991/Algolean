@@ -116,6 +116,9 @@ variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 `carryRight tm` is a Turing machine program that changes each consecutive `true` under the head to
 `false` and moves right after each change. It stops on the first `false` or blank without changing
 that stopping cell. The following write in `increment` resolves the carry at that cell.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def carryRight (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (tape =ₜ some true) do
@@ -165,6 +168,9 @@ theorem carryRight_correct (left bits : List Bool) (s : TMState tm)
 head, with the least significant bit first. It clears the initial ones, writes one at the first zero
 or blank, and returns to the starting cell. Empty input becomes `[true]`, and an input of all ones
 gains a new bit at its right end.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def increment (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   carryRight tm

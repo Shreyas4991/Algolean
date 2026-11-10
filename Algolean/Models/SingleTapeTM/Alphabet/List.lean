@@ -129,6 +129,18 @@ def finFunction (entry : Encoding α Γ) (size : ℕ) :
   (entry.list.subtype (fun values => values.length = size)).ofEquiv
     (Equiv.vectorEquivFin α size).symm
 
+/-- Every decoded table needs one entry separator per value and one final separator. -/
+theorem length_le_of_decode_finFunction (entry : Encoding α Γ) (size : Nat)
+    {word : List (Extended Γ 2)} {table : Fin size → α}
+    (h : (entry.finFunction size).decode word = some table) : size + 1 ≤ word.length := by
+  have hs := (decode_ofEquiv_eq_some_iff _ _).mp h
+  cases hl : entry.list.decode word with
+  | none => simp [subtype, hl] at hs
+  | some values =>
+    by_cases hsize : values.length = size
+    · simpa only [hsize] using length_le_of_decode_list entry hl
+    · simp [subtype, hl, hsize] at hs
+
 /-- A finite table uses one entry marker per value and one final marker. -/
 @[simp] theorem length_finFunction (entry : Encoding α Γ) (size : ℕ) (table : Fin size → α) :
     ((entry.finFunction size).encode table).length =

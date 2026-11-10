@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.SAT.Encoding
+public import Algolean.Problems.Encodings.SAT
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 public import Mathlib.Data.Fintype.OfMap
 public import Mathlib.Tactic.FinCases

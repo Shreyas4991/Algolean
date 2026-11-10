@@ -7,30 +7,34 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Problems.TMSAT.Basic
-public import Algolean.Problems.Encoding
+public import Algolean.Problems.Encodings.Alphabet
 public import Algolean.Models.SingleTapeTM.DescriptionEncoding
 
 /-!
-# Encoding Turing machine satisfiability
+# Writing TMSAT instances as words
 
-* `encoding` stores the machine, input, certificate length, and time bound in that order.
-* Both the certificate length and time bound are written in unary.
-* `language` contains the words that decode to satisfiable instances.
-* Encoding an instance preserves its answer, and failed decoding gives a no answer.
-* Successfully decoded certificate lengths and time bounds cannot exceed the supplied word's length.
+* `encoding` writes the machine, input, certificate length, and time bound in that order.
+* The machine description contains the complete finite transition table.
+* `language` contains the words that decode to satisfiable instances. Failed decoding gives a
+  no answer.
+* `encodingOver` and `languageOver` represent the same problem using only symbols of `Γ`.
+  This requires two distinct symbols of `Γ`, chosen once for the whole language.
+* Encoding an instance preserves its answer. Every decoded certificate length and time bound
+  fits within the length of the word given to the decoder.
 
-The alphabet `Γ` is fixed before defining this language. Input symbols are written as binary
-codes, while the instance encoding uses the same finite alphabet for every choice of `Γ`.
-The fixed `Encodable Γ` instance supplies those codes. Every finite alphabet admits such a
-choice, and its symbol-code lengths have a common constant bound.
-The unary fields have exactly the specified lengths. Separators preserve the boundaries between
-the four fields, and the machine description includes its complete finite transition table.
+The alphabet `Γ` is fixed. Input symbols are represented by binary words determined by a fixed
+`Encodable Γ` instance. Since `Γ` is finite, one constant bounds all these symbol-code lengths.
+Extra symbols separate the four parts of the instance.
+
+In `encoding`, a bound of `k` is written as exactly `k` symbols. In `encodingOver`, each of those
+symbols is replaced by a fixed-length word over `Γ`. This multiplies the length of each bound
+by one fixed constant. The bound's value stays the same.
 
 The encoder chooses one word for each instance. The decoder can also accept other words that
 describe the same instance. This lets us reuse the existing number decoders and follows the
 use of multiple machine descriptions in [Barak's lecture notes][barak2006]. All such words give
 the same yes or no answer. Their lengths can differ, so the size proofs use the length of the
-word supplied to the decoder and cover every word it accepts.
+word passed to the decoder and cover every word it accepts.
 
 [barak2006]: https://www.cs.princeton.edu/courses/archive/spr06/cos522/lec2.pdf
 -/
@@ -50,11 +54,15 @@ def unaryEncoding : Encoding ℕ Bool where
     | zero => rfl
     | succ time ih => simpa [unaryEncodeNat] using congrArg (Option.map Nat.succ) ih
 
+/-- A unary bound of `n` is written as `n` true bits. -/
+theorem encode_unaryEncoding (n : Nat) : unaryEncoding.encode n = List.replicate n true := by
+  induction n <;> simp_all [unaryEncoding, unaryEncodeNat, List.replicate_succ]
+
 /-- The unary representation has exactly the specified length. -/
 @[simp] theorem length_unaryEncoding (value : ℕ) : (unaryEncoding.encode value).length = value := by
-  induction value <;> simp_all [unaryEncoding, unaryEncodeNat]
+  rw [encode_unaryEncoding, List.length_replicate]
 
-/-- A successfully decoded unary value equals the number of bits in the supplied word. -/
+/-- A successfully decoded unary value equals the number of bits in the input word. -/
 theorem unary_eq_length_of_decode {word : List Bool} {value : ℕ}
     (h : unaryEncoding.decode word = some value) : value = word.length := by
   simp only [unaryEncoding] at h
@@ -68,7 +76,7 @@ abbrev CodeSymbol := Extended PayloadSymbol 1
 
 variable {Γ : Type} [Fintype Γ] [Encodable Γ]
 
-/-- The payload stores the complete verifier description and then the encoded input word. -/
+/-- This encoding stores the complete verifier description and then the encoded input word. -/
 def payloadEncoding : Encoding (SingleTapeTM.Description (TapeSymbol Γ) × List Γ) PayloadSymbol :=
   SingleTapeTM.Description.encoding.pair SingleTapeTM.Description.wordEncoding
 
@@ -99,18 +107,21 @@ def encoding : Encoding (Instance Γ) CodeSymbol :=
   lia
 
 /--
-The decoded input, certificate length, time bound, and three separators fit in the supplied word.
-This holds for every successful decoding, including noncanonical machine descriptions.
+The number of states, decoded input, certificate length, time bound, and three separators fit
+in the input word.
+This holds for every successful decoding, including other words describing the same machine.
 -/
-theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
+theorem states_add_input_length_add_bounds_le_length_of_decode
+    {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) :
-    problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
+    problem.verifier.states + 1 + problem.input.length + problem.certificateLength +
+      problem.time + 3 ≤ word.length := by
   have hfields := (Encoding.decode_ofEquiv_eq_some_iff _ _).mp h
   change (payloadEncoding.pair boundsEncoding).decode word =
     some ((problem.verifier, problem.input), (problem.certificateLength, problem.time)) at hfields
   obtain ⟨payload, bounds, rfl, hpayload, hbounds⟩ :=
     (Encoding.decode_pair_eq_some_iff _ _).mp hfields
-  obtain ⟨machine, inputWord, rfl, _, hinput⟩ :=
+  obtain ⟨machine, inputWord, rfl, hmachine, hinput⟩ :=
     (Encoding.decode_pair_eq_some_iff _ _).mp hpayload
   obtain ⟨certificateWord, timeWord, rfl, hcertificate, htime⟩ :=
     (Encoding.decode_pair_eq_some_iff _ _).mp hbounds
@@ -118,6 +129,7 @@ theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {pr
     (Encoding.decode_comp_eq_some_iff _ _).mp hcertificate
   obtain ⟨timeBits, htimeWord, htime⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp htime
   have hinputLength := SingleTapeTM.Description.length_le_of_decode_wordEncoding hinput
+  have hmachineLength := SingleTapeTM.Description.states_le_length_of_decode hmachine
   rw [SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp hcertificateWord,
     SingleTapeTM.Description.decode_bitEncoding_eq_some_iff.mp htimeWord]
   have hlength := unary_eq_length_of_decode hcertificate
@@ -126,19 +138,26 @@ theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {pr
     SingleTapeTM.Description.length_bitEncoding]
   lia
 
-/-- A successfully decoded certificate length is bounded by the supplied word's length. -/
+/-- The decoded input and the two unary bounds fit in every word accepted by the decoder. -/
+theorem input_length_add_bounds_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
+    (h : encoding.decode word = some problem) :
+    problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
+  have := states_add_input_length_add_bounds_le_length_of_decode h
+  lia
+
+/-- A successfully decoded certificate length is bounded by the input word's length. -/
 theorem certificateLength_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.certificateLength ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
   lia
 
-/-- A successfully decoded time bound is bounded by the supplied word's length. -/
+/-- A successfully decoded time bound is bounded by the input word's length. -/
 theorem time_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.time ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
   lia
 
-/-- A successfully decoded input is no longer than the supplied word. -/
+/-- A successfully decoded input is no longer than the input word. -/
 theorem input_length_le_length_of_decode {word : List CodeSymbol} {problem : Instance Γ}
     (h : encoding.decode word = some problem) : problem.input.length ≤ word.length := by
   have := input_length_add_bounds_le_length_of_decode h
@@ -161,5 +180,68 @@ def language (yes : Γ) : Language CodeSymbol := encodedLanguage (satisfiable ye
 @[simp] theorem encode_mem_language (yes : Γ) (problem : Instance Γ) :
     encoding.encode problem ∈ language yes ↔ problem ∈ satisfiable yes := by
   simp [language]
+
+/--
+This writes a TMSAT instance using only symbols of `Γ`. Each symbol of the existing instance
+encoding becomes a fixed-length word over two chosen symbols of `Γ`. The symbol choices and
+the numbering of the finite alphabet are fixed independently of the instance.
+-/
+noncomputable def encodingOver [Nontrivial Γ] : Encoding (Instance Γ) Γ :=
+  letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+  encoding.over
+
+omit [Encodable Γ] in
+/-- Writing the instance over `Γ` multiplies its existing encoded length by one fixed constant. -/
+theorem length_encodingOver [Nontrivial Γ] (problem : Instance Γ) :
+    (encodingOver.encode problem).length =
+      letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+      (encoding.encode problem).length * Fintype.card CodeSymbol := by
+  simp [encodingOver]
+
+omit [Encodable Γ] in
+/--
+The decoded number of states, input, and unary bounds all fit in the word over `Γ`. This holds
+for every accepted spelling of the machine description, not only the encoder's chosen spelling.
+-/
+theorem states_add_input_length_add_bounds_le_length_of_decodeOver [Nontrivial Γ]
+    {word : List Γ} {problem : Instance Γ} (h : encodingOver.decode word = some problem) :
+    problem.verifier.states + 1 + problem.input.length + problem.certificateLength +
+      problem.time + 3 ≤ word.length := by
+  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+  change encoding.over.decode word = some problem at h
+  obtain ⟨raw, hword, hproblem⟩ := (Encoding.decode_over_eq_some_iff _).mp h
+  rw [hword, length_finiteWordsOver]
+  exact (states_add_input_length_add_bounds_le_length_of_decode hproblem).trans
+    (Nat.le_mul_of_pos_right _ Fintype.card_pos)
+
+omit [Encodable Γ] in
+/--
+Every successfully decoded word over `Γ` has room for its input, certificate length, and time
+bound. This covers every word accepted by the decoder, including different words describing
+the same instance.
+-/
+theorem input_length_add_bounds_le_length_of_decodeOver [Nontrivial Γ]
+    {word : List Γ} {problem : Instance Γ} (h : encodingOver.decode word = some problem) :
+    problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length := by
+  have := states_add_input_length_add_bounds_le_length_of_decodeOver h
+  lia
+
+/-- This is TMSAT with its instances, as well as their inputs and certificates, encoded over `Γ`. -/
+noncomputable def languageOver [Nontrivial Γ] (yes : Γ) : Language Γ :=
+  encodedLanguage (satisfiable yes) encodingOver
+
+omit [Encodable Γ] in
+/-- Encoding an instance as a word over `Γ` preserves whether it is satisfiable. -/
+@[simp] theorem encode_mem_languageOver [Nontrivial Γ] (yes : Γ) (problem : Instance Γ) :
+    encodingOver.encode problem ∈ languageOver yes ↔ problem ∈ satisfiable yes := by
+  simp [languageOver]
+
+omit [Encodable Γ] in
+/-- Changing a word of instance symbols to `Γ` preserves its TMSAT membership. -/
+@[simp] theorem encode_word_mem_languageOver [Nontrivial Γ] (yes : Γ) (word : List CodeSymbol) :
+    (finiteWordsOver CodeSymbol Γ).encode word ∈ languageOver yes ↔
+      letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+      word ∈ language yes := by
+  simp [languageOver, encodingOver, language]
 
 end Algolean.Problems.TMSAT

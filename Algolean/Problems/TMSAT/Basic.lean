@@ -18,9 +18,9 @@ public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 * The alphabet `Γ` is fixed for the whole problem. Inputs and certificates are words over `Γ`.
 * Certificates have exactly the specified length, measured in symbols of `Γ`.
 
-The machine receives the separator encoding of the input and certificate. It accepts by halting
-with the chosen accepting symbol under the head. The alphabet and accepting symbol are fixed
-parameters, rather than fields of an instance. Every transition counts as one step, including
+The machine receives the input, then one separate symbol, then the certificate. It accepts
+by halting with the chosen accepting symbol under the head. The alphabet and accepting symbol
+are fixed for the problem. Every transition counts as one step, including
 stationary steps. The definitions also allow alphabets containing just one symbol.
 
 The separate certificate length and time bound follow Definition 2.7 in David Steurer's

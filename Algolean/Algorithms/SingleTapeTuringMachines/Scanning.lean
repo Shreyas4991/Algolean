@@ -12,7 +12,7 @@ public import Algolean.Models.SingleTapeTM.Composition.While
 /-!
 # Moving across a contiguous block
 
-This file supplies Turing machine programs that move the head without changing any tape symbols.
+This file defines Turing machine programs that move the head without changing any tape symbols.
 `seekRightSymbol` moves right until it reaches a specified symbol. `seekRightBlank` moves right
 until it reaches a blank, and `seekLeftBlank` does the same to the left. Both stop immediately
 if their starting cell is blank. `seekLeftEnd` first moves
@@ -40,6 +40,9 @@ variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 This Turing machine program moves right until the head is on `symbol`, leaving every tape
 symbol unchanged. If it starts on `symbol`, it makes no moves. The correctness theorem requires
 that `symbol` occurs at or to the right of the starting cell.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def seekRightSymbol (tm : SingleTapeTM Symbol) (symbol : Symbol) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
@@ -71,6 +74,9 @@ theorem seekRightSymbol_correct (symbol : Symbol) (left crossed suffix : List Sy
 `seekRightBlank tm` is a Turing machine program that repeatedly moves the head right while the
 current cell is occupied. It stops on the first blank without changing any tape symbols. If the
 initial cell is blank, it finishes without moving.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def seekRightBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -106,6 +112,9 @@ theorem seekRightBlank_correct (left right : List Symbol) (s : TMState tm)
 `seekLeftBlank tm` is a Turing machine program that repeatedly moves the head left while the current
 cell is occupied. It stops on the first blank and leaves all tape symbols unchanged. If it starts on
 a blank, it does not move.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def seekLeftBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -152,6 +161,9 @@ theorem seekLeftBlank_correct (left : List Symbol) (bit : Symbol) (right : List 
 `seekLeftEnd tm` is a Turing machine program that moves left once, scans left to a blank, and then
 moves right once. For a contiguous block, it finishes on the first symbol even when it starts on the
 blank just after the block. If the block is empty, it returns to its starting cell after two moves.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def seekLeftEnd (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left

@@ -21,7 +21,7 @@ in their listed order. It uses the first matching value, or false if there is no
 only Boolean choices and the seven state names below. For example, `lookupLoop` contains both
 `checkEntry true` and `checkEntry false`; a test of the certificate's sign selects which block
 runs. Both blocks belong to one program. Variable names, certificates, and their lengths are
-supplied through the tape, and never select a different program.
+provided through the tape, and never select a different program.
 
 While comparing two names, the machine temporarily replaces digits it has read: `positiveSign`
 stands for a processed zero and `negativeSign` for a processed one. The current certificate
@@ -62,7 +62,7 @@ instance : Fintype State := .ofList
     | _ => decide)
 
 /--
-This machine supplies the lookup program's state names. Its transition table preserves the
+This machine provides the lookup program's state names. Its transition table preserves the
 current symbol and halts; query execution follows the programs defined below. The query compiler
 can turn those programs into the transition table of a machine that performs the lookup.
 -/
@@ -330,7 +330,7 @@ This program looks up the binary name at the start of the tape in the certificat
 `nameEnd` and `certificateSeparator`. It returns to that starting cell with all tape symbols
 restored. State `value true` or `value false` records the first listed value for that name;
 an absent name receives false. The certificate must be correctly written before this is called.
-This is one fixed program for all query names and certificates; both are supplied on the tape.
+This is one fixed program for all query names and certificates; both are provided on the tape.
 -/
 def lookup : Prog (TMQuery machine) Unit := do [TMQuery machine]
   seekRightSymbol machine certificateSeparator

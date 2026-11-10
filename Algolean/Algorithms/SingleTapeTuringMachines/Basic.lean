@@ -24,6 +24,12 @@ preservation of the control state, and the number of head moves for primitive wr
 instructions. A write costs no head moves, although it still consumes interpreter fuel. Moving
 with direction `.Stop` counts as one move even though the head stays in place.
 The program `writeBit` writes a chosen Boolean value without moving the head.
+
+The parameterized programs are meta TMs: templates instantiated when constructing another
+Turing machine. Their parameters are chosen once for that machine, independently of the input
+and its length. The resulting finite program reads its input from the tape. To react to a
+scanned symbol, the containing machine includes the fixed cases for the alphabet symbols and
+uses a tape test to select the case during execution.
 -/
 
 @[expose] public section
@@ -121,7 +127,12 @@ theorem write_correct (s : TMState tm) (symbol : Option Symbol) :
     Runs (FreeM.lift (.write symbol)) s (s.config.BiTape.write symbol) s.headPos 0 :=
   ⟨0, s.write symbol, completes_write s _, rfl, rfl, rfl⟩
 
-/-- This Turing machine program writes `bit` under the head without changing other cells. -/
+/--
+This Turing machine program writes `bit` under the head without changing other cells.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
+-/
 def writeBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   tape ←ₜ some bit
 

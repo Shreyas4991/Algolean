@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Composition.MachineComposition
-public import Algolean.Problems.Encoding
+public import Algolean.Problems.Encodings.Basic
 
 /-!
 # Solving one problem by converting its input

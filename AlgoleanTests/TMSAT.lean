@@ -229,7 +229,14 @@ theorem noncanonicalWord_decodes : encoding.decode noncanonicalWord =
   exact ⟨noncanonicalMachineCode, SingleTapeTM.Description.wordEncoding.encode [false, true],
     rfl, noncanonicalMachineCode_decodes, by simp⟩
 
--- The supplied word is genuinely shorter than the canonical encoding of the decoded instance.
+/-- Changing alphabets still accepts this shorter description of the same machine and instance. -/
+example : (encoding.over (Γ := Bool)).decode
+    ((finiteWordsOver CodeSymbol Bool).encode noncanonicalWord) =
+      some ⟨threeStateAccept, [false, true], 1, 2⟩ := by
+  rw [Encoding.decode_over_encode_word]
+  exact noncanonicalWord_decodes
+
+-- This word is shorter than the encoder's chosen representation of the same instance.
 example : noncanonicalWord.length + 1 =
     (encoding.encode ⟨threeStateAccept, [false, true], 1, 2⟩).length := by decide +kernel
 

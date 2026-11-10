@@ -37,6 +37,9 @@ variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 scans right to the first blank, and writes `bit` there. It then returns to the first cell of the
 extended block. On empty input it writes a one-bit word at the starting cell and returns to that
 cell.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def appendBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   seekRightBlank tm
@@ -70,6 +73,9 @@ theorem appendBit_correct (bits : List Bool) (bit : Bool) (s : TMState tm)
 `complementRight tm` is a Turing machine program that flips each occupied Boolean cell from the
 current position to the right, moving right after every flip. It stops on the first blank, leaves
 that blank unchanged, and does not return to its starting position.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def complementRight (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
@@ -112,6 +118,9 @@ theorem complementRight_correct (left right : List Bool) (s : TMState tm)
 `complementBlock tm` is a Turing machine program that starts at the first cell of a Boolean block,
 negates every bit, and then returns the head to the beginning. An empty block remains empty, with
 the head returning to its original blank cell.
+
+This is a machine template. The containing Turing machine fixes its parameters once when
+including it. The same finite program runs on every input length.
 -/
 def complementBlock (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   complementRight tm

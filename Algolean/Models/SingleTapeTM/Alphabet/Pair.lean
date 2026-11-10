@@ -202,6 +202,42 @@ def sigma {family : α → Type v} (first : Encoding α Γ)
       | _, _ => none
   decode_encode value := by simp [readWord_append_marker]
 
+/-- Successful decoding recovers both fields and their separator, including the dependent field. -/
+theorem decode_sigma_eq_some_iff {family : α → Type v} (first : Encoding α Γ)
+    (second : ∀ value, Encoding (family value) Γ)
+    {word : List (Extended Γ 1)} {value : Sigma family} :
+    (first.sigma second).decode word = some value ↔
+      ∃ left right, word = left.map Sum.inl ++ .inr 0 :: right.map Sum.inl ∧
+        first.decode left = some value.1 ∧ (second value.1).decode right = some value.2 := by
+  constructor
+  · intro h
+    cases hread : readWord word with
+    | mk left ending =>
+      cases ending with
+      | none => simp [sigma, hread] at h
+      | some ending =>
+        obtain ⟨marker, rest⟩ := ending
+        have hmarker : marker = 0 := Subsingleton.elim _ _
+        subst marker
+        cases hfirst : first.decode left with
+        | none => simp [sigma, hread, hfirst] at h
+        | some a =>
+          cases hrest : (words Γ 1).decode rest with
+          | none => simp [sigma, hread, hrest] at h
+          | some right =>
+            cases hsecond : (second a).decode right with
+            | none => simp [sigma, hread, hfirst, hrest, hsecond] at h
+            | some b =>
+              have heq : (⟨a, b⟩ : Sigma family) = value := by
+                simpa [sigma, hread, hfirst, hrest, hsecond] using h
+              subst value
+              have hword := readWord_reconstruct word
+              rw [hread, decode_words_eq_some_iff.mp hrest] at hword
+              exact ⟨left, right, hword.symm, hfirst, hsecond⟩
+  · rintro ⟨left, right, rfl, hfirst, hsecond⟩
+    simp only [sigma, readWord_append_marker, hfirst]
+    simp only [decode_words_eq_some_iff.mpr rfl, hsecond, Option.map_some]
+
 /-- A dependent pair uses the two component lengths and one separator. -/
 @[simp] theorem length_sigma {family : α → Type v} (first : Encoding α Γ)
     (second : ∀ value, Encoding (family value) Γ) (value : Sigma family) :
