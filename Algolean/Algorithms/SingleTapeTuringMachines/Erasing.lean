@@ -30,22 +30,96 @@ open Cslib Cslib.Turing TMQuery
 
 open scoped TMQuery
 
-variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
+variable {Symbol : Type}
 
 /-- Moving left on a completely blank tape leaves it blank. -/
-private theorem nil_moveLeft : (BiTape.nil : BiTape Bool).moveLeft = BiTape.nil := rfl
+private theorem nil_moveLeft : (BiTape.nil : BiTape Symbol).moveLeft = BiTape.nil := rfl
 
 /-- Moving right on a completely blank tape leaves it blank. -/
-private theorem nil_moveRight : (BiTape.nil : BiTape Bool).moveRight = BiTape.nil := rfl
+private theorem nil_moveRight : (BiTape.nil : BiTape Symbol).moveRight = BiTape.nil := rfl
 
 attribute [local simp] nil_moveLeft nil_moveRight
+
+variable [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
+variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
+
+/--
+This Turing machine program erases the current cell and moves right. If all cells to its left
+are blank, the remaining word then begins under the head.
+-/
+def eraseAndMove (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  tape ←ₜ none
+  moveₜ .Right
+
+/-- Erasing the first symbol and moving right leaves exactly the remaining word on the tape. -/
+theorem eraseAndMove_correct (symbol : Symbol) (rest : List Symbol) (s : TMState tm)
+    (htape : s.config.BiTape = cursor [] (symbol :: rest)) :
+    Runs (eraseAndMove tm) s (cursor [] rest) (s.headPos + 1) 1 := by
+  simpa [eraseAndMove, htape, cursor, BiTape.write, BiTape.moveRight] using
+    (write_correct s none).append_move .Right
+
+/--
+This Turing machine program erases symbols while moving right and stops on the first blank.
+When started at the first symbol of a word on an otherwise blank tape, it clears the whole tape.
+-/
+def eraseRight (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  whileₜ (notₜ tape =ₜ none) do
+    eraseAndMove tm
+
+/-- Erasing a word to the right clears the tape and uses one head move for each input symbol. -/
+theorem eraseRight_correct (word : List Symbol) (s : TMState tm)
+    (htape : s.config.BiTape = cursor [] word) :
+    Runs (eraseRight tm) s BiTape.nil (s.headPos + word.length) word.length := by
+  induction word generalizing s with
+  | nil =>
+    simpa [eraseRight, htape] using runs_while_false (.not (.tapeIs none))
+      (eraseAndMove tm) s (by simp [htape, BiTape.nil])
+  | cons symbol rest ih =>
+    unfold eraseRight
+    apply runs_while_step (by simp [htape])
+    have hfirst := eraseAndMove_correct symbol rest s htape
+    have hr := hfirst.seq (q := eraseRight tm) (by
+      intro middle hmiddle hpos
+      simpa [hpos] using ih middle (by simp [hmiddle]))
+    simpa [eraseRight, add_assoc, add_comm, add_left_comm] using hr
+
+/--
+This Turing machine program erases cells while moving right until it reaches `ending`.
+It leaves that symbol and everything after it untouched. Its correctness theorem requires
+that an occurrence of `ending` lies at or to the right of the starting cell.
+-/
+def eraseUntil (tm : SingleTapeTM Symbol) (ending : Symbol) : Prog (TMQuery tm) Unit :=
+    do [TMQuery tm]
+  whileₜ (notₜ tape =ₜ some ending) do
+    eraseAndMove tm
+
+/--
+If `crossed` contains no `ending`, the program erases exactly `crossed` and stops on the next
+occurrence of `ending`. The remaining word is the only occupied part of the tape.
+-/
+theorem eraseUntil_correct (ending : Symbol) (crossed rest : List Symbol) (s : TMState tm)
+    (htape : s.config.BiTape = cursor [] (crossed ++ ending :: rest))
+    (hcrossed : ending ∉ crossed) :
+    Runs (eraseUntil tm ending) s (cursor [] (ending :: rest))
+      (s.headPos + crossed.length) crossed.length := by
+  induction crossed generalizing s with
+  | nil => simp [eraseUntil, htape]
+  | cons symbol crossed ih =>
+    have hparts : ending ≠ symbol ∧ ending ∉ crossed := by simpa using hcrossed
+    unfold eraseUntil
+    apply runs_while_step (by simp [htape, Ne.symm hparts.1])
+    have hfirst := eraseAndMove_correct symbol (crossed ++ ending :: rest) s htape
+    have hr := hfirst.seq (q := eraseUntil tm ending) (by
+      intro middle hmiddle hpos
+      simpa [hpos] using ih middle (by simp [hmiddle]) hparts.2)
+    simpa [eraseUntil, add_assoc, add_comm, add_left_comm] using hr
 
 /--
 `eraseLeft tm` is a Turing machine program that replaces the current occupied cell with a blank and
 moves left, repeating until it reaches an already blank cell. Starting on the last symbol of a
 contiguous block erases the whole block and leaves the head on the blank just before it.
 -/
-def eraseLeft (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def eraseLeft (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   whileₜ (notₜ tape =ₜ none) do
     tape ←ₜ none
     moveₜ .Left
@@ -55,7 +129,7 @@ Starting on the last symbol `bit`, this program erases that cell and the entire 
 leaving a completely blank tape. The head finishes `left.length + 1` cells to the left of its
 starting coordinate, using exactly that many head moves.
 -/
-theorem eraseLeft_correct (left : List Bool) (bit : Bool) (s : TMState tm)
+theorem eraseLeft_correct (left : List Symbol) (bit : Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor left [bit]) :
     Runs (eraseLeft tm) s BiTape.nil (s.headPos - (left.length + 1 : ℕ)) (left.length + 1) := by
   induction left generalizing bit s with
@@ -101,7 +175,7 @@ block. It moves left, erases the block while moving backward, and then moves rig
 that used to hold the first symbol. For an empty block, it returns to the starting blank after two
 moves.
 -/
-def eraseToLeft (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def eraseToLeft (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left
   eraseLeft tm
   moveₜ .Right
@@ -111,7 +185,7 @@ Starting from `cursor left []`, this program leaves the tape blank and finishes 
 left.length`. It uses exactly `left.length + 2` head moves and preserves the control state,
 including when `left` is empty.
 -/
-theorem eraseToLeft_correct (left : List Bool) (s : TMState tm)
+theorem eraseToLeft_correct (left : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor left []) :
     Runs (eraseToLeft tm) s BiTape.nil (s.headPos - left.length) (left.length + 2) := by
   cases left with
@@ -150,7 +224,7 @@ theorem eraseToLeft_correct (left : List Bool) (s : TMState tm)
 to the blank after it, and erases the symbols on the way back. It finishes at the original head
 coordinate on a blank tape. The recorded allocation and visit histories are retained.
 -/
-def eraseBlock (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+def eraseBlock (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   seekRightBlank tm
   eraseToLeft tm
 
@@ -159,7 +233,7 @@ Erasing `bits` leaves a completely blank tape and restores the initial head coor
 preserves the control state and uses exactly `2 * bits.length + 2` head moves, even when the input
 is empty.
 -/
-theorem eraseBlock_correct (bits : List Bool) (s : TMState tm)
+theorem eraseBlock_correct (bits : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor [] bits) :
     Runs (eraseBlock tm) s BiTape.nil s.headPos (2 * bits.length + 2) := by
   have hr : Runs (seekRightBlank tm) s (cursor bits.reverse [])

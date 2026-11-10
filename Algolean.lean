@@ -23,9 +23,15 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.BasicTMs
 public import Algolean.Algorithms.SingleTapeTuringMachines.BitOperations
 public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
 public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
+public import Algolean.Algorithms.SingleTapeTuringMachines.FiniteState
 public import Algolean.Algorithms.SingleTapeTuringMachines.Framed
 public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
 public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
 public import Algolean.Algorithms.Strassen
@@ -33,6 +39,7 @@ public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
 public import Algolean.Algorithms.WordRAMLinearSearch
 public import Algolean.Complexity.Basic
+public import Algolean.Complexity.Membership.NP.SAT
 public import Algolean.Complexity.NP
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.FreeWP.Effects
@@ -73,6 +80,7 @@ public import Algolean.Models.SingleTapeTM.Compiler.Internal.Description
 public import Algolean.Models.SingleTapeTM.Compiler.Internal.Machine
 public import Algolean.Models.SingleTapeTM.Compiler.Internal.Time
 public import Algolean.Models.SingleTapeTM.Compiler.Size
+public import Algolean.Models.SingleTapeTM.Compiler.ToQuery
 public import Algolean.Models.SingleTapeTM.Composition.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.Component
@@ -93,6 +101,8 @@ public import Algolean.Models.WordRAM
 public import Algolean.Problems.Basic
 public import Algolean.Problems.Encoding
 public import Algolean.Problems.SAT.Basic
+public import Algolean.Problems.SAT.Encoding
+public import Algolean.Problems.SAT.Verification
 public import Algolean.Problems.TMSAT.Basic
 public import Algolean.Problems.TMSAT.Compiler
 public import Algolean.Problems.TMSAT.Encoding

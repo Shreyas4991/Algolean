@@ -12,9 +12,10 @@ public import Algolean.Models.SingleTapeTM.Composition.While
 /-!
 # Moving across a contiguous block
 
-This file supplies three Turing machine programs that move the head without changing any tape
-symbols. `seekRightBlank` moves right until it reaches a blank, and `seekLeftBlank` does the same to
-the left. Either program stops immediately if its starting cell is blank. `seekLeftEnd` first moves
+This file supplies Turing machine programs that move the head without changing any tape symbols.
+`seekRightSymbol` moves right until it reaches a specified symbol. `seekRightBlank` moves right
+until it reaches a blank, and `seekLeftBlank` does the same to the left. Both stop immediately
+if their starting cell is blank. `seekLeftEnd` first moves
 left, scans to the blank before the block, and then moves right onto its first symbol. It can
 therefore return from the blank immediately after a block as well as from inside it.
 
@@ -34,6 +35,37 @@ open scoped TMQuery
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
+
+/--
+This Turing machine program moves right until the head is on `symbol`, leaving every tape
+symbol unchanged. If it starts on `symbol`, it makes no moves. The correctness theorem requires
+that `symbol` occurs at or to the right of the starting cell.
+-/
+def seekRightSymbol (tm : SingleTapeTM Symbol) (symbol : Symbol) : Prog (TMQuery tm) Unit :=
+    do [TMQuery tm]
+  whileₜ (notₜ tape =ₜ some symbol) do
+    moveₜ .Right
+
+/--
+If `crossed` contains no `symbol`, the program crosses exactly that crossed and stops on the
+following occurrence of `symbol`. It preserves the tape and state and uses `crossed.length` moves.
+-/
+theorem seekRightSymbol_correct (symbol : Symbol) (left crossed suffix : List Symbol)
+    (s : TMState tm) (htape : s.config.BiTape = cursor left (crossed ++ symbol :: suffix))
+    (hprefix : symbol ∉ crossed) :
+    Runs (seekRightSymbol tm symbol) s (cursor (crossed.reverse ++ left) (symbol :: suffix))
+      (s.headPos + crossed.length) crossed.length := by
+  induction crossed generalizing left s with
+  | nil => simp [seekRightSymbol, htape]
+  | cons first crossed ih =>
+    have hparts : symbol ≠ first ∧ symbol ∉ crossed := by simpa using hprefix
+    have hfirst : first ≠ symbol := Ne.symm hparts.1
+    unfold seekRightSymbol
+    apply runs_while_step (by simp [htape, hfirst])
+    have hrest := ih (first :: left) (s.move .Right)
+      (by simp [TMState.move, htape]) hparts.2
+    simpa [seekRightSymbol, TMState.move, List.reverse_cons, List.append_assoc,
+      add_assoc, add_comm, add_left_comm] using hrest.prepend_move
 
 /--
 `seekRightBlank tm` is a Turing machine program that repeatedly moves the head right while the

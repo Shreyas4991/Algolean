@@ -8,8 +8,10 @@ module
 
 public import Algolean.Problems.Basic
 public import Mathlib.Data.List.Basic
+public import Mathlib.Data.List.Flatten
 public import Mathlib.Data.Set.Lattice.Indexed
 public import Mathlib.Logic.Function.Basic
+public import Mathlib.Logic.Equiv.Basic
 
 /-!
 # Boolean satisfiability
@@ -37,6 +39,28 @@ inductive Literal (α : Type u) where
   /-- This literal has the opposite of the value assigned to its variable. -/
   | neg (name : α)
 deriving DecidableEq
+
+/-- This equivalence separates positive and negative literals without changing their names. -/
+def Literal.equiv : Literal α ≃ α ⊕ α where
+  toFun
+    | .pos name => .inl name
+    | .neg name => .inr name
+  invFun
+    | .inl name => .pos name
+    | .inr name => .neg name
+  left_inv literal := by cases literal <;> rfl
+  right_inv name := by cases name <;> rfl
+
+/-- This function returns the variable named by a positive or negative literal. -/
+def Literal.name : Literal α → α
+  | .pos name => name
+  | .neg name => name
+
+/-- A positive literal names the variable supplied to its constructor. -/
+@[simp] theorem Literal.name_pos (name : α) : (Literal.pos name).name = name := rfl
+
+/-- A negative literal names the variable supplied to its constructor. -/
+@[simp] theorem Literal.name_neg (name : α) : (Literal.neg name).name = name := rfl
 
 /-- This function evaluates a literal using the supplied assignment of truth values. -/
 def Literal.eval (literal : Literal α) (assignment : α → Bool) : Bool :=
@@ -115,6 +139,23 @@ abbrev CNF (α : Type u) := List (Clause α)
 /-- This function evaluates a formula by taking the conjunction of its clause values. -/
 def CNF.eval (formula : CNF α) (assignment : α → Bool) : Bool :=
   (formula.map (fun clause => clause.eval assignment)).and
+
+/-- Assignments agreeing on all literal occurrences give the same value to the formula. -/
+theorem CNF.eval_eq_of_agree (formula : CNF α) (first second : α → Bool)
+    (h : ∀ literal ∈ formula.flatten, first literal.name = second literal.name) :
+    formula.eval first = formula.eval second := by
+  unfold CNF.eval
+  congr 1
+  apply List.map_congr_left
+  intro clause hclause
+  unfold Clause.eval
+  congr 1
+  apply List.map_congr_left
+  intro literal hliteral
+  have heq := h literal (List.mem_flatten.mpr ⟨clause, hclause, hliteral⟩)
+  cases literal with
+  | pos name => exact heq
+  | neg name => exact congrArg Bool.not heq
 
 /-- A formula is satisfied by an assignment when every clause evaluates to true. -/
 def CNF.SatisfiedBy (formula : CNF α) (assignment : α → Bool) : Prop :=

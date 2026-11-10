@@ -7,11 +7,12 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Compiler.Basic
+public import Algolean.Models.SingleTapeTM.Compiler.ToQuery
 
 /-!
-# Compiling query programs to finite transition tables
+# Converting between query programs and transition-table Turing machines
 
-This module compiles query programs to ordinary Turing machines over the same tape alphabet.
+This module provides compilers in both directions over the same tape alphabet.
 
 * Each query instruction becomes one transition. Finishing the program adds a halting transition.
 * A compiled control state stores a program position and a logical label. The source type
@@ -20,7 +21,12 @@ This module compiles query programs to ordinary Turing machines over the same ta
   has `R * (Q + 1)` control states. The extra label is `none`.
   For `L` instructions, there are at most `L + 1` positions,
   so the machine has at most `(L + 1) * (Q + 1)` control states.
-* Compilation preserves the output and bounds the transition count by `C * time + C`.
+* Query-to-table compilation preserves the output and bounds transitions by `C * time + C`.
+* Table-to-query compilation uses one additional control label and preserves time bounds exactly.
+  Its loop performs one charged move instruction for every source transition, including stationary
+  transitions through the query instruction `Stop`.
+* `TMQuery.polyTimeComputable_iff` proves that the two models compute the same polynomial-time
+  word-valued functions.
 
 The instruction count includes both branch alternatives and counts each loop body once.
 For a fixed query program and source machine, `C` is independent of input length.
