@@ -24,6 +24,33 @@ correctness proofs of machines that copy, write, and encode words; they do not e
 
 namespace Cslib.Turing.StackTape
 
+/-- This stores a finite list of tape cells, treating every later cell as blank. -/
+def ofList {Symbol : Type} (cells : List (Option Symbol)) : StackTape Symbol :=
+  cells.foldr cons nil
+
+/-- An empty list describes a completely blank side of the tape. -/
+@[simp] theorem ofList_nil {Symbol : Type} : ofList ([] : List (Option Symbol)) = nil := rfl
+
+/-- Storing one more cell places it before the remaining cells. -/
+@[simp] theorem ofList_cons {Symbol : Type} (cell : Option Symbol) (cells : List (Option Symbol)) :
+    ofList (cell :: cells) = cons cell (ofList cells) := rfl
+
+/-- A list of blank cells describes a completely blank side of the tape. -/
+@[simp] theorem ofList_replicate_none {Symbol : Type} (n : Nat) :
+    ofList (List.replicate n (none : Option Symbol)) = nil := by
+  induction n <;> simp_all [List.replicate_succ, cons, nil]
+
+/-- Blank cells after the described cells do not change the tape. -/
+@[simp] theorem ofList_append_blanks {Symbol : Type} (cells : List (Option Symbol)) (n : Nat) :
+    ofList (cells ++ List.replicate n none) = ofList cells := by
+  simp only [ofList, List.foldr_append]
+  simp only [← ofList.eq_def, ofList_replicate_none]
+
+/-- A word of occupied cells has the same tape representation as `mapSome`. -/
+@[simp] theorem ofList_map_some {Symbol : Type} (word : List Symbol) :
+    ofList (word.map some) = mapSome word := by
+  induction word <;> simp_all [mapSome, cons, nil]
+
 /-- This puts the specified number of blank cells before an existing tape stack. -/
 @[simp] def blanks {Symbol : Type} : Nat → StackTape Symbol → StackTape Symbol
   | 0, tail => tail
