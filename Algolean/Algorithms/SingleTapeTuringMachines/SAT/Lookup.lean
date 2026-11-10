@@ -345,10 +345,11 @@ This describes the tape while the head is at the next query digit. The two lists
 `earlier` contains the certificate entries before the one being compared. These lists describe
 an execution for the proof and are not arguments to the Turing machine program.
 -/
-private def queryTape (queryRead queryRest : List Bool) (earlier : List Symbol)
+private def queryTape (between : List Symbol) (queryRead queryRest : List Bool) (earlier : List
+    Symbol)
     (candidateRead candidateRest : List Bool) (suffix : List Symbol) : BiTape Symbol :=
   cursor (queryRead.map markedDigit).reverse
-    (queryRest.map digit ++ nameEnd :: certificateSeparator :: earlier ++
+    (queryRest.map digit ++ nameEnd :: between ++ certificateSeparator :: earlier ++
       clauseSeparator :: candidateRead.map markedDigit ++ candidateRest.map digit ++
         nameEnd :: suffix)
 
@@ -356,9 +357,11 @@ private def queryTape (queryRead queryRest : List Bool) (earlier : List Symbol)
 This is the same comparison tape with the head at the next unread certificate digit.
 The description records which digits have been temporarily replaced on each side.
 -/
-private def candidateTape (queryRead queryRest : List Bool) (earlier : List Symbol)
+private def candidateTape (between : List Symbol) (queryRead queryRest : List Bool) (earlier :
+    List Symbol)
     (candidateRead candidateRest : List Bool) (suffix : List Symbol) : BiTape Symbol :=
-  cursor (queryRead.map markedDigit ++ queryRest.map digit ++ [nameEnd, certificateSeparator] ++
+  cursor (queryRead.map markedDigit ++ queryRest.map digit ++ (nameEnd :: between ++
+      [certificateSeparator]) ++
     earlier ++ clauseSeparator :: candidateRead.map markedDigit).reverse
       (candidateRest.map digit ++ nameEnd :: suffix)
 
@@ -387,23 +390,25 @@ Moving from the next query digit to the next candidate digit preserves the state
 The crossed entries must not contain `clauseSeparator`, so its temporary occurrence identifies
 exactly the candidate being compared.
 -/
-private theorem toCandidate_correct (queryRead queryRest : List Bool) (earlier : List Symbol)
+private theorem toCandidate_correct (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (queryRead queryRest : List Bool) (earlier : List Symbol)
     (candidateRead candidateRest : List Bool) (suffix : List Symbol) (s : TMState machine)
     (hearlier : clauseSeparator ∉ earlier)
     (htape : s.config.BiTape =
-      queryTape queryRead queryRest earlier candidateRead candidateRest suffix)
+      queryTape between queryRead queryRest earlier candidateRead candidateRest suffix)
     (hstate : s.config.state = some .comparing) :
-    let distance := queryRest.length + earlier.length + candidateRead.length + 3
+    let distance := queryRest.length + (between.length + earlier.length) + candidateRead.length + 3
     Runs toCandidate s
-      (candidateTape queryRead queryRest earlier candidateRead candidateRest suffix)
+      (candidateTape between queryRead queryRest earlier candidateRead candidateRest suffix)
       (s.headPos + distance) distance := by
   dsimp only
   have hfirst := (seekRightSymbol_correct certificateSeparator
-    (queryRead.map markedDigit).reverse (queryRest.map digit ++ [nameEnd])
+    (queryRead.map markedDigit).reverse (queryRest.map digit ++ nameEnd :: between)
     (earlier ++ clauseSeparator :: candidateRead.map markedDigit ++
       candidateRest.map digit ++ nameEnd :: suffix) s
     (by simpa [queryTape, List.append_assoc] using htape)
-    (by simp [List.mem_map, digit, certificateSeparator, nameEnd])).append_move .Right
+    (by simpa [List.mem_map, digit, certificateSeparator, nameEnd] using hbetween)).append_move
+      .Right
   have hsecond := hfirst.seq (q := do
       seekRightSymbol machine clauseSeparator
       FreeM.lift (.move .Right)
@@ -427,20 +432,23 @@ private theorem toCandidate_correct (queryRead queryRest : List Bool) (earlier :
 Returning from the next candidate digit stops on the next query digit. It preserves both names
 and the comparison state; the extra moves come from passing the already read query digits twice.
 -/
-private theorem toQuery_correct (queryRead queryRest : List Bool) (earlier : List Symbol)
+private theorem toQuery_correct (between : List Symbol) (queryRead queryRest : List Bool)
+    (earlier : List Symbol)
     (candidateRead candidateRest : List Bool) (suffix : List Symbol) (s : TMState machine)
     (htape : s.config.BiTape =
-      candidateTape queryRead queryRest earlier candidateRead candidateRest suffix)
+      candidateTape between queryRead queryRest earlier candidateRead candidateRest suffix)
     (hstate : s.config.state = some .comparing) :
-    let distance := queryRest.length + earlier.length + candidateRead.length + 3
-    Runs toQuery s (queryTape queryRead queryRest earlier candidateRead candidateRest suffix)
+    let distance := queryRest.length + (between.length + earlier.length) + candidateRead.length + 3
+    Runs toQuery s (queryTape between queryRead queryRest earlier candidateRead candidateRest
+      suffix)
       (s.headPos - distance) (distance + 2 * queryRead.length + 2) := by
   dsimp only
   have hleft := seekLeftEnd_correct _ _ s htape
   have hr := hleft.seq (q := walkMarked false .comparing) (by
     intro middle hmiddle hpos
     have hwalk := walkMarked_name false .comparing queryRead queryRest []
-      (certificateSeparator :: earlier ++ clauseSeparator :: candidateRead.map markedDigit ++
+      (between ++ certificateSeparator :: earlier ++ clauseSeparator :: candidateRead.map
+        markedDigit ++
         candidateRest.map digit ++ nameEnd :: suffix) middle (by decide)
       (by simpa [candidateTape, List.append_assoc] using
         congrArg SingleTapeTM.Cfg.BiTape hmiddle)
@@ -455,9 +463,10 @@ This describes the restored tape just after one certificate entry. Both names ar
 names again, and `value` determines the restored certificate sign. It is a tape description for
 proofs, not a program that receives these names as arguments.
 -/
-private def entryEndTape (query : Variable) (earlier : List Symbol) (value : Bool)
+private def entryEndTape (between : List Symbol) (query : Variable) (earlier : List Symbol)
+    (value : Bool)
     (candidate : Variable) (suffix : List Symbol) : BiTape Symbol :=
-  cursor (query.map digit ++ [nameEnd, certificateSeparator] ++ earlier ++
+  cursor (query.map digit ++ (nameEnd :: between ++ [certificateSeparator]) ++ earlier ++
     valueSign value :: candidate.map digit ++ [nameEnd]).reverse suffix
 
 /--
@@ -465,23 +474,27 @@ Restoring a comparison returns both names and the entry's sign to their original
 The head finishes immediately after that entry. The state recording the comparison result
 is preserved, and the stated move count includes returning to the query and reading right again.
 -/
-private theorem restoreNames_correct (equal value : Bool) (queryRead queryRest : List Bool)
+private theorem restoreNames_correct (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (equal value : Bool) (queryRead queryRest : List Bool)
     (earlier : List Symbol) (candidateRead candidateRest : List Bool) (suffix : List Symbol)
     (s : TMState machine) (hearlier : clauseSeparator ∉ earlier)
     (htape : s.config.BiTape =
-      candidateTape queryRead queryRest earlier candidateRead candidateRest suffix)
+      candidateTape between queryRead queryRest earlier candidateRead candidateRest suffix)
     (hstate : s.config.state = some (comparisonResult equal)) :
     Runs (restoreNames equal value) s
-      (entryEndTape (queryRead ++ queryRest) earlier value (candidateRead ++ candidateRest) suffix)
+      (entryEndTape between (queryRead ++ queryRest) earlier value (candidateRead ++
+        candidateRest) suffix)
       (s.headPos + candidateRest.length + 1)
-      (2 * (queryRead.length + queryRest.length + earlier.length + candidateRead.length) +
+      (2 * (queryRead.length + queryRest.length + (between.length + earlier.length) +
+        candidateRead.length) +
         candidateRest.length + 9) := by
   have hresume : comparisonResult equal ≠ .walking := by cases equal <;> decide
   have hleft := seekLeftEnd_correct _ _ s htape
   have hquery := hleft.seq (q := walkMarked true (comparisonResult equal)) (by
     intro middle hmiddle hpos
     have hwalk := walkMarked_name true (comparisonResult equal) queryRead queryRest []
-      (certificateSeparator :: earlier ++ clauseSeparator :: candidateRead.map markedDigit ++
+      (between ++ certificateSeparator :: earlier ++ clauseSeparator :: candidateRead.map
+        markedDigit ++
         candidateRest.map digit ++ nameEnd :: suffix) middle hresume
       (by simpa [candidateTape, List.append_assoc] using
         congrArg SingleTapeTM.Cfg.BiTape hmiddle)
@@ -492,11 +505,12 @@ private theorem restoreNames_correct (equal value : Bool) (queryRead queryRest :
       FreeM.lift (.move .Right)) (by
     intro middle hmiddle hpos
     have hseek := (seekRightSymbol_correct certificateSeparator
-      (queryRead.map digit).reverse (queryRest.map digit ++ [nameEnd])
+      (queryRead.map digit).reverse (queryRest.map digit ++ nameEnd :: between)
       (earlier ++ clauseSeparator :: candidateRead.map markedDigit ++
         candidateRest.map digit ++ nameEnd :: suffix) middle
       (by simpa [List.append_assoc] using congrArg SingleTapeTM.Cfg.BiTape hmiddle)
-      (by simp [List.mem_map, digit, certificateSeparator, nameEnd])).append_move .Right
+      (by simpa [List.mem_map, digit, certificateSeparator, nameEnd] using
+        hbetween)).append_move .Right
     simpa [hpos] using hseek)
   have hsign := hseparator.seq (q := do
       seekRightSymbol machine clauseSeparator
@@ -533,31 +547,34 @@ Finishing a comparison records its Boolean result, restores the complete tape, a
 the certificate entry. The move count is the same as for `restoreNames`, since setting the state
 uses no head moves.
 -/
-private theorem finishComparison_correct (equal value : Bool) (queryRead queryRest : List Bool)
+private theorem finishComparison_correct (between : List Symbol) (hbetween :
+    certificateSeparator ∉ between) (equal value : Bool) (queryRead queryRest : List Bool)
     (earlier : List Symbol) (candidateRead candidateRest : List Bool) (suffix : List Symbol)
     (s : TMState machine) (hearlier : clauseSeparator ∉ earlier)
     (htape : s.config.BiTape =
-      candidateTape queryRead queryRest earlier candidateRead candidateRest suffix) :
+      candidateTape between queryRead queryRest earlier candidateRead candidateRest suffix) :
     ∃ cost final, Completes (finishComparison equal value) s cost final ∧
       final.config = ⟨some (comparisonResult equal),
-        entryEndTape (queryRead ++ queryRest) earlier value
+        entryEndTape between (queryRead ++ queryRest) earlier value
           (candidateRead ++ candidateRest) suffix⟩ ∧
       final.headPos = s.headPos + candidateRest.length + 1 ∧
-      cost.steps = 2 * (queryRead.length + queryRest.length + earlier.length +
+      cost.steps = 2 * (queryRead.length + queryRest.length + (between.length + earlier.length) +
         candidateRead.length) + candidateRest.length + 9 := by
   let initial : TMState machine := {s with config.state := some (comparisonResult equal)}
   obtain ⟨cost, final, hr, hfinal, hpos, hsteps⟩ :=
-    restoreNames_correct equal value queryRead queryRest earlier candidateRead candidateRest suffix
+    restoreNames_correct between hbetween equal value queryRead queryRest earlier candidateRead
+      candidateRest suffix
       initial hearlier (by simpa [initial] using htape) rfl
   exact ⟨0 + cost, final, (completes_update s _).seq hr, hfinal, hpos, by simpa using hsteps⟩
 
 /-- Replacing the next query digit and moving right makes that digit part of the read prefix. -/
-private theorem markQuery_correct (bit : Bool) (seen queryRest candidateRest : List Bool)
+private theorem markQuery_correct (between : List Symbol) (bit : Bool) (seen queryRest
+    candidateRest : List Bool)
     (earlier suffix : List Symbol) (s : TMState machine)
     (htape : s.config.BiTape =
-      queryTape seen (bit :: queryRest) earlier seen candidateRest suffix) :
+      queryTape between seen (bit :: queryRest) earlier seen candidateRest suffix) :
     Runs (do FreeM.lift (.write (some (markedDigit bit))); FreeM.lift (.move .Right)) s
-      (queryTape (seen ++ [bit]) queryRest earlier seen candidateRest suffix)
+      (queryTape between (seen ++ [bit]) queryRest earlier seen candidateRest suffix)
       (s.headPos + 1) 1 := by
   simpa [queryTape, TMState.move, htape, List.map_append,
     List.reverse_append] using (write_correct s (some (markedDigit bit))).append_move .Right
@@ -566,19 +583,23 @@ private theorem markQuery_correct (bit : Bool) (seen queryRest candidateRest : L
 If the next digits match, comparing them restores neither yet: it marks both as read and returns
 to the next query digit in state `comparing`. All other tape symbols are unchanged.
 -/
-private theorem compareDigit_match (bit value : Bool) (seen queryRest candidateRest : List Bool)
+private theorem compareDigit_match (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (bit value : Bool) (seen queryRest candidateRest : List Bool)
     (earlier suffix : List Symbol) (s : TMState machine)
     (hearlier : clauseSeparator ∉ earlier)
     (htape : s.config.BiTape =
-      queryTape seen (bit :: queryRest) earlier seen (bit :: candidateRest) suffix)
+      queryTape between seen (bit :: queryRest) earlier seen (bit :: candidateRest) suffix)
     (hstate : s.config.state = some .comparing) :
     Runs (compareDigit bit value) s
-      (queryTape (seen ++ [bit]) queryRest earlier (seen ++ [bit]) candidateRest suffix)
-      (s.headPos + 1) (4 * seen.length + 2 * queryRest.length + 2 * earlier.length + 13) := by
-  have hmark := markQuery_correct bit seen queryRest (bit :: candidateRest) earlier suffix s htape
+      (queryTape between (seen ++ [bit]) queryRest earlier (seen ++ [bit]) candidateRest suffix)
+      (s.headPos + 1) (4 * seen.length + 2 * queryRest.length + 2 * (between.length +
+        earlier.length) + 13) := by
+  have hmark := markQuery_correct between bit seen queryRest (bit :: candidateRest) earlier
+      suffix s htape
   have hthere := hmark.seq (q := toCandidate) (by
     intro middle hmiddle hpos
-    have h := toCandidate_correct (seen ++ [bit]) queryRest earlier seen (bit :: candidateRest)
+    have h := toCandidate_correct between hbetween (seen ++ [bit]) queryRest earlier seen (bit
+      :: candidateRest)
       suffix middle hearlier (by simp [hmiddle]) (by simp [hmiddle, hstate])
     simpa [hpos] using h)
   have hback := hthere.seq (q := branch (.tapeIs (some (digit bit)))
@@ -587,14 +608,16 @@ private theorem compareDigit_match (bit value : Bool) (seen queryRest candidateR
     intro middle hmiddle hpos
     have htarget : Runs
         (do FreeM.lift (.write (some (markedDigit bit))); FreeM.lift (.move .Right)) middle
-        (candidateTape (seen ++ [bit]) queryRest earlier (seen ++ [bit]) candidateRest suffix)
+        (candidateTape between (seen ++ [bit]) queryRest earlier (seen ++ [bit]) candidateRest
+          suffix)
         (middle.headPos + 1) 1 := by
       simpa [candidateTape, TMState.move, hmiddle, List.map_append,
         List.reverse_append, List.append_assoc] using
           (write_correct middle (some (markedDigit bit))).append_move .Right
     have hreturn := htarget.seq (q := toQuery) (by
       intro final hfinal hfinalPos
-      have h := toQuery_correct (seen ++ [bit]) queryRest earlier (seen ++ [bit]) candidateRest
+      have h := toQuery_correct between (seen ++ [bit]) queryRest earlier (seen ++ [bit])
+        candidateRest
         suffix final (by simp [hfinal]) (by simp [hfinal, hmiddle, hstate])
       simpa [hfinalPos] using h)
     have hbranch : Runs (branch (.tapeIs (some (digit bit)))
@@ -609,28 +632,33 @@ private theorem compareDigit_match (bit value : Bool) (seen queryRest candidateR
 If the certificate name ends early or its next digit differs, comparing the query digit restores
 both full names and finishes after the certificate entry in state `different`.
 -/
-private theorem compareDigit_mismatch (bit value : Bool) (seen queryRest candidateRest : List Bool)
+private theorem compareDigit_mismatch (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (bit value : Bool) (seen queryRest candidateRest : List Bool)
     (earlier suffix : List Symbol) (s : TMState machine)
     (hearlier : clauseSeparator ∉ earlier) (hdifferent : candidateRest.head? ≠ some bit)
     (htape : s.config.BiTape =
-      queryTape seen (bit :: queryRest) earlier seen candidateRest suffix)
+      queryTape between seen (bit :: queryRest) earlier seen candidateRest suffix)
     (hstate : s.config.state = some .comparing) :
     ∃ cost final, Completes (compareDigit bit value) s cost final ∧
       final.config = ⟨some .different,
-        entryEndTape (seen ++ bit :: queryRest) earlier value (seen ++ candidateRest) suffix⟩ ∧
-      final.headPos = s.headPos + queryRest.length + earlier.length + seen.length +
+        entryEndTape between (seen ++ bit :: queryRest) earlier value (seen ++ candidateRest)
+          suffix⟩ ∧
+      final.headPos = s.headPos + queryRest.length + (between.length + earlier.length) +
+        seen.length +
         candidateRest.length + 5 ∧
-      cost.steps = 5 * seen.length + 3 * queryRest.length + 3 * earlier.length +
+      cost.steps = 5 * seen.length + 3 * queryRest.length + 3 * (between.length + earlier.length) +
         candidateRest.length + 15 := by
-  have hmark := markQuery_correct bit seen queryRest candidateRest earlier suffix s htape
+  have hmark := markQuery_correct between bit seen queryRest candidateRest earlier suffix s htape
   have hthere := hmark.seq (q := toCandidate) (by
     intro middle hmiddle hpos
-    have h := toCandidate_correct (seen ++ [bit]) queryRest earlier seen candidateRest suffix
+    have h := toCandidate_correct between hbetween (seen ++ [bit]) queryRest earlier seen
+      candidateRest suffix
       middle hearlier (by simp [hmiddle]) (by simp [hmiddle, hstate])
     simpa [hpos] using h)
   obtain ⟨a, middle, hpre, hmiddle, hpos, ha⟩ := hthere
   obtain ⟨b, final, hfinish, hfinal, hfinalPos, hb⟩ :=
-    finishComparison_correct false value (seen ++ [bit]) queryRest earlier seen candidateRest
+    finishComparison_correct between hbetween false value (seen ++ [bit]) queryRest earlier seen
+      candidateRest
       suffix middle hearlier (by simp [hmiddle])
   have hhead : middle.config.BiTape.head ≠ some (digit bit) := by
     cases candidateRest with
@@ -667,20 +695,25 @@ private theorem compareBody_digit (bit value : Bool) (s final : TMState machine)
     simpa [hhead, digit] using h
 
 /-- When the query name has ended, the body checks that the candidate name ends there too. -/
-private theorem compareBody_end (value : Bool) (seen candidateRest : List Bool)
+private theorem compareBody_end (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (value : Bool) (seen candidateRest : List Bool)
     (earlier suffix : List Symbol) (s : TMState machine)
     (hearlier : clauseSeparator ∉ earlier)
-    (htape : s.config.BiTape = queryTape seen [] earlier seen candidateRest suffix)
+    (htape : s.config.BiTape = queryTape between seen [] earlier seen candidateRest suffix)
     (hstate : s.config.state = some .comparing) :
     ∃ cost final, Completes (compareBody value) s cost final ∧
       final.config = ⟨some (comparisonResult (decide (candidateRest = []))),
-        entryEndTape seen earlier value (seen ++ candidateRest) suffix⟩ ∧
-      final.headPos = s.headPos + earlier.length + seen.length + candidateRest.length + 4 ∧
-      cost.steps = 5 * seen.length + 3 * earlier.length + candidateRest.length + 12 := by
+        entryEndTape between seen earlier value (seen ++ candidateRest) suffix⟩ ∧
+      final.headPos = s.headPos + (between.length + earlier.length) + seen.length +
+        candidateRest.length + 4 ∧
+      cost.steps = 5 * seen.length + 3 * (between.length + earlier.length) +
+        candidateRest.length + 12 := by
   obtain ⟨a, middle, hpre, hmiddle, hpos, ha⟩ :=
-    toCandidate_correct seen [] earlier seen candidateRest suffix s hearlier htape hstate
+    toCandidate_correct between hbetween seen [] earlier seen candidateRest suffix s hearlier
+      htape hstate
   obtain ⟨b, final, hfinish, hfinal, hfinalPos, hb⟩ :=
-    finishComparison_correct (decide (candidateRest = [])) value seen [] earlier seen candidateRest
+    finishComparison_correct between hbetween (decide (candidateRest = [])) value seen []
+      earlier seen candidateRest
       suffix middle hearlier (by simp [hmiddle])
   have hbranch : Completes (branch (.tapeIs (some nameEnd)) (finishComparison true value)
       (finishComparison false value)) middle b final := by
@@ -719,22 +752,23 @@ Comparing the unread parts of two names decides their equality and restores both
 The bound counts all moves between the two names, including the moves needed to restore them.
 The lists in this theorem describe the tape; the program itself only receives the tape.
 -/
-private theorem compareLoop_correct (value : Bool) (seen query candidate : List Bool)
+private theorem compareLoop_correct (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (value : Bool) (seen query candidate : List Bool)
     (earlier suffix : List Symbol) (s : TMState machine)
     (hearlier : clauseSeparator ∉ earlier)
-    (htape : s.config.BiTape = queryTape seen query earlier seen candidate suffix)
+    (htape : s.config.BiTape = queryTape between seen query earlier seen candidate suffix)
     (hstate : s.config.state = some .comparing) :
     let K := 16 * (2 * seen.length + query.length + candidate.length +
-      earlier.length + suffix.length + 5)
+      (between.length + earlier.length) + suffix.length + 5)
     ∃ cost final, Completes (compareLoop value) s cost final ∧
       final.config = ⟨some (comparisonResult (decide (query = candidate))),
-        entryEndTape (seen ++ query) earlier value (seen ++ candidate) suffix⟩ ∧
-      final.headPos = s.headPos + query.length + earlier.length + seen.length +
+        entryEndTape between (seen ++ query) earlier value (seen ++ candidate) suffix⟩ ∧
+      final.headPos = s.headPos + query.length + (between.length + earlier.length) + seen.length +
         candidate.length + 4 ∧ cost.steps ≤ K * (query.length + 1) := by
   induction query generalizing seen candidate s with
   | nil =>
     obtain ⟨cost, final, hb, hf, hp, ht⟩ :=
-      compareBody_end value seen candidate earlier suffix s hearlier htape hstate
+      compareBody_end between hbetween value seen candidate earlier suffix s hearlier htape hstate
     have hn : final.config.state ≠ some State.comparing := by
       by_cases h : candidate = [] <;> simp [hf, comparisonResult, h]
     refine ⟨cost, final, compareLoop_done value s final cost hstate hb hn, ?_, ?_, ?_⟩
@@ -751,7 +785,8 @@ private theorem compareLoop_correct (value : Bool) (seen query candidate : List 
         have heq : other = bit := by simpa using hhead
         subst other
         obtain ⟨a, middle, hstep, hmiddle, hpos, ha⟩ :=
-          compareDigit_match bit value seen query candidate earlier suffix s hearlier htape hstate
+          compareDigit_match between hbetween bit value seen query candidate earlier suffix s
+            hearlier htape hstate
         have hb := compareBody_digit bit value s middle a (by simp [htape, queryTape]) hstep
         obtain ⟨b, final, hr, hf, hp, hbound⟩ :=
           ih (seen ++ [bit]) candidate middle (by simp [hmiddle]) (by simp [hmiddle, hstate])
@@ -762,7 +797,7 @@ private theorem compareLoop_correct (value : Bool) (seen query candidate : List 
           simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
           lia
         · let K := 16 * (2 * seen.length + (bit :: query).length +
-            (bit :: candidate).length + earlier.length + suffix.length + 5)
+            (bit :: candidate).length + (between.length + earlier.length) + suffix.length + 5)
           have hfirst : a.steps ≤ K := by
             rw [ha]
             dsimp [K]
@@ -776,7 +811,8 @@ private theorem compareLoop_correct (value : Bool) (seen query candidate : List 
             a.steps + b.steps ≤ K + K * (query.length + 1) := Nat.add_le_add hfirst hrest
             _ = K * ((bit :: query).length + 1) := by simp only [List.length_cons]; ring
     · obtain ⟨cost, final, hd, hf, hp, ht⟩ :=
-        compareDigit_mismatch bit value seen query candidate earlier suffix s hearlier hhead
+        compareDigit_mismatch between hbetween bit value seen query candidate earlier suffix s
+          hearlier hhead
           htape hstate
       have hne : bit :: query ≠ candidate := by
         rintro rfl
@@ -789,7 +825,7 @@ private theorem compareLoop_correct (value : Bool) (seen query candidate : List 
         rw [hp]
         lia
       · let K := 16 * (2 * seen.length + (bit :: query).length + candidate.length +
-          earlier.length + suffix.length + 5)
+          (between.length + earlier.length) + suffix.length + 5)
         have hcost : cost.steps ≤ K := by
           rw [ht]
           dsimp [K]
@@ -801,19 +837,22 @@ private theorem compareLoop_correct (value : Bool) (seen query candidate : List 
 /--
 Starting a comparison with no replaced digits decides equality and restores the original names.
 -/
-private theorem compareNames_correct (value : Bool) (query candidate : Variable)
+private theorem compareNames_correct (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (value : Bool) (query candidate : Variable)
     (earlier suffix : List Symbol) (s : TMState machine)
     (hearlier : clauseSeparator ∉ earlier)
-    (htape : s.config.BiTape = queryTape [] query earlier [] candidate suffix) :
+    (htape : s.config.BiTape = queryTape between [] query earlier [] candidate suffix) :
     ∃ cost final, Completes (compareNames value) s cost final ∧
       final.config = ⟨some (comparisonResult (decide (query = candidate))),
-        entryEndTape query earlier value candidate suffix⟩ ∧
-      final.headPos = s.headPos + query.length + earlier.length + candidate.length + 4 ∧
-      cost.steps ≤ 16 * (query.length + candidate.length + earlier.length + suffix.length + 5) *
+        entryEndTape between query earlier value candidate suffix⟩ ∧
+      final.headPos = s.headPos + query.length + (between.length + earlier.length) +
+        candidate.length + 4 ∧
+      cost.steps ≤ 16 * (query.length + candidate.length + (between.length + earlier.length) +
+        suffix.length + 5) *
         (query.length + 1) := by
   let initial : TMState machine := {s with config.state := some State.comparing}
   obtain ⟨cost, final, hr, hf, hp, ht⟩ :=
-    compareLoop_correct value [] query candidate earlier suffix initial hearlier
+    compareLoop_correct between hbetween value [] query candidate earlier suffix initial hearlier
       (by simpa [initial] using htape) rfl
   refine ⟨0 + cost, final, (completes_update s .comparing).seq hr, ?_, ?_, ?_⟩
   · simpa using hf
@@ -824,30 +863,32 @@ private theorem compareNames_correct (value : Bool) (query candidate : Variable)
 Checking one entry restores it and either returns its value or continues the search. Its sign
 is remembered by the Boolean `value`, which is selected by the tape test in `lookupBody`.
 -/
-private theorem checkEntry_correct (value : Bool) (query candidate : Variable)
+private theorem checkEntry_correct (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (value : Bool) (query candidate : Variable)
     (earlier suffix : List Symbol) (s : TMState machine)
     (hearlier : clauseSeparator ∉ earlier)
     (htape : s.config.BiTape =
-      cursor (query.map digit ++ [nameEnd, certificateSeparator] ++ earlier).reverse
+      cursor (query.map digit ++ (nameEnd :: between ++ [certificateSeparator]) ++ earlier).reverse
         (valueSign value :: candidate.map digit ++ nameEnd :: suffix)) :
     ∃ cost final, Completes (checkEntry value) s cost final ∧
       final.config = ⟨some (if query = candidate then State.value value else .searching),
-        entryEndTape query earlier value candidate suffix⟩ ∧
+        entryEndTape between query earlier value candidate suffix⟩ ∧
       final.headPos = s.headPos + candidate.length + 2 ∧
-      cost.steps ≤ 17 * (query.length + candidate.length + earlier.length + suffix.length + 5) *
+      cost.steps ≤ 17 * (query.length + candidate.length + (between.length + earlier.length) +
+        suffix.length + 5) *
         (query.length + 1) := by
   have hwrite := write_correct s (some clauseSeparator)
   have hstart := hwrite.seq (q := seekLeftEnd machine) (by
     intro middle hmiddle hpos
     have h := seekLeftEnd_correct _ _ middle
       (show middle.config.BiTape = cursor
-        (query.map digit ++ [nameEnd, certificateSeparator] ++ earlier).reverse
+        (query.map digit ++ (nameEnd :: between ++ [certificateSeparator]) ++ earlier).reverse
         (clauseSeparator :: candidate.map digit ++ nameEnd :: suffix) by
         simp [hmiddle, htape])
     simpa [hpos] using h)
   obtain ⟨a, initial, hpre, hinitial, hstartPos, ha⟩ := hstart
   obtain ⟨b, middle, hcompare, hmiddle, hpos, hb⟩ :=
-    compareNames_correct value query candidate earlier suffix initial hearlier
+    compareNames_correct between hbetween value query candidate earlier suffix initial hearlier
       (by simpa [queryTape, List.append_assoc] using
         congrArg SingleTapeTM.Cfg.BiTape hinitial)
   let result := if query = candidate then State.value value else .searching
@@ -867,7 +908,7 @@ private theorem checkEntry_correct (value : Bool) (query candidate : Variable)
   · change middle.headPos = _
     rw [hpos, hstartPos]
     lia
-  · let W := query.length + candidate.length + earlier.length + suffix.length + 5
+  · let W := query.length + candidate.length + (between.length + earlier.length) + suffix.length + 5
     have hpreBound : a.steps ≤ W := by
       rw [ha]
       dsimp [W]
@@ -901,20 +942,20 @@ private theorem lookupBody_entry (value : Bool) (s final : TMState machine) (cos
 
 /-- Every certificate entry uses at least two symbols, and one final symbol ends the certificate. -/
 private theorem certificate_length_le (certificate : Certificate) :
-    2 * certificate.length + 1 ≤ (Parsing.certificateSymbols certificate).length := by
+    2 * certificate.length + 1 ≤ (certificateSymbols certificate).length := by
   induction certificate with
-  | nil => simp [Parsing.certificateSymbols_nil]
+  | nil => simp [certificateSymbols_nil]
   | cons literal rest ih =>
     cases literal <;>
-      simp only [Parsing.certificateSymbols_pos, Parsing.certificateSymbols_neg, List.length_cons,
+      simp only [certificateSymbols_pos, certificateSymbols_neg, List.length_cons,
         List.length_append, List.length_map] <;> lia
 
 /-- Adding an assignment writes its sign and binary name before the remaining certificate. -/
 private theorem certificateSymbols_entry (name : Variable) (value : Bool) (rest : Certificate) :
-    Parsing.certificateSymbols (Certificate.entry name value :: rest) =
-      valueSign value :: name.map digit ++ nameEnd :: Parsing.certificateSymbols rest := by
+    certificateSymbols (Certificate.entry name value :: rest) =
+      valueSign value :: name.map digit ++ nameEnd :: certificateSymbols rest := by
   cases value <;>
-    simp [Certificate.entry, Parsing.certificateSymbols_pos, Parsing.certificateSymbols_neg,
+    simp [Certificate.entry, certificateSymbols_pos, certificateSymbols_neg,
       valueSign]
 
 /-- One completed search iteration can precede the remaining loop and the return to the start. -/
@@ -932,18 +973,20 @@ Searching the remaining entries returns the first listed value for the query, or
 It restores the whole word and returns to the query's first cell. Earlier entries are part of the
 unchanged tape; the bound counts the whole occupied word, including those earlier entries.
 -/
-private theorem lookupLoop_correct (query : Variable) (certificate : Certificate)
+private theorem lookupLoop_correct (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (query : Variable) (certificate : Certificate)
     (earlier : List Symbol) (s : TMState machine) (hearlier : clauseSeparator ∉ earlier)
     (htape : s.config.BiTape =
-      cursor (query.map digit ++ [nameEnd, certificateSeparator] ++ earlier).reverse
-        (Parsing.certificateSymbols certificate))
+      cursor (query.map digit ++ (nameEnd :: between ++ [certificateSeparator]) ++ earlier).reverse
+        (certificateSymbols certificate))
     (hstate : s.config.state = some .searching) :
-    let W := query.length + earlier.length + (Parsing.certificateSymbols certificate).length + 3
+    let W := query.length + (between.length + earlier.length) + (certificateSymbols
+      certificate).length + 3
     ∃ cost final, Completes (do lookupLoop; seekLeftEnd machine) s cost final ∧
       final.config = ⟨some (.value (Certificate.assignment certificate query)),
-        cursor [] (query.map digit ++ [nameEnd, certificateSeparator] ++ earlier ++
-          Parsing.certificateSymbols certificate)⟩ ∧
-      final.headPos = s.headPos - (query.length + earlier.length + 2) ∧
+        cursor [] (query.map digit ++ (nameEnd :: between ++ [certificateSeparator]) ++ earlier ++
+          certificateSymbols certificate)⟩ ∧
+      final.headPos = s.headPos - (query.length + (between.length + earlier.length) + 2) ∧
       cost.steps ≤ 18 * W * (query.length + 1) * (certificate.length + 1) := by
   induction certificate generalizing earlier s with
   | nil =>
@@ -951,7 +994,7 @@ private theorem lookupLoop_correct (query : Variable) (certificate : Certificate
     have hb : Completes lookupBody s 0 middle := by
       unfold lookupBody
       apply Completes.branch
-      simpa [htape, Parsing.certificateSymbols_nil, middle] using
+      simpa [htape, certificateSymbols_nil, middle] using
         completes_update s (.value false)
     have hfalse := completes_while_false (.stateIs (some State.searching)) lookupBody middle
       (by simp [middle])
@@ -961,14 +1004,15 @@ private theorem lookupLoop_correct (query : Variable) (certificate : Certificate
       seekLeftEnd_correct _ _ middle (by simpa [middle] using htape)
     refine ⟨0 + cost, final, hloopexec.seq hr, ?_, ?_, ?_⟩
     · simpa [middle, Certificate.assignment] using hf
-    · simpa [middle, add_assoc, add_comm, add_left_comm] using hp
-    · let W := query.length + earlier.length + 4
+    · simp [middle] at hp
+      lia
+    · let W := query.length + (between.length + earlier.length) + 4
       have hcost : cost.steps = W := by
         simp only [List.length_append, List.length_reverse, List.length_cons, List.length_map] at ht
         dsimp [W]
         lia
       change (0 + cost).steps ≤ _
-      simp only [zero_add, hcost, Parsing.certificateSymbols_nil, List.length_cons,
+      simp only [zero_add, hcost, certificateSymbols_nil, List.length_cons,
         List.length_nil, List.length_nil, zero_add, mul_one]
       change W ≤ 18 * W * (query.length + 1)
       calc
@@ -983,10 +1027,11 @@ private theorem lookupLoop_correct (query : Variable) (certificate : Certificate
       | pos name => exact ⟨name, true, rfl⟩
       | neg name => exact ⟨name, false, rfl⟩
     subst literal
-    let W := query.length + earlier.length +
-      (Parsing.certificateSymbols (Certificate.entry candidate value :: rest)).length + 3
+    let W := query.length + (between.length + earlier.length) +
+      (certificateSymbols (Certificate.entry candidate value :: rest)).length + 3
     obtain ⟨a, middle, hcheck, hmiddle, hpos, ha⟩ :=
-      checkEntry_correct value query candidate earlier (Parsing.certificateSymbols rest) s hearlier
+      checkEntry_correct between hbetween value query candidate earlier
+        (certificateSymbols rest) s hearlier
         (by simpa [certificateSymbols_entry] using htape)
     have hbody := lookupBody_entry value s middle a
       (by simp [htape, certificateSymbols_entry]) hcheck
@@ -1068,9 +1113,10 @@ private theorem lookupLoop_correct (query : Variable) (certificate : Certificate
             simp only [List.length_cons]
             ring
 
-private theorem lookup_correct_impl (name : Variable) (certificate : Certificate)
+private theorem lookup_correct_impl (between : List Symbol) (hbetween : certificateSeparator ∉
+    between) (name : Variable) (certificate : Certificate)
     (s : TMState machine) :
-    let word := name.map digit ++ nameEnd :: certificateSeparator ::
+    let word := name.map digit ++ nameEnd :: between ++ certificateSeparator ::
       (certificateEncoding.encode certificate).map Sum.inl
     s.config.BiTape = cursor [] word →
     ∃ cost final, Completes lookup s cost final ∧
@@ -1078,21 +1124,24 @@ private theorem lookup_correct_impl (name : Variable) (certificate : Certificate
       final.headPos = s.headPos ∧ cost.steps ≤ 19 * (word.length + 1) ^ 3 := by
   dsimp only
   intro htape
-  have hstart := (seekRightSymbol_correct certificateSeparator [] (name.map digit ++ [nameEnd])
-    (Parsing.certificateSymbols certificate) s
-    (by simpa [Parsing.certificateSymbols, List.append_assoc] using htape)
-    (by simp [List.mem_map, digit, certificateSeparator, nameEnd])).append_move .Right
+  have hstart := (seekRightSymbol_correct certificateSeparator [] (name.map digit ++ nameEnd ::
+      between)
+    (certificateSymbols certificate) s
+    (by simpa [certificateSymbols, List.append_assoc] using htape)
+    (by simpa [List.mem_map, digit, certificateSeparator, nameEnd] using hbetween)).append_move
+      .Right
   obtain ⟨a, middle, hpre, hmiddle, hpos, ha⟩ := hstart
   let initial : TMState machine := {middle with config.state := some State.searching}
-  obtain ⟨b, final, hr, hf, hp, hb⟩ := lookupLoop_correct name certificate [] initial (by simp)
+  obtain ⟨b, final, hr, hf, hp, hb⟩ := lookupLoop_correct between hbetween name certificate []
+      initial (by simp)
     (by simpa [initial, TMState.move, List.reverse_append, List.append_assoc] using
       congrArg SingleTapeTM.Cfg.BiTape hmiddle) rfl
   refine ⟨a + (0 + b), final, ?_, ?_, ?_, ?_⟩
   · simpa [lookup, bind_assoc] using hpre.seq ((completes_update middle .searching).seq hr)
-  · simpa [htape, Parsing.certificateSymbols, List.append_assoc] using hf
+  · simpa [htape, certificateSymbols, List.append_assoc] using hf
   · simp [initial, hpos] at hp
     simpa [add_assoc] using hp
-  · let W := name.length + (Parsing.certificateSymbols certificate).length + 3
+  · let W := name.length + between.length + (certificateSymbols certificate).length + 3
     have hname : name.length + 1 ≤ W := by dsimp [W]; lia
     have hcertificateLength := certificate_length_le certificate
     have hcertificate : certificate.length + 1 ≤ W := by dsimp [W]; lia
@@ -1115,7 +1164,7 @@ private theorem lookup_correct_impl (name : Variable) (certificate : Certificate
         _ ≤ W ^ 3 + 18 * W ^ 3 := Nat.add_le_add_right hcube _
         _ = 19 * W ^ 3 := by ring
     convert htotal using 1 <;>
-      (try simp only [W, Parsing.certificateSymbols, List.length_append, List.length_map,
+      (try simp only [W, certificateSymbols, List.length_append, List.length_map,
         List.length_cons, TMCost.add_steps, zero_add])
     all_goals ring
 
@@ -1134,6 +1183,25 @@ theorem lookup_correct (name : Variable) (certificate : Certificate) (s : TMStat
     ∃ cost final, Completes lookup s cost final ∧
       final.config = ⟨some (.value (Certificate.assignment certificate name)), s.config.BiTape⟩ ∧
       final.headPos = s.headPos ∧ cost.steps ≤ 19 * (word.length + 1) ^ 3 :=
-  lookup_correct_impl name certificate s
+  by
+    simpa only [List.append_assoc, List.singleton_append] using
+      lookup_correct_impl [] (by simp) name certificate s
+
+/--
+The lookup also works when additional occupied cells lie between the query name's ending and
+the certificate separator. These cells may contain the rest of a formula. They must not contain
+the certificate separator itself. The program preserves all of them, restores both names, and
+returns to the starting cell. The move bound counts this additional part of the input too.
+-/
+theorem lookup_between_correct (between : List Symbol)
+    (hbetween : certificateSeparator ∉ between) (name : Variable) (certificate : Certificate)
+    (s : TMState machine) :
+    let word := name.map digit ++ nameEnd :: between ++ certificateSeparator ::
+      (certificateEncoding.encode certificate).map Sum.inl
+    s.config.BiTape = cursor [] word →
+    ∃ cost final, Completes lookup s cost final ∧
+      final.config = ⟨some (.value (Certificate.assignment certificate name)), s.config.BiTape⟩ ∧
+      final.headPos = s.headPos ∧ cost.steps ≤ 19 * (word.length + 1) ^ 3 :=
+  lookup_correct_impl between hbetween name certificate s
 
 end Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup

@@ -78,41 +78,6 @@ namespace Parsing
 
 open Problems.SAT
 
-/-- These are the symbols of a certificate as they appear on the verifier's tape. -/
-@[expose] def certificateSymbols (certificate : Certificate) : List Symbol :=
-  (certificateEncoding.encode certificate).map Sum.inl
-
-/-- These are the symbols of a formula as they appear on the verifier's tape. -/
-private def formulaSymbols (formula : CNF Variable) : List Symbol :=
-  (encoding.encode formula).map Sum.inl
-
-/-- An empty certificate is written with just the symbol ending the list of assignments. -/
-theorem certificateSymbols_nil : certificateSymbols [] = [clauseEnd] := rfl
-
-/-- A true assignment writes its value, the binary name, and the symbol ending that name. -/
-theorem certificateSymbols_pos (name : Variable) (rest : Certificate) :
-    certificateSymbols (.pos name :: rest) =
-      positiveSign :: name.map digit ++ nameEnd :: certificateSymbols rest := by
-  simp [certificateSymbols, certificateEncoding_encode_pos, List.map_append, List.map_map,
-    Function.comp_def, positiveSign, nameEnd, digit]
-
-/-- A false assignment writes its value, the binary name, and the symbol ending that name. -/
-theorem certificateSymbols_neg (name : Variable) (rest : Certificate) :
-    certificateSymbols (.neg name :: rest) =
-      negativeSign :: name.map digit ++ nameEnd :: certificateSymbols rest := by
-  simp [certificateSymbols, certificateEncoding_encode_neg, List.map_append, List.map_map,
-    Function.comp_def, negativeSign, nameEnd, digit]
-
-/-- An empty formula is written with just the symbol ending the formula. -/
-private theorem formulaSymbols_nil : formulaSymbols [] = [formulaEnd] := rfl
-
-/-- The first clause is followed by its separating symbol and the remaining clauses. -/
-private theorem formulaSymbols_cons (clause : Clause Variable) (rest : CNF Variable) :
-    formulaSymbols (clause :: rest) =
-      certificateSymbols clause ++ clauseSeparator :: formulaSymbols rest := by
-  simp [formulaSymbols, certificateSymbols, encoding_encode_cons, List.map_append,
-    clauseSeparator]
-
 /-- Reading binary digits leaves the machine in the state for reading a formula's variable name. -/
 private theorem foldl_formulaName (name : Variable) :
     (name.map digit).foldl formatNext .formulaName = .formulaName := by

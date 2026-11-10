@@ -29,7 +29,7 @@ name its first listed value, or false if it is absent.
 
 namespace Algolean.Algorithms.SingleTapeTuringMachines.SAT
 
-open Alphabet
+open Alphabet Problems.SAT
 
 /-- The tape uses the SAT encoding's symbols and one symbol separating formula and certificate. -/
 abbrev Symbol := Extended Problems.SAT.CodeSymbol 1
@@ -57,6 +57,63 @@ def formulaEnd : Symbol := .inl (.inr 5)
 
 /-- This symbol separates the encoded formula from its certificate, as in `Alphabet.wordPair`. -/
 def certificateSeparator : Symbol := .inr 0
+
+/--
+`sign true` begins an unnegated variable in a formula or records true in a certificate.
+`sign false` begins a negated variable or records false in a certificate.
+-/
+def sign (positive : Bool) : Symbol := if positive then positiveSign else negativeSign
+
+/-- These are the symbols of a certificate as they appear on the verifier's tape. -/
+def certificateSymbols (certificate : Certificate) : List Symbol :=
+  (certificateEncoding.encode certificate).map Sum.inl
+
+/-- These are the symbols of a formula as they appear on the verifier's tape. -/
+def formulaSymbols (formula : CNF Variable) : List Symbol :=
+  (encoding.encode formula).map Sum.inl
+
+/-- An empty certificate is written with just the symbol ending the list of assignments. -/
+theorem certificateSymbols_nil : certificateSymbols [] = [clauseEnd] := rfl
+
+/-- A true assignment writes its value, the binary name, and the symbol ending that name. -/
+theorem certificateSymbols_pos (name : Variable) (rest : Certificate) :
+    certificateSymbols (.pos name :: rest) =
+      positiveSign :: name.map digit ++ nameEnd :: certificateSymbols rest := by
+  simp [certificateSymbols, certificateEncoding_encode_pos, List.map_append, List.map_map,
+    Function.comp_def, positiveSign, nameEnd, digit]
+
+/-- A false assignment writes its value, the binary name, and the symbol ending that name. -/
+theorem certificateSymbols_neg (name : Variable) (rest : Certificate) :
+    certificateSymbols (.neg name :: rest) =
+      negativeSign :: name.map digit ++ nameEnd :: certificateSymbols rest := by
+  simp [certificateSymbols, certificateEncoding_encode_neg, List.map_append, List.map_map,
+    Function.comp_def, negativeSign, nameEnd, digit]
+
+/-- Each listed literal writes its sign, its binary name, and the symbol ending that name. -/
+theorem certificateSymbols_cons (positive : Bool) (name : Variable) (rest : Certificate) :
+    certificateSymbols ((if positive then .pos name else .neg name) :: rest) =
+      sign positive :: name.map digit ++ nameEnd :: certificateSymbols rest := by
+  cases positive <;> simp [certificateSymbols_pos, certificateSymbols_neg, sign]
+
+/-- An empty formula is written with just the symbol ending the formula. -/
+theorem formulaSymbols_nil : formulaSymbols [] = [formulaEnd] := rfl
+
+/-- The first clause is followed by its separating symbol and the remaining clauses. -/
+theorem formulaSymbols_cons (clause : Clause Variable) (rest : CNF Variable) :
+    formulaSymbols (clause :: rest) =
+      certificateSymbols clause ++ clauseSeparator :: formulaSymbols rest := by
+  simp [formulaSymbols, certificateSymbols, encoding_encode_cons, List.map_append,
+    clauseSeparator]
+
+/-- The verifier's input places the encoded formula before its separator and certificate. -/
+theorem verifierEncoding_symbols (formula : CNF Variable) (certificate : Certificate) :
+    verifierEncoding.encode (formula, certificate) =
+      formulaSymbols formula ++ certificateSeparator :: certificateSymbols certificate := rfl
+
+/-- The extra symbol separating formula and certificate cannot occur inside either encoded part. -/
+theorem certificateSeparator_not_mem (word : List CodeSymbol) :
+    certificateSeparator ∉ word.map (Sum.inl : CodeSymbol → Symbol) := by
+  simp [certificateSeparator, List.mem_map]
 
 /-- The scanner compares the symbol under the head with these symbols, from first to last. -/
 def symbols : List Symbol :=

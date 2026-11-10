@@ -46,6 +46,21 @@ theorem Completes.while_step {condition : TMCondition tm} {body : Prog (TMQuery 
   obtain ⟨fuel, hfuel⟩ := hb.seq hr
   exact ⟨fuel + 1, by simpa [execute_while_succ, h] using hfuel⟩
 
+/--
+When the loop condition is true, a completed run of its body, the remaining loop, and a final
+program also proves completion of the loop followed by that final program. The initial condition
+test adds fuel use but no head moves or tape storage.
+-/
+theorem Completes.while_step_seq {condition : TMCondition tm}
+    {body next : Prog (TMQuery tm) Unit} {s final : TMState tm} {cost : TMCost}
+    (hcondition : condition.eval s.config = true)
+    (h : Completes (do body; whileLoop condition body; next) s cost final) :
+    Completes (do whileLoop condition body; next) s cost final := by
+  obtain ⟨fuel, h⟩ := h
+  refine ⟨fuel + 1, ?_⟩
+  simpa [FuelExecMonad.execute_bind, execute_while_succ, hcondition,
+    bind_assoc, Option.bind_assoc, add_assoc] using h
+
 
 /-- An initially false loop preserves tape, head, and control state. -/
 theorem runs_while_false (condition : TMCondition tm) (body : Prog (TMQuery tm) Unit)

@@ -9,6 +9,7 @@ module
 public import Algolean.Problems.SAT.Basic
 public import Algolean.Problems.Encoding
 public import Algolean.Models.SingleTapeTM.Alphabet.List
+public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 
 /-!
 # Encoding Boolean formulas with binary variable names
@@ -18,6 +19,7 @@ public import Algolean.Models.SingleTapeTM.Alphabet.List
 * A formula is a conjunction of clauses. Its encoding uses the symbols described in `CodeSymbol`.
 * `language` contains the encodings of satisfiable formulas.
   Incorrectly formatted lists are rejected.
+* `verifierEncoding` stores a formula and its certificate with one symbol between them.
 
 A certificate lists variables and proposed truth values. Only variables occurring in the formula
 need to be listed, and the length bound counts the actual binary digits of their names.
@@ -76,6 +78,17 @@ abbrev Certificate := Clause Variable
 def certificateEncoding : Encoding Certificate CodeSymbol :=
   ((clauseEncoding.comp (words ClauseSymbol 2)).mapSymbols
     (Extended.flattenThreeEquiv Bool 2 2 2)).strict
+
+/--
+The verifier receives an encoded formula and certificate with one separate symbol between them.
+-/
+def verifierEncoding : Encoding (CNF Variable × Certificate) (Extended CodeSymbol 1) :=
+  encoding.pair certificateEncoding
+
+/-- The verifier's input uses the same pair format as the definition of NP. -/
+theorem verifierEncoding_encode (formula : CNF Variable) (certificate : Certificate) :
+    verifierEncoding.encode (formula, certificate) = (wordPair CodeSymbol).encode
+      (encoding.encode formula, certificateEncoding.encode certificate) := rfl
 
 /-- Writing a certificate with `CodeSymbol` takes as many symbols as writing it as a clause. -/
 @[simp] theorem length_certificateEncoding (certificate : Certificate) :
@@ -166,6 +179,21 @@ theorem encoding_encode_cons (clause : Clause Variable) (rest : CNF Variable) :
   Encoding.decode_strict_eq_some_iff
     ((clauseEncoding.comp (words ClauseSymbol 2)).mapSymbols
       (Extended.flattenThreeEquiv Bool 2 2 2))
+
+/-- Decoding returns a formula and certificate exactly when the whole input is their encoding. -/
+@[simp] theorem decode_verifierEncoding_eq_some_iff
+    {word : List (Extended CodeSymbol 1)} {formula : CNF Variable} {certificate : Certificate} :
+    verifierEncoding.decode word = some (formula, certificate) ↔
+      word = verifierEncoding.encode (formula, certificate) := by
+  rw [verifierEncoding, Encoding.decode_pair_eq_some_iff]
+  constructor
+  · rintro ⟨first, second, hword, hformula, hcertificate⟩
+    rw [decode_encoding_eq_some_iff] at hformula
+    rw [decode_certificateEncoding_eq_some_iff] at hcertificate
+    simpa [verifierEncoding, Encoding.pair, words, hformula, hcertificate] using hword
+  · rintro rfl
+    exact ⟨encoding.encode formula, certificateEncoding.encode certificate, rfl,
+      encoding.decode_encode formula, certificateEncoding.decode_encode certificate⟩
 
 /-- This language consists of encoded formulas that have a satisfying assignment. -/
 def language : Language CodeSymbol := encodedLanguage CNF.satisfiable encoding
