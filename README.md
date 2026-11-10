@@ -50,6 +50,8 @@ Formalize algorithms at the right level of abstraction. A frontier paper needn't
 
 ## Why a monadic combinator and not a deeper embedding
 
+**Note** : we now have deeply embedded turing machines and RAM models and a realisability predicate in the pipeline. 
+
 1. This is a design decision. One can of course produce a deeper embedding by reinventing a combinator language, giving it a suitable memory model and restricting the non-query operations. This however comes with some trade-offs
 
 2. Implementing a deeply embedded language is a non-trivial task. One has to reinvent the basic constructs, proofs of termination, recursion, variable binding, procedure calls, etc. Choosing memory models and other implementation details is non-trivial and often beside the point of algorithms from the theory side. If one is an algorithms theorist and wishes to rubber duck algorithms in lean, one usually wants to be able to write some operations they don't care about as pure operations.
