@@ -28,6 +28,8 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.Framed
 public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
 public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
+public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
 public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
 public import Algolean.Algorithms.Strassen
