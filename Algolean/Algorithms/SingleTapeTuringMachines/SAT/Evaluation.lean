@@ -20,7 +20,7 @@ public import Algolean.Models.SingleTapeTM.Composition.Relabel
   A clause with no true literal makes the whole formula false.
 * Lookup preserves the unread formula and the certificate. The same certificate assignment
   therefore supplies every variable's value throughout the computation.
-* `evaluate_correct` proves agreement with `CNF.eval` and a polynomial bound on head moves.
+* The proofs below cover literal and clause checking. The whole-formula proof is unfinished.
 
 The program receives its formula and certificate on the tape. Its definitions have no parameters
 for either value or their lengths. The Boolean parameter on literal checking selects one of two
@@ -86,7 +86,8 @@ private theorem lookupOnTape_correct (between : List Symbol)
     Lookup.lookup_between_correct between hbetween name certificate source htape
   let inject : Lookup.State → machine.State := Sum.inl
   have hrun := hr.relabel inject Sum.inl_injective
-  have hsource : source.relabel inject = {s with config.state := some (.inl Lookup.machine.q₀)} := by
+  have hsource :
+      source.relabel inject = {s with config.state := some (.inl Lookup.machine.q₀)} := by
     cases s
     rfl
   rw [hsource] at hrun
@@ -96,10 +97,12 @@ private theorem lookupOnTape_correct (between : List Symbol)
   · simpa using ht
 
 /-- This state records whether the formula evaluated to true or false. -/
-private def resultState (value : Bool) : State := if value then .inr Flag.satisfied else .inr Flag.unsatisfied
+private def resultState (value : Bool) : State :=
+  if value then .inr Flag.satisfied else .inr Flag.unsatisfied
 
 /-- This state records whether a literal satisfied its clause or the search must continue. -/
-private def literalState (value : Bool) : State := if value then .inr Flag.satisfied else .inr Flag.checking
+private def literalState (value : Bool) : State :=
+  if value then .inr Flag.satisfied else .inr Flag.checking
 
 /--
 This program uses the value just returned by lookup. An unnegated variable satisfies the clause
@@ -248,11 +251,14 @@ private theorem formulaSymbols_end (formula : CNF Variable) :
       simpa [List.mem_append, formulaEnd, clauseSeparator] using And.intro hclause hnot
 
 /-- Finishing one literal chooses the same truth value as the existing literal evaluator. -/
-private theorem finishLiteral_correct (positive : Bool) (name : Variable) (certificate : Certificate)
-    (s : TMState machine) (hstate : s.config.state = some (.inl (.value (Certificate.assignment certificate name)))) :
+private theorem finishLiteral_correct (positive : Bool) (name : Variable)
+    (certificate : Certificate) (s : TMState machine)
+    (hstate : s.config.state =
+      some (.inl (.value (Certificate.assignment certificate name)))) :
     Completes (finishLiteral positive) s 0
       {s with config.state := some (literalState
-        ((if positive then Literal.pos name else .neg name).eval (Certificate.assignment certificate)))} := by
+        ((if positive then Literal.pos name else .neg name).eval
+          (Certificate.assignment certificate)))} := by
   have hup := completes_update s (literalState
     ((if positive then Literal.pos name else .neg name).eval (Certificate.assignment certificate)))
   unfold finishLiteral
@@ -272,7 +278,8 @@ private theorem checkLiteral_correct (positive : Bool) (name : Variable) (betwee
     let word := sign positive :: name.map digit ++ nameEnd :: tailWord between certificate
     ∃ cost final, Completes (checkLiteral positive) s cost final ∧
       final.config = ⟨some (literalState
-        ((if positive then Literal.pos name else .neg name).eval (Certificate.assignment certificate))),
+        ((if positive then Literal.pos name else .neg name).eval
+          (Certificate.assignment certificate))),
         cursor [] (tailWord between certificate)⟩ ∧
       final.headPos = s.headPos + name.length + 2 ∧ cost.steps ≤ 20 * (word.length + 1) ^ 3 := by
   obtain ⟨a, initial, hfirst, hinitial, hfirstPos, ha⟩ :=
@@ -339,12 +346,15 @@ private theorem finishClause_correct (clause : Clause Variable) (between : List 
       (by simp [hmiddle]))
   simpa [finishClause] using hr
 
-/-- A literal's sign selects the corresponding one of the two literal-checking instruction blocks. -/
+/--
+A literal's sign selects the corresponding one of the two literal-checking instruction blocks.
+-/
 private theorem clauseBody_literal (positive : Bool) (s final : TMState machine) (cost : TMCost)
     (hhead : s.config.BiTape.head = some (sign positive))
     (h : Completes (checkLiteral positive) s cost final) :
     Completes clauseBody s cost final := by
-  have hnot : ¬((TMCondition.tapeIs (some clauseEnd) : TMCondition machine).eval s.config = true) := by
+  have hnot :
+      ¬((TMCondition.tapeIs (some clauseEnd) : TMCondition machine).eval s.config = true) := by
     cases positive <;> simp [hhead, sign, clauseEnd, positiveSign, negativeSign]
   unfold clauseBody
   apply Completes.branch
@@ -439,7 +449,8 @@ private theorem clauseLoop_correct (clause : Clause Variable) (between : List Sy
             Nat.add_le_add hfirst' hb
           _ = 22 * R * ((_ :: rest).length + 1) := by simp only [List.length_cons]; ring
     | true =>
-      have hfalse := completes_while_false (.stateIs (some (Sum.inr Flag.checking))) clauseBody middle
+      have hfalse := completes_while_false
+        (.stateIs (some (Sum.inr Flag.checking))) clauseBody middle
         (by simp [hmiddle, literalState, hvalue])
       obtain ⟨b, final, hr, hf, hp, hb⟩ :=
         finishClause_correct rest between certificate middle hrestTape
@@ -458,10 +469,11 @@ private theorem clauseLoop_correct (clause : Clause Variable) (between : List Sy
           lia
         have hsmall : b.steps ≤ R := hremaining.trans
           ((Nat.le_succ budget).trans (Nat.le_self_pow (by decide) (budget + 1)))
-        have hsum : a.steps + b.steps ≤ 22 * R := by change a.steps + b.steps ≤ 22 * R; lia
+        have hsum : a.steps + b.steps ≤ 22 * R := by lia
         exact hsum.trans (by
           simpa using Nat.mul_le_mul_left (22 * R)
-            (show 1 ≤ ((if positive then Literal.pos name else .neg name) :: rest).length + 1 by simp))
+            (show 1 ≤ ((if positive then Literal.pos name else .neg name) :: rest).length + 1 by
+              simp))
 
 /-- Starting the clause loop resets the state but does not change the tape or its time bound. -/
 private theorem checkClause_correct (clause : Clause Variable) (between : List Symbol)
@@ -479,6 +491,7 @@ private theorem checkClause_correct (clause : Clause Variable) (between : List S
   let initial : TMState machine := {s with config.state := some (Sum.inr Flag.checking)}
   obtain ⟨cost, final, hr, hf, hp, ht⟩ := clauseLoop_correct clause between certificate budget
     initial hbetween (by simpa [initial] using htape) hsize rfl
-  exact ⟨0 + cost, final, (completes_update s (.inr Flag.checking)).seq hr, hf, hp, by simpa using ht⟩
+  exact ⟨0 + cost, final, (completes_update s (.inr Flag.checking)).seq hr, hf, hp,
+    by simpa using ht⟩
 
 end Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
