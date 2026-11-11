@@ -74,7 +74,7 @@ def controlChoices (problem : Instance Γ) :
 variable [Fintype Γ] [DecidableEq Γ] {problem : Instance Γ}
 
 /-- These clauses choose exactly one alphabet symbol at each position in the certificate. -/
-noncomputable def certificateClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def certificateClauses (problem : Instance Γ) : CNF (Variable problem) :=
   (List.finRange problem.certificateLength).flatMap fun position =>
     CNF.exactlyOne ((Finset.univ : Finset Γ).toList.map (Variable.certificate position))
 

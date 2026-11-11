@@ -114,8 +114,8 @@ private theorem writePairPart_spec (zero one : Γ) (hne : zero ≠ one)
       (output ++ (List.replicate input.length true ++ [false]).flatMap code) left label origin
       (elapsed + lengthHeaderMoves width input.length (regionSpan parts) output.length)]
   all_goals
-    simp_all [pairMoves, BooleanTapeEncoding.pair, List.append_assoc] <;>
-    ring_nf at *
+    simp_all [pairMoves, BooleanTapeEncoding.pair, List.append_assoc]
+    all_goals ring_nf at *
 
 private def fieldBits (first : List Bool) : List (List Bool) → List Bool
   | [] => first
@@ -187,8 +187,8 @@ private theorem writeFields_spec (zero one : Γ) (hne : zero ≠ one)
           fieldMoves width next.length (rest.map List.length) written.length)]
     all_goals
       simp_all [fieldsTape, fieldBits, fieldMoves, BooleanTapeEncoding.pair,
-        digit, later, written, step, regionSpan, List.append_assoc, List.map_map, Function.comp_def] <;>
-      ring_nf at *
+        digit, later, written, step, regionSpan, List.append_assoc, List.map_map, Function.comp_def]
+      all_goals ring_nf at *
 
 private def bodyBits (kind : Kind) (time position value : List Bool) : List Bool :=
   match kind with
@@ -242,8 +242,8 @@ private theorem writeBody_spec (zero one : Γ) (hne : zero ≠ one)
         (elapsed + time.length + 1 +
           fieldMoves width position.length [value.length] output.length)]
   all_goals
-    simp_all [AtFields, layout, fieldsTape, bodyBits, bodyMoves, digit, fieldBits] <;>
-    lia
+    simp_all [AtFields, layout, fieldsTape, bodyBits, bodyMoves, digit, fieldBits]
+    all_goals lia
 
 /--
 This machine template appends a variable name using the three words on the tape. It chooses
@@ -290,17 +290,18 @@ of moves given by `moves`; the specification also covers empty binary fields.
   vcgen [writeName, hstart, writeBody_spec zero one hne code width hwidth kind
     time position value (output ++ (kindBits kind).flatMap code) left label origin clock]
   all_goals
-    simp_all [AtFields, layout, bits_eq, moves, clock, regionSpan, List.append_assoc] <;>
-    lia
+    simp_all [AtFields, layout, bits_eq, moves, clock, regionSpan, List.append_assoc]
+    all_goals lia
 
 /-- The exact move count is quadratic in the source and previous output lengths. -/
 theorem moves_le (kind : Kind) (width time position value output : Nat) :
     moves kind width time position value output ≤
       8 * (width + 1) * (time + position + value + output + 4) ^ 2 := by
-  cases kind <;> simp only [moves, bodyMoves, kindBits, fieldMoves, pairMoves, lengthHeaderMoves, copyBitsMoves,
+  cases kind <;> simp only [moves, bodyMoves, kindBits, fieldMoves, pairMoves,
+    lengthHeaderMoves, copyBitsMoves,
     List.length_cons, List.length_nil, List.sum_cons, List.sum_nil]
   all_goals
-    ring_nf <;>
+    ring_nf;
     lia
 
 /-- The writer produces the stated name, preserves the source, and restores the head. -/
@@ -316,7 +317,7 @@ theorem writeName_correct (zero one : Γ) (hne : zero ≠ one)
   vcgen [writeName_spec zero one hne code width hwidth kind time position value output left
     s.config.state s.headPos 0]
   all_goals
-    cases hcfg : s.config <;>
+    cases hcfg : s.config;
     simp_all [AtFields]
 
 /--

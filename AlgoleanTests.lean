@@ -32,6 +32,7 @@ public import AlgoleanTests.SingleTapeTMSolves
 public import AlgoleanTests.SingleTapeTMVerification
 public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.TMSAT
+public import AlgoleanTests.TMSATCertificateChoices
 public import AlgoleanTests.TMSATNaming
 public import AlgoleanTests.TMSATNumbers
 public import AlgoleanTests.TMSATParsing

@@ -55,8 +55,8 @@ def nextRegion (tm : SingleTapeTM Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm
   vcgen [nextRegion, seekRightBlank_segment_spec left
     (StackTape.prepend following (StackTape.cons none tail)) current label origin elapsed]
   all_goals
-    simp_all [TMState.move, TMState.moveCost] <;>
-    lia
+    simp_all [TMState.move, TMState.moveCost]
+    all_goals lia
 
 /--
 The head reaches the following word after crossing the current word and one blank.
@@ -100,8 +100,8 @@ def previousRegion (tm : SingleTapeTM Γ) : Prog (TMQuery tm) Unit := do [TMQuer
     (StackTape.prepend current (StackTape.cons none tail)) preceding.reverse []
     label (origin - 1) (elapsed + 1)]
   all_goals
-    simp_all [TMState.move, TMState.moveCost] <;>
-    lia
+    simp_all [TMState.move, TMState.moveCost]
+    all_goals lia
 
 /--
 The head returns to the preceding word's first cell, or its ending blank if that word is empty.
@@ -181,8 +181,8 @@ theorem visitPreviousRegion_tail_spec (restore : Γ) (action : Prog (TMQuery tm)
       haction (origin - crossed.length - (input.length + 1 : Nat))
         (initial.steps + crossed.length + 2 + input.length + 3)]
     all_goals
-      simp_all [TMState.write, rest, after, BiTape.segment, BiTape.write] <;>
-      lia
+      simp_all [TMState.write, rest, after, BiTape.segment, BiTape.write]
+      all_goals lia
   · intro _
     apply Std.WP.Triple.intro
     rintro initial current ⟨hcfg, hpos, hbound⟩
@@ -191,8 +191,8 @@ theorem visitPreviousRegion_tail_spec (restore : Γ) (action : Prog (TMQuery tm)
       seekRightBlank_segment_spec (StackTape.cons none (StackTape.mapSome output.reverse))
         after crossed result (origin - crossed.length) (initial.steps + output.length + 1)]
     all_goals
-      simp_all [TMState.write, after, BiTape.segment, BiTape.write] <;>
-      lia
+      simp_all [TMState.write, after, BiTape.segment, BiTape.write]
+      all_goals lia
 
 /--
 The visit changes the preceding word, preserves its neighbors, and restores the head.
@@ -259,8 +259,8 @@ theorem visitPreviousRegion_completes (restore : Γ) (action : Prog (TMQuery tm)
     obtain ⟨cost, final, hc, hf, hh, hb⟩ := haction current neighbor (by simp [hcfg])
     vcgen [Spec.steps hc initial.steps]
     all_goals
-      simp_all <;>
-      lia
+      simp_all
+      all_goals lia
   vcgen [visitPreviousRegion_spec restore action input output crossed suffix tail bound
     s.config.state result s.headPos 0 ha]
   all_goals
@@ -302,8 +302,8 @@ theorem visitPreviousRegion_correct (restore : Γ) (action : Prog (TMQuery tm) U
       haction current neighbor (by simp [hcfg])
     vcgen [Spec.steps hc initial.steps]
     all_goals
-      simp_all <;>
-      lia
+      simp_all
+      all_goals lia
   obtain ⟨cost, final, hc, hf, hh, hb⟩ :
       ∃ cost final, Completes (visitPreviousRegion tm restore action) s cost final ∧
         final.config = ⟨s.config.state, BiTape.segment

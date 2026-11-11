@@ -99,10 +99,11 @@ private theorem copyBitsLoop_spec (zero one : Γ) (hne : zero ≠ one)
       ih (output ++ code bit) (StackTape.cons (some (if bit then one else zero)) left)
         (origin + 1) (elapsed + 2 * (bits.length + regionSpan parts + output.length + width) + 11)]
     all_goals
-      cases bit <;>
-      simp_all [List.reverse_cons, StackTape.prepend_append, List.append_assoc] <;>
-      ring_nf at * <;>
-      simp_all
+      cases bit
+      all_goals
+        simp_all [List.reverse_cons, StackTape.prepend_append, List.append_assoc]
+        all_goals ring_nf at *
+        all_goals simp_all
 
 /--
 This machine template copies a binary word to the output beyond `count` intervening regions.
@@ -145,8 +146,8 @@ def copyBitsAcross (tm : SingleTapeTM Γ) (zero one : Γ) (code : Bool → List 
       (elapsed + (width + 1) * bits.length ^ 2 +
         2 * bits.length * (regionSpan parts + output.length) + (width + 10) * bits.length)]
   all_goals
-    simp_all [copyBitsMoves] <;>
-    lia
+    simp_all [copyBitsMoves]
+    all_goals lia
 
 /-- This counts the moves used to copy the source length and write its ending bit. -/
 @[expose] def lengthHeaderMoves (width size distance output : Nat) : Nat :=
@@ -192,7 +193,7 @@ def appendLengthHeader (tm : SingleTapeTM Γ) (zero one : Γ) (code : Bool → L
       parts (output ++ bits.flatMap (fun _ => code true)) left label origin
       (elapsed + copyBitsMoves width bits.length (regionSpan parts) output.length)]
   all_goals
-    simp_all [lengthHeaderMoves, List.append_assoc] <;>
-    ring_nf at *
+    simp_all [lengthHeaderMoves, List.append_assoc]
+    all_goals ring_nf at *
 
 end Algolean.Algorithms.SingleTapeTuringMachines

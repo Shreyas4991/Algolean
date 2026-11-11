@@ -72,8 +72,8 @@ def appendAcross (tm : SingleTapeTM Symbol) (word : List Symbol) : Nat → Prog 
     simp only [List.length_nil, appendAcross]
     vcgen [appendWord_spec none left output word label (origin + 1) (elapsed + 1)]
     all_goals
-      simp_all [regionSpan, TMState.move, TMState.moveCost] <;>
-      lia
+      simp_all [regionSpan, TMState.move, TMState.moveCost]
+      all_goals lia
   | cons part parts ih =>
     simp only [List.length_cons, appendAcross]
     vcgen [seekRightBlank_segment_spec (StackTape.cons none left)
@@ -87,8 +87,8 @@ def appendAcross (tm : SingleTapeTM Symbol) (word : List Symbol) : Nat → Prog 
         (elapsed + 1 + part.length +
           2 * (regionSpan parts + output.length + word.length) + 8)]
     all_goals
-      simp_all [regionSpan, TMState.move, TMState.moveCost] <;>
-      lia
+      simp_all [regionSpan, TMState.move, TMState.moveCost]
+      all_goals lia
 /--
 This machine template appends a fixed word to the output beyond the source and `count` more
 regions. It preserves the source and returns to its first cell. That cell is the following
@@ -119,10 +119,11 @@ def appendFromRegion (tm : SingleTapeTM Symbol) (word : List Symbol) (count : Na
   simp only [List.length_cons] at ha
   vcgen [appendFromRegion, ha]
   all_goals
-    cases input <;>
-    simp_all [regionSpan, TMState.move, TMState.moveCost, BiTape.segment,
-      BiTape.moveLeft, BiTape.moveRight] <;>
-    lia
+    cases input
+    all_goals
+      simp_all [regionSpan, TMState.move, TMState.moveCost, BiTape.segment,
+        BiTape.moveLeft, BiTape.moveRight]
+      all_goals lia
 
 /--
 This machine template appends a fixed word beyond the current source region and `count` more
@@ -151,7 +152,7 @@ def appendFromCell (tm : SingleTapeTM Symbol) (restore : Symbol) (word : List Sy
   simp only [List.length_cons] at ha
   vcgen [appendFromCell, ha]
   all_goals
-    simp_all [regionSpan, TMState.write, BiTape.segment, BiTape.write] <;>
-    lia
+    simp_all [regionSpan, TMState.write, BiTape.segment, BiTape.write]
+    all_goals lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines

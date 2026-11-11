@@ -36,10 +36,12 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.PolynomialWri
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Reading
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Regions
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.ReverseCopying
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Serialization
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.SymbolEncoding
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Transformations
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryIteration
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.WordCopying
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
@@ -59,6 +61,7 @@ public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
 public import Algolean.Complexity.Reductions.NPToTMSAT.Reduction
 public import Algolean.Complexity.Reductions.NPToTMSAT.Verifier
+public import Algolean.Complexity.Reductions.TMSATToSAT.CertificateChoices
 public import Algolean.Complexity.Reductions.TMSATToSAT.Computation
 public import Algolean.Complexity.Reductions.TMSATToSAT.Fields
 public import Algolean.Complexity.Reductions.TMSATToSAT.Formula

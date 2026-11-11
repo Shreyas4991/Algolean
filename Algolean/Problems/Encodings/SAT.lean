@@ -19,6 +19,7 @@ public import Mathlib.Algebra.Order.Group.Nat
 * A variable name is a finite list of binary digits. Leading zeros distinguish names.
 * A literal is a variable or its negation. A clause is a disjunction of literals.
 * A formula is a conjunction of clauses. Its encoding uses the symbols described in `CodeSymbol`.
+* `formulaPrefix` writes the clauses without the final symbol that ends the formula.
 * `language` contains the encodings of satisfiable formulas.
   Incorrectly formatted lists are rejected.
 * `verifierEncoding` stores a formula and its certificate with one symbol between them.

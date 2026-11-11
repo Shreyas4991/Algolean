@@ -19,8 +19,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.WordCopying
 
 This is a machine template. The containing machine fixes the digit symbols, output words,
 and number of intervening regions. The digits and their number are read from the tape.
-This allows counters whose largest-place digit comes first to be copied into the binary
-number format used by the encodings, whose smallest-place digit comes first.
+This allows a counter to be read in the digit order used for binary variable names.
 -/
 
 public section
@@ -82,12 +81,13 @@ private theorem reverseLoop_spec (zero one : Γ) (hne : zero ≠ one)
         (elapsed + 2 * (done.length + regionSpan parts + output.length + width) + 11)]
     all_goals
       cases bit <;>
-      cases bits <;>
-      simp_all [digit, BiTape.segment, BiTape.mirror, BiTape.moveLeft,
-        TMState.move, TMState.moveCost, List.reverse_cons, StackTape.prepend_append,
-        List.append_assoc] <;>
-      ring_nf at * <;>
-      simp_all
+      cases bits
+      all_goals
+        simp_all [digit, BiTape.segment, BiTape.mirror, BiTape.moveLeft,
+          TMState.move, TMState.moveCost, List.reverse_cons, StackTape.prepend_append,
+          List.append_assoc]
+        all_goals ring_nf at *
+        all_goals simp_all
 
 /--
 This machine template appends a reversed copy beyond `count` intervening regions. It starts
@@ -115,7 +115,8 @@ def copyBitsReverseAcross (tm : SingleTapeTM Γ) (zero one : Γ) (code : Bool �
     ⦃ fun _ cost final => final.config = ⟨label,
         BiTape.segment (StackTape.cons none left)
           (bits.map (fun bit => if bit then one else zero))
-          (StackTape.separateWords parts (StackTape.mapSome (output ++ bits.reverse.flatMap code)))⟩ ∧
+          (StackTape.separateWords parts
+            (StackTape.mapSome (output ++ bits.reverse.flatMap code)))⟩ ∧
         final.headPos = origin ∧ cost.steps = elapsed +
           copyBitsMoves width bits.length (regionSpan parts) output.length ⦄ := by
   vcgen [copyBitsReverseAcross,
@@ -128,13 +129,13 @@ def copyBitsReverseAcross (tm : SingleTapeTM Γ) (zero one : Γ) (code : Bool �
     cases hbits : bits.reverse
     all_goals
       simp_all [TMState.move, TMState.moveCost, BiTape.segment, BiTape.mirror,
-        BiTape.moveLeft, List.map_reverse] <;>
-      lia
+        BiTape.moveLeft, List.map_reverse]
+      all_goals lia
   case vc2 =>
     cases bits
     all_goals
       simp_all [TMState.move, TMState.moveCost, BiTape.segment, BiTape.mirror,
-        BiTape.moveRight, copyBitsMoves] <;>
-      lia
+        BiTape.moveRight, copyBitsMoves]
+      all_goals lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines

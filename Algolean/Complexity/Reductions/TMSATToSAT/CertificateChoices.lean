@@ -10,24 +10,27 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.ReverseCopyin
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryIteration
 public import Algolean.Complexity.Reductions.TMSATToSAT.Naming
 public import Algolean.Complexity.Reductions.TMSATToSAT.Variables
-public import Mathlib.Tactic.GCongr
+import Mathlib.Tactic.GCongr
+import Mathlib.Tactic.ComputeDegree
 
 /-!
 # Writing the choices for each certificate position
 
-The tape begins with the certificate-length bound in unary. A blank separates it from the
-preserved input word, and another blank separates the input from the existing formula output.
-All cells to the left are initially blank. The program appends the clauses that choose exactly
-one alphabet symbol at each certificate position. It leaves the unary bound and input unchanged,
-erases its position counter, and returns the head to the unary bound's first cell.
+* `writeChoices` reads a unary count and writes exactly-one clauses for each position, using
+  a symbol list fixed with the program. It uses the existing clauses and their existing order.
+* `writeCertificateChoices` uses the whole alphabet and writes `certificateClauses` from the
+  existing reduction. Each clause is ended and separated, but the formula is left open.
+* Both writers preserve the bound, input, and earlier output. They erase the position counter
+  and return the head to the bound's first cell. Their time bound is a polynomial of degree
+  at most four, fixed for the chosen alphabet and encodings.
 
-The clauses are the existing `CNF.exactlyOne` construction, in its existing order. The program
-writes each clause's ending and separator but leaves the final formula-ending symbol for the
-containing machine. The correctness theorem identifies the output with `certificateClauses`.
+The bound is a repetition of one fixed, nonempty word, with one repetition per position.
+A blank separates it from the preserved input, and another blank precedes the output.
+All cells to the left are initially blank so the position counter can grow there.
 
-This is a machine template. The alphabet enumeration, number encodings, unary unit, and SAT
-symbol representations are fixed with the program. The certificate length is read from the
-tape. The position counter is also on the tape; it is never a Lean parameter to the program.
+These are machine templates. The alphabet enumeration, digit symbols, unary unit, and SAT
+representations are fixed with the program. The count and position stay on the tape; neither
+is a Lean parameter to the program.
 -/
 
 public section
@@ -117,19 +120,23 @@ private theorem writeLiteral_spec (zero one : Γ) (hne : zero ≠ one)
   let copied := bits.reverse.flatMap digits
   have hf : front.length = 2 * width := by simp [front, hwidth]; lia
   have hh : header.length = width * (bits.length + 1) := by
-    simp [header, digits, List.length_flatMap, hwidth, List.sum_replicate, Nat.mul_comm, Nat.mul_add]
+    simp [header, digits, List.length_flatMap, hwidth, List.sum_replicate,
+      Nat.mul_comm, Nat.mul_add]
   have hc : copied.length = width * bits.length := by
     simp [copied, digits, List.length_flatMap, hwidth, List.sum_replicate, Nat.mul_comm]
   have hs : ((symbolBits literal.name).flatMap digits).length =
       width * (symbolBits literal.name).length := by
     simp [digits, List.length_flatMap, hwidth, List.sum_replicate, Nat.mul_comm]
   vcgen [writeLiteral,
-    appendFromRegion_spec (code (sign literal) ++ code (.inl false)) (bits.map (fun bit => if bit then one else zero))
+    appendFromRegion_spec (code (sign literal) ++ code (.inl false))
+      (bits.map (fun bit => if bit then one else zero))
       parts output StackTape.nil label origin elapsed,
-    appendLengthHeader_spec zero one hne (fun bit => code (.inl bit)) width (fun bit => hwidth (.inl bit))
+    appendLengthHeader_spec zero one hne (fun bit => code (.inl bit)) width
+      (fun bit => hwidth (.inl bit))
       bits parts (output ++ front) StackTape.nil label origin
       (elapsed + 2 * (bits.length + regionSpan parts + output.length + 2 * width) + 12),
-    copyBitsReverseAcross_spec zero one hne (fun bit => code (.inl bit)) width (fun bit => hwidth (.inl bit))
+    copyBitsReverseAcross_spec zero one hne (fun bit => code (.inl bit)) width
+      (fun bit => hwidth (.inl bit))
       bits parts (output ++ front ++ header) StackTape.nil label origin
       (elapsed + 2 * (bits.length + regionSpan parts + output.length + 2 * width) + 12 +
         lengthHeaderMoves width bits.length (regionSpan parts) (output.length + 2 * width)),
@@ -139,15 +146,15 @@ private theorem writeLiteral_spec (zero one : Γ) (hne : zero ≠ one)
       StackTape.nil label origin
       (elapsed + 2 * (bits.length + regionSpan parts + output.length + 2 * width) + 12 +
         lengthHeaderMoves width bits.length (regionSpan parts) (output.length + 2 * width) +
-        copyBitsMoves width bits.length (regionSpan parts) (output.length + width * (bits.length + 3)))]
+        copyBitsMoves width bits.length (regionSpan parts)
+          (output.length + width * (bits.length + 3)))]
   all_goals
     cases literal <;>
     simp_all [literalMoves, itemWord, nameAt, Naming.bits, sign, front, header,
       copied, digits, Literal.rename, BooleanTapeEncoding.pair, certificateEncoding_encode_pos,
       certificateEncoding_encode_neg, certificateEncoding_encode_nil, List.append_assoc,
-      List.dropLast_cons_of_ne_nil, List.flatMap_map, ← List.map_reverse, List.flatMap_replicate] <;>
-    ring_nf at * <;>
-    simp_all
+      List.dropLast_cons_of_ne_nil, List.flatMap_map, -List.map_reverse, List.flatMap_replicate] <;>
+    ring_nf at *
 
 private theorem writeItem_spec (zero one : Γ) (hne : zero ≠ one)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
@@ -170,11 +177,12 @@ private theorem writeItem_spec (zero one : Γ) (hne : zero ≠ one)
         (bits.map (fun bit => if bit then one else zero)) parts output StackTape.nil
         label origin elapsed]
     all_goals
-      simp_all [itemWord, itemMoves, hwidth] <;> lia
+      simp_all [itemWord, itemMoves, two_mul, Nat.add_assoc]
   | some literal =>
     exact writeLiteral_spec zero one hne code width hwidth literal bits parts output
       label origin elapsed
 
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem itemWord_length_le (code : CodeSymbol → List Γ) (width : Nat)
     (hwidth : ∀ symbol, (code symbol).length = width)
     (bits : List Bool) (item : Option (Literal Γ)) :
@@ -187,19 +195,20 @@ private theorem itemWord_length_le (code : CodeSymbol → List Γ) (width : Nat)
   | some literal =>
     cases literal <;>
       simp [itemWord, itemWeight, Literal.rename, nameAt, Naming.bits, BooleanTapeEncoding.pair,
-        certificateEncoding_encode_pos, certificateEncoding_encode_neg, certificateEncoding_encode_nil,
+        certificateEncoding_encode_pos, certificateEncoding_encode_neg,
+        certificateEncoding_encode_nil,
         List.dropLast_cons_of_ne_nil, List.length_flatMap, hwidth, List.sum_replicate,
         Function.comp_def]
     all_goals
-      ring_nf <;> lia
+      ring_nf; lia
 
-omit [Inhabited Γ] in
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem itemMoves_le (width size distance output : Nat) (item : Option (Literal Γ)) :
     itemMoves width size distance output item ≤ itemWeight width item * (size + 1) *
       (size + distance + output + itemWeight width item * (size + 1) + 1) := by
   cases item <;> simp only [itemMoves, itemWeight, literalMoves, lengthHeaderMoves, copyBitsMoves]
   all_goals
-    ring_nf <;> lia
+    ring_nf; lia
 
 private theorem writeItem_bound_spec (zero one : Γ) (hne : zero ≠ one)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
@@ -225,7 +234,7 @@ private theorem writeItem_bound_spec (zero one : Γ) (hne : zero ≠ one)
   vcgen [writeItem_spec zero one hne code width hwidth item bits parts output
     label origin initial.steps]
   all_goals
-    simp_all <;> lia
+    grind
 
 private theorem writeItems_spec (zero one : Γ) (hne : zero ≠ one)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
@@ -266,7 +275,7 @@ private theorem writeItems_spec (zero one : Γ) (hne : zero ≠ one)
       ih (output ++ itemWord code bits item) hrest
         (elapsed + itemWeight width item * (bits.length + 1) * limit)]
     all_goals
-      simp_all [weight, List.append_assoc] <;> ring_nf at * <;> lia
+      simp_all [weight, List.append_assoc]; ring_nf at *; lia
 
 private def items (formula : CNF Γ) : List (Option (Literal Γ)) :=
   formula.flatMap fun clause => clause.map some ++ [none]
@@ -274,12 +283,14 @@ private def items (formula : CNF Γ) : List (Option (Literal Γ)) :=
 private def schema (symbols : List Γ) : List (Option (Literal Γ)) :=
   items (CNF.exactlyOne symbols)
 
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem items_word (code : CodeSymbol → List Γ) (bits : List Bool) (formula : CNF Γ) :
     (items formula).flatMap (itemWord code bits) =
       (formulaPrefix (formula.rename (nameAt bits))).flatMap code := by
   have hclause (clause : Clause Γ) :
       (clause.map some ++ [none]).flatMap (itemWord code bits) =
-        (certificateEncoding.encode (clause.rename (nameAt bits)) ++ [(.inr 4 : CodeSymbol)]).flatMap code := by
+        (certificateEncoding.encode (clause.rename (nameAt bits)) ++
+          [(.inr 4 : CodeSymbol)]).flatMap code := by
     induction clause with
     | nil => simp [itemWord, Clause.rename, certificateEncoding_encode_nil]
     | cons literal rest ih =>
@@ -301,12 +312,13 @@ def word (code : CodeSymbol → List Γ) (symbols : List Γ) (count : Nat) : Lis
   (List.finRange count).flatMap fun position =>
     (schema symbols).flatMap (itemWord code (encodingNatBool.encode position.val).reverse)
 
-omit [Inhabited Γ] in
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_succ (code : CodeSymbol → List Γ) (symbols : List Γ) (count : Nat) :
     word code symbols (count + 1) = word code symbols count ++
       (schema symbols).flatMap (itemWord code (encodingNatBool.encode count).reverse) := by
   simp [word, List.finRange_succ_last, List.flatMap_map]
 
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem items_length_le (code : CodeSymbol → List Γ) (width : Nat)
     (hwidth : ∀ symbol, (code symbol).length = width)
     (bits : List Bool) (items : List (Option (Literal Γ))) :
@@ -317,6 +329,7 @@ private theorem items_length_le (code : CodeSymbol → List Γ) (width : Nat)
     simpa only [List.flatMap_cons, List.length_append, weight, List.map_cons, List.sum_cons,
       Nat.add_mul] using Nat.add_le_add (itemWord_length_le code width hwidth bits item) ih
 
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_length_le (code : CodeSymbol → List Γ) (width : Nat)
     (hwidth : ∀ symbol, (code symbol).length = width) (symbols : List Γ) (count : Nat) :
     (word code symbols count).length ≤ weight width (schema symbols) * count * (count + 1) := by
@@ -338,7 +351,7 @@ private theorem word_length_le (code : CodeSymbol → List Γ) (width : Nat)
       intro size hsize
       obtain ⟨position, _, rfl⟩ := List.mem_map.mp hsize
       exact hposition position)
-  simpa [word, List.length_flatMap, nsmul_eq_mul, Nat.mul_assoc, Nat.mul_comm,
+  simpa [word, List.length_flatMap, nsmul_eq_mul, Nat.mul_assoc, Nat.mul_comm, Nat.mul_left_comm,
     List.map_map, Function.comp_def] using h
 
 private def workSize (width : Nat) (symbols : List Γ) (unit count input output : Nat) : Nat :=
@@ -359,7 +372,7 @@ def writeChoices (tm : SingleTapeTM Γ) (zero one tick : Γ) (unitTail : List Γ
   BiTape.segment StackTape.nil (unaryWord (tick :: unitTail) count)
     (StackTape.separateWords [input] (StackTape.mapSome output))
 
-/-- This states the tape contents, control state, and restored head position of the clause writer. -/
+/-- This states the tape contents, control state, and head position of the clause writer. -/
 @[expose] def AtInput (tick : Γ) (unitTail : List Γ) (count : Nat) (input output : List Γ)
     (label : Option tm.State) (origin : ℤ) (current : TMState tm) : Prop :=
   current.config = ⟨label, layout tick unitTail count input output⟩ ∧ current.headPos = origin
@@ -371,6 +384,13 @@ noncomputable def timeBound (width unit : Nat) (symbols : List Γ) : Polynomial 
   let b : Polynomial Nat := X + 1
   let size := C (unit + 3) * b + C a * b ^ 2 + 4
   b * (C a * b * size + 8 * C (unit + 1) * b) + 4 * C (unit + 1) * b
+
+omit [Inhabited Γ] [Fintype Γ] in
+/-- The time-bound polynomial has degree at most four. -/
+theorem timeBound_natDegree_le (width unit : Nat) (symbols : List Γ) :
+    (timeBound width unit symbols).natDegree ≤ 4 := by
+  dsimp [timeBound]
+  compute_degree
 
 private theorem action_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (unitTail : List Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
@@ -393,6 +413,7 @@ private theorem action_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (un
     rw [← hcount]
     simp [parts, regionSpan, unaryWord, List.length_flatten]
     ring_nf
+    lia
   have hout : (output ++ word code symbols index).length ≤
       output.length + a * count * (count + 1) := by
     have h := word_length_le code width hwidth symbols index
@@ -414,14 +435,17 @@ private theorem action_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (un
     (workSize width symbols (unitTail.length + 1) count input.length output.length) hlimit
     label origin elapsed
   norm_num only [parts, List.length_cons, List.length_nil] at hbody
+  have hw := word_succ code symbols index
   vcgen [hbody]
   all_goals
-    simp_all [counterTape, counterWord, bits, parts, word_succ, List.append_assoc, a] <;> lia
+    grind only [counterTape, counterWord, List.append_assoc]
 
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem forUnaryMoves_le (width : Nat) (symbols : List Γ) (unit count input output : Nat)
     (size : Nat) (hcount : count ≤ size) (hinput : input ≤ size) (houtput : output ≤ size) :
     forUnaryMoves unit count (weight width (schema symbols) * (count + 1) *
-      workSize width symbols unit count input output) ≤ (timeBound width unit symbols).eval size := by
+      workSize width symbols unit count input output) ≤
+        (timeBound width unit symbols).eval size := by
   have hw : workSize width symbols unit count input output ≤
       (unit + 3) * (size + 1) + weight width (schema symbols) * (size + 1) ^ 2 + 4 := by
     dsimp [workSize]
@@ -432,7 +456,7 @@ private theorem forUnaryMoves_le (width : Nat) (symbols : List Γ) (unit count i
   simp only [forUnaryMoves, timeBound, Polynomial.eval_add, Polynomial.eval_mul,
     Polynomial.eval_C, Polynomial.eval_X, Polynomial.eval_one, Polynomial.eval_pow,
     Polynomial.eval_ofNat]
-  gcongr <;> first | exact hw | lia
+  gcongr; lia
 
 /--
 The writer appends the encoded exactly-one clauses for every position in the unary bound.
@@ -457,6 +481,7 @@ restores the head. The same fixed polynomial bounds every run of this program.
     lia
   have ht := forUnaryMoves_le width symbols (unitTail.length + 1) count input.length
     output.length size hn (by dsimp [size]; lia) (by dsimp [size]; lia)
+  have hz : word code symbols 0 = [] := rfl
   vcgen [writeChoices, forUnary_spec zero one hne tick unitTail count [input]
     (fun index => output ++ word code symbols index) label
     (writeItems (tm := tm) zero one code 3 (schema symbols))
@@ -465,6 +490,108 @@ restores the head. The same fixed polynomial bounds every run of this program.
     (action_spec zero one hne tick unitTail code width hwidth symbols count input output label)
     origin elapsed]
   all_goals
-    simp_all [AtInput, layout, word, size] <;> lia
+    grind only [AtInput, layout, List.append_nil]
+
+omit [Inhabited Γ] in
+/-- The generated word is exactly the existing certificate clauses in SAT's encoding. -/
+theorem word_eq_certificateClauses (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+    word code (Finset.univ : Finset Γ).toList problem.certificateLength =
+      (formulaPrefix ((certificateClauses problem).rename Variable.name)).flatMap code := by
+  have hmap (position : Fin problem.certificateLength) :
+      (CNF.exactlyOne ((Finset.univ : Finset Γ).toList.map (Variable.certificate position))).rename
+          Variable.name =
+        (CNF.exactlyOne (Finset.univ : Finset Γ).toList).rename
+          (nameAt (encodingNatBool.encode position.val).reverse) := by
+    rw [← CNF.rename_exactlyOne (Variable.certificate position)
+      (by intro first second h; cases h; rfl)]
+    simp only [CNF.rename, Clause.rename, List.map_map, Function.comp_def]
+    congr 1
+    funext clause
+    congr 1
+    funext literal
+    cases literal <;> simp [Literal.rename, nameAt, Naming.bits, symbolBits, Variable.name]
+  have hblock (position : Fin problem.certificateLength) :
+      (schema (Finset.univ : Finset Γ).toList).flatMap
+          (itemWord code (encodingNatBool.encode position.val).reverse) =
+        (formulaPrefix ((CNF.exactlyOne
+          ((Finset.univ : Finset Γ).toList.map (Variable.certificate position))).rename
+            Variable.name)).flatMap code := by
+    rw [schema, items_word, ← hmap position]
+  simp only [word, certificateClauses, CNF.rename, formulaPrefix, List.map_flatMap,
+    List.flatMap_assoc, List.flatMap_map]
+  congr 1
+  funext position
+  simpa only [CNF.rename, formulaPrefix, List.flatMap_map, List.flatMap_assoc] using hblock position
+
+/--
+This machine template chooses from the whole fixed alphabet at every certificate position.
+It fixes that alphabet's enumeration once and reads the number of positions from the unary
+bound on the tape. It writes the certificate part of the existing TMSAT-to-SAT formula.
+-/
+noncomputable def writeCertificateChoices (tm : SingleTapeTM Γ) (zero one tick : Γ)
+    (unitTail : List Γ) (code : CodeSymbol → List Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  writeChoices tm zero one tick unitTail code (Finset.univ : Finset Γ).toList
+
+/--
+The program appends precisely the certificate clauses already defined for the given instance.
+It preserves the unary bound and input, clears its position counter, and restores the head.
+The instance occurs only in the specification; the running program reads its bound from the tape.
+-/
+@[spec] theorem writeCertificateChoices_spec (zero one : Γ) (hne : zero ≠ one)
+    (tick : Γ) (unitTail : List Γ) (code : CodeSymbol → List Γ) (width : Nat)
+    (hwidth : ∀ symbol, (code symbol).length = width) (problem : TMSAT.Instance Γ)
+    (input output : List Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current =>
+        AtInput tick unitTail problem.certificateLength input output label origin current ∧
+        cost.steps ≤ elapsed ⦄
+      writeCertificateChoices tm zero one tick unitTail code
+    ⦃ fun _ cost final =>
+        AtInput tick unitTail problem.certificateLength input
+          (output ++
+            (formulaPrefix ((certificateClauses problem).rename Variable.name)).flatMap code)
+          label origin final ∧ cost.steps ≤ elapsed +
+          (timeBound width (unitTail.length + 1) (Finset.univ : Finset Γ).toList).eval
+            ((unaryWord (tick :: unitTail) problem.certificateLength).length +
+              input.length + output.length + 1) ⦄ := by
+  simpa only [writeCertificateChoices, word_eq_certificateClauses] using
+    writeChoices_spec (tm := tm) zero one hne tick unitTail code width hwidth
+      (Finset.univ : Finset Γ).toList problem.certificateLength input output label origin elapsed
+
+/-- The completed run appends the certificate clauses and preserves the input and starting head. -/
+theorem writeCertificateChoices_correct (zero one : Γ) (hne : zero ≠ one)
+    (tick : Γ) (unitTail : List Γ) (code : CodeSymbol → List Γ) (width : Nat)
+    (hwidth : ∀ symbol, (code symbol).length = width) (problem : TMSAT.Instance Γ)
+    (input output : List Γ) (s : TMState tm)
+    (hs : s.config.BiTape = layout tick unitTail problem.certificateLength input output) :
+    let result := output ++
+      (formulaPrefix ((certificateClauses problem).rename Variable.name)).flatMap code
+    let size := (unaryWord (tick :: unitTail) problem.certificateLength).length +
+      input.length + output.length + 1
+    ∃ steps, Runs (writeCertificateChoices tm zero one tick unitTail code) s
+      (layout tick unitTail problem.certificateLength input result) s.headPos steps ∧
+      steps ≤
+        (timeBound width (unitTail.length + 1) (Finset.univ : Finset Γ).toList).eval size := by
+  apply Spec.runs_le
+  vcgen [writeCertificateChoices_spec zero one hne tick unitTail code width hwidth problem
+    input output s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [AtInput]
+
+/-- The same polynomial bounds the head moves for every unary bound and preserved input word. -/
+theorem writeCertificateChoices_time_bound (zero one : Γ) (hne : zero ≠ one)
+    (tick : Γ) (unitTail : List Γ) (code : CodeSymbol → List Γ) (width : Nat)
+    (hwidth : ∀ symbol, (code symbol).length = width) (problem : TMSAT.Instance Γ)
+    (input output : List Γ) (s : TMState tm)
+    (hs : s.config.BiTape = layout tick unitTail problem.certificateLength input output) :
+    let size := (unaryWord (tick :: unitTail) problem.certificateLength).length +
+      input.length + output.length + 1
+    ∃ cost final, Completes (writeCertificateChoices tm zero one tick unitTail code) s cost final ∧
+      cost.steps ≤
+        (timeBound width (unitTail.length + 1) (Finset.univ : Finset Γ).toList).eval size := by
+  obtain ⟨steps, ⟨cost, final, hc, _, _, ht⟩, hb⟩ :=
+    writeCertificateChoices_correct zero one hne tick unitTail code width hwidth problem
+      input output s hs
+  exact ⟨cost, final, hc, ht ▸ hb⟩
 
 end Algolean.Algorithms.TMSATToSAT.CertificateChoices

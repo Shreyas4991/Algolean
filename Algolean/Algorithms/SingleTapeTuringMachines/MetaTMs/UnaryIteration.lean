@@ -111,8 +111,8 @@ private theorem incrementIndex_spec (zero one : Γ) (hne : zero ≠ one) (index 
   vcgen [incrementLeft_spec zero one hne (encodingNatBool.encode index).reverse
     tail label origin initial.steps]
   all_goals
-    simp_all [counterWord] <;>
-    lia
+    simp_all [counterWord]
+    all_goals lia
 
 private theorem advance_spec (crossed rest : List Γ) (left tail : StackTape Γ)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
@@ -183,8 +183,8 @@ private theorem step_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (unit
         (StackTape.separateWords (before :: after :: extra)
           (StackTape.mapSome (output (index + 1)))) label position (steps + bound)]
     all_goals
-      simp_all [before, after] <;>
-      lia
+      simp_all [before, after]
+      all_goals lia
   have hu : unaryWord (tick :: unitTail) (rest + 1) =
       tick :: (unitTail ++ unaryWord (tick :: unitTail) rest) := by
     simp [unaryWord, List.replicate_succ]
@@ -203,9 +203,9 @@ private theorem step_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (unit
       intro position steps
       simpa [tail, resultTail, counterWord] using hcompound position steps)]
   all_goals
-    simp_all [loopTape, before, after, tail, resultTail, counterWord] <;>
-    ring_nf at * <;>
-    lia
+    simp_all [loopTape, before, after, tail, resultTail, counterWord]
+    all_goals ring_nf at *
+    all_goals lia
 
 private theorem loop_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (unitTail : List Γ)
     (count : Nat) (extra : List (List Γ)) (output : Nat → List Γ) (label : Option tm.State)
@@ -251,9 +251,9 @@ private theorem loop_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (unit
       ha, ih (index + 1) (by lia) (origin + (unitTail.length + 1 : Nat)) (elapsed + total)]
     all_goals
       simp_all [loopTape, unaryWord, List.reverse_append,
-        StackTape.prepend_append, visit, total, BiTape.segment] <;>
-      ring_nf at * <;>
-      lia
+        StackTape.prepend_append, visit, total, BiTape.segment]
+      all_goals ring_nf at *
+      all_goals lia
 
 private theorem finish_spec (zero one tick : Γ) (unitTail : List Γ) (count : Nat)
     (extra : List (List Γ)) (output : List Γ) (label : Option tm.State)
@@ -284,9 +284,9 @@ private theorem finish_spec (zero one tick : Γ) (unitTail : List Γ) (count : N
       (initial.steps + input.length + 2 + counter.length + 3)]
   all_goals
     simp_all [loopTape, input, counter, tail, counterWord, unaryWord,
-      List.length_flatten, TMState.move, TMState.moveCost] <;>
-    ring_nf at * <;>
-    lia
+      List.length_flatten, TMState.move, TMState.moveCost]
+    all_goals ring_nf at *
+    all_goals lia
 
 /--
 The loop calls the same action at positions zero through `count - 1`, with the counter stored
@@ -314,8 +314,8 @@ the original head position. The action's bound gives the stated bound for the wh
     finish_spec zero one tick unitTail count extra (output count) label origin
       (elapsed + count * (bound + 8 * (unitTail.length + 2) * (count + 1)))]
   all_goals
-    simp_all [loopTape, unaryWord, forUnaryMoves, List.length_flatten] <;>
-    ring_nf at * <;>
-    lia
+    simp_all [loopTape, unaryWord, forUnaryMoves, List.length_flatten]
+    all_goals ring_nf at *
+    all_goals lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines
