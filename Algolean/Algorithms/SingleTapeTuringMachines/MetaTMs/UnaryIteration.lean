@@ -94,7 +94,8 @@ def forUnary (tm : SingleTapeTM Γ) (zero one tick : Γ) (unitTail : List Γ)
 @[expose] def forUnaryMoves (unit count actionBound : Nat) : Nat :=
   count * (actionBound + 8 * (unit + 1) * (count + 1)) + 4 * (unit + 1) * (count + 1)
 
-private theorem incrementIndex_spec (zero one : Γ) (hne : zero ≠ one) (index : Nat)
+/-- Incrementing the counter preserves its following tape and its canonical number encoding. -/
+@[spec] theorem incrementCounterWord_spec (zero one : Γ) (hne : zero ≠ one) (index : Nat)
     (tail : StackTape Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config =
         ⟨label, BiTape.segment StackTape.nil (counterWord zero one index) tail⟩ ∧
@@ -179,7 +180,7 @@ private theorem step_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (unit
           final.headPos = position + index.size - (index + 1).size ∧
           cost.steps ≤ steps + (bound + 4 * index.size + 5) ⦄ := by
     vcgen [hact position steps,
-      incrementIndex_spec zero one hne index
+      incrementCounterWord_spec zero one hne index
         (StackTape.separateWords (before :: after :: extra)
           (StackTape.mapSome (output (index + 1)))) label position (steps + bound)]
     all_goals

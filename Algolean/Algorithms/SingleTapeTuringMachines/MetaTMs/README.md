@@ -24,6 +24,13 @@ and every input length. For example:
   program reads the input length from the tape to determine how many copies to write.
 - `forUnary tm zero one tick unitTail action` fixes one action and the word representing each
   unit. The count and position counter stay on the tape. The same action runs at every position.
+- `forBlocks tm tick unitTail action` visits the same kind of unary word without keeping a
+  position counter. The action can run another loop while the temporarily erased cell records
+  the outer loop's position.
+- `countBlocks` counts a unary word into a binary counter farther left. `onCounter` visits
+  that counter and restores the head. Both preserve the words between the source and counter.
+- `appendUnaryNumber` writes that count in binary beyond the source and clears its temporary
+  counter. The symbols, word representations, and numbers of intervening words are fixed once.
 
 Lean allows a function to choose different template arguments for different inputs. That would
 describe a family of programs, rather than one machine computing on all inputs. The template's

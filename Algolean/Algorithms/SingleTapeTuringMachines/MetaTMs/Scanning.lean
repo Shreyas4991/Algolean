@@ -125,6 +125,20 @@ def seekRightBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TM
       StackTape.prepend_append, add_assoc]
     all_goals lia
 
+/-- Scanning right preserves the tape and increases an upper time bound by the word's length. -/
+theorem seekRightBlank_le_spec (left tail : StackTape Symbol) (right : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left right tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      seekRightBlank tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.prepend right.reverse left) [] tail⟩ ∧
+        final.headPos = origin + right.length ∧ cost.steps ≤ elapsed + right.length ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [seekRightBlank_segment_spec left tail right label origin initial.steps]
+  all_goals simp_all
+
 /-- The rightward scan preserves the word and uses one move per remaining symbol. -/
 @[spec] theorem seekRightBlank_spec (left right : List Symbol) (label : Option tm.State)
     (origin : ℤ) (elapsed : Nat) :
@@ -269,6 +283,21 @@ def seekLeftEnd (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQue
     all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
       List.append_assoc, sub_eq_add_neg, add_assoc]
     all_goals lia
+
+/-- Returning to the word's beginning preserves the tape and increases the upper time bound. -/
+theorem seekLeftEnd_le_spec (base tail : StackTape Symbol) (left right : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, BiTape.segment (StackTape.prepend left (StackTape.cons none base)) right tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      seekLeftEnd tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.cons none base) (left.reverse ++ right) tail⟩ ∧
+        final.headPos = origin - left.length ∧ cost.steps ≤ elapsed + left.length + 2 ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [seekLeftEnd_segment_spec base tail left right label origin initial.steps]
+  all_goals simp_all
 
 /-- Returning to the first symbol preserves the word and counts both end moves. -/
 @[spec] theorem seekLeftEnd_spec (left right : List Symbol) (label : Option tm.State)

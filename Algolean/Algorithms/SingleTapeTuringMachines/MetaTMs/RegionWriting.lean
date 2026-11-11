@@ -89,6 +89,23 @@ def appendAcross (tm : SingleTapeTM Symbol) (word : List Symbol) : Nat → Prog 
     all_goals
       simp_all [regionSpan, TMState.move, TMState.moveCost]
       all_goals lia
+/-- Appending preserves the crossed words and increases an upper bound by the exact move count. -/
+theorem appendAcross_le_spec (word : List Symbol) (parts : List (List Symbol))
+    (output : List Symbol) (left : StackTape Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        segment left [] (StackTape.separateWords parts (StackTape.mapSome output))⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      appendAcross tm word parts.length
+    ⦃ fun _ cost final => final.config = ⟨label,
+        segment left [] (StackTape.separateWords parts (StackTape.mapSome (output ++ word)))⟩ ∧
+        final.headPos = origin ∧
+        cost.steps ≤ elapsed + 2 * (regionSpan parts + output.length + word.length) + 8 ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [appendAcross_spec word parts output left label origin initial.steps]
+  all_goals simp_all
+
 /--
 This machine template appends a fixed word to the output beyond the source and `count` more
 regions. It preserves the source and returns to its first cell. That cell is the following

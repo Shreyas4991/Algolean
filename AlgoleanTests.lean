@@ -37,6 +37,7 @@ public import AlgoleanTests.TMSATNaming
 public import AlgoleanTests.TMSATNumbers
 public import AlgoleanTests.TMSATParsing
 public import AlgoleanTests.TMSATStateFields
+public import AlgoleanTests.TMSATTapeChoices
 public import AlgoleanTests.TMSATToSAT
 public import AlgoleanTests.TMSATToSATTape
 public import AlgoleanTests.TMSATVariableNames

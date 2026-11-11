@@ -21,9 +21,12 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Augmented
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Basic
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BasicTMs
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BitOperations
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BlockCounting
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BlockIteration
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CertificatePadding
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Comparison
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CounterVisits
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Decrement
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Expanding
@@ -42,6 +45,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Serialization
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.SymbolEncoding
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Transformations
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryIteration
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.WordCopying
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
@@ -74,6 +78,7 @@ public import Algolean.Complexity.Reductions.TMSATToSAT.Size
 public import Algolean.Complexity.Reductions.TMSATToSAT.StateBounds
 public import Algolean.Complexity.Reductions.TMSATToSAT.StateFields
 public import Algolean.Complexity.Reductions.TMSATToSAT.Tape
+public import Algolean.Complexity.Reductions.TMSATToSAT.TapeChoices
 public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
 public import Algolean.Complexity.Reductions.TMSATToSAT.Validation
 public import Algolean.Complexity.Reductions.TMSATToSAT.VariableNames

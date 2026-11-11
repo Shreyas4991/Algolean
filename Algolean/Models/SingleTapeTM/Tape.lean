@@ -120,6 +120,14 @@ theorem prepend_append {Symbol : Type} (first second : List Symbol) (tail : Stac
   | [], tail => tail
   | word :: rest, tail => prepend word (cons none (separateWords rest tail))
 
+/-- Joining two lists of separated words places the second list after the first. -/
+theorem separateWords_append {Symbol : Type} (first second : List (List Symbol))
+    (tail : StackTape Symbol) :
+    separateWords (first ++ second) tail = separateWords first (separateWords second tail) := by
+  induction first with
+  | nil => rfl
+  | cons word first ih => simp only [List.cons_append, separateWords, ih]
+
 end StackTape
 
 namespace BiTape
