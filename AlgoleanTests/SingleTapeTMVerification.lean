@@ -14,7 +14,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 
 * A loop changes the control state without moving the head and still finishes.
 * A scan crosses a word of arbitrary length and records its exact time and final position.
-* A move records the additional space, including the case where its destination was visited.
+* A move records whether its destination already belongs to the recorded tape range.
 -/
 
 public section
@@ -98,7 +98,7 @@ theorem scan_correct (left right : List Γ) (s : TMState tm)
         rw [hafter, Int.toNat_natCast]
         lia
 
-/-- The cost and final tape range both record whether the move reaches a new cell. -/
+/-- The cost and final tape range agree on whether the move extends that range. -/
 theorem move_tracks_space (s : TMState tm) :
     ∃ cost final, Completes (do [TMQuery tm] moveₜ .Right) s cost final ∧
       final.headPos = s.headPos + 1 ∧ cost.steps = 1 ∧

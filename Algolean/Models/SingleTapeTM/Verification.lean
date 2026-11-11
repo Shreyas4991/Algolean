@@ -14,8 +14,8 @@ public import Algolean.Models.SingleTapeTM.Composition.While
 
 * `Spec.completes` and `Spec.runs` let `vcgen` prove the existing correctness statements.
 * The rules for writing, moving, and changing the state retain exact time and space costs.
-* The conditional rule checks the selected branch. The loop rule uses an invariant and a
-  decreasing natural-number measure to prove that the loop finishes.
+* The conditional rule checks the selected branch. The loop rule proves that a natural number
+  assigned to the current state gets smaller after every iteration, so the loop must finish.
 
 Open `scoped Std.WP TMQuery.Spec` to use these rules. They use the existing `Completes` relation,
 which requires a successful run with finite interpreter fuel. Fuel exhaustion does not count
@@ -73,7 +73,7 @@ theorem completes {p : Prog (TMQuery tm) Unit} {s : TMState tm}
   have hw := h.le_wp 0 s ⟨rfl, rfl⟩
   simpa using sound p (fun _ => post) 0 s hw
 
-/-- This proves an existing `Runs` statement from a cost-aware verification proof. -/
+/-- A verification proof gives the tape, head position, and time required by `Runs`. -/
 theorem runs {p : Prog (TMQuery tm) Unit} {s : TMState tm}
     {output : BiTape Γ} {position : ℤ} {time : Nat}
     (h : Triple p (fun initial current => initial = 0 ∧ current = s)
@@ -126,8 +126,9 @@ theorem runs {p : Prog (TMQuery tm) Unit} {s : TMState tm}
 
 /--
 The loop preserves its invariant and finishes when its condition becomes false. Each iteration
-must decrease a natural-number measure. The invariant can record exact time and space costs
-or bounds on them. The measure is used in the proof and adds no machine instructions.
+must make a chosen natural number smaller. This number depends on the current machine state.
+The invariant can record exact time and space costs or bounds on them. The chosen number is
+used only in the proof and adds no machine instructions.
 -/
 @[spec] theorem while_spec (condition : TMCondition tm) (body : Prog (TMQuery tm) Unit)
     (inv : Invariant tm) (rank : TMState tm → Nat)
