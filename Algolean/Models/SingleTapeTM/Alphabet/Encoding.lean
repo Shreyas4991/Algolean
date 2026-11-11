@@ -10,6 +10,7 @@ public import Algolean.Models.SingleTapeTM.Alphabet.Basic
 public import Mathlib.Computability.Encoding
 public import Mathlib.Logic.Equiv.List
 public import Mathlib.Data.Nat.Size
+public import Mathlib.Data.Nat.Digits.Defs
 
 /-!
 # Reusing encodings on tape alphabets
@@ -38,6 +39,27 @@ and [list](##Computability.Encoding.list) formats give lengths in terms of the e
 @[expose] public section
 
 namespace Computability
+
+/--
+The first digit has place value one, the next has place value two, and so on. If the word ends
+in false, the decoder also adds one at the next place value after the last digit. This describes
+the alternative words accepted by the existing number decoder, as well as the encoder's words.
+-/
+theorem decodeNat_eq_ofDigits (word : List Bool) :
+    decodeNat word = Nat.ofDigits 2 (word.map Bool.toNat) +
+      if word.getLast? = some false then 2 ^ word.length else 0 := by
+  induction word with
+  | nil => simp [decodeNat, decodeNum]
+  | cons bit bits ih =>
+    cases bits with
+    | nil => cases bit <;> simp [decodeNat, decodeNum, decodePosNum]
+    | cons next rest =>
+      cases bit <;>
+        simp only [decodeNat, decodeNum, reduceCtorEq, ↓reduceIte, PosNum.cast_to_num,
+          Num.cast_pos, List.map_cons, Nat.ofDigits, Nat.cast_id, List.length_cons, decodePosNum,
+          PosNum.cast_bit0, PosNum.cast_bit1, Num.cast_add, Num.cast_one, Bool.toNat_false,
+          Bool.toNat_true, Nat.cast_zero, Nat.cast_one, zero_add, List.getLast?_cons_cons] at ih ⊢
+      all_goals rw [ih]; split_ifs <;> simp [pow_succ] <;> ring
 
 /-- The binary encoding uses exactly the number of digits measured by `Nat.size`. -/
 @[simp] theorem length_encodingNatBool (n : Nat) : (encodingNatBool.encode n).length = n.size := by

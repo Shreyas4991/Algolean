@@ -31,6 +31,7 @@ public import AlgoleanTests.SingleTapeTMReductions
 public import AlgoleanTests.SingleTapeTMSolves
 public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.TMSAT
+public import AlgoleanTests.TMSATNumbers
 public import AlgoleanTests.TMSATParsing
 public import AlgoleanTests.TMSATToSAT
 public import AlgoleanTests.TMSATToSATTape

@@ -24,6 +24,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BitOperations
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CertificatePadding
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Comparison
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Decrement
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Expanding
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.FiniteState

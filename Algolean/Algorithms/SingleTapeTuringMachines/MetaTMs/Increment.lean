@@ -8,6 +8,7 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
+public import Mathlib.Data.Nat.Digits.Defs
 
 /-!
 # Adding one to a binary word
@@ -73,6 +74,20 @@ value zero.
 @[simp] def binaryValue : List Bool → ℕ
   | [] => 0
   | bit :: bits => (if bit then 1 else 0) + 2 * binaryValue bits
+
+/-- A binary word represents zero exactly when it has no one bits. -/
+@[simp] theorem binaryValue_eq_zero_iff (bits : List Bool) :
+    binaryValue bits = 0 ↔ true ∉ bits := by
+  induction bits with
+  | nil => simp
+  | cons bit bits ih => cases bit <;> simp [ih]
+
+/-- Reading the binary digits agrees with Mathlib's positional number notation. -/
+theorem binaryValue_eq_ofDigits (bits : List Bool) :
+    binaryValue bits = Nat.ofDigits 2 (bits.map Bool.toNat) := by
+  induction bits with
+  | nil => rfl
+  | cons bit bits ih => cases bit <;> simp [ih, Nat.ofDigits]
 
 /--
 The output specified by `incrementBits` represents exactly one more than the input. This also holds
@@ -228,7 +243,8 @@ theorem increment_complexity (bits : List Bool) (s : TMState tm)
   have := carryCount_le_length bits
   exact ⟨cost, final, hc, by lia, by lia, by lia⟩
 
-private theorem carryTail_shape (bits : List Bool) :
+/-- The carry stops at a zero bit or reaches the end of the word. -/
+theorem carryTail_shape (bits : List Bool) :
     carryTail bits = [] ∨ ∃ rest, carryTail bits = false :: rest := by
   induction bits with
   | nil => exact Or.inl rfl
