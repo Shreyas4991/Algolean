@@ -17,6 +17,8 @@ Initialization is checked on every Boolean input of length at most four, includi
 input and inputs containing the chosen marker. Each fixed program is run on all these inputs.
 Navigation is checked with empty and nonempty region contents and with other words on both
 sides. The checks compare the entire tape, control state, head position, and head-move count.
+Cleanup is checked with empty and nonempty temporary regions and outputs. Every run must
+leave only its output, with the head at the first output cell.
 -/
 
 @[expose] public section
@@ -96,8 +98,27 @@ private def checkNavigation : IO Unit := do
                 result.tell.steps = first.length + 3 do
               throw (IO.userError "Returning left gave incorrect contents, position, or cost.")
 
+/-- Cleanup erases all earlier regions and their markers, including when the output is empty. -/
+private def checkCleanup : IO Unit := do
+  for marker in [false, true] do
+    for regions in [[], [[]], [[true]], [[], [false, true], []], [[true, false], [false]]] do
+      for output in [[], [false], [true, false, true]] do
+        let program := Algorithms.TMSATToSAT.Tape.finish control regions.length
+        let initial : TMState control := {
+          config := ⟨some true, Algorithms.TMSATToSAT.Tape.layout marker (regions ++ [output])⟩
+          headPos := -7 }
+        let moves : Nat := (regions.map fun region => region.length + 2).sum + 1
+        match execute 10000 program initial with
+        | none => throw (IO.userError "Tape cleanup ran out of fuel.")
+        | some (result, final) =>
+          unless tapeView final.machine.config.BiTape = tapeView (BiTape.mk₁ output) ∧
+              final.machine.config.state = some true ∧
+              final.machine.headPos = -7 + (moves : Int) ∧ result.tell.steps = moves do
+            throw (IO.userError "Tape cleanup gave incorrect contents, position, or cost.")
+
 run_cmd Lean.Elab.Command.liftIO do
   checkPreparation
   checkNavigation
+  checkCleanup
 
 end AlgoleanTests.TMSATToSATTape

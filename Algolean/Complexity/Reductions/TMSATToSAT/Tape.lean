@@ -8,6 +8,7 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Regions
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 
 /-!
 # Tape regions for writing the TMSAT-to-SAT reduction
@@ -24,6 +25,9 @@ length `n`, it uses exactly `2 * n + 2 * k + 7` head moves.
 The representation uses `BiTape.segment` and `StackTape.separateWords`. The programs
 `nextRegion` and `previousRegion` move between neighboring regions. The output is last so
 that the existing `appendWord` program can extend it without overwriting another region.
+
+`finish` erases the temporary regions and original input, removes the output's marker, and
+leaves the head at the first output cell. The final tape follows CSLib's output convention.
 
 The marker and the number of working regions are fixed when constructing the containing
 Query machine, independently of the input and its length. The words themselves are tape data.
@@ -149,6 +153,80 @@ theorem prepare_correct (marker : Γ) (workCount : Nat) (input : List Γ) (s : T
       (s.headPos - (2 * workCount + 1 : Nat)) (2 * input.length + 2 * workCount + 7) := by
   apply Spec.runs
   vcgen [prepare_spec marker workCount input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+
+private def eraseRegions (tm : SingleTapeTM Γ) : Nat → Prog (TMQuery tm) Unit
+  | 0 => pure ()
+  | count + 1 => do [TMQuery tm]
+    eraseRight tm
+    moveₜ .Right
+    eraseRegions tm count
+
+private theorem eraseRegions_spec (marker : Γ) (regions : List (List Γ)) (output : List Γ)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    let moves : Nat := (regions.map fun region => region.length + 2).sum
+    ⦃ fun cost current => current.config = ⟨label, layout marker (regions ++ [output])⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseRegions tm regions.length
+    ⦃ fun _ cost final => final.config = ⟨label, layout marker [output]⟩ ∧
+        final.headPos = origin + moves ∧ cost.steps = elapsed + moves ⦄ := by
+  dsimp only
+  induction regions generalizing origin elapsed with
+  | nil =>
+    simp only [List.length_nil, eraseRegions]
+    vcgen
+    simp_all
+  | cons region regions ih =>
+    simp only [List.length_cons, eraseRegions]
+    vcgen [
+      eraseRight_segment_spec (tm := tm) StackTape.nil
+        (StackTape.separateWords ((regions ++ [output]).map (marker :: ·)) StackTape.nil)
+        (marker :: region) label origin elapsed,
+      ih (origin + (region.length + 2 : Nat)) (elapsed + region.length + 2)]
+    all_goals cases regions
+    all_goals
+      simp_all [layout, TMState.move, TMState.moveCost, BiTape.segment, BiTape.moveRight,
+        List.map_append, StackTape.separateWords]
+      all_goals lia
+
+/--
+This machine template erases `count` regions preceding the output, then removes the output's
+marker. It leaves only the output word on the tape, with the head at its first cell. The
+containing machine fixes the number of regions independently of the input and their lengths.
+-/
+def finish (tm : SingleTapeTM Γ) (count : Nat) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  eraseRegions tm count
+  eraseAndMove tm
+
+/--
+Finishing preserves the output and control state and erases every other occupied cell.
+The exact move count includes each erased symbol and each separating blank crossed.
+-/
+@[spec] theorem finish_spec (marker : Γ) (regions : List (List Γ)) (output : List Γ)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    let moves : Nat := (regions.map fun region => region.length + 2).sum + 1
+    ⦃ fun cost current => current.config = ⟨label, layout marker (regions ++ [output])⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      finish tm regions.length
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.mk₁ output⟩ ∧
+        final.headPos = origin + moves ∧ cost.steps = elapsed + moves ⦄ := by
+  dsimp only
+  vcgen [finish, eraseRegions_spec marker regions output label origin elapsed, eraseAndMove_spec]
+  all_goals cases output
+  all_goals
+    simp_all [layout, TMState.move, TMState.moveCost, TMState.write,
+      BiTape.mk₁, BiTape.nil, BiTape.segment, BiTape.write, BiTape.moveRight]
+    all_goals lia
+
+/-- The cleanup program produces precisely the clean output tape with the stated move count. -/
+theorem finish_correct (marker : Γ) (regions : List (List Γ)) (output : List Γ)
+    (s : TMState tm) (htape : s.config.BiTape = layout marker (regions ++ [output])) :
+    let moves : Nat := (regions.map fun region => region.length + 2).sum + 1
+    Runs (finish tm regions.length) s (BiTape.mk₁ output) (s.headPos + moves) moves := by
+  apply Spec.runs
+  vcgen [finish_spec marker regions output s.config.state s.headPos 0]
   all_goals
     cases hcfg : s.config
     simp_all
