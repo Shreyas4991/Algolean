@@ -28,7 +28,9 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
 
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 
@@ -54,20 +56,12 @@ moves, including when `bits` is empty.
 theorem appendBit_correct (bits : List Bool) (bit : Bool) (s : TMState tm)
     (hs : s.config.BiTape = cursor [] bits) :
     Runs (appendBit tm bit) s (cursor [] (bits ++ [bit])) s.headPos (2 * bits.length + 2) := by
-  have hr : Runs (seekRightBlank tm) s (cursor bits.reverse [])
-      (s.headPos + bits.length) bits.length := by
-    simpa using seekRightBlank_correct [] bits s hs
-  have h := hr.seq (q := do FreeM.lift (.write (some bit)); seekLeftEnd tm)
-    (second := cursor [] (bits ++ [bit])) (pos₂ := s.headPos) (time₂ := bits.length + 2) (by
-      intro t ht hp
-      have hw : Runs (FreeM.lift (.write (some bit))) t (cursor bits.reverse [bit])
-          (s.headPos + bits.length) 0 := by simpa [ht, hp] using write_correct t (some bit)
-      simpa using hw.seq (q := seekLeftEnd tm) (second := cursor [] (bits ++ [bit]))
-        (pos₂ := s.headPos) (time₂ := bits.length + 2) (by
-          intro u hu hup
-          have huTape : u.config.BiTape = cursor bits.reverse [bit] := by simp [hu]
-          simpa [hup] using seekLeftEnd_correct bits.reverse [bit] u huTape))
-  simpa [appendBit, two_mul, Nat.add_assoc] using h
+  obtain ⟨cost, middle, hc, ht, hp, hm⟩ := seekRightBlank_correct [] bits s hs
+  obtain ⟨more, final, hr, hf, hpos, htime⟩ := seekLeftEnd_correct bits.reverse [bit]
+    (middle.write (some bit)) (by simp [TMState.write, ht])
+  apply Spec.runs
+  vcgen [appendBit, Spec.steps hc 0, Spec.steps hr bits.length]
+  all_goals simp_all [TMState.write, add_assoc, add_comm, add_left_comm, two_mul]
 
 /--
 `complementRight tm` is a Turing machine program that flips each occupied Boolean cell from the
@@ -93,26 +87,21 @@ theorem complementRight_correct (left right : List Bool) (s : TMState tm)
       (s.headPos + right.length) right.length := by
   induction right generalizing left s with
   | nil =>
-    simp [complementRight, hs]
-  | cons bit right ih =>
     unfold complementRight
-    apply runs_while_step (by simp [hs])
-    have hf : Runs (flipBit tm) s (cursor left (bit.not :: right)) s.headPos 0 := by
-      simpa [hs] using flipBit_correct s
-    have hb : Runs (do flipBit tm; FreeM.lift (.move .Right)) s
-        (cursor (bit.not :: left) right) (s.headPos + 1) 1 := by
-      simpa using hf.seq (q := FreeM.lift (.move .Right))
-        (second := cursor (bit.not :: left) right) (pos₂ := s.headPos + 1) (time₂ := 1) (by
-          intro t ht hp
-          simpa [TMState.move, ht, hp] using move_correct t .Right)
-    have hr := hb.seq (q := complementRight tm) (time₂ := right.length)
-      (second := cursor (((bit :: right).map Bool.not).reverse ++ left) [])
-      (pos₂ := s.headPos + (bit :: right).length) (by
-        intro t ht hp
-        have htape : t.config.BiTape = cursor (bit.not :: left) right := by simp [ht]
-        simpa [List.reverse_cons, List.append_assoc, hp, add_assoc, add_comm, add_left_comm] using
-          ih (bit.not :: left) t htape)
-    simpa [complementRight, Nat.add_comm] using hr
+    apply Spec.runs
+    vcgen [Spec.while_false_spec]
+    cases hcfg : s.config
+    simp_all
+  | cons bit right ih =>
+    obtain ⟨first, flipped, hflip, hcfg, hhead, hfirst⟩ := flipBit_correct s
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih (bit.not :: left) (flipped.move .Right)
+      (by simp [TMState.move, hcfg, hs])
+    unfold complementRight
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := complementRight tm) (hloop := rfl),
+      Spec.steps hflip 0, Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost,
+      List.reverse_cons, List.append_assoc, add_comm, add_left_comm]
 
 /--
 `complementBlock tm` is a Turing machine program that starts at the first cell of a Boolean block,
@@ -134,14 +123,12 @@ theorem complementBlock_correct (bits : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = cursor [] bits) :
     Runs (complementBlock tm) s (cursor [] (bits.map Bool.not))
       s.headPos (2 * bits.length + 2) := by
-  have hr : Runs (complementRight tm) s (cursor (bits.map Bool.not).reverse [])
-      (s.headPos + bits.length) bits.length := by
-    simpa using complementRight_correct [] bits s hs
-  have h := hr.seq (q := seekLeftEnd tm) (second := cursor [] (bits.map Bool.not))
-    (pos₂ := s.headPos) (time₂ := bits.length + 2) (by
-      intro t ht hp
-      have htape : t.config.BiTape = cursor (bits.map Bool.not).reverse [] := by simp [ht]
-      simpa [hp] using seekLeftEnd_correct (bits.map Bool.not).reverse [] t htape)
-  simpa [complementBlock, two_mul, Nat.add_assoc] using h
+  obtain ⟨cost, middle, hc, ht, hp, hm⟩ := complementRight_correct [] bits s hs
+  obtain ⟨more, final, hr, hf, hpos, htime⟩ := seekLeftEnd_correct
+    (bits.map Bool.not).reverse [] middle
+    (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht)
+  apply Spec.runs
+  vcgen [complementBlock, Spec.steps hc 0, Spec.steps hr bits.length]
+  all_goals simp_all [add_assoc, add_comm, add_left_comm, two_mul]
 
 end Algolean.Algorithms.SingleTapeTuringMachines

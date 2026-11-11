@@ -35,7 +35,9 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
 
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type}
 
@@ -65,8 +67,10 @@ def eraseAndMove (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQu
 theorem eraseAndMove_correct (symbol : Symbol) (rest : List Symbol) (s : TMState tm)
     (htape : s.config.BiTape = cursor [] (symbol :: rest)) :
     Runs (eraseAndMove tm) s (cursor [] rest) (s.headPos + 1) 1 := by
-  simpa [eraseAndMove, htape, cursor, BiTape.write, BiTape.moveRight] using
-    (write_correct s none).append_move .Right
+  apply Spec.runs
+  vcgen [eraseAndMove]
+  simp_all [TMState.move, TMState.write, TMState.moveCost, cursor,
+    BiTape.write, BiTape.moveRight]
 
 /--
 This Turing machine program erases symbols while moving right and stops on the first blank.
@@ -89,19 +93,22 @@ theorem eraseRight_segment (word : List Symbol) (tail : StackTape Symbol) (s : T
       (s.headPos + word.length) word.length := by
   induction word generalizing s with
   | nil =>
-    simp [eraseRight, htape]
-  | cons symbol rest ih =>
     unfold eraseRight
-    apply runs_while_step (by simp [htape])
-    have hfirst : Runs (eraseAndMove tm) s (BiTape.segment StackTape.nil rest tail)
-        (s.headPos + 1) 1 := by
-      cases rest <;>
-        simpa [eraseAndMove, htape, BiTape.segment, BiTape.write, BiTape.moveRight] using
-          (write_correct s none).append_move .Right
-    have hr := hfirst.seq (q := eraseRight tm) (by
-      intro middle hmiddle hpos
-      simpa [hpos] using ih middle (by simp [hmiddle]))
-    simpa [eraseRight, add_assoc, add_comm, add_left_comm] using hr
+    apply Spec.runs
+    vcgen [Spec.while_false_spec]
+    cases hcfg : s.config
+    simp_all
+  | cons symbol rest ih =>
+    let moved := (s.write none).move .Right
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih moved (by
+      cases rest <;> simp [moved, TMState.move, TMState.write, htape, BiTape.segment,
+        BiTape.write, BiTape.moveRight])
+    unfold eraseRight
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := eraseRight tm) (hloop := rfl),
+      eraseAndMove, Spec.steps hc 1]
+    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost,
+      add_comm, add_left_comm]
 
 /-- Erasing a word to the right clears the tape and uses one head move for each input symbol. -/
 theorem eraseRight_correct (word : List Symbol) (s : TMState tm)
@@ -133,16 +140,24 @@ theorem eraseUntil_correct (ending : Symbol) (crossed rest : List Symbol) (s : T
     Runs (eraseUntil tm ending) s (cursor [] (ending :: rest))
       (s.headPos + crossed.length) crossed.length := by
   induction crossed generalizing s with
-  | nil => simp [eraseUntil, htape]
+  | nil =>
+    unfold eraseUntil
+    apply Spec.runs
+    vcgen [Spec.while_false_spec]
+    cases hcfg : s.config
+    simp_all
   | cons symbol crossed ih =>
     have hparts : ending ≠ symbol ∧ ending ∉ crossed := by simpa using hcrossed
+    let moved := (s.write none).move .Right
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih moved
+      (by simp [moved, TMState.move, TMState.write, htape, cursor,
+        BiTape.write, BiTape.moveRight]) hparts.2
     unfold eraseUntil
-    apply runs_while_step (by simp [htape, Ne.symm hparts.1])
-    have hfirst := eraseAndMove_correct symbol (crossed ++ ending :: rest) s htape
-    have hr := hfirst.seq (q := eraseUntil tm ending) (by
-      intro middle hmiddle hpos
-      simpa [hpos] using ih middle (by simp [hmiddle]) hparts.2)
-    simpa [eraseUntil, add_assoc, add_comm, add_left_comm] using hr
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := eraseUntil tm ending) (hloop := rfl),
+      eraseAndMove, Spec.steps hc 1]
+    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost,
+      add_comm, add_left_comm]
 
 /--
 `eraseLeft tm` is a Turing machine program that replaces the current occupied cell with a blank and
@@ -167,40 +182,22 @@ theorem eraseLeft_correct (left : List Symbol) (bit : Symbol) (s : TMState tm)
     Runs (eraseLeft tm) s BiTape.nil (s.headPos - (left.length + 1 : ℕ)) (left.length + 1) := by
   induction left generalizing bit s with
   | nil =>
+    let moved := (s.write none).move .Left
+    have hc : Completes (eraseLeft tm) moved 0 moved :=
+      completes_while_false _ _ _ (by simp [moved, TMState.move, TMState.write, hs, BiTape.nil, BiTape.moveLeft])
     unfold eraseLeft
-    apply runs_while_step (by simp [hs])
-    have hw : Runs (FreeM.lift (.write none)) s BiTape.nil s.headPos 0 := by
-      simpa [hs] using write_correct s none
-    have hb : Runs (do FreeM.lift (.write none); FreeM.lift (.move .Left)) s BiTape.nil
-        (s.headPos - 1) 1 := by
-      simpa using hw.seq (q := FreeM.lift (.move .Left)) (second := BiTape.nil)
-        (pos₂ := s.headPos - 1) (time₂ := 1) (by
-          intro t ht hp
-          simpa [TMState.move, ht, hp, sub_eq_add_neg] using move_correct t .Left)
-    have hr := hb.seq (q := eraseLeft tm) (second := BiTape.nil)
-      (pos₂ := s.headPos - 1) (time₂ := 0) (by
-        intro t ht hp
-        simp [eraseLeft, ht, hp, BiTape.nil])
-    simpa [eraseLeft] using hr
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := eraseLeft tm) (hloop := rfl), Spec.steps hc 1]
+    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost, sub_eq_add_neg]
   | cons prev left ih =>
+    let moved := (s.write none).move .Left
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih prev moved
+      (by simp [moved, TMState.move, TMState.write, hs])
     unfold eraseLeft
-    apply runs_while_step (by simp [hs])
-    have hw : Runs (FreeM.lift (.write none)) s (cursor (prev :: left) []) s.headPos 0 := by
-      simpa [hs] using write_correct s none
-    have hb : Runs (do FreeM.lift (.write none); FreeM.lift (.move .Left)) s
-        (cursor left [prev]) (s.headPos - 1) 1 := by
-      simpa using hw.seq (q := FreeM.lift (.move .Left)) (second := cursor left [prev])
-        (pos₂ := s.headPos - 1) (time₂ := 1) (by
-          intro t ht hp
-          simpa [TMState.move, ht, hp, sub_eq_add_neg] using move_correct t .Left)
-    have hr := hb.seq (q := eraseLeft tm) (second := BiTape.nil)
-      (pos₂ := s.headPos - ((prev :: left).length + 1 : ℕ)) (time₂ := left.length + 1) (by
-        intro t ht hp
-        have htape : t.config.BiTape = cursor left [prev] := by simp [ht]
-        convert ih prev t htape using 1
-        simp [hp, sub_eq_add_neg, add_assoc]
-        lia)
-    simpa [eraseLeft, Nat.add_comm, Nat.add_left_comm] using hr
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := eraseLeft tm) (hloop := rfl), Spec.steps hc 1]
+    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost,
+      sub_eq_add_neg, add_comm, add_left_comm]
 
 /--
 `eraseToLeft tm` is a Turing machine program that starts on the blank immediately after a contiguous
@@ -226,34 +223,18 @@ theorem eraseToLeft_correct (left : List Symbol) (s : TMState tm)
     Runs (eraseToLeft tm) s BiTape.nil (s.headPos - left.length) (left.length + 2) := by
   cases left with
   | nil =>
-    have hm : Runs (FreeM.lift (.move .Left)) s BiTape.nil (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have h := hm.seq (q := do eraseLeft tm; FreeM.lift (.move .Right))
-      (second := BiTape.nil) (pos₂ := s.headPos) (time₂ := 1) (by
-        intro t ht hp
-        have he : Runs (eraseLeft tm) t BiTape.nil (s.headPos - 1) 0 := by
-          simp [eraseLeft, ht, hp, BiTape.nil]
-        simpa using he.seq (q := FreeM.lift (.move .Right)) (second := BiTape.nil)
-          (pos₂ := s.headPos) (time₂ := 1) (by
-            intro u hu hup
-            simpa [TMState.move, hu, hup] using move_correct u .Right))
-    simpa [eraseToLeft] using h
+    have hc : Completes (eraseLeft tm) (s.move .Left) 0 (s.move .Left) :=
+      completes_while_false _ _ _ (by simp [TMState.move, hs, BiTape.nil, BiTape.moveLeft])
+    apply Spec.runs
+    vcgen [eraseToLeft, Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
   | cons bit left =>
-    have hm : Runs (FreeM.lift (.move .Left)) s (cursor left [bit]) (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have h := hm.seq (q := do eraseLeft tm; FreeM.lift (.move .Right))
-      (second := BiTape.nil) (pos₂ := s.headPos - (bit :: left).length)
-      (time₂ := left.length + 2) (by
-        intro t ht hp
-        have htape : t.config.BiTape = cursor left [bit] := by simp [ht]
-        have he := eraseLeft_correct left bit t htape
-        have hr := he.seq (q := FreeM.lift (.move .Right)) (second := BiTape.nil)
-          (pos₂ := s.headPos - (bit :: left).length) (time₂ := 1) (by
-            intro u hu hup
-            convert move_correct u .Right using 1 <;>
-              simp [TMState.move, hu, hup, hp, sub_eq_add_neg, add_assoc])
-        simpa [Nat.add_assoc] using hr)
-    simpa [eraseToLeft, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using h
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := eraseLeft_correct left bit (s.move .Left)
+      (by simp [TMState.move, hs])
+    apply Spec.runs
+    vcgen [eraseToLeft, Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg,
+      add_comm, add_left_comm]
 
 /--
 `eraseBlock tm` is a Turing machine program that starts at the beginning of the input block, scans
@@ -275,14 +256,11 @@ is empty.
 theorem eraseBlock_correct (bits : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor [] bits) :
     Runs (eraseBlock tm) s BiTape.nil s.headPos (2 * bits.length + 2) := by
-  have hr : Runs (seekRightBlank tm) s (cursor bits.reverse [])
-      (s.headPos + bits.length) bits.length := by
-    simpa using seekRightBlank_correct [] bits s hs
-  have h := hr.seq (q := eraseToLeft tm) (second := BiTape.nil) (pos₂ := s.headPos)
-    (time₂ := bits.length + 2) (by
-      intro t ht hp
-      have htape : t.config.BiTape = cursor bits.reverse [] := by simp [ht]
-      simpa [hp] using eraseToLeft_correct bits.reverse t htape)
-  simpa [eraseBlock, two_mul, Nat.add_assoc] using h
+  obtain ⟨cost, middle, hc, ht, hp, hm⟩ := seekRightBlank_correct [] bits s hs
+  obtain ⟨more, final, hr, hf, hpos, htime⟩ := eraseToLeft_correct bits.reverse middle
+    (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht)
+  apply Spec.runs
+  vcgen [eraseBlock, Spec.steps hc 0, Spec.steps hr bits.length]
+  all_goals simp_all [add_assoc, add_comm, two_mul]
 
 end Algolean.Algorithms.SingleTapeTuringMachines

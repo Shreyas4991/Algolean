@@ -30,7 +30,9 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
 
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 
@@ -59,16 +61,22 @@ theorem seekRightSymbol_correct (symbol : Symbol) (left crossed suffix : List Sy
     Runs (seekRightSymbol tm symbol) s (cursor (crossed.reverse ++ left) (symbol :: suffix))
       (s.headPos + crossed.length) crossed.length := by
   induction crossed generalizing left s with
-  | nil => simp [seekRightSymbol, htape]
+  | nil =>
+    unfold seekRightSymbol
+    apply Spec.runs
+    vcgen [Spec.while_false_spec]
+    cases hcfg : s.config
+    simp_all
   | cons first crossed ih =>
     have hparts : symbol ≠ first ∧ symbol ∉ crossed := by simpa using hprefix
-    have hfirst : first ≠ symbol := Ne.symm hparts.1
-    unfold seekRightSymbol
-    apply runs_while_step (by simp [htape, hfirst])
-    have hrest := ih (first :: left) (s.move .Right)
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih (first :: left) (s.move .Right)
       (by simp [TMState.move, htape]) hparts.2
-    simpa [seekRightSymbol, TMState.move, List.reverse_cons, List.append_assoc,
-      add_assoc, add_comm, add_left_comm] using hrest.prepend_move
+    unfold seekRightSymbol
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := seekRightSymbol tm symbol) (hloop := rfl),
+      Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
+      List.append_assoc, add_comm, add_left_comm]
 
 /--
 `seekRightBlank tm` is a Turing machine program that repeatedly moves the head right while the
@@ -92,21 +100,21 @@ theorem seekRightBlank_correct (left right : List Symbol) (s : TMState tm)
     Runs (seekRightBlank tm) s (cursor (right.reverse ++ left) [])
       (s.headPos + right.length) right.length := by
   induction right generalizing left s with
-  | nil => simp [seekRightBlank, hs]
-  | cons bit right ih =>
+  | nil =>
     unfold seekRightBlank
-    apply runs_while_step (by simp [hs])
-    have hm := move_correct s .Right
-    have hm' : Runs (FreeM.lift (.move .Right)) s (cursor (bit :: left) right)
-        (s.headPos + 1) 1 := by simpa [TMState.move, hs] using hm
-    have hr := hm'.seq (q := seekRightBlank tm)
-      (second := cursor ((bit :: right).reverse ++ left) [])
-      (pos₂ := s.headPos + (bit :: right).length) (time₂ := right.length) (by
-        intro t ht hp
-        have htape : t.config.BiTape = cursor (bit :: left) right := by simp [ht]
-        simpa [List.reverse_cons, List.append_assoc, hp, add_assoc, add_comm, add_left_comm] using
-          ih (bit :: left) t htape)
-    simpa [seekRightBlank, Nat.add_comm] using hr
+    apply Spec.runs
+    vcgen [Spec.while_false_spec]
+    cases hcfg : s.config
+    simp_all
+  | cons bit right ih =>
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih (bit :: left) (s.move .Right)
+      (by simp [TMState.move, hs])
+    unfold seekRightBlank
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := seekRightBlank tm) (hloop := rfl),
+      Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost,
+      List.reverse_cons, List.append_assoc, add_comm, add_left_comm]
 
 /--
 `seekLeftBlank tm` is a Turing machine program that repeatedly moves the head left while the current
@@ -132,30 +140,22 @@ theorem seekLeftBlank_correct (left : List Symbol) (bit : Symbol) (right : List 
       (s.headPos - (left.length + 1 : ℕ)) (left.length + 1) := by
   induction left generalizing bit right s with
   | nil =>
+    have hc : Completes (seekLeftBlank tm) (s.move .Left) 0 (s.move .Left) :=
+      completes_while_false _ _ _ (by simp [TMState.move, hs])
     unfold seekLeftBlank
-    apply runs_while_step (by simp [hs])
-    have hm : Runs (FreeM.lift (.move .Left)) s (before (bit :: right)) (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := seekLeftBlank tm) (time₂ := 0)
-      (second := before (bit :: right)) (pos₂ := s.headPos - 1) (by
-        intro t ht hp
-        simp [ht, hp, seekLeftBlank])
-    simpa [seekLeftBlank] using hr
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := seekLeftBlank tm) (hloop := rfl),
+      Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
   | cons prev left ih =>
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih prev (bit :: right) (s.move .Left)
+      (by simp [TMState.move, hs])
     unfold seekLeftBlank
-    apply runs_while_step (by simp [hs])
-    have hm : Runs (FreeM.lift (.move .Left)) s (cursor left (prev :: bit :: right))
-        (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := seekLeftBlank tm) (time₂ := left.length + 1)
-      (second := before ((prev :: left).reverse ++ bit :: right))
-      (pos₂ := s.headPos - ((prev :: left).length + 1 : ℕ)) (by
-        intro t ht hp
-        have htape : t.config.BiTape = cursor left (prev :: bit :: right) := by simp [ht]
-        convert ih prev (bit :: right) t htape using 1 <;>
-          simp [List.reverse_cons, List.append_assoc, hp, sub_eq_add_neg, add_assoc]
-        lia)
-    simpa [seekLeftBlank, Nat.add_comm, Nat.add_left_comm] using hr
+    apply Spec.runs
+    vcgen [Spec.while_step_spec (loop := seekLeftBlank tm) (hloop := rfl),
+      Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
+      List.append_assoc, sub_eq_add_neg, add_comm, add_left_comm]
 
 /--
 `seekLeftEnd tm` is a Turing machine program that moves left once, scans left to a blank, and then
@@ -181,36 +181,18 @@ theorem seekLeftEnd_correct (left right : List Symbol) (s : TMState tm)
       (s.headPos - left.length) (left.length + 2) := by
   cases left with
   | nil =>
-    have hm : Runs (FreeM.lift (.move .Left)) s (before right) (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := do seekLeftBlank tm; FreeM.lift (.move .Right)) (time₂ := 1)
-      (second := cursor [] right) (pos₂ := s.headPos) (by
-        intro t ht hp
-        have hl : Runs (seekLeftBlank tm) t (before right) (s.headPos - 1) 0 := by
-          simp [seekLeftBlank, ht, hp]
-        simpa using hl.seq (q := FreeM.lift (.move .Right)) (time₂ := 1)
-          (second := cursor [] right) (pos₂ := s.headPos) (by
-            intro u hu hup
-            simpa [TMState.move, hu, hup] using move_correct u .Right))
-    simpa [seekLeftEnd] using hr
+    have hc : Completes (seekLeftBlank tm) (s.move .Left) 0 (s.move .Left) :=
+      completes_while_false _ _ _ (by simp [TMState.move, hs])
+    apply Spec.runs
+    vcgen [seekLeftEnd, Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
   | cons bit left =>
-    have hm : Runs (FreeM.lift (.move .Left)) s (cursor left (bit :: right)) (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := do seekLeftBlank tm; FreeM.lift (.move .Right))
-      (time₂ := left.length + 2) (second := cursor [] ((bit :: left).reverse ++ right))
-      (pos₂ := s.headPos - (bit :: left).length) (by
-        intro t ht hp
-        have htape : t.config.BiTape = cursor left (bit :: right) := by simp [ht]
-        have hl := seekLeftBlank_correct left bit right t htape
-        have hret := hl.seq (q := FreeM.lift (.move .Right)) (time₂ := 1)
-          (second := cursor [] ((bit :: left).reverse ++ right))
-          (pos₂ := s.headPos - (bit :: left).length) (by
-            intro u hu hup
-            convert move_correct u .Right using 1 <;>
-              simp [TMState.move, hu, hup, hp, List.reverse_cons, List.append_assoc,
-                sub_eq_add_neg, add_assoc])
-        simpa [Nat.add_assoc] using hret)
-    simpa [seekLeftEnd, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc] using hr
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := seekLeftBlank_correct left bit right
+      (s.move .Left) (by simp [TMState.move, hs])
+    apply Spec.runs
+    vcgen [seekLeftEnd, Spec.steps hc 1]
+    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
+      List.append_assoc, sub_eq_add_neg, add_assoc, add_comm, add_left_comm]
 
 /--
 This value stores the rightward scan with its proof that the tape is preserved and the head stops

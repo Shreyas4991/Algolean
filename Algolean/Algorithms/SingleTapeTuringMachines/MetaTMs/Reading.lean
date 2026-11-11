@@ -33,7 +33,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
@@ -58,15 +60,17 @@ theorem moveCells_correct (direction : Dir) (count : Nat) (s : TMState tm) :
       (s.headPos + count * direction.offset) count := by
   induction count generalizing s with
   | zero =>
-    refine ⟨0, s, completes_pure s, ?_, by simp, rfl⟩
-    cases s.config
-    rfl
+    apply Spec.runs
+    vcgen [moveCells]
+    cases hcfg : s.config
+    simp_all
   | succ count ih =>
-    have h := (ih (s.move direction)).prepend_move
-    convert h using 1 <;>
-      simp [moveCells, TMState.move, Function.iterate_succ_apply, Nat.cast_add,
-        Nat.cast_one, add_mul, add_assoc, add_comm]
-    cases direction <;> rfl
+    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih (s.move direction)
+    apply Spec.runs
+    vcgen [moveCells, Spec.steps hc 1]
+    all_goals cases direction
+    all_goals simp_all [TMState.move, TMState.moveCost, Function.iterate_succ_apply,
+      add_comm, add_left_comm]
 
 /--
 This machine template compares a fixed word with the cells beginning under the head.
@@ -114,7 +118,13 @@ theorem checkPrefix_correct (yes no : tm.State) (expected word : List Γ)
           ih word (StackTape.cons (some symbol) left) moved
             (by simp [moved, TMState.move, htape])
         let returned := final.move .Left
-        have hr := (completes_move s .Right).seq (hc.seq (completes_move final .Left))
+        have hr : Completes (do [TMQuery tm]
+            moveₜ .Right
+            checkPrefix tm yes no rest
+            moveₜ .Left) s (s.moveCost .Right + (cost + final.moveCost .Left)) returned := by
+          apply Spec.exact_completes
+          vcgen [Spec.of_completes hc (s.moveCost .Right)]
+          all_goals simp_all [moved, returned, add_assoc]
         refine ⟨s.moveCost .Right + (cost + final.moveCost .Left), returned, ?_, ?_, ?_, ?_⟩
         · unfold checkPrefix
           apply Completes.branch
@@ -148,11 +158,10 @@ private theorem previousWord_correct (found searching : tm.State) (expected actu
     checkPrefix_correct found searching expected (actual ++ suffix) left tail middle hmiddle
   have hprefix : expected <+: actual ++ suffix ↔ expected = actual := by
     rw [List.prefix_iff_eq_take, ← hlen, List.take_left]
-  refine ⟨cost + more, final, hc.seq hr, ?_, ?_, ?_⟩
-  · simpa [hprefix, hmiddle] using hf
-  · simpa [hp, sub_eq_add_neg] using hh
-  · simp only [TMCost.add_steps, hb]
-    lia
+  apply Spec.completes
+  vcgen [previousWord, Spec.steps hc 0, Spec.steps hr expected.length]
+  all_goals simp_all [sub_eq_add_neg]
+  all_goals lia
 
 private def previousLoop (tm : SingleTapeTM Γ) (found searching : tm.State)
     (word : List Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
@@ -174,9 +183,13 @@ private theorem previousLoop_correct (found searching : tm.State) (hne : found �
   | nil =>
     obtain ⟨cost, final, hc, hf, hh, hb⟩ := previousWord_correct found searching expected expected
       rfl left tail suffix s (by simpa using htape)
-    refine ⟨cost + 0, final, Completes.while_step (by simp [hstate, hne.symm]) hc
-      (completes_while_false _ _ final (by simp [hf])), by simpa using hf,
-      by simpa using hh, by simpa using hb⟩
+    have hend : Completes (previousLoop tm found searching expected) final 0 final :=
+      completes_while_false _ _ _ (by simp [hf])
+    unfold previousLoop
+    apply Spec.completes
+    vcgen [Spec.while_step_spec (loop := previousLoop tm found searching expected) (hloop := rfl),
+      Spec.steps hc 0, Spec.steps hend cost.steps]
+    all_goals simp_all
   | append_singleton blocks block ih =>
     have hblock := hblocks block (by simp)
     have hrest : ∀ word ∈ blocks, word.length = expected.length ∧ word ≠ expected :=
@@ -186,19 +199,24 @@ private theorem previousLoop_correct (found searching : tm.State) (hne : found �
         simpa [List.flatten_append, List.reverse_append, StackTape.prepend_append] using htape)
     obtain ⟨more, final, hr, hf, hfpos, hbound⟩ :=
       ih hrest (block ++ suffix) middle (by simp [hm, hblock.2.symm]) (by simp [hm])
-    refine ⟨cost + more, final, Completes.while_step (by simp [hstate, hne.symm]) hc hr,
-      ?_, ?_, ?_⟩
-    · simpa [List.flatten_append, List.append_assoc] using hf
-    · rw [hfpos, hh]
+    have hpos : final.headPos = s.headPos - expected.length * ((blocks ++ [block]).length + 1) := by
+      rw [hfpos, hh]
       simp only [List.length_append, List.length_singleton]
       push_cast
       ring
-    · simp only [TMCost.add_steps, List.length_append, List.length_singleton]
+    have htime : cost.steps + more.steps ≤
+        3 * expected.length * ((blocks ++ [block]).length + 1) := by
+      simp only [List.length_append, List.length_singleton]
       calc
         cost.steps + more.steps ≤
             3 * expected.length + 3 * expected.length * (blocks.length + 1) :=
           Nat.add_le_add hb hbound
         _ = _ := by ring
+    unfold previousLoop
+    apply Spec.completes
+    vcgen [Spec.while_step_spec (loop := previousLoop tm found searching expected) (hloop := rfl),
+      Spec.steps hc 0, Spec.steps hr cost.steps]
+    all_goals simp_all [List.flatten_append, List.append_assoc]
 
 /--
 This machine template searches left through words of a fixed length until it finds `expected`.
@@ -227,9 +245,11 @@ theorem findPreviousWord_correct (found searching : tm.State) (hne : found ≠ s
       final.config = ⟨some found, BiTape.segment left (expected ++ blocks.flatten ++ suffix) tail⟩ ∧
       final.headPos = s.headPos - expected.length * (blocks.length + 1) ∧
       cost.steps ≤ 3 * expected.length * (blocks.length + 1) := by
-  let initial : TMState tm := {s with config.state := some searching}
+  let initial : TMState tm := {s with config := ⟨some searching, s.config.BiTape⟩}
   obtain ⟨cost, final, hc, hf, hh, hb⟩ := previousLoop_correct found searching hne expected
     blocks hblocks left tail suffix initial rfl (by simpa [initial] using htape)
-  exact ⟨0 + cost, final, (completes_update s searching).seq hc, hf, hh, by simpa using hb⟩
+  apply Spec.completes
+  vcgen [findPreviousWord, Spec.steps hc 0]
+  all_goals simp_all [initial]
 
 end Algolean.Algorithms.SingleTapeTuringMachines

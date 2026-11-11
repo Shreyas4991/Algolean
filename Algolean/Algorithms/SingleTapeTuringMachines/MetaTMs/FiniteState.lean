@@ -34,7 +34,9 @@ same finite program runs on every input length.
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
@@ -83,7 +85,11 @@ theorem updateForSymbol_correct (table : ScanTable tm)
   apply select_correct _ _ _ symbol s _ 0 (table.mem_symbols symbol)
   · intro candidate
     simp [hhead, eq_comm]
-  · exact completes_update s (table.next label symbol)
+  · change Completes (do [TMQuery tm] state ←ₜ table.next label symbol) s 0
+      {s with config := ⟨some (table.next label symbol), s.config.BiTape⟩}
+    apply Spec.exact_completes
+    vcgen
+    simp_all
 
 /--
 This Turing machine program compares the current state with each name in `table.states`, from
@@ -144,23 +150,24 @@ theorem scan_segment_correct (table : ScanTable tm) (left tail : StackTape Symbo
       final.headPos = s.headPos + word.length ∧ cost.steps = word.length := by
   induction word generalizing left label s with
   | nil =>
-    refine ⟨0, s, completes_while_false _ _ s (by simp [htape]), ?_, by simp, rfl⟩
+    unfold scan
+    apply Spec.completes
+    vcgen [Spec.while_false_spec]
     cases hcfg : s.config
     simp_all
   | cons symbol word ih =>
-    let updated : TMState tm := {s with config.state := some (table.next label symbol)}
+    let updated : TMState tm := {s with config := ⟨some (table.next label symbol), s.config.BiTape⟩}
     let moved := updated.move .Right
-    have hu := updateFromTable_correct table label symbol s hstate (by simp [htape])
+    have hu : Completes (updateFromTable table) s 0 updated :=
+      updateFromTable_correct table label symbol s hstate (by simp [htape])
     obtain ⟨cost, final, hr, hf, hp, hm⟩ := ih (StackTape.cons (some symbol) left)
       (table.next label symbol) moved (by simp [moved, updated, TMState.move, htape]) rfl
-    refine ⟨(0 + updated.moveCost .Right) + cost, final,
-      Completes.while_step (by simp [htape]) (hu.seq (completes_move updated .Right)) hr,
-      ?_, ?_, ?_⟩
-    · simpa [List.reverse_cons, StackTape.prepend_append] using hf
-    · simp [moved, updated, TMState.move] at hp
-      simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
-      lia
-    · simp [TMState.moveCost, hm, Nat.add_comm]
+    unfold scan
+    apply Spec.completes
+    vcgen [Spec.while_step_spec (loop := scan table) (hloop := rfl),
+      Spec.steps hu 0, Spec.steps hr 1]
+    all_goals simp_all [moved, updated, TMState.move, TMState.moveCost,
+      List.reverse_cons, StackTape.prepend_append, add_comm, add_left_comm]
 
 /--
 Starting in state `label`, the program reads the symbols of `right` from first to last.
