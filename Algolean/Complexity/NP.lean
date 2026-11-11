@@ -75,7 +75,9 @@ def TimeComputable.onFirstWord {f : List Symbol → List Symbol} (machine : Time
       SingleTapeTuringMachines.firstWord (machine.tm.extendAlphabet (markers := 1))
       machine.program.reduceProg (alphabetReduction (markers := 1))
     timeBound n := 2 * n + 4 + machine.timeBound n
-    outputsFunInTime input := by
+    computesWithin := by
+      apply TMQuery.ComputesWithin.of_outputsWithinTime
+      intro input
       exact firstWord_outputs mono (machine.outputsFunInTime (Alphabet.firstWord input)) }
 
 /--

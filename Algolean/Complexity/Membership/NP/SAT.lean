@@ -28,13 +28,6 @@ public import Algolean.Problems.SAT.Verification
 namespace Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 
 /--
-This language contains the correctly encoded formula-certificate pairs whose listed values make
-all clauses true. Incorrectly written words are excluded. Missing values mean false, and a
-repeated variable uses its first listed value.
--/
-def acceptedPairs : Language Symbol := {word | result word = true}
-
-/--
 The SAT certificate checker recognizes this language in polynomial time. Its fixed program
 returns the one-symbol word containing true exactly on the words in the language, and returns
 false on every other word.

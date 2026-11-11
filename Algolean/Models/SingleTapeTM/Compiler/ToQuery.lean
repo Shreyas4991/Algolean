@@ -296,8 +296,13 @@ noncomputable def TimeComputable.toQuery {f : List Symbol → List Symbol}
     tm := TMQuery.Compiler.ToQuery.machine computer.tm
     program := TMQuery.Compiler.ToQuery.compile computer.tm
     timeBound := computer.timeBound
-    outputsFunInTime input :=
-      (TMQuery.Compiler.ToQuery.time_bound computer.tm).mpr (computer.outputsFunInTime input) }
+    computesWithin := by
+      apply TMQuery.ComputesWithin.of_outputsWithinTime
+        (program := TMQuery.Compiler.ToQuery.compile computer.tm) (f := f)
+        (time := computer.timeBound)
+      intro input
+      exact (TMQuery.Compiler.ToQuery.time_bound computer.tm).mpr
+        (computer.outputsFunInTime input) }
 
 private theorem toQuery_timeBound_impl {f : List Symbol → List Symbol}
     (computer : TimeComputable f) (n : ℕ) :

@@ -108,7 +108,9 @@ noncomputable def compareWordComputer (yes no : Symbol) (expected : List Symbol)
   tm := comparisonControl Symbol
   program := compareWord (comparisonControl Symbol) yes no expected
   timeBound := id
-  outputsFunInTime input := by
+  computesWithin := by
+    apply TMQuery.ComputesWithin.of_outputsWithinTime
+    intro input
     obtain ⟨cost, final, hr, htape, _, hsteps⟩ :=
       compareWord_correct yes no expected input (TMState.init (comparisonControl Symbol) input) rfl
     exact hr.outputsWithinTime

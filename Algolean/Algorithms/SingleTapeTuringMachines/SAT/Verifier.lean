@@ -18,7 +18,8 @@ public import Algolean.Models.SingleTapeTM.Compiler.Basic
 * The program erases the input and leaves one Boolean digit under the head, just after the original
   input. Missing variable values mean false, and repeated assignments use the first listed value.
 * `verify_correct` proves the answer and termination on every input word. For input length `n`,
-  the complete program uses at most `27 * (n + 1) ^ 4` head moves.
+  time is at most `27 * (n + 1) ^ 4` move instructions, and total space is at most that bound
+  plus `max 1 n` cells. `verify_decides` states which language the program decides.
 * `computer` puts the program and these proofs into `PolyTimeComputable`.
 * `transitionTableComputer` compiles it to a finite transition table with a polynomial bound on
   the number of transitions.
@@ -116,7 +117,7 @@ private theorem checkInput_correct (word : List Symbol) (s : TMState machine)
   let source : TMState formatMachine :=
     ⟨⟨some formatMachine.q₀, s.config.BiTape⟩, s.headPos, s.cellsAllocated, s.cellsVisited⟩
   obtain ⟨cost, final, hr, hf, hp, hformat, ht⟩ :=
-    checkFormat_correct word source (by simpa [source, cursor_start] using htape)
+    checkFormat_execution word source (by simpa [source, cursor_start] using htape)
   let inject : FormatState → machine.State := Sum.inl
   have hrun := hr.relabel inject Sum.inl_injective
   have hsource : source.relabel inject =
@@ -174,7 +175,7 @@ which is its specified Boolean answer, under the head. The head finishes one cel
 original word. The bound includes format checking and applies to incorrectly written words and
 to certificates of any length, using at most `27 * (word.length + 1) ^ 4` head moves.
 -/
-theorem verify_correct (word : List Symbol) (s : TMState machine)
+private theorem verify_correct_impl (word : List Symbol) (s : TMState machine)
     (htape : s.config.BiTape = BiTape.mk₁ word) :
     ∃ cost final, Completes verify s cost final ∧
       final.config.BiTape = BiTape.mk₁ [digit (result word)] ∧
@@ -220,18 +221,46 @@ theorem verify_correct (word : List Symbol) (s : TMState machine)
       lia
 
 /--
-This record contains the same verifier program for every input and its correctness proof.
-Its time bound and bounding polynomial are both `27 * (n + 1) ^ 4`, measured in the complete
-input length, including the certificate and the separator between the two words.
+The fixed verifier computes its specified answer on every word, including incorrectly encoded
+inputs. Time is bounded by `27 * (n + 1) ^ 4` move instructions. Total space also includes the
+`max 1 n` cells occupied initially. The input length includes the formula, certificate, and
+their separator.
 -/
+theorem verify_correct :
+    ComputesWithin verify (fun word => [digit (result word)])
+      (fun n => 27 * (n + 1) ^ 4) (fun n => max 1 n + 27 * (n + 1) ^ 4) := by
+  apply TMSolves.of_time_bound
+  intro word
+  obtain ⟨cost, final, hc, hf, _, ht⟩ :=
+    verify_correct_impl word (TMState.init machine word) rfl
+  exact ⟨cost, final, hc, hf, ht⟩
+
+/--
+This language contains the correctly encoded formula-certificate pairs whose listed values
+make every clause true. Missing values mean false, and a repeated variable uses its first
+listed value. Incorrectly written words are excluded.
+-/
+@[expose] def acceptedPairs : Language Symbol := {word | result word = true}
+
+/--
+The fixed verifier decides the accepted formula-certificate pairs by leaving the true symbol
+under its final head exactly on those pairs. The same time and total space bounds apply to
+every input word, including malformed words.
+-/
+theorem verify_decides :
+    DecidesWithin verify acceptedPairs (.tapeIs (some (digit true)))
+      (fun n => 27 * (n + 1) ^ 4) (fun n => max 1 n + 27 * (n + 1) ^ 4) := by
+  apply verify_correct.consequence
+  intro word cfg htape
+  change cfg.BiTape = BiTape.mk₁ [digit (result word)] at htape
+  simp [htape, acceptedPairs, digit, BiTape.mk₁]
+
+/-- This record stores the verifier and its common correctness and resource proof. -/
 noncomputable def computer : PolyTimeComputable (fun word => [digit (result word)]) where
   tm := machine
   program := verify
   timeBound n := 27 * (n + 1) ^ 4
-  outputsFunInTime word := by
-    obtain ⟨cost, final, ⟨fuel, hr⟩, hf, _, ht⟩ :=
-      verify_correct word (TMState.init machine word) rfl
-    exact ⟨fuel, ⟨(), cost⟩, ⟨final, 0⟩, hr, hf, ht⟩
+  computesWithin := verify_correct
   poly := 27 * (X + 1) ^ 4
   bounds n := by simp
 

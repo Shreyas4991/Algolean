@@ -22,8 +22,10 @@ Time counts Query move instructions. Interpreter fuel also accounts for instruct
 loop tests that do not move the head, and sufficient fuel is required for a completed run.
 The compiler connects these records to CSLib's records with an affine overhead in time.
 
-The `ComputesWithin` adapters connect function computation to `TMSolves`, including total
-space. A time bound `T(n)` always gives the space bound `max 1 n + T(n)`.
+The `computesWithin` field is the common `TMSolves` correctness and resource statement for
+word computation. A time bound `T(n)` gives the total space bound `max 1 n + T(n)`.
+`outputsFunInTime` derives the per-input execution statement when a compiler or composition
+proof needs it.
 -/
 
 @[expose] public section
@@ -77,9 +79,11 @@ structure TimeComputable (f : List Symbol → List Symbol) where
   program : Prog (TMQuery tm) Unit
   /-- This function gives the allowed number of head moves for each input length. -/
   timeBound : ℕ → ℕ
-  /-- The program finishes with the required output within the allowed time on every input. -/
-  outputsFunInTime (input : List Symbol) :
-    OutputsWithinTime program input (f input) (timeBound input.length)
+  /--
+  The same program computes the required output on every input within the time bound. Total
+  space is bounded by the initial input space plus that time bound.
+  -/
+  computesWithin : ComputesWithin program f timeBound (fun n => max 1 n + timeBound n)
 
 /--
 This record adds a polynomial time bound to a
@@ -125,6 +129,24 @@ theorem ComputesWithin.outputsWithinTime (h : ComputesWithin program f time spac
   obtain ⟨cost, final, hc, ht, hb, _⟩ := h input
   exact hc.outputsWithinTime ht hb
 
+end FixedProgram
+
+/-- The stored common correctness statement gives the output and time bound on each input. -/
+theorem TimeComputable.outputsFunInTime {f : List Symbol → List Symbol}
+    (computer : TimeComputable f) (input : List Symbol) :
+    let := computer.symbolDecidableEq
+    let := computer.stateDecidableEq
+    OutputsWithinTime computer.program input (f input) (computer.timeBound input.length) := by
+  let := computer.symbolDecidableEq
+  let := computer.stateDecidableEq
+  exact computer.computesWithin.outputsWithinTime input
+
+section FixedProgram
+
+variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
+variable {program : Prog (TMQuery tm) Unit} {f : List Symbol → List Symbol}
+variable {time space : ℕ → ℕ}
+
 /--
 Computing the required output within a time bound gives a `TMSolves` statement with total
 space bounded by the initial input space plus that time bound.
@@ -134,13 +156,13 @@ theorem ComputesWithin.of_outputsWithinTime
     ComputesWithin program f time (fun n => max 1 n + time n) :=
   TMSolves.of_time_bound (fun input => OutputsWithinTime.iff_completes.mp (h input))
 
-/-- The same fixed program and time bound give a computation record after forgetting space. -/
+/-- The same program and time bound give a record with the automatic space bound from time. -/
 def ComputesWithin.timeComputable (h : ComputesWithin program f time space) :
     TimeComputable f where
   tm := tm
   program := program
   timeBound := time
-  outputsFunInTime := h.outputsWithinTime
+  computesWithin := ComputesWithin.of_outputsWithinTime h.outputsWithinTime
 
 /-- A polynomial bound packages the same program as a polynomial-time computation record. -/
 def ComputesWithin.polyTimeComputable (h : ComputesWithin program f time space)
@@ -152,24 +174,10 @@ def ComputesWithin.polyTimeComputable (h : ComputesWithin program f time space)
 end FixedProgram
 
 /--
-A computation record satisfies the common correctness, time, and total space interface.
-Its program and time bound are unchanged; the space bound includes the original input.
--/
-theorem TimeComputable.computesWithin {f : List Symbol → List Symbol}
-    (computer : TimeComputable f) :
-    let := computer.symbolDecidableEq
-    let := computer.stateDecidableEq
-    ComputesWithin computer.program f computer.timeBound
-      (fun n => max 1 n + computer.timeBound n) := by
-  let := computer.symbolDecidableEq
-  let := computer.stateDecidableEq
-  exact ComputesWithin.of_outputsWithinTime computer.outputsFunInTime
-
-/--
 The stored polynomial bounds both time and additional tape space for the same fixed program.
 Total space also includes `max 1 n` cells for the initial input.
 -/
-theorem PolyTimeComputable.computesWithin {f : List Symbol → List Symbol}
+theorem PolyTimeComputable.computesWithin_poly {f : List Symbol → List Symbol}
     (computer : PolyTimeComputable f) :
     let := computer.symbolDecidableEq
     let := computer.stateDecidableEq
@@ -190,8 +198,8 @@ noncomputable def TimeComputable.id : TimeComputable (Symbol := Symbol) id := by
     tm := SingleTapeTM.idComputer
     program := pure ()
     timeBound := fun _ => 0
-    outputsFunInTime := fun input =>
-      ⟨0, ⟨(), 0⟩, ⟨TMState.init _ input, 0⟩, rfl, rfl, le_rfl⟩ }
+    computesWithin := ComputesWithin.of_outputsWithinTime (fun input =>
+      ⟨0, ⟨(), 0⟩, ⟨TMState.init _ input, 0⟩, rfl, rfl, le_rfl⟩) }
 
 /-- The program that leaves its input unchanged has a polynomial time bound of zero. -/
 noncomputable def PolyTimeComputable.id : PolyTimeComputable (Symbol := Symbol) id where

@@ -135,19 +135,19 @@ theorem finite_output (_reduction : KarpReduction A B inputSymbol middleSymbol) 
   Finite.of_injective middleSymbol middleSymbol.injective
 
 /--
-The reduction's fixed program finishes on every shared tape word within its stored polynomial
-bound. The existence of sufficient interpreter fuel is part of `OutputsWithinTime`.
+The reduction's fixed program computes the conversion on every shared tape word within its
+stored polynomial time bound. Total space is bounded by the initial input space plus that
+polynomial. The statement uses the common correctness and resource interface.
 -/
-theorem time_bound (reduction : KarpReduction A B inputSymbol middleSymbol)
-    (input : List Symbol) :
+theorem time_bound (reduction : KarpReduction A B inputSymbol middleSymbol) :
     let computer := reduction.computer
     let := computer.symbolDecidableEq
     let := computer.stateDecidableEq
-    TMQuery.OutputsWithinTime computer.program input (reduction.transform input)
-      (computer.poly.eval input.length) := by
+    TMQuery.ComputesWithin computer.program reduction.transform computer.poly.eval
+      (fun n => max 1 n + computer.poly.eval n) := by
   let := reduction.computer.symbolDecidableEq
   let := reduction.computer.stateDecidableEq
-  exact (reduction.computer.outputsFunInTime input).mono (reduction.computer.bounds input.length)
+  exact reduction.computer.computesWithin_poly
 
 /--
 A reduction cannot write an arbitrarily long target word for free. Its output length is at most
@@ -160,7 +160,7 @@ theorem output_length_le (reduction : KarpReduction A B inputSymbol middleSymbol
       1 + input.length + reduction.computer.poly.eval input.length := by
   let := reduction.computer.symbolDecidableEq
   let := reduction.computer.stateDecidableEq
-  exact (reduction.time_bound input).output_length_le
+  exact (reduction.time_bound.outputsWithinTime input).output_length_le
 
 /--
 Running a polynomial-time computation after the reduction still gives a polynomial-time
@@ -175,23 +175,24 @@ theorem preservesPolyTimeComputable (reduction : KarpReduction A B inputSymbol m
 
 /--
 If the reduction has polynomial bound `p` and a subsequent computation has bound `q`, their
-combined program finishes within `p(n) + q(1 + n + p(n))` moves. The argument to `q` accounts for
-the reduction's output length. The two programs use the same fixed tape alphabet.
+combined program computes the composed function within `p(n) + q(1 + n + p(n))` moves.
+Total space is bounded by the initial input space plus that time bound. The argument to `q`
+accounts for the reduction's output length. Both programs use the same fixed tape alphabet.
 -/
 theorem composition_time_bound (reduction : KarpReduction A B inputSymbol middleSymbol)
-    {f : List Symbol → List Symbol} (target : TMQuery.PolyTimeComputable f)
-    (input : List Symbol) :
+    {f : List Symbol → List Symbol} (target : TMQuery.PolyTimeComputable f) :
     let p := reduction.computer.poly
     let q := target.poly
     let combined := reduction.computer.comp target
     let := combined.symbolDecidableEq
     let := combined.stateDecidableEq
-    TMQuery.OutputsWithinTime combined.program input (f (reduction.transform input))
-      ((p + q.comp (1 + Polynomial.X + p)).eval input.length) := by
+    let bound := p + q.comp (1 + Polynomial.X + p)
+    TMQuery.ComputesWithin combined.program (f ∘ reduction.transform) bound.eval
+      (fun n => max 1 n + bound.eval n) := by
   let combined := reduction.computer.comp target
   let := combined.symbolDecidableEq
   let := combined.stateDecidableEq
-  exact (combined.outputsFunInTime input).mono (combined.bounds input.length)
+  exact combined.computesWithin_poly
 
 /--
 If the represented target language belongs to `P` on the shared alphabet, the represented source

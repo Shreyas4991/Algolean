@@ -298,7 +298,9 @@ def timeComputable {β : Type} {outputEncoding : β → List Symbol} {f : List S
   tm := tm
   program := machine.program
   timeBound := timeBound
-  outputsFunInTime input := by
+  computesWithin := by
+    apply TMQuery.ComputesWithin.of_outputsWithinTime
+    intro input
     obtain ⟨cost, final, completed, hcfg, _, ht⟩ :=
       machine.correct input (TMState.init tm input) rfl
     exact completed.outputsWithinTime (by simp [hcfg]) ht

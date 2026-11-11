@@ -22,6 +22,8 @@ handles every input length and uses the same alphabet for its input and output.
 
 For input length `n`, the machine uses at most `C * (n + m(n) + t(n) + 1)^2` head moves.
 The constant `C` depends only on the verifier, the two polynomials, and the fixed alphabet.
+The record's `computesWithin` field proves this bound and correctness on every input. Its
+total space bound adds the initial input space `max 1 n` to the time bound.
 -/
 
 public section
@@ -101,17 +103,18 @@ noncomputable def tmsatSerializer (verifier : SingleTapeTM.Description (TapeSymb
     timeBound := fun n => coefficient * (n + m.eval n + t.eval n + 1) ^ 2
     poly := C coefficient * (X + m + t + 1) ^ 2
     bounds := by intro n; simp
-    outputsFunInTime := ?_ }
-  intro input
+    computesWithin := ?_ }
+  apply (computer.computesWithin_poly.mono hbound
+    (fun n => Nat.add_le_add_left (hbound n) (max 1 n))).consequence
+  intro input cfg htape
   have hword : Serialization.header verifier ++ input.flatMap Serialization.symbolCode ++
       Serialization.ending ++ fieldsWord (boundsFields m t) input.length =
         encodingOver.encode
           (⟨verifier, input, m.eval input.length, t.eval input.length⟩ : Instance Γ) := by
     rw [Serialization.encode_instance]
     simp [boundsFields, fieldsWord, List.append_assoc]
-  rw [← hword]
-  exact (computer.outputsFunInTime input).mono
-    ((computer.bounds input.length).trans (hbound input.length))
+  change cfg.BiTape = BiTape.mk₁ _ at htape ⊢
+  simpa only [hword] using htape
 
 private theorem tmsatSerializer_poly_impl
     (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (m t : Polynomial Nat) :

@@ -121,7 +121,9 @@ def TimeComputable.comp {f g : List Symbol → List Symbol}
       state ←ₜ right second.tm.q₀
       second.program.reduceProg (relabelReduction right)
     timeBound n := first.timeBound n + second.timeBound (1 + n + first.timeBound n)
-    outputsFunInTime input := by
+    computesWithin := by
+      apply TMQuery.ComputesWithin.of_outputsWithinTime
+      intro input
       have hfirst := first.outputsFunInTime input
       have hsecond : OutputsWithinTime second.program (f input) (g (f input))
           (second.timeBound (f input).length) := by
@@ -155,10 +157,7 @@ def PolyTimeComputable.polynomialBound {f : List Symbol → List Symbol}
   stateDecidableEq := machine.stateDecidableEq
   program := machine.program
   timeBound := machine.poly.eval
-  outputsFunInTime input := by
-    let := machine.symbolDecidableEq
-    let := machine.stateDecidableEq
-    exact (machine.outputsFunInTime input).mono (machine.bounds input.length)
+  computesWithin := machine.computesWithin_poly
 
 /--
 Two programs that compute functions in polynomial time can be run in sequence to compute the
@@ -186,7 +185,9 @@ def TimeComputable.onNonempty {f : List Symbol → List Symbol} (computer : Time
     tm := computer.tm
     program := branch (.tapeIs none) (FreeM.lift (.write (some fallback))) computer.program
     timeBound := computer.timeBound
-    outputsFunInTime input := by
+    computesWithin := by
+      apply TMQuery.ComputesWithin.of_outputsWithinTime
+      intro input
       cases input with
       | nil =>
         let s := TMState.init computer.tm []
