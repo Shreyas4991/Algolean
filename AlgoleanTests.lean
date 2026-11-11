@@ -34,6 +34,7 @@ public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.TMSAT
 public import AlgoleanTests.TMSATNumbers
 public import AlgoleanTests.TMSATParsing
+public import AlgoleanTests.TMSATStateFields
 public import AlgoleanTests.TMSATToSAT
 public import AlgoleanTests.TMSATToSATTape
 public import AlgoleanTests.TMSATWriting
