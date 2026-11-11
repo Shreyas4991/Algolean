@@ -24,7 +24,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery Copying
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
@@ -45,6 +47,81 @@ def encodeLeft (tm : SingleTapeTM Symbol) (symbols : List Symbol) (code : Symbol
     select symbols (fun symbol => .tapeIs (some symbol))
       (fun symbol => replaceBeforeBlank tm symbols (code symbol))
 
+private theorem encodeSymbol_spec (symbols : List Symbol) (code : Symbol → List Symbol)
+    (symbol : Symbol) (hmem : symbol ∈ symbols) (first : Symbol) (rest : List Symbol)
+    (hcode : code symbol = first :: rest) (hcover : ∀ symbol, symbol ∈ symbols)
+    (input suffix : List Symbol) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        (segment (StackTape.cons none (StackTape.mapSome suffix))
+          (symbol :: input) StackTape.nil).mirror⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      select symbols (fun symbol => .tapeIs (some symbol))
+        (fun symbol => replaceBeforeBlank tm symbols (code symbol))
+    ⦃ fun _ cost final => final.config = ⟨label,
+        (segment (StackTape.cons none (StackTape.mapSome (code symbol ++ suffix)))
+          input StackTape.nil).mirror⟩ ∧
+        final.headPos = origin - 1 ∧ cost.steps =
+          elapsed + rest.length * (4 * suffix.length + 3) + (code symbol).length + 2 ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hsteps⟩
+  vcgen [Spec.select_spec symbols (fun symbol => .tapeIs (some symbol))
+    (fun symbol => replaceBeforeBlank tm symbols (code symbol)) symbol hmem]
+  constructor
+  · intro candidate
+    simp [hcfg, eq_comm]
+  · rw [hcode]
+    vcgen [replaceBeforeBlank_spec symbols hcover first rest symbol input suffix
+      label origin elapsed]
+    all_goals simp_all
+
+/--
+Encoding preserves the symbol order and the existing output. Bounds on the code lengths and
+final output length bound every iteration and therefore the whole computation.
+-/
+@[spec] theorem encodeLeft_spec (symbols : List Symbol) (code : Symbol → List Symbol)
+    (hcover : ∀ symbol, symbol ∈ symbols) (hne : ∀ symbol, code symbol ≠ [])
+    (W : Nat) (hW : ∀ symbol, (code symbol).length ≤ W)
+    (input suffix : List Symbol) (N : Nat)
+    (hN : (input.reverse.flatMap code ++ suffix).length ≤ N)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        (segment (StackTape.cons none (StackTape.mapSome suffix)) input StackTape.nil).mirror⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      encodeLeft tm symbols code
+    ⦃ fun _ cost final => final.config = ⟨label,
+        (segment (StackTape.cons none (StackTape.mapSome
+          (input.reverse.flatMap code ++ suffix))) [] StackTape.nil).mirror⟩ ∧
+        final.headPos = origin - input.length ∧
+        cost.steps ≤ elapsed + input.length * (W * (4 * N + 3) + W + 2) ⦄ := by
+  induction input generalizing suffix origin elapsed with
+  | nil =>
+    unfold encodeLeft
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons symbol input ih =>
+    obtain ⟨first, rest, hcode⟩ := List.exists_cons_of_ne_nil (hne symbol)
+    have hsuffix : suffix.length ≤ N := by
+      simp only [List.length_append] at hN
+      lia
+    have hlen := hW symbol
+    have htail : rest.length ≤ W := by simp only [hcode, List.length_cons] at hlen; lia
+    have hmul := Nat.mul_le_mul htail (show 4 * suffix.length + 3 ≤ 4 * N + 3 by lia)
+    have hbody : rest.length * (4 * suffix.length + 3) + (code symbol).length + 2 ≤
+        W * (4 * N + 3) + W + 2 := by
+      simp only [hcode, List.length_cons] at hlen ⊢
+      lia
+    have hnext : (input.reverse.flatMap code ++ (code symbol ++ suffix)).length ≤ N := by
+      simpa [List.reverse_cons, List.flatMap_append, List.append_assoc] using hN
+    unfold encodeLeft
+    vcgen [Spec.while_step_spec (loop := encodeLeft tm symbols code) (hloop := rfl),
+      encodeSymbol_spec symbols code symbol (hcover symbol) first rest hcode hcover input suffix
+        label origin elapsed,
+      ih (code symbol ++ suffix) hnext (origin - 1)
+        (elapsed + rest.length * (4 * suffix.length + 3) + (code symbol).length + 2)]
+    all_goals simp_all [List.reverse_cons, List.flatMap_append, List.append_assoc,
+      sub_eq_add_neg, add_assoc, Nat.add_mul]
+    all_goals lia
+
 /--
 Encoding preserves the symbol order and the existing output. The input is described by the list
 of symbols encountered while moving left. A bound on the code lengths and final output length
@@ -62,45 +139,19 @@ theorem encodeLeft_correct (symbols : List Symbol) (code : Symbol → List Symbo
         [] StackTape.nil).mirror
       (s.headPos - input.length) moves ∧
       moves ≤ input.length * (W * (4 * N + 3) + W + 2) := by
-  induction input generalizing suffix s with
-  | nil =>
-    refine ⟨0, ?_, by simp⟩
-    simp [encodeLeft, hs]
-  | cons symbol input ih =>
-    obtain ⟨first, rest, hcode⟩ := List.exists_cons_of_ne_nil (hne symbol)
-    have hbody := replaceBeforeBlank_correct symbols hcover first rest symbol input suffix s hs
-    rw [← hcode] at hbody
-    obtain ⟨cost, middle, hc, ht, hp, hm⟩ := hbody
-    have hselect : Completes
-        (select symbols (fun candidate => .tapeIs (some candidate))
-          (fun candidate => replaceBeforeBlank tm symbols (code candidate))) s cost middle := by
-      exact select_correct _ _ _ symbol s middle cost (hcover symbol)
-        (by intro candidate; simp [hs, eq_comm]) hc
-    obtain ⟨moreMoves, hrest, hbound⟩ := ih (code symbol ++ suffix) middle
-      (congrArg SingleTapeTM.Cfg.BiTape ht) (by
-        simpa [List.reverse_cons, List.flatMap_append, List.append_assoc] using hN)
-    have hjoined := hrest.prepend hselect (by simp [ht])
-    have hloop : Runs (encodeLeft tm symbols code) s
-        (segment (StackTape.cons none (StackTape.mapSome
-          (input.reverse.flatMap code ++ (code symbol ++ suffix)))) [] StackTape.nil).mirror
-        (middle.headPos - input.length) (cost.steps + moreMoves) := by
-      unfold encodeLeft
-      apply runs_while_step (by simp [hs])
-      simpa [encodeLeft] using hjoined
-    refine ⟨cost.steps + moreMoves, ?_, ?_⟩
-    · convert hloop using 1
-      · simp [List.reverse_cons, List.flatMap_append, List.append_assoc]
-      · simp [hp, sub_eq_add_neg, add_comm, add_left_comm]
-    · have hsuffix : suffix.length ≤ N := by
-        simp only [List.length_append] at hN
-        lia
-      have hlen := hW symbol
-      have htail : rest.length ≤ W := by simp only [hcode, List.length_cons] at hlen; lia
-      have hmul := Nat.mul_le_mul htail (show 4 * suffix.length + 3 ≤ 4 * N + 3 by lia)
-      have hbodyBound : cost.steps ≤ W * (4 * N + 3) + W + 2 := by
-        simp only [hcode, List.length_cons] at hm hlen
-        lia
-      have hsum := Nat.add_le_add hbodyBound hbound
-      simpa only [List.length_cons, Nat.add_mul, Nat.one_mul, Nat.add_comm] using hsum
+  obtain ⟨cost, final, hc, hf, hh, hb⟩ :
+      ∃ cost final, Completes (encodeLeft tm symbols code) s cost final ∧
+        final.config = ⟨s.config.state,
+          (segment (StackTape.cons none (StackTape.mapSome
+            (input.reverse.flatMap code ++ suffix))) [] StackTape.nil).mirror⟩ ∧
+        final.headPos = s.headPos - input.length ∧
+        cost.steps ≤ input.length * (W * (4 * N + 3) + W + 2) := by
+    apply Spec.completes
+    vcgen [encodeLeft_spec symbols code hcover hne W hW input suffix N hN
+      s.config.state s.headPos 0]
+    all_goals
+      cases hcfg : s.config
+      simp_all
+  exact ⟨cost.steps, ⟨cost, final, hc, hf, hh, rfl⟩, hb⟩
 
 end Algolean.Algorithms.SingleTapeTuringMachines

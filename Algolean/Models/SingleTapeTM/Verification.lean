@@ -270,6 +270,23 @@ theorem branch_false_spec (condition : TMCondition tm) (yes no : Prog (TMQuery t
   rw [wp_query]
   exact ⟨cost, final, Completes.branch (by simpa [hcondition] using hc), hp⟩
 
+/--
+Selecting a case runs its action when every test agrees that this is the chosen case.
+The action's assertion then proves the result for the whole selection.
+-/
+theorem select_spec {α : Type} [DecidableEq α] (cases : List α)
+    (test : α → TMCondition tm) (action : α → Prog (TMQuery tm) Unit)
+    (chosen : α) (hmem : chosen ∈ cases) (post : Unit → TMCost → TMState tm → Prop) :
+    Triple (select cases test action)
+      (fun initial current =>
+        (∀ candidate, (test candidate).eval current.config = decide (candidate = chosen)) ∧
+        wp (action chosen) post () initial current) post () := by
+  apply Triple.intro
+  rintro initial current ⟨htest, hbody⟩
+  obtain ⟨cost, final, hc, hp⟩ := sound (action chosen) post initial current hbody
+  exact complete _ post initial current final cost
+    (select_correct cases test action chosen current final cost hmem htest hc) hp
+
 /-- A loop whose first test is false finishes without changing the state or cost. -/
 theorem while_false_spec (condition : TMCondition tm) (body : Prog (TMQuery tm) Unit)
     (post : Unit → TMCost → TMState tm → Prop) :
