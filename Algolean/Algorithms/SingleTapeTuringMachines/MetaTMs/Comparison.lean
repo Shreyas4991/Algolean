@@ -27,7 +27,9 @@ of tests. The same program handles inputs of every length, including the empty w
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery Polynomial
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
@@ -55,6 +57,34 @@ def compareWord (tm : SingleTapeTM Symbol) (yes no : Symbol) :
       eraseRight tm
       tape ←ₜ some no
 
+/-- Comparing the whole word erases it and writes its equality answer after its original end. -/
+@[spec] theorem compareWord_spec (yes no : Symbol) (expected input : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.mk₁ input⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      compareWord tm yes no expected
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.mk₁ [if input = expected then yes else no]⟩ ∧
+        final.headPos = origin + input.length ∧ cost.steps = elapsed + input.length ⦄ := by
+  induction expected generalizing input origin elapsed with
+  | nil =>
+    vcgen [compareWord, eraseRight_spec input StackTape.nil label origin elapsed]
+    all_goals cases input
+    all_goals simp_all [TMState.write, BiTape.mk₁, BiTape.nil, BiTape.write]
+  | cons symbol rest ih =>
+    cases input with
+    | nil =>
+      vcgen [compareWord, eraseRight_spec [] StackTape.nil label origin elapsed]
+      all_goals simp_all [TMState.write, BiTape.mk₁, BiTape.nil, BiTape.write]
+    | cons first input =>
+      vcgen [compareWord, eraseAndMove_spec,
+        eraseRight_spec (first :: input) StackTape.nil label origin elapsed,
+        ih input (origin + 1) (elapsed + 1)]
+      all_goals cases input
+      all_goals simp_all [TMState.write, TMState.move, TMState.moveCost, BiTape.mk₁,
+        BiTape.nil, BiTape.write, BiTape.moveRight, add_assoc]
+      all_goals lia
+
 /--
 Comparing the whole input produces exactly its equality answer and erases every input cell.
 The head finishes just after the original input, using exactly its length in head moves.
@@ -64,34 +94,11 @@ theorem compareWord_correct (yes no : Symbol) (expected input : List Symbol) (s 
     Runs (compareWord tm yes no expected) s
       (BiTape.mk₁ [if input = expected then yes else no])
       (s.headPos + input.length) input.length := by
-  induction expected generalizing input s with
-  | nil =>
-    have hreject := (eraseRight_correct input s
-      (by simpa [cursor_start] using htape)).append_write (some no)
-    unfold compareWord
-    apply Runs.branch
-    cases input with
-    | nil => simpa [htape, BiTape.mk₁, BiTape.nil, BiTape.write] using write_correct s (some yes)
-    | cons symbol rest => simpa [htape, BiTape.mk₁, BiTape.nil, BiTape.write] using hreject
-  | cons symbol rest ih =>
-    have hreject := (eraseRight_correct input s
-      (by simpa [cursor_start] using htape)).append_write (some no)
-    unfold compareWord
-    apply Runs.branch
-    cases input with
-    | nil => simpa [htape, BiTape.mk₁, BiTape.nil, BiTape.write] using hreject
-    | cons first input =>
-      by_cases heq : first = symbol
-      · subst first
-        have hfirst := eraseAndMove_correct symbol input s
-          (by simpa [cursor_start] using htape)
-        have hrest := hfirst.seq (q := compareWord tm yes no rest) (by
-          intro middle hmiddle hpos
-          simpa [hpos, Nat.cast_add, add_assoc] using
-            ih input middle
-              (by simpa [cursor_start] using congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-        simpa [htape, BiTape.mk₁, Nat.add_comm, add_comm, add_left_comm, add_assoc] using hrest
-      · simpa [htape, BiTape.mk₁, BiTape.nil, BiTape.write, heq] using hreject
+  apply Spec.runs
+  vcgen [compareWord_spec yes no expected input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 This machine has one control state. The comparison instructions define all of its behavior.

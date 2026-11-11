@@ -32,7 +32,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter
 
 open Cslib Cslib.Turing TMQuery Copying Polynomial
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
@@ -54,61 +56,32 @@ private def across (word : List Symbol) : Nat → Prog (TMQuery tm) Unit
     across word n
     seekLeftGap tm
 
-private theorem across_correct (word : List Symbol) (parts : List (List Symbol))
-    (output : List Symbol) (left : StackTape Symbol) (s : TMState tm)
-    (hs : s.config.BiTape = segment left [] (chain parts output)) :
-    Runs (across (tm := tm) word parts.length) s
-      (segment left [] (chain parts (output ++ word))) s.headPos
-      (2 * (span parts + output.length + word.length) + 8) := by
-  induction parts generalizing left s with
+private theorem across_spec (word : List Symbol) (parts : List (List Symbol))
+    (output : List Symbol) (left : StackTape Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, segment left [] (chain parts output)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      across (tm := tm) word parts.length
+    ⦃ fun _ cost final => final.config = ⟨label, segment left [] (chain parts (output ++ word))⟩ ∧
+        final.headPos = origin ∧
+        cost.steps = elapsed + 2 * (span parts + output.length + word.length) + 8 ⦄ := by
+  induction parts generalizing left origin elapsed with
   | nil =>
-    have hm : Runs (FreeM.lift (.move .Right)) s
-        (segment (StackTape.cons none left) output StackTape.nil) (s.headPos + 1) 1 := by
-      simpa [hs, chain] using move_correct s .Right
-    have ha := hm.seq (q := appendWord tm none word)
-      (second := segment (StackTape.cons none left) (output ++ word) StackTape.nil)
-      (pos₂ := s.headPos + 1) (time₂ := 2 * (output.length + word.length) + 6) (by
-        intro middle ht hp
-        simpa [hp] using appendWord_correct none left output word middle
-          (congrArg SingleTapeTM.Cfg.BiTape ht))
-    have hf := ha.append_move .Left
-    convert hf using 1
-    · simp [across, bind_assoc]
-    · simp only [chain, StackTape.separateWords, Copying.segment_moveLeft_gap,
-        cons_none_nil, stackAppend_nil]
-    · simp
-    · simp only [span, List.map_nil, List.sum_nil, List.length_nil]
-      lia
+    simp only [List.length_nil, across]
+    vcgen [appendWord_spec none left output word label (origin + 1) (elapsed + 1)]
+    all_goals simp_all [chain, span, TMState.move, TMState.moveCost]
+    all_goals lia
   | cons part parts ih =>
-    have hm : Runs (FreeM.lift (.move .Right)) s
-        (segment (StackTape.cons none left) part (chain parts output)) (s.headPos + 1) 1 := by
-      simpa [hs, chain] using move_correct s .Right
-    have hsweep := hm.seq (q := seekRightBlank tm)
-      (second := segment (stackAppend part.reverse (StackTape.cons none left)) []
-        (chain parts output))
-      (pos₂ := s.headPos + 1 + part.length) (time₂ := part.length) (by
-        intro middle ht hp
-        simpa [hp] using seekRightBlank_segment (StackTape.cons none left) part
-          (chain parts output) middle (congrArg SingleTapeTM.Cfg.BiTape ht))
-    have hinner := hsweep.seq (q := across word parts.length)
-      (second := segment (stackAppend part.reverse (StackTape.cons none left)) []
-        (chain parts (output ++ word)))
-      (pos₂ := s.headPos + 1 + part.length)
-      (time₂ := 2 * (span parts + output.length + word.length) + 8) (by
-        intro middle ht hp
-        simpa [hp] using ih (stackAppend part.reverse (StackTape.cons none left)) middle
-          (congrArg SingleTapeTM.Cfg.BiTape ht))
-    have hf := hinner.seq (q := seekLeftGap tm)
-      (second := segment left [] (chain (part :: parts) (output ++ word)))
-      (pos₂ := s.headPos) (time₂ := part.length + 1) (by
-        intro middle ht hp
-        convert seekLeftGap_segment left part.reverse [] (chain parts (output ++ word)) middle
-          (congrArg SingleTapeTM.Cfg.BiTape ht) using 1 <;>
-          simp [chain, hp, add_comm, add_left_comm])
-    convert hf using 1
-    · simp [across, bind_assoc]
-    · simp only [span, List.map_cons, List.sum_cons, List.length_cons]
-      lia
+    simp only [List.length_cons, across]
+    vcgen [seekRightBlank_segment_spec (StackTape.cons none left)
+        (chain parts output) part label (origin + 1) (elapsed + 1),
+      ih (stackAppend part.reverse (StackTape.cons none left))
+        (origin + 1 + part.length) (elapsed + 1 + part.length),
+      seekLeftGap_segment_spec left part.reverse [] (chain parts (output ++ word))
+        label (origin + 1 + part.length)
+        (elapsed + 1 + part.length + 2 * (span parts + output.length + word.length) + 8)]
+    all_goals simp_all [chain, span, TMState.move, TMState.moveCost]
+    all_goals lia
 
 private def picked (rest : Prog (TMQuery tm) Unit) (symbol : Symbol) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
@@ -226,128 +199,135 @@ private theorem visitSums_root (depth n : Nat) :
   simp only [Nat.choose_zero_right]
 
 private def Correct (symbols word : List Symbol) (total depth N : Nat) : Prop :=
-  ∀ (input : List Symbol) (parts : List (List Symbol)) (output : List Symbol) (s : TMState tm),
+  ∀ (input : List Symbol) (parts : List (List Symbol)) (output : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat),
     total = parts.length + depth →
-    s.config.BiTape = segment StackTape.nil input (chain parts output) →
     input.length + span parts + (output ++ copies word (input.length.choose depth)).length +
       word.length + 1 ≤ N →
-    ∃ moves, Runs (chooseProgram (tm := tm) symbols word total depth) s
-      (segment (StackTape.mapSome input.reverse) []
-        (chain parts (output ++ copies word (input.length.choose depth))))
-      (s.headPos + input.length) moves ∧ moves ≤ runtime depth N input.length
+    ⦃ fun cost current => current.config =
+        ⟨label, segment StackTape.nil input (chain parts output)⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      chooseProgram (tm := tm) symbols word total depth
+    ⦃ fun _ cost final => final.config = ⟨label,
+        segment (StackTape.mapSome input.reverse) []
+          (chain parts (output ++ copies word (input.length.choose depth)))⟩ ∧
+        final.headPos = origin + input.length ∧
+        cost.steps ≤ elapsed + runtime depth N input.length ⦄
 
 private theorem choose_zero (symbols word : List Symbol) (total N : Nat) :
     Correct (tm := tm) symbols word total 0 N := by
-  intro input parts output s htotal hs hN
-  have hr := seekRightBlank_segment StackTape.nil input (chain parts output) s hs
-  have hf := hr.seq (q := across word total)
-    (second := segment (StackTape.mapSome input.reverse) [] (chain parts (output ++ word)))
-    (pos₂ := s.headPos + input.length)
-    (time₂ := 2 * (span parts + output.length + word.length) + 8) (by
-      intro middle ht hp
-      simpa [htotal, hp] using across_correct word parts output (StackTape.mapSome input.reverse)
-        middle (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht))
-  refine ⟨input.length + (2 * (span parts + output.length + word.length) + 8), ?_, ?_⟩
-  · simpa [chooseProgram, copies] using hf
-  · simp only [Nat.choose_zero_right, List.length_append, length_copies, Nat.one_mul] at hN
+  intro input parts output label origin elapsed htotal hN
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hsteps⟩
+  have htime : input.length + (2 * (span parts + output.length + word.length) + 8) ≤
+      runtime 0 N input.length := by
+    simp only [Nat.choose_zero_right, List.length_append, length_copies, Nat.one_mul] at hN
     simp [runtime, visits]
     lia
+  unfold chooseProgram
+  rw [htotal, Nat.add_zero]
+  vcgen [seekRightBlank_segment_spec StackTape.nil (chain parts output) input
+      label origin initial.steps,
+    across_spec word parts output (StackTape.mapSome input.reverse)
+      label (origin + input.length) (initial.steps + input.length)]
+  all_goals simp_all [copies]
+  all_goals lia
+
+private theorem choose_iteration_spec (symbols word : List Symbol)
+    (hcover : ∀ symbol, symbol ∈ symbols) (total depth N : Nat)
+    (hchild : Correct (tm := tm) symbols word total depth N)
+    (done : List Symbol) (symbol : Symbol) (remaining : List Symbol)
+    (parts : List (List Symbol)) (output : List Symbol)
+    (htotal : total = parts.length + (depth + 1))
+    (hN : done.length + (remaining.length + 1) + span parts +
+      (output ++ copies word (sums depth done.length (remaining.length + 1))).length +
+        word.length + 1 ≤ N)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        segment (StackTape.mapSome done.reverse) (symbol :: remaining) (chain parts output)⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      select symbols (fun candidate => .tapeIs (some candidate))
+        (picked (chooseProgram (tm := tm) symbols word total depth))
+    ⦃ fun _ cost final => final.config = ⟨label,
+        segment (StackTape.mapSome (done ++ [symbol]).reverse) remaining
+          (chain parts (output ++ copies word (done.length.choose depth)))⟩ ∧
+        final.headPos = origin + 1 ∧ cost.steps ≤ elapsed +
+          (2 * depth + 6) * (N + 2) * visits depth done.length ⦄ := by
+  have hinnerN : done.length + span (remaining :: parts) +
+      (output ++ copies word (done.length.choose depth)).length + word.length + 1 ≤ N := by
+    simp only [List.length_append, length_copies, sums_succ, Nat.add_mul] at hN
+    dsimp only [span] at hN ⊢
+    simp only [List.map_cons, List.sum_cons, List.length_cons, List.length_append, length_copies]
+    lia
+  have htotal' : total = (remaining :: parts).length + depth := by
+    simp only [List.length_cons]
+    lia
+  have hdone : done.length ≤ N := by lia
+  have hunit : done.length + 3 ≤ 2 * (N + 2) := by lia
+  have hcharged := Nat.mul_le_mul_left (2 * (N + 2)) (visits_pos depth done.length)
+  have htime : runtime depth N done.length + done.length + 3 ≤
+      (2 * depth + 6) * (N + 2) * visits depth done.length := by
+    calc
+      _ ≤ runtime depth N done.length + 2 * (N + 2) * visits depth done.length := by lia
+      _ = _ := by unfold runtime; ring
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hsteps⟩
+  vcgen [Spec.select_spec symbols (fun candidate => .tapeIs (some candidate))
+    (picked (chooseProgram (tm := tm) symbols word total depth)) symbol (hcover symbol)]
+  constructor
+  · intro candidate
+    simp [hcfg, eq_comm]
+  · vcgen [picked,
+      seekLeftEnd_segment_spec StackTape.nil (chain (remaining :: parts) output) done.reverse []
+        label origin initial.steps,
+      hchild done (remaining :: parts) output label (origin - done.length)
+        (initial.steps + done.length + 2) htotal' hinnerN]
+    all_goals cases remaining
+    all_goals simp_all [TMState.write, TMState.move, TMState.moveCost, chain,
+      BiTape.segment, BiTape.write, BiTape.moveRight, List.reverse_append]
+    all_goals lia
 
 private theorem choose_loop (symbols word : List Symbol)
     (hcover : ∀ symbol, symbol ∈ symbols) (total depth N : Nat)
     (hchild : Correct (tm := tm) symbols word total depth N)
     (done remaining : List Symbol) (parts : List (List Symbol)) (output : List Symbol)
-    (s : TMState tm) (htotal : total = parts.length + (depth + 1))
-    (hs : s.config.BiTape = segment (StackTape.mapSome done.reverse) remaining (chain parts output))
+    (htotal : total = parts.length + (depth + 1))
     (hN : done.length + remaining.length + span parts +
       (output ++ copies word (sums depth done.length remaining.length)).length +
-        word.length + 1 ≤ N) :
-    ∃ moves, Runs (chooseProgram (tm := tm) symbols word total (depth + 1)) s
-      (segment (StackTape.mapSome (done ++ remaining).reverse) []
-        (chain parts (output ++ copies word (sums depth done.length remaining.length))))
-      (s.headPos + remaining.length) moves ∧
-      moves ≤ (2 * depth + 6) * (N + 2) * visitSums depth done.length remaining.length := by
-  induction remaining generalizing done output s with
+        word.length + 1 ≤ N)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, segment (StackTape.mapSome done.reverse) remaining (chain parts output)⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      chooseProgram (tm := tm) symbols word total (depth + 1)
+    ⦃ fun _ cost final => final.config = ⟨label,
+        segment (StackTape.mapSome (done ++ remaining).reverse) []
+          (chain parts (output ++ copies word (sums depth done.length remaining.length)))⟩ ∧
+        final.headPos = origin + remaining.length ∧ cost.steps ≤ elapsed +
+          (2 * depth + 6) * (N + 2) * visitSums depth done.length remaining.length ⦄ := by
+  induction remaining generalizing done output origin elapsed with
   | nil =>
-    refine ⟨0, ?_, by simp [visitSums]⟩
-    simp [chooseProgram, hs, sums, copies]
+    unfold chooseProgram
+    vcgen [Spec.while_false_spec]
+    simp_all [sums, copies, visitSums]
   | cons symbol remaining ih =>
-    have hm : Runs (FreeM.lift (.write none)) s
-        (segment (StackTape.mapSome done.reverse) [] (chain (remaining :: parts) output))
-        s.headPos 0 := by
-      simpa [hs, chain, Copying.segment, BiTape.segment, BiTape.write] using write_correct s none
-    have hstart := hm.seq (q := seekLeftEnd tm)
-      (second := segment StackTape.nil done (chain (remaining :: parts) output))
-      (pos₂ := s.headPos - done.length) (time₂ := done.length + 2) (by
-        intro middle ht hp
-        simpa [hp] using seekLeftEnd_segment StackTape.nil done.reverse []
-          (chain (remaining :: parts) output) middle
-          (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht))
-    obtain ⟨a, start, ha, ht, hp, hsteps⟩ := hstart
-    have hinnerN : done.length + span (remaining :: parts) +
-        (output ++ copies word (done.length.choose depth)).length + word.length + 1 ≤ N := by
-      simp only [List.length_cons, List.length_append, length_copies, sums_succ, Nat.add_mul] at hN
-      dsimp only [span] at hN ⊢
-      simp only [List.map_cons, List.sum_cons, List.length_cons, List.length_append, length_copies]
-      lia
-    obtain ⟨innerMoves, hinner, hb⟩ := hchild done (remaining :: parts) output start
-      (by simp only [List.length_cons]; lia) (congrArg SingleTapeTM.Cfg.BiTape ht) hinnerN
     let nextOutput := output ++ copies word (done.length.choose depth)
-    have hrestore : Runs (do
-        chooseProgram symbols word total depth
-        FreeM.lift (.write (some symbol))
-        FreeM.lift (.move .Right)) start
-        (segment (StackTape.mapSome (done ++ [symbol]).reverse) remaining (chain parts nextOutput))
-        (s.headPos + 1) (innerMoves + 1) := by
-      have h := (hinner.append_write (some symbol)).append_move .Right
-      simpa [chain, nextOutput, hp, List.reverse_append, List.append_assoc,
-        sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using h
-    have haction := hrestore.prepend ha (by simp [ht])
-    obtain ⟨cost, middle, hc, hcfg, hpos, hcost⟩ := haction
-    have hselected : Completes
-        (select symbols (fun candidate => .tapeIs (some candidate))
-          (picked (chooseProgram symbols word total depth))) s cost middle := by
-      apply select_correct _ _ _ symbol s middle cost (hcover symbol)
-      · intro candidate
-        simp [hs, eq_comm]
-      · simpa [picked, bind_assoc] using hc
     have hrestN : (done ++ [symbol]).length + remaining.length + span parts +
         (nextOutput ++ copies word (sums depth (done ++ [symbol]).length remaining.length)).length +
           word.length + 1 ≤ N := by
       simp only [List.length_cons, List.length_append, length_copies, sums_succ, Nat.add_mul] at hN
-      simp only [nextOutput, List.length_append, List.length_cons, List.length_nil,
-        length_copies]
+      simp only [nextOutput, List.length_append, List.length_cons, List.length_nil, length_copies]
       lia
-    obtain ⟨moreMoves, hrest, hbound⟩ := ih (done ++ [symbol]) nextOutput middle
-      (congrArg SingleTapeTM.Cfg.BiTape hcfg) hrestN
-    have hjoined := hrest.prepend hselected (by simp [hcfg])
-    have hloop : Runs (chooseProgram (tm := tm) symbols word total (depth + 1)) s
-        (segment (StackTape.mapSome ((done ++ [symbol]) ++ remaining).reverse) []
-          (chain parts (nextOutput ++
-            copies word (sums depth (done ++ [symbol]).length remaining.length))))
-        (middle.headPos + remaining.length) (cost.steps + moreMoves) := by
-      unfold chooseProgram
-      apply runs_while_step (by simp [hs])
-      simpa only [chooseProgram, bind_assoc] using hjoined
-    refine ⟨cost.steps + moreMoves, ?_, ?_⟩
-    · convert hloop using 1
-      · simp [List.append_assoc, sums_succ, copies_add, nextOutput]
-      · simp [hpos, add_comm, add_left_comm]
-    · have hdone : done.length ≤ N := by lia
-      have hunit : done.length + 3 ≤ 2 * (N + 2) := by lia
-      have hcharged := Nat.mul_le_mul_left (2 * (N + 2)) (visits_pos depth done.length)
-      have hcostBound : cost.steps ≤
-          (2 * depth + 6) * (N + 2) * visits depth done.length := by
-        calc
-          cost.steps = innerMoves + (done.length + 3) := by lia
-          _ ≤ runtime depth N done.length +
-              2 * (N + 2) * visits depth done.length :=
-            Nat.add_le_add hb (hunit.trans (by simpa using hcharged))
-          _ = (2 * depth + 6) * (N + 2) * visits depth done.length := by
-            unfold runtime
-            ring
-      have hsum := Nat.add_le_add hcostBound hbound
-      simpa [visitSums_succ, Nat.mul_add] using hsum
+    unfold chooseProgram
+    vcgen [Spec.while_step_spec
+        (loop := chooseProgram (tm := tm) symbols word total (depth + 1)) (hloop := rfl),
+      choose_iteration_spec symbols word hcover total depth N hchild done symbol remaining parts
+        output htotal (by simpa using hN) label origin elapsed,
+      ih (done ++ [symbol]) nextOutput hrestN (origin + 1)
+        (elapsed + (2 * depth + 6) * (N + 2) * visits depth done.length)]
+    all_goals simp_all [nextOutput, List.append_assoc, sums_succ, copies_add,
+      visitSums_succ, Nat.mul_add]
+    all_goals lia
 
 private theorem choose_correct (symbols word : List Symbol)
     (hcover : ∀ symbol, symbol ∈ symbols) (depth : Nat) :
@@ -355,15 +335,18 @@ private theorem choose_correct (symbols word : List Symbol)
   induction depth with
   | zero => exact choose_zero symbols word
   | succ depth ih =>
-    intro total N input parts output s htotal hs hN
-    obtain ⟨moves, hr, hb⟩ := choose_loop symbols word hcover total depth N (ih total N)
-      [] input parts output s htotal (by simpa using hs) (by simpa [sums_root] using hN)
-    refine ⟨moves, by simpa [sums_root] using hr, ?_⟩
+    intro total N input parts output label origin elapsed htotal hN
     have hsum : visitSums depth 0 input.length ≤ visits (depth + 1) input.length := by
       have := visitSums_root depth input.length
       lia
-    exact hb.trans (by simpa [runtime, Nat.mul_add, Nat.add_assoc] using
-      Nat.mul_le_mul_left ((2 * depth + 6) * (N + 2)) hsum)
+    have htime : (2 * depth + 6) * (N + 2) * visitSums depth 0 input.length ≤
+        runtime (depth + 1) N input.length := by
+      simpa [runtime, Nat.mul_add, Nat.add_assoc] using
+        Nat.mul_le_mul_left ((2 * depth + 6) * (N + 2)) hsum
+    vcgen [choose_loop symbols word hcover total depth N (ih total N) [] input parts output
+      htotal (by simpa [sums_root] using hN) label origin elapsed]
+    all_goals simp_all [sums_root]
+    all_goals lia
 
 /--
 This appends one copy of `word` for every choice of `count` input positions. The copies are
@@ -380,6 +363,30 @@ def writeChoose (tm : SingleTapeTM Symbol) (symbols word : List Symbol) (count :
 noncomputable def writeChooseTime (count : Nat) : Polynomial Nat :=
   C (chooseFactor count) * (X + 2) ^ 2
 
+/-- Writing the chosen copies preserves the input and records the polynomial time bound. -/
+@[spec] theorem writeChoose_spec (symbols word : List Symbol)
+    (hcover : ∀ symbol, symbol ∈ symbols) (count : Nat) (input output : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, segment StackTape.nil input (StackTape.mapSome output)⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      writeChoose tm symbols word count
+    ⦃ fun _ cost final => final.config = ⟨label,
+        segment (StackTape.mapSome input.reverse) [] (StackTape.mapSome
+          (output ++ (List.replicate (input.length.choose count) word).flatten))⟩ ∧
+        final.headPos = origin + input.length ∧ cost.steps ≤ elapsed +
+          (writeChooseTime count).eval (input.length +
+            (output ++ (List.replicate (input.length.choose count) word).flatten).length +
+              word.length + input.length.choose count + 1) ⦄ := by
+  let N := input.length + (output ++ copies word (input.length.choose count)).length +
+    word.length + 1
+  have htime := runtime_le_quadratic count N input.length
+  vcgen [writeChoose, choose_correct symbols word hcover count count N input [] output
+    label origin elapsed (by simp) (by simp [N, span])]
+  all_goals simp_all [writeChooseTime, N, chain, copies,
+    add_assoc, add_comm, add_left_comm]
+  all_goals lia
+
 /--
 The machine writes exactly one copy for every set of `count` input positions. It preserves the
 input and the old output, and stops on the blank after the input. The time bound uses the input
@@ -395,13 +402,11 @@ theorem writeChoose_correct (symbols word : List Symbol)
       (s.headPos + input.length) moves ∧
       moves ≤ (writeChooseTime count).eval
         (input.length + result.length + word.length + input.length.choose count + 1) := by
-  let N := input.length + (output ++ copies word (input.length.choose count)).length +
-    word.length + 1
-  obtain ⟨moves, hr, hb⟩ := choose_correct symbols word hcover count count N
-    input [] output s (by simp) (by simpa [chain] using hs) (by simp [N, span])
-  refine ⟨moves, by simpa [writeChoose, chain, copies] using hr, ?_⟩
-  have h := hb.trans (runtime_le_quadratic count N input.length)
-  simpa [writeChooseTime, N, copies, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using h
+  apply Spec.runs_le
+  vcgen [writeChoose_spec symbols word hcover count input output s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 private noncomputable def terms (p : Polynomial Nat) : List Nat :=
   p.support.toList.flatMap fun degree =>
@@ -450,25 +455,22 @@ private def termsFactor (terms : List Nat) : Nat :=
 private noncomputable def termsTime (terms : List Nat) : Polynomial Nat :=
   C (termsFactor terms) * (X + 2) ^ 2
 
-private theorem writeTerms_correct (symbols word : List Symbol)
+private theorem writeTerms_spec (symbols word : List Symbol)
     (hcover : ∀ symbol, symbol ∈ symbols) (terms : List Nat) (input output : List Symbol)
-    (N : Nat) (s : TMState tm)
-    (hs : s.config.BiTape = segment StackTape.nil input (StackTape.mapSome output))
-    (hN : input.length + (output ++ copies word (count terms input.length)).length +
-      word.length + count terms input.length + 1 ≤ N) :
-    ∃ moves, Runs (writeTerms (tm := tm) symbols word terms) s
-      (segment StackTape.nil input
-        (StackTape.mapSome (output ++ copies word (count terms input.length))))
-      s.headPos moves ∧ moves ≤ (termsTime terms).eval N := by
-  induction terms generalizing output s with
+    (N : Nat) (hN : input.length + (output ++ copies word (count terms input.length)).length +
+      word.length + count terms input.length + 1 ≤ N)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, segment StackTape.nil input (StackTape.mapSome output)⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      writeTerms (tm := tm) symbols word terms
+    ⦃ fun _ cost final => final.config = ⟨label, segment StackTape.nil input
+        (StackTape.mapSome (output ++ copies word (count terms input.length)))⟩ ∧
+        final.headPos = origin ∧ cost.steps ≤ elapsed + (termsTime terms).eval N ⦄ := by
+  induction terms generalizing output elapsed with
   | nil =>
-    refine ⟨0, ?_, by simp [termsTime]⟩
-    simp only [writeTerms, count, List.map_nil, List.sum_nil, copies,
-      List.replicate_zero, List.flatten_nil, List.append_nil]
-    refine ⟨0, s, completes_pure s, ?_, by simp, rfl⟩
-    change s.config =
-      {s.config with BiTape := Copying.segment StackTape.nil input (StackTape.mapSome output)}
-    rw [← hs]
+    vcgen [writeTerms]
+    simp_all [count, copies, termsTime, termsFactor]
   | cons k rest ih =>
     have hfirstN : input.length +
         (output ++ copies word (input.length.choose k)).length + word.length +
@@ -477,40 +479,38 @@ private theorem writeTerms_correct (symbols word : List Symbol)
         length_copies, Nat.add_mul] at hN
       simp only [List.length_append, length_copies]
       lia
-    obtain ⟨firstMoves, hf, hfirst⟩ := writeChoose_correct symbols word hcover k input output s hs
-    have hb : firstMoves ≤ (writeChooseTime k).eval N :=
-      hfirst.trans ((writeChooseTime k).eval_mono hfirstN)
-    have hreturn := hf.seq (q := seekLeftEnd tm)
-      (second := segment StackTape.nil input
-        (StackTape.mapSome (output ++ copies word (input.length.choose k))))
-      (pos₂ := s.headPos) (time₂ := input.length + 2) (by
-        intro middle ht hp
-        convert seekLeftEnd_segment StackTape.nil input.reverse []
-          (StackTape.mapSome (output ++ copies word (input.length.choose k))) middle
-          (by simpa [copies] using congrArg SingleTapeTM.Cfg.BiTape ht) using 1 <;>
-          simp [hp])
-    obtain ⟨cost, middle, hc, ht, hp, hm⟩ := hreturn
-    obtain ⟨restMoves, hr, hrb⟩ := ih (output ++ copies word (input.length.choose k)) middle
-      (congrArg SingleTapeTM.Cfg.BiTape ht) (by
-        simp only [count, List.map_cons, List.sum_cons, List.length_append,
-          length_copies, Nat.add_mul] at hN ⊢
-        lia)
-    have hjoined := hr.prepend hc (by simp [ht])
-    refine ⟨cost.steps + restMoves, ?_, ?_⟩
-    · simpa [writeTerms, writeChoose, count, copies_add, List.append_assoc, hp,
-        bind_assoc] using hjoined
-    · have hn : input.length ≤ N := by lia
-      have hlinear : input.length + 2 ≤ (N + 2) ^ 2 := by
-        have h := Nat.le_mul_of_pos_right (N + 2) (show 0 < N + 2 by lia)
-        rw [pow_two]
-        lia
-      simp only [writeChooseTime, eval_mul, eval_C, eval_pow, eval_add, eval_X, eval_ofNat] at hb
-      simp only [termsTime, eval_mul, eval_C, eval_pow, eval_add, eval_X, eval_ofNat] at hrb ⊢
-      simp only [termsFactor, List.map_cons, List.sum_cons]
-      change cost.steps + restMoves ≤ (chooseFactor k + 1 + termsFactor rest) * (N + 2) ^ 2
-      have hsum := Nat.add_le_add (Nat.add_le_add hb hlinear) hrb
-      rw [Nat.add_mul, Nat.add_mul, Nat.one_mul]
+    have hfirst := (writeChooseTime k).eval_mono hfirstN
+    have hrestN : input.length +
+        ((output ++ copies word (input.length.choose k)) ++
+          copies word (count rest input.length)).length +
+            word.length + count rest input.length + 1 ≤ N := by
+      simp only [count, List.map_cons, List.sum_cons, List.length_append,
+        length_copies, Nat.add_mul] at hN ⊢
       lia
+    have hn : input.length ≤ N := by lia
+    have hlinear : input.length + 2 ≤ (N + 2) ^ 2 := by
+      have h := Nat.le_mul_of_pos_right (N + 2) (show 0 < N + 2 by lia)
+      rw [pow_two]
+      lia
+    unfold writeTerms
+    apply Std.WP.Triple.bind (mid := fun _ cost current => current.config = ⟨label,
+      segment (StackTape.mapSome input.reverse) []
+        (StackTape.mapSome (output ++ copies word (input.length.choose k)))⟩ ∧
+      current.headPos = origin + input.length ∧ cost.steps ≤ elapsed + (writeChooseTime k).eval N)
+    · vcgen [writeChoose_spec symbols word hcover k input output label origin elapsed]
+      all_goals simp_all [copies]
+      all_goals lia
+    · intro _
+      apply Std.WP.Triple.intro
+      rintro initial current ⟨hcfg, hpos, hsteps⟩
+      vcgen [seekLeftEnd_segment_spec StackTape.nil
+          (StackTape.mapSome (output ++ copies word (input.length.choose k))) input.reverse []
+          label (origin + input.length) initial.steps,
+        ih (output ++ copies word (input.length.choose k)) hrestN
+          (initial.steps + input.length + 2)]
+      all_goals simp_all [count, copies_add, List.append_assoc, termsTime,
+        writeChooseTime, termsFactor, Nat.add_mul]
+      all_goals lia
 
 /--
 This is a machine template for appending a polynomial number of copies of a fixed word beyond
@@ -534,6 +534,25 @@ noncomputable def writePolynomialTime (p : Polynomial Nat) : Polynomial Nat :=
     (writePolynomialTime p).eval n = writePolynomialFactor p * (n + 2) ^ 2 := by
   simp [writePolynomialTime]
 
+/-- Writing the polynomial number of copies preserves the input and restores the head. -/
+@[spec] theorem writePolynomial_spec (symbols word : List Symbol)
+    (hcover : ∀ symbol, symbol ∈ symbols) (p : Polynomial Nat) (input output : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, segment StackTape.nil input (StackTape.mapSome output)⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      writePolynomial tm symbols word p
+    ⦃ fun _ cost final => final.config = ⟨label, segment StackTape.nil input
+        (StackTape.mapSome (output ++ (List.replicate (p.eval input.length) word).flatten))⟩ ∧
+        final.headPos = origin ∧ cost.steps ≤ elapsed + (writePolynomialTime p).eval
+          (input.length + (output ++ (List.replicate (p.eval input.length) word).flatten).length +
+            word.length + p.eval input.length + 1) ⦄ := by
+  simpa [writePolynomial, writePolynomialTime, writePolynomialFactor, termsTime,
+    count_terms, copies] using
+    writeTerms_spec symbols word hcover (terms p) input output
+      (input.length + (output ++ copies word (p.eval input.length)).length +
+        word.length + p.eval input.length + 1) (by rw [count_terms]) label origin elapsed
+
 /--
 The template appends exactly `p.eval input.length` copies and restores the input and starting
 head position. The bound counts the old output, the new output, the fixed word length, and
@@ -548,10 +567,10 @@ theorem writePolynomial_correct (symbols word : List Symbol)
       (segment StackTape.nil input (StackTape.mapSome result)) s.headPos moves ∧
       moves ≤ (writePolynomialTime p).eval
         (input.length + result.length + word.length + p.eval input.length + 1) := by
-  simpa [writePolynomial, writePolynomialTime, writePolynomialFactor, termsTime,
-    count_terms, copies] using
-    writeTerms_correct symbols word hcover (terms p) input output
-      (input.length + (output ++ copies word (p.eval input.length)).length +
-        word.length + p.eval input.length + 1) s hs (by rw [count_terms])
+  apply Spec.runs_le
+  vcgen [writePolynomial_spec symbols word hcover p input output s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 end Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter

@@ -25,7 +25,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery Copying
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
@@ -37,6 +39,23 @@ The containing machine includes this fixed program independently of the input le
 def nextRegion (tm : SingleTapeTM Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   seekRightBlank tm
   moveₜ .Right
+
+/-- Crossing the word and its following blank reaches the next word in exactly that many moves. -/
+@[spec] theorem nextRegion_spec (left : StackTape Γ) (current following : List Γ)
+    (tail : StackTape Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost initial => initial.config = ⟨label, BiTape.segment left current
+        (StackTape.prepend following (StackTape.cons none tail))⟩ ∧
+        initial.headPos = origin ∧ cost.steps = elapsed ⦄
+      nextRegion tm
+    ⦃ fun _ cost final => final.config = ⟨label,
+        BiTape.segment (StackTape.cons none (StackTape.prepend current.reverse left))
+          following tail⟩ ∧
+        final.headPos = origin + (current.length + 1 : Nat) ∧
+        cost.steps = elapsed + current.length + 1 ⦄ := by
+  vcgen [nextRegion, seekRightBlank_segment_spec left
+    (StackTape.prepend following (StackTape.cons none tail)) current label origin elapsed]
+  all_goals simp_all [TMState.move, TMState.moveCost]
+  all_goals lia
 
 /--
 The head reaches the following word after crossing the current word and one blank.
@@ -50,11 +69,11 @@ theorem nextRegion_correct (left : StackTape Γ) (current following : List Γ)
       (BiTape.segment (StackTape.cons none (StackTape.prepend current.reverse left))
         following tail)
       (s.headPos + (current.length + 1 : Nat)) (current.length + 1) := by
-  have h := (seekRightBlank_segment left current
-    (StackTape.prepend following (StackTape.cons none tail)) s htape).append_move .Right
-  cases following <;>
-    simpa [nextRegion, Copying.segment, BiTape.segment, BiTape.moveRight,
-      Nat.cast_add, add_assoc] using h
+  apply Spec.runs
+  vcgen [nextRegion_spec left current following tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 This machine template moves left onto the separating blank and returns to the preceding word.
@@ -63,6 +82,24 @@ The containing machine includes this fixed program independently of the input le
 def previousRegion (tm : SingleTapeTM Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left
   seekLeftEnd tm
+
+/-- Returning to the preceding word preserves both words and counts every move. -/
+@[spec] theorem previousRegion_spec (left : StackTape Γ) (preceding current : List Γ)
+    (tail : StackTape Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost initial => initial.config = ⟨label, BiTape.segment
+        (StackTape.cons none (StackTape.prepend preceding.reverse (StackTape.cons none left)))
+        current tail⟩ ∧ initial.headPos = origin ∧ cost.steps = elapsed ⦄
+      previousRegion tm
+    ⦃ fun _ cost final => final.config = ⟨label,
+        BiTape.segment (StackTape.cons none left) preceding
+          (StackTape.prepend current (StackTape.cons none tail))⟩ ∧
+        final.headPos = origin - (preceding.length + 1 : Nat) ∧
+        cost.steps = elapsed + preceding.length + 3 ⦄ := by
+  vcgen [previousRegion, seekLeftEnd_segment_spec left
+    (StackTape.prepend current (StackTape.cons none tail)) preceding.reverse []
+    label (origin - 1) (elapsed + 1)]
+  all_goals simp_all [TMState.move, TMState.moveCost]
+  all_goals lia
 
 /--
 The head returns to the preceding word's first cell, or its ending blank if that word is empty.
@@ -77,22 +114,11 @@ theorem previousRegion_correct (left : StackTape Γ) (preceding current : List �
       (BiTape.segment (StackTape.cons none left) preceding
         (StackTape.prepend current (StackTape.cons none tail)))
       (s.headPos - (preceding.length + 1 : Nat)) (preceding.length + 3) := by
-  have hm : Runs (FreeM.lift (.move .Left)) s
-      (BiTape.segment (StackTape.prepend preceding.reverse (StackTape.cons none left)) []
-        (StackTape.prepend current (StackTape.cons none tail)))
-      (s.headPos - 1) 1 := by
-    simpa [htape, sub_eq_add_neg] using move_correct s .Left
-  have hr := hm.seq (q := seekLeftEnd tm)
-    (second := BiTape.segment (StackTape.cons none left) preceding
-      (StackTape.prepend current (StackTape.cons none tail)))
-    (pos₂ := s.headPos - (preceding.length + 1 : Nat))
-    (time₂ := preceding.length + 2) (by
-      intro middle hmiddle hpos
-      simpa [hpos, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using
-        seekLeftEnd_segment left preceding.reverse []
-          (StackTape.prepend current (StackTape.cons none tail)) middle
-          (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  simpa [previousRegion, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hr
+  apply Spec.runs
+  vcgen [previousRegion_spec left preceding current tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 This machine template temporarily erases the scanned symbol, runs a fixed program on the
@@ -110,67 +136,55 @@ def visitPreviousRegion (tm : SingleTapeTM Γ) (restore : Γ)
   tape ←ₜ some restore
 
 /--
-Visiting the preceding region changes only that region and restores the scanned cell and head.
-The inserted program must preserve its right neighbor and leave the blank after its output at
-the same absolute coordinate. Its bound and the lengths of the crossed words bound the visit.
+The visit changes the preceding word, preserves its neighbors, and restores the head.
+The assertion about `action` states its output, result state, and move bound. The end of its
+output must remain at the same coordinate as the end of its input.
 -/
-theorem visitPreviousRegion_correct (restore : Γ) (action : Prog (TMQuery tm) Unit)
+@[spec] theorem visitPreviousRegion_spec (restore : Γ) (action : Prog (TMQuery tm) Unit)
     (input output crossed suffix : List Γ) (tail : StackTape Γ) (bound : Nat)
-    (haction : ∀ (s : TMState tm) (tail : StackTape Γ),
-      s.config.BiTape = BiTape.segment StackTape.nil input tail →
-      ∃ moves, Runs action s (BiTape.segment StackTape.nil output tail)
-        (s.headPos + input.length - output.length) moves ∧ moves ≤ bound)
-    (s : TMState tm)
-    (htape : s.config.BiTape = BiTape.segment
-      (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome input.reverse)))
-      (restore :: suffix) tail) :
-    ∃ moves, Runs (visitPreviousRegion tm restore action) s
-      (BiTape.segment
+    (label result : Option tm.State) (origin : ℤ) (elapsed : Nat)
+    (haction : ∀ (tail : StackTape Γ) (origin : ℤ) (elapsed : Nat),
+      ⦃ fun cost current => current.config = ⟨label, BiTape.segment StackTape.nil input tail⟩ ∧
+          current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+        action
+      ⦃ fun _ cost final => final.config = ⟨result, BiTape.segment StackTape.nil output tail⟩ ∧
+          final.headPos = origin + input.length - output.length ∧ cost.steps ≤ elapsed + bound ⦄) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment
+        (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome input.reverse)))
+        (restore :: suffix) tail⟩ ∧ current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      visitPreviousRegion tm restore action
+    ⦃ fun _ cost final => final.config = ⟨result, BiTape.segment
         (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome output.reverse)))
-        (restore :: suffix) tail) s.headPos moves ∧
-      moves ≤ bound + 2 * crossed.length + input.length + output.length + 6 := by
+        (restore :: suffix) tail⟩ ∧ final.headPos = origin ∧
+        cost.steps ≤ elapsed + bound + 2 * crossed.length + input.length + output.length + 6 ⦄ := by
   let rest := StackTape.prepend suffix (StackTape.cons none tail)
-  have hs := (write_correct s none).seq (q := seekLeftEnd tm)
-    (second := BiTape.segment (StackTape.cons none (StackTape.mapSome input.reverse)) crossed rest)
-    (pos₂ := s.headPos - crossed.length) (time₂ := crossed.length + 2) (by
-      intro middle hmiddle hpos
-      simpa [rest, hpos] using seekLeftEnd_segment (StackTape.mapSome input.reverse)
-        crossed.reverse [] rest middle (by
-          simp [hmiddle, htape, rest, BiTape.segment, BiTape.write]))
-  have hp := hs.seq (q := previousRegion tm)
-    (second := BiTape.segment StackTape.nil input
-      (StackTape.prepend crossed (StackTape.cons none rest)))
-    (pos₂ := s.headPos - crossed.length - (input.length + 1 : Nat))
-    (time₂ := input.length + 3) (by
-      intro middle hmiddle hpos
-      simpa [hpos] using previousRegion_correct StackTape.nil input crossed rest middle
-        (by simpa using congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  obtain ⟨cost, middle, hc, hmiddle, hpos, hmoves⟩ := hp
-  obtain ⟨actionMoves, ha, hb⟩ := haction middle
-    (StackTape.prepend crossed (StackTape.cons none rest))
-    (congrArg SingleTapeTM.Cfg.BiTape hmiddle)
-  have hj := ha.prepend hc (by simp [hmiddle])
-  have hn := hj.seq (q := nextRegion tm)
-    (second := BiTape.segment (StackTape.cons none (StackTape.mapSome output.reverse)) crossed rest)
-    (pos₂ := s.headPos - crossed.length) (time₂ := output.length + 1) (by
-      intro current hcurrent hcurrentPos
-      simpa [hcurrentPos, hpos, sub_eq_add_neg, Int.add_assoc, Int.add_comm, Int.add_left_comm]
-        using nextRegion_correct StackTape.nil output crossed rest current
-          (congrArg SingleTapeTM.Cfg.BiTape hcurrent))
-  have hr := hn.seq (q := seekRightBlank tm)
-    (second := BiTape.segment
-      (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome output.reverse)))
-      [] rest)
-    (pos₂ := s.headPos) (time₂ := crossed.length) (by
-      intro current hcurrent hcurrentPos
-      simpa [hcurrentPos] using seekRightBlank_segment
-        (StackTape.cons none (StackTape.mapSome output.reverse)) crossed rest current
-        (congrArg SingleTapeTM.Cfg.BiTape hcurrent))
-  have hw := hr.append_write (some restore)
-  refine ⟨cost.steps + actionMoves + (output.length + 1) + crossed.length, ?_, ?_⟩
-  · simpa [visitPreviousRegion, bind_assoc, rest] using hw
-  · rw [hmoves]
-    lia
+  unfold visitPreviousRegion
+  iterate 3 rw [← bind_assoc]
+  apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+    ⟨result, BiTape.segment StackTape.nil output
+      (StackTape.prepend crossed (StackTape.cons none rest))⟩ ∧
+    current.headPos = origin - crossed.length - (output.length + 1 : Nat) ∧
+    cost.steps ≤ elapsed + crossed.length + input.length + bound + 5)
+  · apply Std.WP.Triple.intro
+    rintro initial current ⟨hcfg, hpos, hbound⟩
+    vcgen [seekLeftEnd_segment_spec (StackTape.mapSome input.reverse) rest
+        crossed.reverse [] label origin initial.steps,
+      previousRegion_spec StackTape.nil input crossed rest label (origin - crossed.length)
+        (initial.steps + crossed.length + 2),
+      haction (StackTape.prepend crossed (StackTape.cons none rest))
+        (origin - crossed.length - (input.length + 1 : Nat))
+        (initial.steps + crossed.length + 2 + input.length + 3)]
+    all_goals simp_all [TMState.write, rest, BiTape.segment, BiTape.write]
+    all_goals lia
+  · intro _
+    apply Std.WP.Triple.intro
+    rintro initial current ⟨hcfg, hpos, hbound⟩
+    vcgen [nextRegion_spec StackTape.nil output crossed rest result
+        (origin - crossed.length - (output.length + 1 : Nat)) initial.steps,
+      seekRightBlank_segment_spec (StackTape.cons none (StackTape.mapSome output.reverse))
+        rest crossed result (origin - crossed.length) (initial.steps + output.length + 1)]
+    all_goals simp_all [TMState.write, rest, BiTape.segment, BiTape.write]
+    all_goals lia
 
 /--
 A visit may also record its answer in the control state. The inserted program changes the
@@ -194,42 +208,77 @@ theorem visitPreviousRegion_completes (restore : Γ) (action : Prog (TMQuery tm)
         (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome output.reverse)))
         (restore :: suffix) tail⟩ ∧ final.headPos = s.headPos ∧
       cost.steps ≤ bound + 2 * crossed.length + input.length + output.length + 6 := by
-  let rest := StackTape.prepend suffix (StackTape.cons none tail)
-  have hs := (write_correct s none).seq (q := seekLeftEnd tm)
-    (second := BiTape.segment (StackTape.cons none (StackTape.mapSome input.reverse)) crossed rest)
-    (pos₂ := s.headPos - crossed.length) (time₂ := crossed.length + 2) (by
-      intro middle hmiddle hpos
-      simpa [rest, hpos] using seekLeftEnd_segment (StackTape.mapSome input.reverse)
-        crossed.reverse [] rest middle (by
-          simp [hmiddle, htape, rest, BiTape.segment, BiTape.write]))
-  have hp := hs.seq (q := previousRegion tm)
-    (second := BiTape.segment StackTape.nil input
-      (StackTape.prepend crossed (StackTape.cons none rest)))
-    (pos₂ := s.headPos - crossed.length - (input.length + 1 : Nat))
-    (time₂ := input.length + 3) (by
-      intro middle hmiddle hpos
-      simpa [hpos] using previousRegion_correct StackTape.nil input crossed rest middle
-        (by simpa using congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  obtain ⟨setup, middle, hc, hm, hh, hb⟩ := hp
-  obtain ⟨cost, changed, ha, ht, hpos, hbound⟩ := haction middle
-    (StackTape.prepend crossed (StackTape.cons none rest))
-    (congrArg SingleTapeTM.Cfg.BiTape hm)
-  have hn := nextRegion_correct (tm := tm) StackTape.nil output crossed rest changed (by simp [ht])
-  have hr := hn.seq (q := seekRightBlank tm)
-    (second := BiTape.segment
-      (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome output.reverse)))
-      [] rest)
-    (pos₂ := s.headPos) (time₂ := crossed.length) (by
-      intro current hcurrent hcurrentPos
-      simpa [hcurrentPos, hpos, hh, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using
-        seekRightBlank_segment (StackTape.cons none (StackTape.mapSome output.reverse))
-          crossed rest current (by simpa using congrArg SingleTapeTM.Cfg.BiTape hcurrent))
-  obtain ⟨back, final, hf, hfinal, hfpos, hback⟩ := hr.append_write (some restore)
-  refine ⟨setup + (cost + back), final, ?_, ?_, hfpos, ?_⟩
-  · simpa [visitPreviousRegion, bind_assoc] using hc.seq (ha.seq hf)
-  · simpa [ht, rest, BiTape.segment, BiTape.write] using hfinal
-  · simp only [TMCost.add_steps]
-    rw [hb, hback]
-    lia
+  apply Spec.completes
+  have ha (neighbor : StackTape Γ) (position : ℤ) (elapsed : Nat) :
+      ⦃ fun cost current => current.config =
+          ⟨s.config.state, BiTape.segment StackTape.nil input neighbor⟩ ∧
+          current.headPos = position ∧ cost.steps ≤ elapsed ⦄
+        action
+      ⦃ fun _ cost final => final.config =
+          ⟨result, BiTape.segment StackTape.nil output neighbor⟩ ∧
+          final.headPos = position + input.length - output.length ∧
+          cost.steps ≤ elapsed + bound ⦄ := by
+    apply Std.WP.Triple.intro
+    rintro initial current ⟨hcfg, hpos, hbound⟩
+    obtain ⟨cost, final, hc, hf, hh, hb⟩ := haction current neighbor (by simp [hcfg])
+    vcgen [Spec.steps hc initial.steps]
+    all_goals simp_all
+    all_goals lia
+  vcgen [visitPreviousRegion_spec restore action input output crossed suffix tail bound
+    s.config.state result s.headPos 0 ha]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+
+/--
+Visiting the preceding region changes only that region and restores the scanned cell and head.
+The inserted program must preserve its right neighbor and leave the blank after its output at
+the same absolute coordinate. Its bound and the lengths of the crossed words bound the visit.
+-/
+theorem visitPreviousRegion_correct (restore : Γ) (action : Prog (TMQuery tm) Unit)
+    (input output crossed suffix : List Γ) (tail : StackTape Γ) (bound : Nat)
+    (haction : ∀ (s : TMState tm) (tail : StackTape Γ),
+      s.config.BiTape = BiTape.segment StackTape.nil input tail →
+      ∃ moves, Runs action s (BiTape.segment StackTape.nil output tail)
+        (s.headPos + input.length - output.length) moves ∧ moves ≤ bound)
+    (s : TMState tm)
+    (htape : s.config.BiTape = BiTape.segment
+      (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome input.reverse)))
+      (restore :: suffix) tail) :
+    ∃ moves, Runs (visitPreviousRegion tm restore action) s
+      (BiTape.segment
+        (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome output.reverse)))
+        (restore :: suffix) tail) s.headPos moves ∧
+      moves ≤ bound + 2 * crossed.length + input.length + output.length + 6 := by
+  have ha (neighbor : StackTape Γ) (position : ℤ) (elapsed : Nat) :
+      ⦃ fun cost current => current.config =
+          ⟨s.config.state, BiTape.segment StackTape.nil input neighbor⟩ ∧
+          current.headPos = position ∧ cost.steps ≤ elapsed ⦄
+        action
+      ⦃ fun _ cost final => final.config =
+          ⟨s.config.state, BiTape.segment StackTape.nil output neighbor⟩ ∧
+          final.headPos = position + input.length - output.length ∧
+          cost.steps ≤ elapsed + bound ⦄ := by
+    apply Std.WP.Triple.intro
+    rintro initial current ⟨hcfg, hpos, hbound⟩
+    obtain ⟨moves, ⟨cost, final, hc, hf, hh, hb⟩, htime⟩ :=
+      haction current neighbor (by simp [hcfg])
+    vcgen [Spec.steps hc initial.steps]
+    all_goals simp_all
+    all_goals lia
+  obtain ⟨cost, final, hc, hf, hh, hb⟩ :
+      ∃ cost final, Completes (visitPreviousRegion tm restore action) s cost final ∧
+        final.config = ⟨s.config.state, BiTape.segment
+          (StackTape.prepend crossed.reverse
+            (StackTape.cons none (StackTape.mapSome output.reverse))) (restore :: suffix) tail⟩ ∧
+        final.headPos = s.headPos ∧
+        cost.steps ≤ bound + 2 * crossed.length + input.length + output.length + 6 := by
+    apply Spec.completes
+    vcgen [visitPreviousRegion_spec restore action input output crossed suffix tail bound
+      s.config.state s.config.state s.headPos 0 ha]
+    all_goals
+      cases hcfg : s.config
+      simp_all
+  exact ⟨cost.steps, ⟨cost, final, hc, hf, hh, rfl⟩, hb⟩
 
 end Algolean.Algorithms.SingleTapeTuringMachines

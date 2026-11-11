@@ -39,7 +39,9 @@ Previously recorded tape allocation remains part of the final space count.
 namespace Algolean.Algorithms.SingleTapeTuringMachines.Copying
 
 open Cslib Cslib.Turing TMQuery
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 section Generic
 
@@ -141,13 +143,28 @@ def writeAdvance (tm : SingleTapeTM Symbol) (symbol : Option Symbol) : Prog (TMQ
   tape ←ₜ symbol
   moveₜ .Right
 
+/-- Writing and advancing changes the current cell and makes one move to the right. -/
+@[spec] theorem writeAdvance_spec (symbol : Option Symbol)
+    (post : Unit → TMCost → TMState tm → Prop) :
+    ⦃ fun cost current =>
+        post () (cost + current.moveCost .Right) ((current.write symbol).move .Right) ⦄
+      writeAdvance tm symbol ⦃ post ⦄ := by
+  vcgen [writeAdvance]
+  rename_i initial current h
+  have hcost : (current.write symbol).moveCost .Right = current.moveCost .Right := rfl
+  rw [hcost]
+  exact h
+
 /--
 Writing and advancing changes only the original head cell and finishes one coordinate to its right.
 It preserves the control state and uses exactly one head move.
 -/
 theorem writeAdvance_correct (s : TMState tm) (symbol : Option Symbol) :
-    Runs (writeAdvance tm symbol) s ((s.config.BiTape.write symbol).moveRight) (s.headPos + 1) 1 :=
-  ⟨_, _, ⟨2, rfl⟩, rfl, rfl, rfl⟩
+    Runs (writeAdvance tm symbol) s ((s.config.BiTape.write symbol).moveRight)
+      (s.headPos + 1) 1 := by
+  apply Spec.runs
+  vcgen [writeAdvance_spec]
+  simp_all [TMState.write, TMState.move, TMState.moveCost]
 
 /--
 The rightward scan crosses the displayed `bits` and stops on the blank separating them from `tail`.
@@ -158,24 +175,11 @@ theorem seekRightBlank_segment (left : StackTape Symbol) (bits : List Symbol)
     (s : TMState tm) (hs : s.config.BiTape = segment left bits tail) :
     Runs (seekRightBlank tm) s (segment (stackAppend bits.reverse left) [] tail)
       (s.headPos + bits.length) bits.length := by
-  induction bits generalizing left s with
-  | nil =>
-    simp [seekRightBlank, hs]
-  | cons bit bits ih =>
-    unfold seekRightBlank
-    apply runs_while_step (by simp [hs])
-    have hm : Runs (FreeM.lift (.move .Right)) s
-        (segment (StackTape.cons (some bit) left) bits tail) (s.headPos + 1) 1 := by
-      simpa [TMState.move, hs] using move_correct s .Right
-    have hr := hm.seq (q := seekRightBlank tm) (time₂ := bits.length)
-      (second := segment (stackAppend (bit :: bits).reverse left) [] tail)
-      (pos₂ := s.headPos + (bit :: bits).length) (by
-        intro t ht hp
-        have htape : t.config.BiTape = segment (StackTape.cons (some bit) left) bits tail := by
-          simp [ht]
-        simpa [List.reverse_cons, stackAppend_append, hp, add_assoc, add_comm, add_left_comm] using
-          ih (StackTape.cons (some bit) left) t htape)
-    simpa [seekRightBlank, Nat.add_comm] using hr
+  apply Spec.runs
+  vcgen [seekRightBlank_segment_spec left tail bits s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `seekLeftGap tm` is a Turing machine program that moves left at least once and then continues left
@@ -189,6 +193,28 @@ def seekLeftGap (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQue
   moveₜ .Left
   seekLeftBlank tm
 
+/-- The scan stops on the blank before the preceding word and preserves the tape. -/
+@[spec] theorem seekLeftGap_segment_spec (base : StackTape Symbol) (left bits : List Symbol)
+    (tail : StackTape Symbol) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, segment (stackAppend left (StackTape.cons none base)) bits tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekLeftGap tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, segment base [] (stackAppend (left.reverse ++ bits) (StackTape.cons none tail))⟩ ∧
+        final.headPos = origin - (left.length + 1 : Nat) ∧
+        cost.steps = elapsed + left.length + 1 ⦄ := by
+  cases left with
+  | nil =>
+    vcgen [seekLeftGap, seekLeftBlank, Spec.while_false_spec]
+    simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
+  | cons bit left =>
+    vcgen [seekLeftGap, seekLeftBlank_segment_spec base tail left bit bits
+      label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
+      List.append_assoc, sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /--
 This leftward scan crosses the displayed left prefix and stops on its preceding blank. It preserves
 the regions on both sides of that blank and uses exactly `left.length + 1` head moves, including its
@@ -200,36 +226,11 @@ theorem seekLeftGap_segment (base : StackTape Symbol) (left bits : List Symbol)
     Runs (seekLeftGap tm) s
       (segment base [] (stackAppend (left.reverse ++ bits) (StackTape.cons none tail)))
       (s.headPos - (left.length + 1 : ℕ)) (left.length + 1) := by
-  induction left generalizing bits s with
-  | nil =>
-    have hm : Runs (FreeM.lift (.move .Left)) s
-        (segment base [] (stackAppend bits (StackTape.cons none tail))) (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := seekLeftBlank tm) (time₂ := 0)
-      (second := segment base [] (stackAppend bits (StackTape.cons none tail)))
-      (pos₂ := s.headPos - 1) (by
-        intro t ht hp
-        simp [seekLeftBlank, ht, hp])
-    simpa [seekLeftGap] using hr
-  | cons bit left ih =>
-    have hm : Runs (FreeM.lift (.move .Left)) s
-        (segment (stackAppend left (StackTape.cons none base)) (bit :: bits) tail)
-        (s.headPos - 1) 1 := by
-      simpa [TMState.move, hs, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := seekLeftBlank tm) (time₂ := left.length + 1)
-      (second := segment base []
-        (stackAppend ((bit :: left).reverse ++ bits) (StackTape.cons none tail)))
-      (pos₂ := s.headPos - ((bit :: left).length + 1 : ℕ)) (by
-        intro t ht hp
-        unfold seekLeftBlank
-        apply runs_while_step (by simp [ht])
-        have htape : t.config.BiTape =
-            segment (stackAppend left (StackTape.cons none base)) (bit :: bits) tail := by simp [ht]
-        convert ih (bit :: bits) t htape using 1 <;>
-          simp [seekLeftGap, seekLeftBlank, List.reverse_cons, List.append_assoc, hp,
-            sub_eq_add_neg, add_assoc]
-        lia)
-    simpa [seekLeftGap, Nat.add_comm] using hr
+  apply Spec.runs
+  vcgen [seekLeftGap_segment_spec base left bits tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 The return-to-start program finishes on the first cell of the current region, or its ending blank if
@@ -241,14 +242,11 @@ theorem seekLeftEnd_segment (base : StackTape Symbol) (left bits : List Symbol)
     (hs : s.config.BiTape = segment (stackAppend left (StackTape.cons none base)) bits tail) :
     Runs (seekLeftEnd tm) s (segment (StackTape.cons none base) (left.reverse ++ bits) tail)
       (s.headPos - left.length) (left.length + 2) := by
-  have hg := seekLeftGap_segment base left bits tail s hs
-  have hr := hg.seq (q := FreeM.lift (.move .Right)) (time₂ := 1)
-    (second := segment (StackTape.cons none base) (left.reverse ++ bits) tail)
-    (pos₂ := s.headPos - left.length) (by
-      intro t ht hp
-      convert move_correct t .Right using 1 <;>
-        simp [TMState.move, ht, hp, sub_eq_add_neg, add_assoc])
-  simpa [seekLeftEnd, seekLeftGap, Nat.add_assoc] using hr
+  apply Spec.runs
+  vcgen [seekLeftEnd_segment_spec base tail left bits s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 end Generic
 
@@ -269,6 +267,20 @@ def shiftBitLeft (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit 
   moveₜ .Right
   moveₜ .Right
 
+/-- Moving one bit left preserves its neighbors and uses exactly three head moves. -/
+@[spec] theorem shiftBitLeft_spec (left : StackTape Bool) (bit : Bool) (bits : List Bool)
+    (tail : StackTape Bool) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, segment (StackTape.cons none left) (bit :: bits) tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      shiftBitLeft tm bit
+    ⦃ fun _ cost final => final.config =
+        ⟨label, segment (StackTape.cons none (StackTape.cons (some bit) left)) bits tail⟩ ∧
+        final.headPos = origin + 1 ∧ cost.steps = elapsed + 3 ⦄ := by
+  vcgen [shiftBitLeft]
+  cases bits <;> simp_all [TMState.write, TMState.move, TMState.moveCost,
+    BiTape.segment, BiTape.write, BiTape.moveLeft, BiTape.moveRight, add_assoc]
+
 /--
 Shifting one bit fills the blank immediately to its left and leaves its former cell blank. The head
 finishes on the next source cell after exactly three head moves, and the regions surrounding the
@@ -280,12 +292,11 @@ theorem shiftBitLeft_correct (left : StackTape Bool) (bit : Bool) (bits : List B
     Runs (shiftBitLeft tm bit) s
       (segment (StackTape.cons none (StackTape.cons (some bit) left)) bits tail)
       (s.headPos + 1) 3 := by
-  refine ⟨_, _, ⟨5, rfl⟩, ?_, ?_, ?_⟩
-  · cases bits <;>
-      simp [TMQuery.step, hs, segment, BiTape.segment, BiTape.write, BiTape.moveLeft,
-        BiTape.moveRight]
-  · simp [TMQuery.step, sub_eq_add_neg, add_assoc]
-  · rfl
+  apply Spec.runs
+  vcgen [shiftBitLeft_spec left bit bits tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `shiftLeft tm` is a Turing machine program that starts on the first bit of a contiguous block with a
@@ -303,6 +314,30 @@ def shiftLeft (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery t
     else
       shiftBitLeft tm false
 
+/-- Shifting the word left preserves its order and uses three moves per bit. -/
+@[spec] theorem shiftLeft_spec (left : StackTape Bool) (bits : List Bool) (tail : StackTape Bool)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, segment (StackTape.cons none left) bits tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      shiftLeft tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, segment (StackTape.cons none (stackAppend bits.reverse left)) [] tail⟩ ∧
+        final.headPos = origin + bits.length ∧ cost.steps = elapsed + 3 * bits.length ⦄ := by
+  induction bits generalizing left origin elapsed with
+  | nil =>
+    unfold shiftLeft
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons bit bits ih =>
+    unfold shiftLeft
+    vcgen [Spec.while_step_spec (loop := shiftLeft tm) (hloop := rfl),
+      shiftBitLeft_spec left true bits tail label origin elapsed,
+      shiftBitLeft_spec left false bits tail label origin elapsed,
+      ih (StackTape.cons (some bit) left) (origin + 1) (elapsed + 3)]
+    all_goals cases bit
+    all_goals simp_all [List.reverse_cons, stackAppend_append, add_assoc]
+    all_goals lia
+
 /--
 The block shift moves every bit of `bits` one cell left without changing its value or order. It
 preserves the surrounding regions, finishes `bits.length` cells to the right of the starting
@@ -313,26 +348,11 @@ theorem shiftLeft_correct (left : StackTape Bool) (bits : List Bool) (tail : Sta
     Runs (shiftLeft tm) s
       (segment (StackTape.cons none (stackAppend bits.reverse left)) [] tail)
       (s.headPos + bits.length) (3 * bits.length) := by
-  induction bits generalizing left s with
-  | nil =>
-    simp [shiftLeft, hs]
-  | cons bit bits ih =>
-    unfold shiftLeft
-    apply runs_while_step (by simp [hs])
-    have hb : Runs (branch (.tapeIs (some true)) (shiftBitLeft tm true) (shiftBitLeft tm false)) s
-        (segment (StackTape.cons none (StackTape.cons (some bit) left)) bits tail)
-        (s.headPos + 1) 3 := by
-      apply Runs.branch
-      cases bit <;> simpa [hs] using shiftBitLeft_correct left _ bits tail s hs
-    have hr := hb.seq (q := shiftLeft tm) (time₂ := 3 * bits.length)
-      (second := segment (StackTape.cons none (stackAppend (bit :: bits).reverse left)) [] tail)
-      (pos₂ := s.headPos + (bit :: bits).length) (by
-        intro t ht hp
-        have htape : t.config.BiTape =
-            segment (StackTape.cons none (StackTape.cons (some bit) left)) bits tail := by simp [ht]
-        simpa [List.reverse_cons, stackAppend_append, hp, add_assoc, add_comm, add_left_comm] using
-          ih (StackTape.cons (some bit) left) t htape)
-    simpa [shiftLeft, Nat.mul_add, Nat.add_comm] using hr
+  apply Spec.runs
+  vcgen [shiftLeft_spec left bits tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `header doneBits` is a pure Lean function that describes the unary length header built so far: it
@@ -426,6 +446,35 @@ def restoreSource (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit
   seekRightBlank tm
   writeAdvance tm (some bit)
 
+/-- Copying the current bit appends it to the copy and leaves its source cell blank. -/
+@[spec] theorem putCopy_spec (doneBits rest : List Bool) (bit : Bool)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, layout doneBits (bit :: rest)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      putCopy tm bit
+    ⦃ fun _ cost final => final.config =
+        ⟨label, segment (destinationLeft doneBits rest) [bit] StackTape.nil⟩ ∧
+        final.headPos = origin + (rest.length + doneBits.length + 2 : Nat) ∧
+        cost.steps = elapsed + rest.length + doneBits.length + 2 ⦄ := by
+  unfold putCopy
+  rw [← bind_assoc]
+  apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+    ⟨label, segment (stackAppend rest.reverse (StackTape.cons none (sourceLeft doneBits)))
+      [] (StackTape.mapSome doneBits)⟩ ∧
+    current.headPos = origin + 1 + rest.length ∧ cost.steps = elapsed + 1 + rest.length)
+  · vcgen [writeAdvance_spec,
+      seekRightBlank_segment_spec (StackTape.cons none (sourceLeft doneBits))
+        (StackTape.mapSome doneBits) rest label (origin + 1) (elapsed + 1)]
+    all_goals simp_all [layout, TMState.write, TMState.move, TMState.moveCost]
+  · intro _
+    vcgen [seekRightBlank_segment_spec
+      (StackTape.cons none
+        (stackAppend rest.reverse (StackTape.cons none (sourceLeft doneBits))))
+      StackTape.nil doneBits label (origin + 1 + rest.length + 1)
+      (elapsed + 1 + rest.length + 1)]
+    all_goals simp_all [destinationLeft, TMState.write, TMState.move, TMState.moveCost]
+    all_goals lia
+
 /--
 The append phase adds `bit` after the existing copied prefix and leaves the head on that new bit.
 The source cell remains temporarily erased, and the head travels right by `rest.length +
@@ -436,33 +485,43 @@ theorem putCopy_correct (doneBits rest : List Bool) (bit : Bool) (s : TMState tm
     Runs (putCopy tm bit) s (segment (destinationLeft doneBits rest) [bit] StackTape.nil)
       (s.headPos + (rest.length + doneBits.length + 2 : ℕ))
       (rest.length + doneBits.length + 2) := by
-  have h0 : Runs (writeAdvance tm none) s
-      (segment (StackTape.cons none (sourceLeft doneBits)) rest (StackTape.mapSome doneBits))
-      (s.headPos + 1) 1 := by simpa [hs, layout] using writeAdvance_correct s none
-  have h := h0.seq (by
-    intro t ht hp
-    have h1 := seekRightBlank_segment (StackTape.cons none (sourceLeft doneBits)) rest
-      (StackTape.mapSome doneBits) t (by simp [ht])
-    have h2 := h1.seq (by
-      intro u hu hup
-      have hm : Runs (FreeM.lift (.move .Right)) u
-          (segment (StackTape.cons none
-            (stackAppend rest.reverse (StackTape.cons none (sourceLeft doneBits))))
-            doneBits StackTape.nil) (u.headPos + 1) 1 := by
-        simpa [TMState.move, hu] using move_correct u .Right
-      have h3 := hm.seq (by
-        intro v hv hvp
-        have hr := seekRightBlank_segment
-          (StackTape.cons none
-            (stackAppend rest.reverse (StackTape.cons none (sourceLeft doneBits))))
-          doneBits StackTape.nil v (by simp [hv])
-        have hw := hr.seq (by
-          intro w hw hwp
-          simpa [hw, hwp] using write_correct w (some bit))
-        simpa [hvp] using hw)
-      simpa [hup] using h3)
-    simpa [hp] using h2)
-  convert h using 1 <;> first | rfl | lia
+  apply Spec.runs
+  vcgen [putCopy_spec doneBits rest bit s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [add_assoc]
+
+/-- Restoring the source extends the header and advances to the next source cell. -/
+@[spec] theorem restoreSource_spec (doneBits rest : List Bool) (bit : Bool)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, headerStart doneBits rest bit⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      restoreSource tm bit
+    ⦃ fun _ cost final => final.config = ⟨label, layout (doneBits ++ [bit]) rest⟩ ∧
+        final.headPos = origin + (2 * doneBits.length + 3 : Nat) ∧
+        cost.steps = elapsed + 2 * doneBits.length + 3 ⦄ := by
+  let copied := doneBits ++ [bit]
+  let remaining := stackAppend rest (StackTape.cons none (StackTape.mapSome copied))
+  let source := stackAppend doneBits (StackTape.cons none remaining)
+  have hheader : (true :: header doneBits).reverse = header copied := by
+    simp [header, copied, ← List.replicate_succ]
+  unfold restoreSource
+  rw [← bind_assoc]
+  apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+    ⟨label, segment (StackTape.mapSome (header copied)) [] source⟩ ∧
+    current.headPos = origin + doneBits.length + 1 ∧
+    cost.steps = elapsed + doneBits.length + 1)
+  · vcgen [seekRightBlank_segment_spec StackTape.nil source (true :: header doneBits)
+      label origin elapsed]
+    all_goals simp_all [headerStart, TMState.write, header, source, remaining, copied]
+    all_goals lia
+  · intro _
+    vcgen [seekRightBlank_segment_spec (StackTape.cons none (StackTape.mapSome (header copied)))
+      remaining doneBits label (origin + doneBits.length + 1 + 1)
+      (elapsed + doneBits.length + 1 + 1), writeAdvance_spec]
+    all_goals simp_all [TMState.move, TMState.moveCost, TMState.write,
+      layout, sourceLeft, source, remaining, copied, List.reverse_append]
+    all_goals lia
 
 /--
 The restoration phase extends the header, repairs the erased source bit, and returns to the
@@ -473,41 +532,60 @@ theorem restoreSource_correct (doneBits rest : List Bool) (bit : Bool) (s : TMSt
     (hs : s.config.BiTape = headerStart doneBits rest bit) :
     Runs (restoreSource tm bit) s (layout (doneBits ++ [bit]) rest)
       (s.headPos + (2 * doneBits.length + 3 : ℕ)) (2 * doneBits.length + 3) := by
+  apply Spec.runs
+  vcgen [restoreSource_spec doneBits rest bit s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+
+/-- The four scans return to the blank before the header and preserve every tape cell. -/
+@[spec] theorem returnHeader_spec (doneBits rest : List Bool) (bit : Bool)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, segment (destinationLeft doneBits rest) [bit] StackTape.nil⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      returnHeader tm
+    ⦃ fun _ cost final => final.config = ⟨label, headerStart doneBits rest bit⟩ ∧
+        final.headPos = origin - (rest.length + 3 * doneBits.length + 4 : Nat) ∧
+        cost.steps = elapsed + rest.length + 3 * doneBits.length + 4 ⦄ := by
   let copied := doneBits ++ [bit]
   let remaining := stackAppend rest (StackTape.cons none (StackTape.mapSome copied))
   let source := stackAppend doneBits (StackTape.cons none remaining)
-  have hheader : (true :: header doneBits).reverse = header copied := by
-    simp [header, copied, ← List.replicate_succ]
-  have hw : Runs (FreeM.lift (.write (some true))) s
-      (segment StackTape.nil (true :: header doneBits) source) s.headPos 0 := by
-    simpa [hs, headerStart, source, remaining, copied] using write_correct s (some true)
-  have h := hw.seq (by
-    intro t ht hp
-    have hr := seekRightBlank_segment StackTape.nil (true :: header doneBits) source t
-      (by simp [ht])
-    have h1 := hr.seq (by
-      intro u hu hup
-      have hm : Runs (FreeM.lift (.move .Right)) u
-          (segment (StackTape.cons none (StackTape.mapSome (header copied))) doneBits remaining)
-          (u.headPos + 1) 1 := by
-        simpa [TMState.move, hu, hheader, source] using move_correct u .Right
-      have h2 := hm.seq (by
-        intro v hv hvp
-        have hsuffix := seekRightBlank_segment
-          (StackTape.cons none (StackTape.mapSome (header copied))) doneBits remaining v
-          (by simp [hv])
-        have h3 := hsuffix.seq (by
-          intro w hw hwp
-          simpa [hw, hwp, remaining] using writeAdvance_correct w (some bit))
-        simpa [hvp] using h3)
-      simpa [hup] using h2)
-    simpa [hp] using h1)
-  simp only [header, List.length_replicate] at h
-  convert h using 1
-  · rfl
-  · simp [layout, sourceLeft, copied, header, List.reverse_cons]
-  · lia
-  · lia
+  unfold returnHeader
+  apply Std.WP.Triple.bind (mid := fun _ cost current => current.config = ⟨label,
+    segment (stackAppend rest.reverse (StackTape.cons none (sourceLeft doneBits)))
+      [] (StackTape.mapSome copied)⟩ ∧
+    current.headPos = origin - (doneBits.length + 1 : Nat) ∧
+    cost.steps = elapsed + doneBits.length + 1)
+  · vcgen [seekLeftGap_segment_spec
+      (stackAppend rest.reverse (StackTape.cons none (sourceLeft doneBits)))
+      doneBits.reverse [bit] StackTape.nil label origin elapsed]
+    all_goals simp_all [destinationLeft, copied]
+  · intro _
+    apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+      ⟨label, segment (sourceLeft doneBits) [] remaining⟩ ∧
+      current.headPos = origin - (doneBits.length + 1 : Nat) - (rest.length + 1 : Nat) ∧
+      cost.steps = elapsed + doneBits.length + 1 + rest.length + 1)
+    · vcgen [seekLeftGap_segment_spec (sourceLeft doneBits) rest.reverse []
+        (StackTape.mapSome copied) label (origin - (doneBits.length + 1 : Nat))
+        (elapsed + doneBits.length + 1)]
+      all_goals simp_all [remaining, add_assoc]
+    · intro _
+      apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+        ⟨label, segment (StackTape.mapSome (header doneBits)) [] source⟩ ∧
+        current.headPos = origin - (2 * doneBits.length + rest.length + 3 : Nat) ∧
+        cost.steps = elapsed + 2 * doneBits.length + rest.length + 3)
+      · vcgen [seekLeftGap_segment_spec (StackTape.mapSome (header doneBits)) doneBits.reverse []
+          remaining label (origin - (doneBits.length + 1 : Nat) - (rest.length + 1 : Nat))
+          (elapsed + doneBits.length + 1 + rest.length + 1)]
+        all_goals simp_all [sourceLeft, source]
+        all_goals lia
+      · intro _
+        vcgen [seekLeftGap_segment_spec StackTape.nil (header doneBits) [] source label
+          (origin - (2 * doneBits.length + rest.length + 3 : Nat))
+          (elapsed + 2 * doneBits.length + rest.length + 3)]
+        all_goals simp_all [headerStart, header, source, remaining, copied]
+        all_goals lia
 
 /--
 The four leftward scans preserve the source and copy regions and finish on the blank before the
@@ -519,29 +597,11 @@ theorem returnHeader_correct (doneBits rest : List Bool) (bit : Bool) (s : TMSta
     Runs (returnHeader tm) s (headerStart doneBits rest bit)
       (s.headPos - (rest.length + 3 * doneBits.length + 4 : ℕ))
       (rest.length + 3 * doneBits.length + 4) := by
-  let copied := doneBits ++ [bit]
-  let remaining := stackAppend rest (StackTape.cons none (StackTape.mapSome copied))
-  let source := stackAppend doneBits (StackTape.cons none remaining)
-  have h0 := seekLeftGap_segment
-    (stackAppend rest.reverse (StackTape.cons none (sourceLeft doneBits)))
-    doneBits.reverse [bit] StackTape.nil s (by simpa [destinationLeft] using hs)
-  have h := h0.seq (by
-    intro t ht hp
-    have h1 := seekLeftGap_segment (sourceLeft doneBits) rest.reverse []
-      (StackTape.mapSome copied) t (by simp [ht, copied])
-    have h2 := h1.seq (by
-      intro u hu hup
-      have hr := seekLeftGap_segment (StackTape.mapSome (header doneBits)) doneBits.reverse []
-        remaining u (by simp [hu, sourceLeft, remaining])
-      have h3 := hr.seq (by
-        intro v hv hvp
-        have hg := seekLeftGap_segment StackTape.nil (header doneBits) [] source v
-          (by simp [hv, source])
-        simpa [hvp] using hg)
-      simpa [hup] using h3)
-    simpa [hp] using h2)
-  simp only [header, List.reverse_replicate, List.length_reverse, List.length_replicate] at h
-  convert h using 1 <;> first | rfl | lia
+  apply Spec.runs
+  vcgen [returnHeader_spec doneBits rest bit s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [add_assoc]
 
 /--
 `copyBit tm bit` is a Turing machine program that copies the current source bit into the separate
@@ -556,6 +616,26 @@ def copyBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do
   returnHeader tm
   restoreSource tm bit
 
+/-- One iteration copies and restores one bit, then advances the head by one cell. -/
+@[spec] theorem copyBit_spec (doneBits rest : List Bool) (bit : Bool)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, layout doneBits (bit :: rest)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      copyBit tm bit
+    ⦃ fun _ cost final => final.config = ⟨label, layout (doneBits ++ [bit]) rest⟩ ∧
+        final.headPos = origin + 1 ∧
+        cost.steps = elapsed + 2 * rest.length + 6 * doneBits.length + 9 ⦄ := by
+  vcgen [copyBit, putCopy_spec doneBits rest bit label origin elapsed,
+    returnHeader_spec doneBits rest bit label
+      (origin + (rest.length + doneBits.length + 2 : Nat))
+      (elapsed + rest.length + doneBits.length + 2),
+    restoreSource_spec doneBits rest bit label
+      (origin + (rest.length + doneBits.length + 2 : Nat) -
+        (rest.length + 3 * doneBits.length + 4 : Nat))
+      (elapsed + rest.length + doneBits.length + 2 + rest.length + 3 * doneBits.length + 4)]
+  all_goals simp_all
+  all_goals lia
+
 /--
 One copying iteration preserves the source word, extends the copied prefix and unary header by one
 bit, and advances the head to the next source cell. Its exact cost is `2 * rest.length + 6 *
@@ -565,14 +645,11 @@ theorem copyBit_correct (doneBits rest : List Bool) (bit : Bool) (s : TMState tm
     (hs : s.config.BiTape = layout doneBits (bit :: rest)) :
     Runs (copyBit tm bit) s (layout (doneBits ++ [bit]) rest) (s.headPos + 1)
       (2 * rest.length + 6 * doneBits.length + 9) := by
-  have h := (putCopy_correct doneBits rest bit s hs).seq (by
-    intro t ht hp
-    have hr := returnHeader_correct doneBits rest bit t (by simp [ht])
-    have hw := hr.seq (by
-      intro u hu hup
-      simpa [hup] using restoreSource_correct doneBits rest bit u (by simp [hu]))
-    simpa [hp] using hw)
-  convert h using 1 <;> first | rfl | lia
+  apply Spec.runs
+  vcgen [copyBit_spec doneBits rest bit s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [add_assoc]
 
 /--
 `copyLoop tm` is a Turing machine program that processes every remaining source bit by selecting the
@@ -590,6 +667,33 @@ def copyLoop (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm
     else
       copyBit tm false
 
+/-- The loop copies every remaining bit and records its exact quadratic move count. -/
+@[spec] theorem copyLoop_spec (doneBits bits : List Bool) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, layout doneBits bits⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      copyLoop tm
+    ⦃ fun _ cost final => final.config = ⟨label, layout (doneBits ++ bits) []⟩ ∧
+        final.headPos = origin + bits.length ∧ cost.steps =
+          elapsed + 4 * bits.length ^ 2 + 6 * doneBits.length * bits.length +
+            5 * bits.length ⦄ := by
+  induction bits generalizing doneBits origin elapsed with
+  | nil =>
+    unfold copyLoop
+    vcgen [Spec.while_false_spec]
+    simp_all [layout]
+  | cons bit bits ih =>
+    unfold copyLoop
+    vcgen [Spec.while_step_spec (loop := copyLoop tm) (hloop := rfl),
+      copyBit_spec doneBits bits true label origin elapsed,
+      copyBit_spec doneBits bits false label origin elapsed,
+      ih (doneBits ++ [bit]) (origin + 1)
+        (elapsed + 2 * bits.length + 6 * doneBits.length + 9)]
+    all_goals cases bit
+    all_goals simp_all [layout, List.append_assoc, add_assoc]
+    all_goals ring_nf at *
+    all_goals simp_all
+
 /--
 The copying loop extends the processed prefix from `doneBits` to `doneBits ++ bits` while preserving
 the source and building the matching header and copy. It finishes on the blank after the source word
@@ -600,26 +704,11 @@ theorem copyLoop_correct (doneBits bits : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = layout doneBits bits) :
     Runs (copyLoop tm) s (layout (doneBits ++ bits) []) (s.headPos + bits.length)
       (4 * bits.length ^ 2 + 6 * doneBits.length * bits.length + 5 * bits.length) := by
-  induction bits generalizing doneBits s with
-  | nil =>
-    simp [copyLoop, hs, layout]
-  | cons bit bits ih =>
-    unfold copyLoop
-    apply runs_while_step (by simp [hs, layout])
-    have hb : Runs (branch (.tapeIs (some true)) (copyBit tm true) (copyBit tm false)) s
-        (layout (doneBits ++ [bit]) bits) (s.headPos + 1)
-        (2 * bits.length + 6 * doneBits.length + 9) := by
-      apply Runs.branch
-      cases bit <;> simpa [hs, layout] using copyBit_correct doneBits bits _ s hs
-    have h := hb.seq (q := copyLoop tm)
-      (second := layout (doneBits ++ bit :: bits) []) (pos₂ := s.headPos + 1 + bits.length)
-      (time₂ := 4 * bits.length ^ 2 + 6 * (doneBits.length + 1) * bits.length + 5 * bits.length)
-      (by
-        intro t ht hp
-        have htape : t.config.BiTape = layout (doneBits ++ [bit]) bits := by simp [ht]
-        simpa [List.append_assoc, hp] using ih (doneBits ++ [bit]) t htape)
-    convert h using 1 <;>
-      first | rfl | (simp only [List.length_cons, Nat.cast_add, Nat.cast_one]; ring)
+  apply Spec.runs
+  vcgen [copyLoop_spec doneBits bits s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [add_assoc]
 
 /--
 `finishCopy tm` is a Turing machine program that starts on the blank between the completed source
@@ -651,6 +740,27 @@ def duplicate (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery t
   copyLoop tm
   finishCopy tm
 
+/-- Joining the two copies produces their pair encoding and returns to its first cell. -/
+@[spec] theorem finishCopy_spec (input : List Bool) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, layout input []⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      finishCopy tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.mk₁ (Problems.BooleanTapeEncoding.pair input input)⟩ ∧
+        final.headPos = origin - (2 * input.length + 1 : Nat) ∧
+        cost.steps = elapsed + 6 * input.length + 5 ⦄ := by
+  vcgen [finishCopy, shiftLeft_spec (sourceLeft input) input StackTape.nil
+      label (origin + 1) (elapsed + 1),
+    seekLeftGap_segment_spec (StackTape.mapSome (header input)) (input ++ input).reverse []
+      StackTape.nil label (origin + input.length) (elapsed + 3 * input.length + 2),
+    seekLeftEnd_segment_spec StackTape.nil StackTape.nil (header input)
+      (false :: (input ++ input)) label (origin - (input.length + 1 : Nat))
+      (elapsed + 5 * input.length + 3)]
+  all_goals simp_all [layout, sourceLeft, header, TMState.move, TMState.moveCost,
+    TMState.write, List.reverse_append, stackAppend_append, Problems.BooleanTapeEncoding.pair]
+  all_goals lia
+
 /--
 Finishing the copy transforms the completed loop layout into
 `Problems.BooleanTapeEncoding.pair input input`
@@ -661,40 +771,27 @@ theorem finishCopy_correct (input : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = layout input []) :
     Runs (finishCopy tm) s (BiTape.mk₁ (Problems.BooleanTapeEncoding.pair input input))
       (s.headPos - (2 * input.length + 1 : ℕ)) (6 * input.length + 5) := by
-  have hm : Runs (FreeM.lift (.move .Right)) s
-      (segment (StackTape.cons none (sourceLeft input)) input StackTape.nil) (s.headPos + 1) 1 := by
-    simpa [TMState.move, hs, layout] using move_correct s .Right
-  have h := hm.seq (by
-    intro t ht hp
-    have hshift := shiftLeft_correct (sourceLeft input) input StackTape.nil t (by simp [ht])
-    have h1 := hshift.seq (by
-      intro u hu hup
-      have hm' : Runs (FreeM.lift (.move .Left)) u
-          (segment (stackAppend (input ++ input).reverse
-            (StackTape.cons none (StackTape.mapSome (header input)))) [] StackTape.nil)
-          (u.headPos - 1) 1 := by
-        simpa [TMState.move, hu, sourceLeft, List.reverse_append, stackAppend_append,
-          sub_eq_add_neg] using move_correct u .Left
-      have h2 := hm'.seq (by
-        intro v hv hvp
-        have hg := seekLeftGap_segment (StackTape.mapSome (header input))
-          (input ++ input).reverse [] StackTape.nil v (by simp [hv])
-        have h3 := hg.seq (by
-          intro w hw hwp
-          have hw' : Runs (FreeM.lift (.write (some false))) w
-              (segment (StackTape.mapSome (header input)) (false :: (input ++ input)) StackTape.nil)
-              w.headPos 0 := by simpa [hw] using write_correct w (some false)
-          have h4 := hw'.seq (by
-            intro z hz hzp
-            have hr := seekLeftEnd_segment StackTape.nil (header input)
-              (false :: (input ++ input)) StackTape.nil z (by simp [hz])
-            simpa [hzp] using hr)
-          simpa [hwp] using h4)
-        simpa [hvp] using h3)
-      simpa [hup] using h2)
-    simpa [hp] using h1)
-  simp only [header, List.reverse_replicate, List.length_replicate] at h
-  convert h using 1 <;> first | rfl | lia
+  apply Spec.runs
+  vcgen [finishCopy_spec input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+
+/-- Duplication produces the pair of two input copies and records the exact quadratic cost. -/
+@[spec] theorem duplicate_spec (input : List Bool) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.mk₁ input⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      duplicate tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.mk₁ (Problems.BooleanTapeEncoding.pair input input)⟩ ∧
+        final.headPos = origin - (input.length + 1 : Nat) ∧
+        cost.steps = elapsed + 4 * input.length ^ 2 + 11 * input.length + 5 ⦄ := by
+  vcgen [duplicate, copyLoop_spec [] input label origin elapsed,
+    finishCopy_spec input label (origin + input.length)
+      (elapsed + 4 * input.length ^ 2 + 5 * input.length)]
+  all_goals simp_all [layout, sourceLeft, header]
+  all_goals lia
 
 /--
 Duplication produces the Boolean pair encoding of `(input, input)`, preserves the control state, and
@@ -706,13 +803,11 @@ theorem duplicate_correct (input : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = BiTape.mk₁ input) :
     Runs (duplicate tm) s (BiTape.mk₁ (Problems.BooleanTapeEncoding.pair input input))
       (s.headPos - (input.length + 1 : ℕ)) (4 * input.length ^ 2 + 11 * input.length + 5) := by
-  have hl : Runs (copyLoop tm) s (layout input []) (s.headPos + input.length)
-      (4 * input.length ^ 2 + 5 * input.length) := by
-    simpa using copyLoop_correct [] input s (by simpa [layout, sourceLeft, header] using hs)
-  have h := hl.seq (by
-    intro t ht hp
-    simpa [hp] using finishCopy_correct input t (by simp [ht]))
-  convert h using 1 <;> first | rfl | lia
+  apply Spec.runs
+  vcgen [duplicate_spec input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [add_assoc]
 
 /--
 This value packages the copying Turing machine program with its output and cost guarantees. It

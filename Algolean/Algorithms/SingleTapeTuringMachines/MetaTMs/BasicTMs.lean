@@ -38,6 +38,9 @@ prove polynomial-time computability of the other four programs, counting head mo
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib.Turing TMQuery Polynomial
+open scoped TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 
@@ -45,8 +48,9 @@ variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 theorem writeBit_computes (bit : Bool) :
     Computes (writeBit tm bit) (fun bits => bit :: bits.tail) (fun _ => 0) := by
   intro input s hs
-  refine ⟨0, ?_, le_rfl⟩
-  cases input <;> simpa [hs, BiTape.mk₁, BiTape.nil, BiTape.write] using writeBit_correct s bit
+  apply Spec.runs_le
+  vcgen [writeBit_spec]
+  cases input <;> simp_all [TMState.write, BiTape.mk₁, BiTape.nil, BiTape.write]
 
 /-- This Lean function negates the first bit and preserves the rest. Empty input stays empty. -/
 def flipFirst : List Bool → List Bool
@@ -56,9 +60,9 @@ def flipFirst : List Bool → List Bool
 /-- Flipping the first bit computes `flipFirst` without moving the head. -/
 theorem flipBit_computes : Computes (flipBit tm) flipFirst (fun _ => 0) := by
   intro input s hs
-  refine ⟨0, ?_, le_rfl⟩
-  cases input <;>
-    simpa [flipFirst, hs, BiTape.mk₁, BiTape.nil, BiTape.write] using flipBit_correct s
+  apply Spec.runs_le
+  vcgen [flipBit_spec]
+  cases input <;> simp_all [flipFirst, TMState.write, BiTape.mk₁, BiTape.nil, BiTape.write]
 
 /--
 The append program computes `input ++ [bit]` for every input and returns the head to the starting
@@ -68,8 +72,11 @@ coordinate. Its correctness proof bounds the cost by `2 * input.length + 2` head
 theorem appendBit_computes (bit : Bool) :
     Computes (appendBit tm bit) (fun bits => bits ++ [bit]) (fun bits => 2 * bits.length + 2) := by
   intro input s hs
-  refine ⟨2 * input.length + 2, ?_, le_rfl⟩
-  simpa [cursor_start] using appendBit_correct input bit s (by simpa [cursor_start] using hs)
+  apply Spec.runs_le
+  vcgen [appendBit_spec input bit s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [cursor_start]
 
 /--
 The block-complementing program negates every input bit and returns the head to the starting
@@ -79,8 +86,11 @@ theorem shows it uses regardless of the bit values.
 theorem complementBlock_computes :
     Computes (complementBlock tm) (List.map Bool.not) (fun bits => 2 * bits.length + 2) := by
   intro input s hs
-  refine ⟨2 * input.length + 2, ?_, le_rfl⟩
-  simpa [cursor_start] using complementBlock_correct input s (by simpa [cursor_start] using hs)
+  apply Spec.runs_le
+  vcgen [complementBlock_spec input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [cursor_start]
 
 /--
 The erasing program computes the empty output word on every input and returns the head to its
@@ -90,8 +100,12 @@ cost proved by `eraseBlock_correct`.
 theorem eraseBlock_computes :
     Computes (eraseBlock tm) (fun _ => []) (fun bits => 2 * bits.length + 2) := by
   intro input s hs
-  refine ⟨2 * input.length + 2, ?_, le_rfl⟩
-  simpa [BiTape.mk₁] using eraseBlock_correct input s (by simpa [cursor_start] using hs)
+  apply Spec.runs_le
+  vcgen [eraseBlock_spec input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [cursor_start]
+  all_goals rfl
 
 /--
 The increment program adds one to the input interpreted with its least significant bit first and
@@ -101,10 +115,12 @@ return trip by `2 * input.length + 2` head moves, including overflow.
 theorem increment_computes :
     Computes (increment tm) incrementBits (fun bits => 2 * bits.length + 2) := by
   intro input s hs
-  refine ⟨2 * carryCount input + 2, ?_, ?_⟩
-  · simpa [cursor_start] using increment_correct input s (by simpa [cursor_start] using hs)
-  · have := carryCount_le_length input
-    lia
+  have hcount := carryCount_le_length input
+  apply Spec.runs_le
+  vcgen [increment_spec input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all [cursor_start]
 
 /-- This value pairs the bit-writing program with its correctness proof and zero head-move bound. -/
 def writeBitComputer (bit : Bool) : Computer tm (fun bits => bit :: bits.tail) (fun _ => 0) :=

@@ -9,6 +9,7 @@ module
 public import Algolean.Models.SingleTapeTM.Composition.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Sequential
 public import Algolean.Models.SingleTapeTMSyntax
+public import Algolean.Models.SingleTapeTM.Verification
 
 /-!
 # Tape views and primitive programs
@@ -38,7 +39,9 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
 
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type}
 
@@ -124,8 +127,10 @@ unchanged. Passing `none` erases that cell, and passing `some value` writes an o
 cases use zero head moves.
 -/
 theorem write_correct (s : TMState tm) (symbol : Option Symbol) :
-    Runs (FreeM.lift (.write symbol)) s (s.config.BiTape.write symbol) s.headPos 0 :=
-  ⟨0, s.write symbol, completes_write s _, rfl, rfl, rfl⟩
+    Runs (FreeM.lift (.write symbol)) s (s.config.BiTape.write symbol) s.headPos 0 := by
+  apply Spec.runs
+  vcgen
+  simp_all
 
 /--
 This Turing machine program writes `bit` under the head without changing other cells.
@@ -135,6 +140,13 @@ including it. The same finite program runs on every input length.
 -/
 def writeBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   tape ←ₜ some bit
+
+/-- Writing the bit establishes any condition that holds after replacing the current cell. -/
+@[spec] theorem writeBit_spec {tm : SingleTapeTM Bool} [DecidableEq tm.State] (bit : Bool)
+    (post : Unit → TMCost → TMState tm → Prop) :
+    ⦃ fun cost current => post () cost (current.write (some bit)) ⦄
+      writeBit tm bit ⦃ post ⦄ := by
+  vcgen [writeBit]
 
 /-- Writing the bit preserves the head position and control state and uses no head moves. -/
 theorem writeBit_correct {tm : SingleTapeTM Bool} [DecidableEq tm.State]
@@ -149,7 +161,8 @@ position by `dir.offset`. The cost is exactly one head move, including when `dir
 theorem move_correct (s : TMState tm) (dir : Dir) :
     Runs (FreeM.lift (.move dir)) s (s.move dir).config.BiTape
       (s.headPos + dir.offset) 1 := by
-  refine ⟨s.moveCost dir, s.move dir, completes_move s dir, ?_, rfl, rfl⟩
-  cases dir <;> rfl
+  apply Spec.runs
+  vcgen
+  cases dir <;> simp_all [TMState.move, TMState.moveCost]
 
 end Algolean.Algorithms.SingleTapeTuringMachines

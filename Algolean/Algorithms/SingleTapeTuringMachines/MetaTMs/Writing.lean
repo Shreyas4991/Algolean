@@ -47,6 +47,33 @@ def writeRight (tm : SingleTapeTM Symbol) : List Symbol → Prog (TMQuery tm) Un
     moveₜ .Right
     writeRight tm word
 
+/-- Writing replaces the chosen number of cells and preserves all cells farther to the right. -/
+@[spec] theorem writeRight_overwrite_spec (left tail : StackTape Symbol)
+    (word old suffix : List Symbol) (hlen : old.length = word.length)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left (old ++ suffix) tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      writeRight tm word
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.prepend word.reverse left) suffix tail⟩ ∧
+        final.headPos = origin + word.length ∧ cost.steps = elapsed + word.length ⦄ := by
+  induction word generalizing left old origin elapsed with
+  | nil =>
+    have hold : old = [] := List.eq_nil_of_length_eq_zero hlen
+    subst old
+    vcgen [writeRight]
+    simp_all
+  | cons symbol word ih =>
+    cases old with
+    | nil => simp at hlen
+    | cons previous old =>
+      vcgen [writeRight,
+        ih (StackTape.cons (some symbol) left) old (by simpa using hlen)
+          (origin + 1) (elapsed + 1)]
+      all_goals simp_all [TMState.write, TMState.move, TMState.moveCost,
+        List.reverse_cons, StackTape.prepend_append, add_assoc]
+      all_goals lia
+
 /--
 Writing over an equally long prefix replaces just that prefix and advances by its length.
 The rest of the word and the tape beyond its separating blank remain unchanged.
@@ -57,50 +84,41 @@ theorem writeRight_overwrite (left tail : StackTape Symbol) (word old suffix : L
     Runs (writeRight tm word) s
       (BiTape.segment (StackTape.prepend word.reverse left) suffix tail)
       (s.headPos + word.length) word.length := by
-  induction word generalizing left old s with
+  apply Spec.runs
+  vcgen [writeRight_overwrite_spec left tail word old suffix hlen s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+
+/-- Writing on a blank extends the region by the fixed word and stops on the following blank. -/
+@[spec] theorem writeRight_spec (left : StackTape Symbol) (word : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left [] StackTape.nil⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      writeRight tm word
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.prepend word.reverse left) [] StackTape.nil⟩ ∧
+        final.headPos = origin + word.length ∧ cost.steps = elapsed + word.length ⦄ := by
+  induction word generalizing left origin elapsed with
   | nil =>
-    have hold : old = [] := List.eq_nil_of_length_eq_zero hlen
-    subst old
-    refine ⟨0, s, completes_pure s, ?_, by simp, rfl⟩
-    change s.config = {s.config with BiTape := BiTape.segment left suffix tail}
-    have ht : s.config.BiTape = BiTape.segment left suffix tail := by simpa using hs
-    rw [← ht]
+    vcgen [writeRight]
+    simp_all
   | cons symbol word ih =>
-    cases old with
-    | nil => simp at hlen
-    | cons previous old =>
-      have hw := (write_correct s (some symbol)).append_move .Right
-      have hrest := hw.seq (q := writeRight tm word) (by
-        intro middle hm hp
-        simpa [List.reverse_cons, StackTape.prepend_append, hp, add_assoc] using
-          ih (StackTape.cons (some symbol) left) old (by simpa using hlen) middle
-            (by simp [hm, hs]))
-      simpa [writeRight, List.reverse_cons, StackTape.prepend_append,
-        add_assoc, add_comm, add_left_comm] using hrest
+    vcgen [writeRight, ih (StackTape.cons (some symbol) left) (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.write, TMState.move, TMState.moveCost,
+      List.reverse_cons, StackTape.prepend_append, add_assoc]
+    all_goals lia
 
 /-- Writing on the blank right of a region adds the word and uses one move per written symbol. -/
 theorem writeRight_correct (left : StackTape Symbol) (word : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = segment left [] StackTape.nil) :
     Runs (writeRight tm word) s (segment (stackAppend word.reverse left) [] StackTape.nil)
       (s.headPos + word.length) word.length := by
-  induction word generalizing left s with
-  | nil =>
-    refine ⟨0, s, completes_pure s, ?_, by simp, rfl⟩
-    change s.config = {s.config with BiTape := segment left [] StackTape.nil}
-    rw [← hs]
-  | cons symbol word ih =>
-    have hw : Runs (writeAdvance tm (some symbol)) s
-        (segment (StackTape.cons (some symbol) left) [] StackTape.nil) (s.headPos + 1) 1 := by
-      simpa [writeAdvance, hs, Copying.segment, BiTape.segment, BiTape.write,
-        BiTape.moveRight] using
-        (write_correct s (some symbol)).append_move .Right
-    have hr := hw.seq (q := writeRight tm word)
-      (second := segment (stackAppend (symbol :: word).reverse left) [] StackTape.nil)
-      (pos₂ := s.headPos + (symbol :: word).length) (time₂ := word.length) (by
-        intro middle hm hp
-        simpa [List.reverse_cons, stackAppend_append, hp, add_assoc, add_comm, add_left_comm] using
-          ih (StackTape.cons (some symbol) left) middle (congrArg SingleTapeTM.Cfg.BiTape hm))
-    simpa [writeRight, writeAdvance, Nat.add_comm] using hr
+  apply Spec.runs
+  vcgen [writeRight_spec left word s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 This writes the chosen value in the cell to the left and returns to the original cell.
@@ -115,15 +133,31 @@ def setLeftCell (tm : SingleTapeTM Symbol) (value : Option Symbol) : Prog (TMQue
   moveₜ .Right
 
 /-- Changing the left neighboring cell preserves every other cell and uses two head moves. -/
+@[spec] theorem setLeftCell_spec (old value : Option Symbol) (left : StackTape Symbol)
+    (word : List Symbol) (tail : StackTape Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, BiTape.segment (StackTape.cons old left) word tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      setLeftCell tm value
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.cons value left) word tail⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed + 2 ⦄ := by
+  vcgen [setLeftCell]
+  cases word <;> simp_all [TMState.move, TMState.write, TMState.moveCost,
+    BiTape.segment, BiTape.moveLeft, BiTape.moveRight, BiTape.write]
+
+/-- Changing the left neighboring cell preserves every other cell and uses two head moves. -/
 theorem setLeftCell_correct (old value : Option Symbol) (left : StackTape Symbol)
     (word : List Symbol) (tail : StackTape Symbol) (s : TMState tm)
     (hs : s.config.BiTape = segment (StackTape.cons old left) word tail) :
     Runs (setLeftCell tm value) s (segment (StackTape.cons value left) word tail)
       s.headPos 2 := by
   apply Spec.runs
-  vcgen [setLeftCell]
-  cases word <;> simp_all [TMState.move, TMState.write, TMState.moveCost,
-    BiTape.segment, BiTape.moveLeft, BiTape.moveRight, BiTape.write]
+  vcgen [setLeftCell_spec old value left word tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 This appends the fixed word to the region under the head and returns to its first cell. It uses
@@ -141,6 +175,30 @@ def appendWord (tm : SingleTapeTM Symbol) (separator : Option Symbol) (word : Li
   seekLeftEnd tm
   setLeftCell tm separator
 
+/-- Appending preserves the neighboring regions and restores the head with the stated move count. -/
+@[spec] theorem appendWord_spec (separator : Option Symbol) (left : StackTape Symbol)
+    (input word : List Symbol) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, BiTape.segment (StackTape.cons separator left) input StackTape.nil⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      appendWord tm separator word
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.cons separator left) (input ++ word) StackTape.nil⟩ ∧
+        final.headPos = origin ∧
+        cost.steps = elapsed + 2 * (input.length + word.length) + 6 ⦄ := by
+  vcgen [appendWord,
+    setLeftCell_spec separator none left input StackTape.nil label origin elapsed,
+    seekRightBlank_segment_spec (StackTape.cons none left) StackTape.nil input
+      label origin (elapsed + 2),
+    writeRight_spec (StackTape.prepend input.reverse (StackTape.cons none left)) word
+      label (origin + input.length) (elapsed + 2 + input.length),
+    seekLeftEnd_segment_spec left StackTape.nil (input ++ word).reverse []
+      label (origin + input.length + word.length) (elapsed + 2 + input.length + word.length),
+    setLeftCell_spec none separator left (input ++ word) StackTape.nil
+      label origin (elapsed + 2 + input.length + word.length + (input ++ word).length + 2)]
+  all_goals simp_all [List.reverse_append, StackTape.prepend_append, add_assoc]
+  all_goals lia
+
 /--
 Appending a fixed word preserves all cells to the left of the separator and restores the head.
 The number of moves is twice the combined word length plus six.
@@ -151,37 +209,10 @@ theorem appendWord_correct (separator : Option Symbol) (left : StackTape Symbol)
     Runs (appendWord tm separator word) s
       (segment (StackTape.cons separator left) (input ++ word) StackTape.nil)
       s.headPos (2 * (input.length + word.length) + 6) := by
-  have hm := setLeftCell_correct separator none left input StackTape.nil s hs
-  have hr := hm.seq (q := seekRightBlank tm)
-    (second := segment (stackAppend input.reverse (StackTape.cons none left)) [] StackTape.nil)
-    (pos₂ := s.headPos + input.length) (time₂ := input.length) (by
-      intro middle ht hp
-      simpa [hp] using seekRightBlank_segment (StackTape.cons none left) input StackTape.nil
-        middle (congrArg SingleTapeTM.Cfg.BiTape ht))
-  have hw := hr.seq (q := writeRight tm word)
-    (second := segment (stackAppend (input ++ word).reverse (StackTape.cons none left)) []
-      StackTape.nil)
-    (pos₂ := s.headPos + (input ++ word).length) (time₂ := word.length) (by
-      intro middle ht hp
-      simpa [hp, List.reverse_append, stackAppend_append, add_assoc] using
-        writeRight_correct (stackAppend input.reverse (StackTape.cons none left)) word middle
-          (congrArg SingleTapeTM.Cfg.BiTape ht))
-  have hb := hw.seq (q := seekLeftEnd tm)
-    (second := segment (StackTape.cons none left) (input ++ word) StackTape.nil)
-    (pos₂ := s.headPos) (time₂ := (input ++ word).length + 2) (by
-      intro middle ht hp
-      convert seekLeftEnd_segment left (input ++ word).reverse [] StackTape.nil middle
-        (congrArg SingleTapeTM.Cfg.BiTape ht) using 1 <;>
-        simp [hp, add_comm, add_assoc])
-  have hf := hb.seq (q := setLeftCell tm separator)
-    (second := segment (StackTape.cons separator left) (input ++ word) StackTape.nil)
-    (pos₂ := s.headPos) (time₂ := 2) (by
-      intro middle ht hp
-      simpa [hp] using setLeftCell_correct none separator left (input ++ word) StackTape.nil middle
-        (congrArg SingleTapeTM.Cfg.BiTape ht))
-  convert hf using 1
-  · simp [appendWord, bind_assoc]
-  · simp only [List.length_append]
-    lia
+  apply Spec.runs
+  vcgen [appendWord_spec separator left input word s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 end Algolean.Algorithms.SingleTapeTuringMachines

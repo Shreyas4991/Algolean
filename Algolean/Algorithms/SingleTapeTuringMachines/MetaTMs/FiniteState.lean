@@ -34,7 +34,9 @@ same finite program runs on every input length.
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
@@ -80,10 +82,38 @@ theorem updateForSymbol_correct (table : ScanTable tm)
     (hhead : s.config.BiTape.head = some symbol) :
     Completes (updateForSymbol table label) s 0
       {s with config.state := some (table.next label symbol)} := by
-  apply select_correct _ _ _ symbol s _ 0 (table.mem_symbols symbol)
+  change Completes (updateForSymbol table label) s 0
+    {s with config := ⟨some (table.next label symbol), s.config.BiTape⟩}
+  apply Spec.exact_completes
+  vcgen [updateForSymbol, Spec.select_spec table.symbols (fun symbol => .tapeIs (some symbol))
+    (fun symbol => do [TMQuery tm] state ←ₜ table.next label symbol)
+    symbol (table.mem_symbols symbol)]
+  rename_i initial current hpre
+  rcases hpre with ⟨rfl, rfl⟩
+  constructor
   · intro candidate
     simp [hhead, eq_comm]
-  · exact completes_update s (table.next label symbol)
+  · vcgen
+
+/-- Reading a fixed symbol changes the control label and preserves the tape and head. -/
+@[spec] theorem updateForSymbol_spec (table : ScanTable tm) (label : tm.State)
+    (symbol : Symbol) (view : BiTape Symbol) (hhead : view.head = some symbol)
+    (previous : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨previous, view⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      updateForSymbol table label
+    ⦃ fun _ cost final => final.config = ⟨some (table.next label symbol), view⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hsteps⟩
+  vcgen [updateForSymbol, Spec.select_spec table.symbols (fun symbol => .tapeIs (some symbol))
+    (fun symbol => do [TMQuery tm] state ←ₜ table.next label symbol)
+    symbol (table.mem_symbols symbol)]
+  constructor
+  · intro candidate
+    simp [hcfg, hhead, eq_comm]
+  · vcgen
+    simp_all
 
 /--
 This Turing machine program compares the current state with each name in `table.states`, from
@@ -105,10 +135,40 @@ theorem updateFromTable_correct (table : ScanTable tm)
     (hstate : s.config.state = some label) (hhead : s.config.BiTape.head = some symbol) :
     Completes (updateFromTable table) s 0
       {s with config.state := some (table.next label symbol)} := by
-  apply select_correct _ _ _ label s _ 0 (table.mem_states label)
+  change Completes (updateFromTable table) s 0
+    {s with config := ⟨some (table.next label symbol), s.config.BiTape⟩}
+  apply Spec.exact_completes
+  vcgen [updateFromTable, Spec.select_spec table.states (fun label => .stateIs (some label))
+    (updateForSymbol table) label (table.mem_states label)]
+  rename_i initial current hpre
+  rcases hpre with ⟨rfl, rfl⟩
+  constructor
   · intro candidate
     simp [hstate, eq_comm]
-  · exact updateForSymbol_correct table label symbol s hhead
+  · have hc : Completes (updateForSymbol table label) current 0
+        {current with config := ⟨some (table.next label symbol), current.config.BiTape⟩} :=
+      updateForSymbol_correct table label symbol current hhead
+    vcgen [Spec.of_completes hc 0]
+    all_goals simp_all
+
+/-- The table chooses the next label from the current label and scanned symbol. -/
+@[spec] theorem updateFromTable_spec (table : ScanTable tm) (label : tm.State)
+    (symbol : Symbol) (view : BiTape Symbol) (hhead : view.head = some symbol)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨some label, view⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      updateFromTable table
+    ⦃ fun _ cost final => final.config = ⟨some (table.next label symbol), view⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hsteps⟩
+  vcgen [updateFromTable, Spec.select_spec table.states (fun label => .stateIs (some label))
+    (updateForSymbol table) label (table.mem_states label)]
+  constructor
+  · intro candidate
+    simp [hcfg, eq_comm]
+  · vcgen [updateForSymbol_spec table label symbol view hhead (some label) origin elapsed]
+    all_goals simp_all
 
 end FiniteState
 
@@ -130,6 +190,31 @@ def scan (table : ScanTable tm) : Prog (TMQuery tm) Unit := do [TMQuery tm]
     updateFromTable table
     moveₜ .Right
 
+/-- Scanning applies the table to every symbol and uses exactly one move per symbol. -/
+@[spec] theorem scan_spec (table : ScanTable tm) (left tail : StackTape Symbol)
+    (word : List Symbol) (label : tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨some label, BiTape.segment left word tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      scan table
+    ⦃ fun _ cost final => final.config = ⟨some (word.foldl table.next label),
+        BiTape.segment (StackTape.prepend word.reverse left) [] tail⟩ ∧
+        final.headPos = origin + word.length ∧ cost.steps = elapsed + word.length ⦄ := by
+  induction word generalizing left label origin elapsed with
+  | nil =>
+    unfold scan
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons symbol word ih =>
+    unfold scan
+    vcgen [Spec.while_step_spec (loop := scan table) (hloop := rfl),
+      updateFromTable_spec table label symbol (BiTape.segment left (symbol :: word) tail)
+        (by simp) origin elapsed,
+      ih (StackTape.cons (some symbol) left) (table.next label symbol)
+        (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost,
+      List.reverse_cons, StackTape.prepend_append, add_assoc]
+    all_goals lia
+
 /--
 Scanning preserves the tape to the word's left and beyond the blank on its right. The final
 state follows the table's updates, and the number of head moves equals the scanned length.
@@ -142,25 +227,11 @@ theorem scan_segment_correct (table : ScanTable tm) (left tail : StackTape Symbo
       final.config = ⟨some (word.foldl table.next label),
         BiTape.segment (StackTape.prepend word.reverse left) [] tail⟩ ∧
       final.headPos = s.headPos + word.length ∧ cost.steps = word.length := by
-  induction word generalizing left label s with
-  | nil =>
-    refine ⟨0, s, completes_while_false _ _ s (by simp [htape]), ?_, by simp, rfl⟩
+  apply Spec.completes
+  vcgen [scan_spec table left tail word label s.headPos 0]
+  all_goals
     cases hcfg : s.config
     simp_all
-  | cons symbol word ih =>
-    let updated : TMState tm := {s with config.state := some (table.next label symbol)}
-    let moved := updated.move .Right
-    have hu := updateFromTable_correct table label symbol s hstate (by simp [htape])
-    obtain ⟨cost, final, hr, hf, hp, hm⟩ := ih (StackTape.cons (some symbol) left)
-      (table.next label symbol) moved (by simp [moved, updated, TMState.move, htape]) rfl
-    refine ⟨(0 + updated.moveCost .Right) + cost, final,
-      Completes.while_step (by simp [htape]) (hu.seq (completes_move updated .Right)) hr,
-      ?_, ?_, ?_⟩
-    · simpa [List.reverse_cons, StackTape.prepend_append] using hf
-    · simp [moved, updated, TMState.move] at hp
-      simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
-      lia
-    · simp [TMState.moveCost, hm, Nat.add_comm]
 
 /--
 Starting in state `label`, the program reads the symbols of `right` from first to last.

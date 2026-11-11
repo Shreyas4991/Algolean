@@ -34,7 +34,9 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
 
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 /--
 `incrementBits bits` is a pure Lean function that describes the word obtained by adding one to a
@@ -145,6 +147,34 @@ def carryRight (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery 
     tape ←ₜ some false
     moveₜ .Right
 
+/-- Carrying right changes the initial one bits to zero and counts exactly those moves. -/
+@[spec] theorem carryRight_spec (left bits : List Bool) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left bits⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      carryRight tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, cursor (List.replicate (carryCount bits) false ++ left) (carryTail bits)⟩ ∧
+        final.headPos = origin + carryCount bits ∧ cost.steps = elapsed + carryCount bits ⦄ := by
+  induction bits generalizing left origin elapsed with
+  | nil =>
+    unfold carryRight
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons bit bits ih =>
+    cases bit with
+    | false =>
+      unfold carryRight
+      vcgen [Spec.while_false_spec]
+      simp_all
+    | true =>
+      unfold carryRight
+      vcgen [Spec.while_step_spec (loop := carryRight tm) (hloop := rfl),
+        ih (false :: left) (origin + 1) (elapsed + 1)]
+      all_goals simp_all [TMState.write, TMState.move, TMState.moveCost,
+        List.replicate_succ', List.append_assoc, add_assoc]
+      all_goals lia
+
 /--
 The carry phase changes exactly the initial `carryCount bits` one bits to zeros and leaves
 `carryTail bits` under and to the right of the head. It preserves the existing prefix and control
@@ -155,33 +185,11 @@ theorem carryRight_correct (left bits : List Bool) (s : TMState tm)
     Runs (carryRight tm) s
       (cursor (List.replicate (carryCount bits) false ++ left) (carryTail bits))
       (s.headPos + carryCount bits) (carryCount bits) := by
-  induction bits generalizing left s with
-  | nil =>
-    simp [carryRight, hs]
-  | cons bit bits ih =>
-    cases bit with
-    | false =>
-      simp [carryRight, hs]
-    | true =>
-      unfold carryRight
-      apply runs_while_step (by simp [hs])
-      have hw : Runs (FreeM.lift (.write (some false))) s (cursor left (false :: bits))
-          s.headPos 0 := by simpa [hs] using write_correct s (some false)
-      have hb : Runs (do FreeM.lift (.write (some false)); FreeM.lift (.move .Right)) s
-          (cursor (false :: left) bits) (s.headPos + 1) 1 := by
-        simpa using hw.seq (q := FreeM.lift (.move .Right))
-          (second := cursor (false :: left) bits) (pos₂ := s.headPos + 1) (time₂ := 1) (by
-            intro t ht hp
-            simpa [TMState.move, ht, hp] using move_correct t .Right)
-      have hr := hb.seq (q := carryRight tm) (time₂ := carryCount bits)
-        (second := cursor (List.replicate (carryCount (true :: bits)) false ++ left)
-          (carryTail (true :: bits))) (pos₂ := s.headPos + carryCount (true :: bits)) (by
-          intro t ht hp
-          have htape : t.config.BiTape = cursor (false :: left) bits := by simp [ht]
-          convert ih (false :: left) t htape using 1 <;>
-            simp [List.replicate_succ', List.append_assoc, hp, add_assoc]
-          lia)
-      simpa [carryRight, Nat.add_comm] using hr
+  apply Spec.runs
+  vcgen [carryRight_spec left bits s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `increment tm` is a Turing machine program that adds one to the binary word beginning under the
@@ -197,6 +205,22 @@ def increment (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery t
   tape ←ₜ some true
   seekLeftEnd tm
 
+/-- Adding one restores the head and counts both the carry and the return trip. -/
+@[spec] theorem increment_spec (bits : List Bool) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor [] bits⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      increment tm
+    ⦃ fun _ cost final => final.config = ⟨label, cursor [] (incrementBits bits)⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed + 2 * carryCount bits + 2 ⦄ := by
+  have houtput := incrementBits_eq bits
+  vcgen [increment, carryRight_spec [] bits label origin elapsed,
+    seekLeftEnd_spec (List.replicate (carryCount bits) false) (true :: (carryTail bits).tail)
+      label (origin + carryCount bits) (elapsed + carryCount bits)]
+  all_goals cases htail : carryTail bits
+  all_goals simp_all [TMState.write]
+  all_goals lia
+
 /--
 The increment program replaces the input with `incrementBits bits`, preserves the control state, and
 restores the starting head coordinate. Its exact cost is `2 * carryCount bits + 2` head moves,
@@ -206,28 +230,11 @@ theorem increment_correct (bits : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = cursor [] bits) :
     Runs (increment tm) s (cursor [] (incrementBits bits))
       s.headPos (2 * carryCount bits + 2) := by
-  have hc : Runs (carryRight tm) s
-      (cursor (List.replicate (carryCount bits) false) (carryTail bits))
-      (s.headPos + carryCount bits) (carryCount bits) := by
-    simpa using carryRight_correct [] bits s hs
-  have h := hc.seq (q := do FreeM.lift (.write (some true)); seekLeftEnd tm)
-    (second := cursor [] (incrementBits bits)) (pos₂ := s.headPos)
-    (time₂ := carryCount bits + 2) (by
-      intro t ht hp
-      have hw : Runs (FreeM.lift (.write (some true))) t
-          (cursor (List.replicate (carryCount bits) false) (true :: (carryTail bits).tail))
-          (s.headPos + carryCount bits) 0 := by
-        cases htail : carryTail bits <;>
-          simpa [ht, hp, htail] using write_correct t (some true)
-      simpa using hw.seq (q := seekLeftEnd tm) (second := cursor [] (incrementBits bits))
-        (pos₂ := s.headPos) (time₂ := carryCount bits + 2) (by
-          intro u hu hup
-          have huTape : u.config.BiTape = cursor (List.replicate (carryCount bits) false)
-              (true :: (carryTail bits).tail) := by simp [hu]
-          simpa [hup, incrementBits_eq] using
-            seekLeftEnd_correct (List.replicate (carryCount bits) false)
-              (true :: (carryTail bits).tail) u huTape))
-  simpa [increment, two_mul, Nat.add_assoc] using h
+  apply Spec.runs
+  vcgen [increment_spec bits s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 Incrementing a word uses at most `2 * bits.length + 2` head moves and allocates at most that many
@@ -267,6 +274,39 @@ def carryLeft (counter : SingleTapeTM Γ) (zero one : Γ) :
     tape ←ₜ some zero
     moveₜ .Left
 
+/-- Carrying left preserves the neighboring regions and uses one move per changed bit. -/
+@[spec] theorem carryLeft_spec (zero one : Γ) (hne : zero ≠ one)
+    (left tail : StackTape Γ) (bits : List Bool) (label : Option counter.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        (BiTape.segment left (bits.map (fun bit => if bit then one else zero)) tail).mirror⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      carryLeft counter zero one
+    ⦃ fun _ cost final => final.config = ⟨label,
+        (BiTape.segment (StackTape.prepend (List.replicate (carryCount bits) zero) left)
+          ((carryTail bits).map (fun bit => if bit then one else zero)) tail).mirror⟩ ∧
+        final.headPos = origin - carryCount bits ∧ cost.steps = elapsed + carryCount bits ⦄ := by
+  induction bits generalizing left origin elapsed with
+  | nil =>
+    unfold carryLeft
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons bit bits ih =>
+    cases bit with
+    | false =>
+      unfold carryLeft
+      vcgen [Spec.while_false_spec]
+      simp_all
+    | true =>
+      unfold carryLeft
+      vcgen [Spec.while_step_spec (loop := carryLeft counter zero one) (hloop := rfl),
+        ih (StackTape.cons (some zero) left) (origin - 1) (elapsed + 1)]
+      all_goals cases bits
+      all_goals simp_all [TMState.write, TMState.move, TMState.moveCost,
+        BiTape.segment, BiTape.mirror, BiTape.write, BiTape.moveLeft,
+        List.replicate_succ', StackTape.prepend_append, sub_eq_add_neg, add_assoc]
+      all_goals lia
+
 /-- Propagating the carry preserves both neighboring regions and uses one move per changed bit. -/
 theorem carryLeft_correct (zero one : Γ) (hne : zero ≠ one)
     (left tail : StackTape Γ) (bits : List Bool) (s : TMState counter)
@@ -276,34 +316,11 @@ theorem carryLeft_correct (zero one : Γ) (hne : zero ≠ one)
       (BiTape.segment (StackTape.prepend (List.replicate (carryCount bits) zero) left)
         ((carryTail bits).map (fun bit => if bit then one else zero)) tail).mirror
       (s.headPos - carryCount bits) (carryCount bits) := by
-  induction bits generalizing left s with
-  | nil => simp [carryLeft, htape]
-  | cons bit bits ih =>
-    cases bit with
-    | false => simp [carryLeft, htape, hne]
-    | true =>
-      unfold carryLeft
-      apply runs_while_step (by simp [htape])
-      have hb : Runs (do
-          FreeM.lift (.write (some zero))
-          FreeM.lift (.move .Left)) s
-          (BiTape.segment (StackTape.cons (some zero) left)
-            (bits.map (fun bit => if bit then one else zero)) tail).mirror
-          (s.headPos - 1) 1 := by
-        cases bits <;>
-          simpa [htape, BiTape.segment, BiTape.mirror, BiTape.write, BiTape.moveLeft,
-            sub_eq_add_neg] using (write_correct s (some zero)).append_move .Left
-      have hr := hb.seq (q := carryLeft counter zero one)
-        (second := (BiTape.segment
-          (StackTape.prepend (List.replicate (carryCount (true :: bits)) zero) left)
-          ((carryTail (true :: bits)).map (fun bit => if bit then one else zero)) tail).mirror)
-        (pos₂ := s.headPos - carryCount (true :: bits)) (time₂ := carryCount bits) (by
-          intro middle hmiddle hpos
-          simpa [hpos, List.replicate_succ', StackTape.prepend_append, sub_eq_add_neg,
-            Int.add_assoc, Int.add_comm, Int.add_left_comm] using
-            ih (StackTape.cons (some zero) left) middle
-              (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-      simpa [carryLeft, Nat.add_comm] using hr
+  apply Spec.runs
+  vcgen [carryLeft_spec zero one hne left tail bits s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 This machine template adds one to a binary word whose most significant bit comes first.
@@ -321,6 +338,61 @@ def incrementLeft (counter : SingleTapeTM Γ) (zero one : Γ) :
   seekLeftEnd counter
 
 /--
+Incrementing a counter preserves its right neighbor and finishes on the first output digit.
+The exact move count includes the scan, the carry, and both return scans.
+-/
+@[spec] theorem incrementLeft_spec (zero one : Γ) (hne : zero ≠ one) (bits : List Bool)
+    (tail : StackTape Γ) (label : Option counter.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment StackTape.nil
+        (bits.map (fun bit => if bit then one else zero)) tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      incrementLeft counter zero one
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.segment StackTape.nil
+        ((incrementBits bits.reverse).reverse.map (fun bit => if bit then one else zero)) tail⟩ ∧
+        final.headPos = origin + bits.length - (incrementBits bits.reverse).length ∧
+        cost.steps = elapsed + bits.length + 2 * carryCount bits.reverse +
+          (incrementBits bits.reverse).length + 4 ⦄ := by
+  let digit := fun bit : Bool => if bit then one else zero
+  let count := carryCount bits.reverse
+  let higher := (carryTail bits.reverse).tail.map digit
+  let output := (incrementBits bits.reverse).reverse.map digit
+  have houtput : output.reverse = List.replicate count zero ++ one :: higher := by
+    simp only [output, List.map_reverse, List.reverse_reverse]
+    rw [← incrementBits_eq]
+    simp [digit, count, higher]
+  have hlength : (incrementBits bits.reverse).length = count + higher.length + 1 := by
+    have h := congrArg List.length houtput
+    simpa [output, add_assoc] using h
+  unfold incrementLeft
+  iterate 3 rw [← bind_assoc]
+  apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+    ⟨label, BiTape.segment (StackTape.mapSome higher) (one :: List.replicate count zero) tail⟩ ∧
+    current.headPos = origin + bits.length - 1 - count ∧
+    cost.steps = elapsed + bits.length + 1 + count)
+  · vcgen [seekRightBlank_segment_spec StackTape.nil tail (bits.map digit)
+        label origin elapsed,
+      carryLeft_spec zero one hne (StackTape.cons none tail) StackTape.nil bits.reverse
+        label (origin + bits.length - 1) (elapsed + bits.length + 1)]
+    case vc1 => simp_all [digit]
+    case vc2 =>
+      cases hx : (bits.map digit).reverse
+      all_goals simp_all [digit, List.map_reverse, TMState.move, TMState.moveCost,
+        BiTape.segment, BiTape.mirror, BiTape.moveLeft]
+      all_goals lia
+    case vc3 =>
+      rcases carryTail_shape bits.reverse with htail | ⟨rest, htail⟩
+      all_goals simp_all [digit, count, higher, TMState.write,
+        BiTape.segment, BiTape.mirror, BiTape.write]
+  · intro _
+    vcgen [seekRightBlank_segment_spec (StackTape.mapSome higher) tail
+        (one :: List.replicate count zero) label
+        (origin + bits.length - 1 - count) (elapsed + bits.length + 1 + count),
+      seekLeftEnd_segment_spec StackTape.nil tail output.reverse []
+        label (origin + bits.length) (elapsed + bits.length + 2 * count + 2)]
+    all_goals simp_all [digit, count, output]
+    all_goals lia
+
+/--
 Incrementing preserves the neighboring region and control state. The head finishes at the
 first output bit, and the number of moves is at most four times the input length plus five.
 -/
@@ -332,54 +404,14 @@ theorem incrementLeft_correct (zero one : Γ) (hne : zero ≠ one) (bits : List 
     ∃ moves, Runs (incrementLeft counter zero one) s
       (BiTape.segment StackTape.nil output tail)
       (s.headPos + bits.length - output.length) moves ∧ moves ≤ 4 * bits.length + 5 := by
-  let digit := fun bit : Bool => if bit then one else zero
-  let count := carryCount bits.reverse
-  let higher := (carryTail bits.reverse).tail.map digit
-  let output := (incrementBits bits.reverse).reverse.map digit
-  have houtput : output.reverse = List.replicate count zero ++ one :: higher := by
-    simp only [output, List.map_reverse, List.reverse_reverse]
-    rw [← incrementBits_eq]
-    simp [digit, count, higher]
-  have hstart := (seekRightBlank_segment StackTape.nil (bits.map digit) tail s htape).append_move
-    .Left
-  have hc := hstart.seq (q := do
-      carryLeft counter zero one
-      FreeM.lift (.write (some one)))
-    (second := BiTape.segment (StackTape.mapSome higher) (one :: List.replicate count zero) tail)
-    (pos₂ := s.headPos + bits.length - 1 - count) (time₂ := count) (by
-      intro middle hmiddle hpos
-      have hmirror : middle.config.BiTape =
-          (BiTape.segment (StackTape.cons none tail)
-            (bits.reverse.map digit) StackTape.nil).mirror := by
-        have ht := congrArg SingleTapeTM.Cfg.BiTape hmiddle
-        cases hx : (bits.map digit).reverse <;>
-          simpa [List.map_reverse, hx, BiTape.segment, BiTape.mirror, BiTape.moveLeft] using ht
-      have hw := (carryLeft_correct zero one hne (StackTape.cons none tail) StackTape.nil
-        bits.reverse middle hmirror).append_write (some one)
-      rcases carryTail_shape bits.reverse with htail | ⟨rest, htail⟩ <;>
-        simpa [digit, count, higher, htail, hpos, BiTape.segment, BiTape.mirror, BiTape.write,
-          sub_eq_add_neg, add_assoc] using hw)
-  have he := hc.seq (q := seekRightBlank counter)
-    (second := BiTape.segment (StackTape.mapSome output.reverse) [] tail)
-    (pos₂ := s.headPos + bits.length) (time₂ := count + 1) (by
-      intro middle hmiddle hpos
-      simpa [houtput, hpos, sub_eq_add_neg, add_assoc] using
-        seekRightBlank_segment (StackTape.mapSome higher) (one :: List.replicate count zero) tail
-          middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  have hr := he.seq (q := seekLeftEnd counter)
-    (second := BiTape.segment StackTape.nil output tail)
-    (pos₂ := s.headPos + bits.length - output.length) (time₂ := output.length + 2) (by
-      intro middle hmiddle hpos
-      simpa [hpos] using seekLeftEnd_segment StackTape.nil output.reverse [] tail middle
-        (by simpa using congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  refine ⟨(bits.map digit).length + 1 + count + (count + 1) + (output.length + 2), ?_, ?_⟩
-  · simpa [incrementLeft, bind_assoc, digit, output] using hr
-  · have hc := carryCount_le_length bits.reverse
-    have hl := length_incrementBits_le bits.reverse
-    simp only [List.length_map, List.length_reverse] at *
-    dsimp only [count, output] at *
-    simp only [List.length_map, List.length_reverse] at *
-    lia
+  have hcount := carryCount_le_length bits.reverse
+  have hlength := length_incrementBits_le bits.reverse
+  apply Spec.runs_le
+  vcgen [incrementLeft_spec zero one hne bits tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+  all_goals lia
 
 end LeftCounter
 

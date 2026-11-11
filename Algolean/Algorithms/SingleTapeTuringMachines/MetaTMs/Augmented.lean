@@ -35,8 +35,9 @@ preserves the control state and uses at most `2 * input.length + 4` head moves.
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery Alphabet
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
 
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM (Extended Symbol 1)} [DecidableEq tm.State]
@@ -57,6 +58,49 @@ def seekSeparator (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Un
     else
       moveₜ .Right
 
+private theorem seekSeparator_marker_spec (left right : List (Extended Symbol 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left ((.inr 0) :: right)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekSeparator tm
+    ⦃ fun _ cost final => final.config = ⟨label, cursor left ((.inr 0) :: right)⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
+  unfold seekSeparator
+  vcgen [Spec.while_false_spec]
+  simp_all
+
+/-- The scan finds the first separator or writes one at the ending blank. -/
+@[spec] theorem seekSeparator_spec (left right : List (Extended Symbol 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left right⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekSeparator tm
+    ⦃ fun _ cost final => final.config = ⟨label,
+        cursor ((Alphabet.firstWord right).reverse.map .inl ++ left)
+          ((.inr 0) :: Alphabet.afterMarker right)⟩ ∧
+        final.headPos = origin + (Alphabet.firstWord right).length ∧
+        cost.steps = elapsed + (Alphabet.firstWord right).length ⦄ := by
+  induction right generalizing left origin elapsed with
+  | nil =>
+    unfold seekSeparator
+    vcgen [Spec.while_step_spec (loop := seekSeparator tm) (hloop := rfl),
+      seekSeparator_marker_spec left [] label origin elapsed]
+    all_goals simp_all [TMState.write]
+  | cons symbol right ih =>
+    cases symbol with
+    | inr marker =>
+      have hm : marker = 0 := Fin.eq_zero marker
+      subst marker
+      vcgen [seekSeparator_marker_spec left right label origin elapsed]
+      all_goals simp_all
+    | inl symbol =>
+      unfold seekSeparator
+      vcgen [Spec.while_step_spec (loop := seekSeparator tm) (hloop := rfl),
+        ih (.inl symbol :: left) (origin + 1) (elapsed + 1)]
+      all_goals simp_all [TMState.move, TMState.moveCost,
+        List.reverse_cons, List.append_assoc, add_assoc]
+      all_goals lia
+
 /--
 The separator scan preserves the ordinary prefix and stops on the first separator, or on the
 separator it inserts at the end when none exists. It moves right once for each symbol of
@@ -68,29 +112,11 @@ theorem seekSeparator_correct (left right : List (Extended Symbol 1)) (s : TMSta
       (cursor ((Alphabet.firstWord right).reverse.map .inl ++ left)
         ((.inr 0) :: Alphabet.afterMarker right))
       (s.headPos + (Alphabet.firstWord right).length) (Alphabet.firstWord right).length := by
-  induction right generalizing left s with
-  | nil =>
-    unfold seekSeparator
-    apply runs_while_step (by simp [hs])
-    apply Runs.branch_seq
-    have h : Runs (seekSeparator tm) (s.write (some (.inr 0)))
-        (cursor left [(.inr 0)]) s.headPos 0 := by
-      simp [seekSeparator, TMState.write, hs]
-    simpa [seekSeparator, hs] using h.prepend_write
-  | cons a right ih =>
-    cases a with
-    | inr marker =>
-      have hm : marker = 0 := Fin.eq_zero marker
-      subst marker
-      simp [seekSeparator, hs]
-    | inl a =>
-      unfold seekSeparator
-      apply runs_while_step (by simp [hs])
-      apply Runs.branch_seq
-      have h := ih (.inl a :: left) (s.move .Right) (by simp [TMState.move, hs])
-      simpa [seekSeparator, hs, TMState.move,
-        List.reverse_cons, List.append_assoc, add_assoc, add_comm, add_left_comm] using
-        h.prepend_move
+  apply Spec.runs
+  vcgen [seekSeparator_spec left right s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 variable [Inhabited Symbol]
 
@@ -108,6 +134,28 @@ def fillRight (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit :
     tape ←ₜ some (.inl (default : Symbol))
     moveₜ .Right
 
+/-- Overwriting the suffix removes its separators and uses one move per cell. -/
+@[spec] theorem fillRight_spec (left right : List (Extended Symbol 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left right⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      fillRight tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, cursor (List.replicate right.length (.inl (default : Symbol)) ++ left) []⟩ ∧
+        final.headPos = origin + right.length ∧ cost.steps = elapsed + right.length ⦄ := by
+  induction right generalizing left origin elapsed with
+  | nil =>
+    unfold fillRight
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons symbol right ih =>
+    unfold fillRight
+    vcgen [Spec.while_step_spec (loop := fillRight tm) (hloop := rfl),
+      ih (.inl default :: left) (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      List.replicate_succ', List.append_assoc, add_assoc]
+    all_goals lia
+
 /--
 The overwrite phase replaces the whole suffix `right` with the same number of ordinary default
 symbols, leaving `left` unchanged. It stops on the following blank after exactly `right.length` head
@@ -118,18 +166,11 @@ theorem fillRight_correct (left right : List (Extended Symbol 1)) (s : TMState t
     Runs (fillRight tm) s
       (cursor (List.replicate right.length (.inl (default : Symbol)) ++ left) [])
       (s.headPos + right.length) right.length := by
-  induction right generalizing left s with
-  | nil => simp [fillRight, hs]
-  | cons a right ih =>
-    unfold fillRight
-    apply runs_while_step (by simp [hs])
-    have h := ih (.inl default :: left)
-      ((s.write (some (.inl default))).move .Right) (by simp [TMState.move, TMState.write, hs])
-    have h := h.prepend_move.prepend_write
-    simp only [fillRight, TMState.move_headPos, TMState.write_headPos, Dir.offset,
-      List.length_cons, List.replicate_succ', List.append_assoc, List.singleton_append,
-      bind_assoc] at h ⊢
-    grind
+  apply Spec.runs
+  vcgen [fillRight_spec left right s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `eraseToSeparator tm` is a Turing machine program that erases the current cell and moves left until
@@ -145,6 +186,41 @@ def eraseToSeparator (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm)
     tape ←ₜ none
     moveₜ .Left
 
+omit [Inhabited Symbol] in
+private theorem eraseToSeparator_marker_spec (left : List (Extended Symbol 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left [(.inr 0)]⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseToSeparator tm
+    ⦃ fun _ cost final => final.config = ⟨label, cursor left [(.inr 0)]⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
+  unfold eraseToSeparator
+  vcgen [Spec.while_false_spec]
+  simp_all
+
+/-- Erasing backward stops at the separator and preserves the prefix before it. -/
+@[spec] theorem eraseToSeparator_spec (n : Nat) (left : List (Extended Symbol 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor
+        (List.replicate n (.inl (default : Symbol)) ++ (.inr 0) :: left) [.inl default]⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseToSeparator tm
+    ⦃ fun _ cost final => final.config = ⟨label, cursor left [(.inr 0)]⟩ ∧
+        final.headPos = origin - (n + 1 : Nat) ∧ cost.steps = elapsed + n + 1 ⦄ := by
+  induction n generalizing origin elapsed with
+  | zero =>
+    unfold eraseToSeparator
+    vcgen [Spec.while_step_spec (loop := eraseToSeparator tm) (hloop := rfl),
+      eraseToSeparator_marker_spec left label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost, sub_eq_add_neg]
+  | succ n ih =>
+    unfold eraseToSeparator
+    vcgen [Spec.while_step_spec (loop := eraseToSeparator tm) (hloop := rfl),
+      ih (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      List.replicate_succ, sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /--
 Starting on an ordinary default symbol with `n` more such symbols before the separator, this program
 erases all `n + 1` symbols and stops on the separator. It preserves the prefix to the separator's
@@ -155,23 +231,11 @@ theorem eraseToSeparator_correct (n : ℕ) (left : List (Extended Symbol 1)) (s 
       (List.replicate n (.inl (default : Symbol)) ++ (.inr 0) :: left) [.inl default]) :
     Runs (eraseToSeparator tm) s (cursor left [(.inr 0)])
       (s.headPos - (n + 1 : ℕ)) (n + 1) := by
-  induction n generalizing s with
-  | zero =>
-    unfold eraseToSeparator
-    apply runs_while_step (by simp [hs])
-    have h : Runs (eraseToSeparator tm) ((s.write none).move .Left)
-        (cursor left [(.inr 0)]) (s.headPos - 1) 0 := by
-      simp [eraseToSeparator, TMState.move, TMState.write, hs, sub_eq_add_neg]
-    simpa [eraseToSeparator] using h.prepend_move.prepend_write
-  | succ n ih =>
-    unfold eraseToSeparator
-    apply runs_while_step (by simp [hs])
-    have h := ih ((s.write none).move .Left)
-      (by simp [TMState.move, TMState.write, hs, List.replicate_succ])
-    have h := h.prepend_move.prepend_write
-    simp only [eraseToSeparator, TMState.move_headPos, TMState.write_headPos, Dir.offset,
-      Nat.cast_add, Nat.cast_one, bind_assoc] at h ⊢
-    grind
+  apply Spec.runs
+  vcgen [eraseToSeparator_spec n left s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `finishDiscard tm` is a Turing machine program that starts on the blank after an overwritten suffix.
@@ -187,6 +251,25 @@ def finishDiscard (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Un
   eraseToSeparator tm
   tape ←ₜ none
 
+/-- The final erasure clears the suffix and its separator with one move per removed cell. -/
+@[spec] theorem finishDiscard_spec (n : Nat) (left : List (Extended Symbol 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor
+        (List.replicate n (.inl (default : Symbol)) ++ (.inr 0) :: left) []⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      finishDiscard tm
+    ⦃ fun _ cost final => final.config = ⟨label, cursor left []⟩ ∧
+        final.headPos = origin - (n + 1 : Nat) ∧ cost.steps = elapsed + n + 1 ⦄ := by
+  cases n with
+  | zero =>
+    vcgen [finishDiscard, eraseToSeparator_marker_spec left label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost, sub_eq_add_neg]
+  | succ n =>
+    vcgen [finishDiscard, eraseToSeparator_spec n left label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      List.replicate_succ, sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /--
 Starting just after `n` overwritten suffix symbols, this program erases those symbols and their
 preceding separator. It finishes `n + 1` cells to the left of the starting position, uses exactly `n
@@ -196,18 +279,11 @@ theorem finishDiscard_correct (n : ℕ) (left : List (Extended Symbol 1)) (s : T
     (hs : s.config.BiTape = cursor
       (List.replicate n (.inl (default : Symbol)) ++ (.inr 0) :: left) []) :
     Runs (finishDiscard tm) s (cursor left []) (s.headPos - (n + 1 : ℕ)) (n + 1) := by
-  cases n with
-  | zero =>
-    have h : Runs (eraseToSeparator tm) (s.move .Left)
-        (cursor left [(.inr 0)]) (s.headPos - 1) 0 := by
-      simp [eraseToSeparator, TMState.move, hs, sub_eq_add_neg]
-    simpa [finishDiscard] using (h.append_write none).prepend_move
-  | succ n =>
-    have h := eraseToSeparator_correct n left (s.move .Left)
-      (by simp [TMState.move, hs, List.replicate_succ])
-    have h := (h.append_write none).prepend_move
-    simp only [finishDiscard, cursor_erase_last, TMState.move_headPos, Dir.offset] at h ⊢
-    grind
+  apply Spec.runs
+  vcgen [finishDiscard_spec n left s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `discardRight tm` is a Turing machine program that starts on a separator and removes it and the
@@ -224,6 +300,20 @@ def discardRight (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Uni
   fillRight tm
   finishDiscard tm
 
+/-- Removing the suffix preserves the prefix and returns to the separator's former position. -/
+@[spec] theorem discardRight_spec (left right : List (Extended Symbol 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left ((.inr 0) :: right)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      discardRight tm
+    ⦃ fun _ cost final => final.config = ⟨label, cursor left []⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed + 2 * right.length + 2 ⦄ := by
+  vcgen [discardRight, fillRight_spec ((.inr 0) :: left) right label (origin + 1) (elapsed + 1),
+    finishDiscard_spec right.length left label (origin + 1 + right.length)
+      (elapsed + 1 + right.length)]
+  all_goals simp_all [TMState.move, TMState.moveCost]
+  all_goals lia
+
 /--
 Starting on the displayed separator, the discard program erases that separator and all of `right`,
 preserving `left`. It returns to the separator's coordinate, preserves the control state, and uses
@@ -232,16 +322,11 @@ exactly `2 * right.length + 2` head moves.
 theorem discardRight_correct (left right : List (Extended Symbol 1)) (s : TMState tm)
     (hs : s.config.BiTape = cursor left ((.inr 0) :: right)) :
     Runs (discardRight tm) s (cursor left []) s.headPos (2 * right.length + 2) := by
-  have h := (fillRight_correct ((.inr 0) :: left) right (s.move .Right)
-    (by simp [TMState.move, hs])).prepend_move
-  have hr := h.seq (q := finishDiscard tm) (second := cursor left [])
-    (pos₂ := s.headPos) (time₂ := right.length + 1) (by
-      intro t ht hp
-      convert finishDiscard_correct right.length left t (by simp [ht]) using 1
-      simp only [TMState.move_headPos, Dir.offset] at hp
-      grind)
-  simp only [discardRight, bind_assoc] at hr ⊢
-  grind
+  apply Spec.runs
+  vcgen [discardRight_spec left right s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `firstWord tm` is a Turing machine program that starts at the beginning of a word, keeps the
@@ -259,6 +344,26 @@ def firstWord (tm : SingleTapeTM (Extended Symbol 1)) : Prog (TMQuery tm) Unit :
   discardRight tm
   seekLeftEnd tm
 
+/-- Keeping the first word restores the head and takes at most twice the input length plus four. -/
+@[spec] theorem firstWord_spec (input : List (Extended Symbol 1)) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.mk₁ input⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      firstWord tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.mk₁ ((Alphabet.firstWord input).map .inl)⟩ ∧
+        final.headPos = origin ∧ cost.steps ≤ elapsed + 2 * input.length + 4 ⦄ := by
+  have hlen := Alphabet.lengths_firstWord_afterMarker_le input
+  vcgen [firstWord, seekSeparator_spec [] input label origin elapsed,
+    discardRight_spec ((Alphabet.firstWord input).reverse.map .inl) (Alphabet.afterMarker input)
+      label (origin + (Alphabet.firstWord input).length)
+      (elapsed + (Alphabet.firstWord input).length),
+    seekLeftEnd_spec ((Alphabet.firstWord input).reverse.map Sum.inl) [] label
+      (origin + (Alphabet.firstWord input).length)
+      (elapsed + (Alphabet.firstWord input).length + 2 * (Alphabet.afterMarker input).length + 2)]
+  all_goals simp_all [List.map_reverse, cursor_start]
+  all_goals lia
+
 /--
 The first-word program computes the ordinary prefix before the first separator, leaving that prefix
 tagged by `.inl` on the tape. For every input it restores the starting head coordinate, preserves
@@ -268,22 +373,16 @@ theorem firstWord_computes :
     Computes (firstWord tm) (fun input => (Alphabet.firstWord input).map .inl)
       (fun input => 2 * input.length + 4) := by
   intro input s hs
-  have h := seekSeparator_correct [] input s (by simpa [cursor_start] using hs)
-  refine ⟨(Alphabet.firstWord input).length +
-    (2 * (Alphabet.afterMarker input).length + 2 + ((Alphabet.firstWord input).length + 2)),
-    ?_, ?_⟩
-  · unfold firstWord
-    refine h.seq ?_
-    intro t ht hp
-    refine (discardRight_correct ((Alphabet.firstWord input).reverse.map .inl)
-      (Alphabet.afterMarker input) t
-      (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht)).seq ?_
-    intro u hu hup
-    simpa [List.map_reverse, cursor_start, hp, hup, sub_eq_add_neg, add_assoc] using
-      seekLeftEnd_correct ((Alphabet.firstWord input).reverse.map Sum.inl) [] u
-        (by simp [hu])
-  · have := Alphabet.lengths_firstWord_afterMarker_le input
-    grind
+  obtain ⟨cost, final, hc, hf, hh, hb⟩ :
+      ∃ cost final, Completes (firstWord tm) s cost final ∧
+        final.config = ⟨s.config.state, BiTape.mk₁ ((Alphabet.firstWord input).map .inl)⟩ ∧
+        final.headPos = s.headPos ∧ cost.steps ≤ 2 * input.length + 4 := by
+    apply Spec.completes
+    vcgen [firstWord_spec input s.config.state s.headPos 0]
+    all_goals
+      cases hcfg : s.config
+      simp_all
+  exact ⟨cost.steps, ⟨cost, final, hc, hf, hh, rfl⟩, hb⟩
 
 /--
 This value contains a verified Turing machine program that keeps the ordinary prefix before the

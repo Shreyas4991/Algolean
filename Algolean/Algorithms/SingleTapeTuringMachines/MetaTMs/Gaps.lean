@@ -24,7 +24,9 @@ public import Algolean.Models.SingleTapeTM.Tape
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
@@ -49,6 +51,45 @@ def seekRightOccupied (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do 
   whileₜ (tape =ₜ none) do
     moveₜ .Right
 
+/-- A scan for an occupied cell stops immediately when the current cell is occupied. -/
+private theorem occupied_spec (direction : Dir) (loop : Prog (TMQuery tm) Unit)
+    (hloop : loop = whileLoop (.tapeIs none) (do [TMQuery tm] moveₜ direction))
+    (symbol : Symbol) (left right : StackTape Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, ⟨some symbol, left, right⟩⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      loop
+    ⦃ fun _ cost final => final.config = ⟨label, ⟨some symbol, left, right⟩⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
+  subst loop
+  vcgen [Spec.while_false_spec]
+  simp_all
+
+/-- Moving left across the displayed blanks preserves the tape and counts every move. -/
+@[spec] theorem seekLeftOccupied_spec (gap : Nat) (symbol : Symbol)
+    (left right : StackTape Symbol) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, ⟨none, StackTape.blanks gap (StackTape.cons (some symbol) left), right⟩⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekLeftOccupied tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, ⟨some symbol, left, StackTape.blanks (gap + 1) right⟩⟩ ∧
+        final.headPos = origin - (gap + 1 : Nat) ∧ cost.steps = elapsed + gap + 1 ⦄ := by
+  induction gap generalizing right origin elapsed with
+  | zero =>
+    unfold seekLeftOccupied
+    vcgen [Spec.while_step_spec (loop := seekLeftOccupied tm) (hloop := rfl),
+      occupied_spec .Left (seekLeftOccupied tm) rfl symbol left (StackTape.cons none right)
+        label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, BiTape.moveLeft, sub_eq_add_neg]
+  | succ gap ih =>
+    unfold seekLeftOccupied
+    vcgen [Spec.while_step_spec (loop := seekLeftOccupied tm) (hloop := rfl),
+      ih (StackTape.cons none right) (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, BiTape.moveLeft,
+      sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /-- Crossing `gap + 1` blank cells to the left preserves the tape and stops on the next symbol. -/
 theorem seekLeftOccupied_correct (gap : Nat) (symbol : Symbol) (left right : StackTape Symbol)
     (s : TMState tm)
@@ -57,36 +98,35 @@ theorem seekLeftOccupied_correct (gap : Nat) (symbol : Symbol) (left right : Sta
     Runs (seekLeftOccupied tm) s
       ⟨some symbol, left, StackTape.blanks (gap + 1) right⟩
       (s.headPos - (gap + 1 : Nat)) (gap + 1) := by
-  induction gap generalizing right s with
+  apply Spec.runs
+  vcgen [seekLeftOccupied_spec gap symbol left right s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+
+/-- Moving right across the displayed blanks preserves the tape and counts every move. -/
+@[spec] theorem seekRightOccupied_spec (gap : Nat) (symbol : Symbol)
+    (left right : StackTape Symbol) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, ⟨none, left, StackTape.blanks gap (StackTape.cons (some symbol) right)⟩⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekRightOccupied tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, ⟨some symbol, StackTape.blanks (gap + 1) left, right⟩⟩ ∧
+        final.headPos = origin + (gap + 1 : Nat) ∧ cost.steps = elapsed + gap + 1 ⦄ := by
+  induction gap generalizing left origin elapsed with
   | zero =>
-    unfold seekLeftOccupied
-    apply runs_while_step (by simp [htape])
-    have hm := move_correct s .Left
-    have ht : (s.move .Left).config.BiTape =
-        ⟨some symbol, left, StackTape.cons none right⟩ := by
-      simp [TMState.move, htape, BiTape.moveLeft]
-    have hb : Runs (FreeM.lift (.move .Left)) s
-        ⟨some symbol, left, StackTape.cons none right⟩ (s.headPos - 1) 1 := by
-      simpa only [ht, Dir.offset, sub_eq_add_neg] using hm
-    have hr := hb.seq (q := seekLeftOccupied tm)
-      (second := ⟨some symbol, left, StackTape.cons none right⟩)
-      (pos₂ := s.headPos - 1) (time₂ := 0) (by
-      intro middle hmiddle hpos
-      simp [seekLeftOccupied, hmiddle, hpos])
-    simpa [seekLeftOccupied] using hr
+    unfold seekRightOccupied
+    vcgen [Spec.while_step_spec (loop := seekRightOccupied tm) (hloop := rfl),
+      occupied_spec .Right (seekRightOccupied tm) rfl symbol (StackTape.cons none left) right
+        label (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, BiTape.moveRight]
   | succ gap ih =>
-    unfold seekLeftOccupied
-    apply runs_while_step (by simp [htape])
-    have hm : Runs (FreeM.lift (.move .Left)) s
-        ⟨none, StackTape.blanks gap (StackTape.cons (some symbol) left),
-          StackTape.cons none right⟩ (s.headPos - 1) 1 := by
-      simpa [htape, BiTape.moveLeft, sub_eq_add_neg] using move_correct s .Left
-    have hr := hm.seq (q := seekLeftOccupied tm) (by
-      intro middle hmiddle hpos
-      simpa [hpos, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using
-        ih (StackTape.cons none right) middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-    convert hr using 1 <;> simp [seekLeftOccupied, sub_eq_add_neg,
-      add_comm, add_left_comm]
+    unfold seekRightOccupied
+    vcgen [Spec.while_step_spec (loop := seekRightOccupied tm) (hloop := rfl),
+      ih (StackTape.cons none left) (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, BiTape.moveRight, add_assoc]
+    all_goals lia
 
 /-- Crossing `gap + 1` blank cells to the right preserves the tape and stops on the next symbol. -/
 theorem seekRightOccupied_correct (gap : Nat) (symbol : Symbol) (left right : StackTape Symbol)
@@ -96,32 +136,30 @@ theorem seekRightOccupied_correct (gap : Nat) (symbol : Symbol) (left right : St
     Runs (seekRightOccupied tm) s
       ⟨some symbol, StackTape.blanks (gap + 1) left, right⟩
       (s.headPos + (gap + 1 : Nat)) (gap + 1) := by
-  induction gap generalizing left s with
+  apply Spec.runs
+  vcgen [seekRightOccupied_spec gap symbol left right s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+
+/-- The scan crosses the displayed gap, including a gap of length zero, and preserves the tape. -/
+@[spec] theorem seekRightOccupied_stack_spec (gap : Nat) (symbol : Symbol)
+    (left right : StackTape Symbol) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        ⟨(StackTape.blanks gap (StackTape.cons (some symbol) right)).head, left,
+          (StackTape.blanks gap (StackTape.cons (some symbol) right)).tail⟩⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekRightOccupied tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, ⟨some symbol, StackTape.blanks gap left, right⟩⟩ ∧
+        final.headPos = origin + gap ∧ cost.steps = elapsed + gap ⦄ := by
+  cases gap with
   | zero =>
-    unfold seekRightOccupied
-    apply runs_while_step (by simp [htape])
-    have hm : Runs (FreeM.lift (.move .Right)) s
-        ⟨some symbol, StackTape.cons none left, right⟩ (s.headPos + 1) 1 := by
-      simpa [htape, BiTape.moveRight] using move_correct s .Right
-    have hr := hm.seq (q := seekRightOccupied tm)
-      (second := ⟨some symbol, StackTape.cons none left, right⟩)
-      (pos₂ := s.headPos + 1) (time₂ := 0) (by
-      intro middle hmiddle hpos
-      simp [seekRightOccupied, hmiddle, hpos])
-    simpa [seekRightOccupied] using hr
-  | succ gap ih =>
-    unfold seekRightOccupied
-    apply runs_while_step (by simp [htape])
-    have hm : Runs (FreeM.lift (.move .Right)) s
-        ⟨none, StackTape.cons none left,
-          StackTape.blanks gap (StackTape.cons (some symbol) right)⟩
-        (s.headPos + 1) 1 := by
-      simpa [htape, BiTape.moveRight] using move_correct s .Right
-    have hr := hm.seq (q := seekRightOccupied tm) (by
-      intro middle hmiddle hpos
-      simpa [hpos, add_assoc, add_comm, add_left_comm] using
-        ih (StackTape.cons none left) middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-    convert hr using 1 <;> simp [seekRightOccupied, add_comm, add_left_comm]
+    vcgen [occupied_spec .Right (seekRightOccupied tm) rfl symbol left right label origin elapsed]
+    all_goals simp_all
+  | succ gap =>
+    vcgen [seekRightOccupied_spec gap symbol left right label origin elapsed]
+    all_goals simp_all [add_assoc]
 
 /-- The rightward scan also handles a gap of length zero, when the head is already on a symbol. -/
 theorem seekRightOccupied_stack (gap : Nat) (symbol : Symbol) (left right : StackTape Symbol)
@@ -132,9 +170,10 @@ theorem seekRightOccupied_stack (gap : Nat) (symbol : Symbol) (left right : Stac
     Runs (seekRightOccupied tm) s
       ⟨some symbol, StackTape.blanks gap left, right⟩
       (s.headPos + gap) gap := by
-  cases gap with
-  | zero => simp [seekRightOccupied, htape]
-  | succ gap =>
-    exact seekRightOccupied_correct gap symbol left right s (by simpa using htape)
+  apply Spec.runs
+  vcgen [seekRightOccupied_stack_spec gap symbol left right s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 end Algolean.Algorithms.SingleTapeTuringMachines
