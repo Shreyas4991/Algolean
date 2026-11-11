@@ -83,6 +83,14 @@ def CNF.atMostOne (names : List α) : CNF α :=
 /-- This formula requires one listed variable to be true and prevents any other distinct choice. -/
 def CNF.exactlyOne (names : List α) : CNF α := Clause.atLeastOne names :: atMostOne names
 
+/-- An injective renaming preserves the clauses and their order in an exactly-one formula. -/
+theorem CNF.rename_exactlyOne {β : Type v} [DecidableEq β] (f : α → β)
+    (hf : Function.Injective f) (names : List α) :
+    (CNF.exactlyOne names).rename f = CNF.exactlyOne (names.map f) := by
+  simp [CNF.exactlyOne, CNF.atMostOne, CNF.rename, Clause.rename,
+    Clause.atLeastOne, Clause.forbid, List.flatMap_map, List.map_flatMap,
+    List.filter_map, hf.eq_iff, List.map_map, Function.comp_def, Literal.rename]
+
 /-- Two listed variables can both be true exactly when they name the same variable. -/
 @[simp] theorem CNF.atMostOne_satisfiedBy (names : List α) (assignment : α → Bool) :
     (atMostOne names).SatisfiedBy assignment ↔

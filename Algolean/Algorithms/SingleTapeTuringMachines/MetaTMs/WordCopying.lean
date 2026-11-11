@@ -13,6 +13,8 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 
 * `copyBitsAcross` reads a binary word, appends the chosen representation of each bit to
   a later output region, and returns to the source's first cell.
+* `appendLengthHeader` writes one true bit per source bit, followed by a false bit.
+  It preserves the source and returns to its first cell.
 * `copyBitsMoves` gives its exact number of head moves when both bit representations have
   the same length. Empty source words and empty intervening regions are allowed.
 
@@ -35,9 +37,7 @@ variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
 private def copyCurrent (restore : Γ) (word : List Γ) (count : Nat) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
-  tape ←ₜ none
-  appendAcross tm word (count + 1)
-  tape ←ₜ some restore
+  appendFromCell tm restore word count
   moveₜ .Right
 
 private theorem copyCurrent_spec (restore : Γ) (word rest output : List Γ)
@@ -52,14 +52,11 @@ private theorem copyCurrent_spec (restore : Γ) (word rest output : List Γ)
           (StackTape.separateWords parts (StackTape.mapSome (output ++ word)))⟩ ∧
         final.headPos = origin + 1 ∧ cost.steps = elapsed +
           2 * (rest.length + regionSpan parts + output.length + word.length) + 11 ⦄ := by
-  have ha := appendAcross_spec (tm := tm) word (rest :: parts) output left
-    label origin elapsed
-  simp only [List.length_cons] at ha
-  vcgen [copyCurrent, ha]
-  all_goals cases rest
-  all_goals simp_all [regionSpan, TMState.write, TMState.move, TMState.moveCost,
-    BiTape.segment, BiTape.write, BiTape.moveRight]
-  all_goals lia
+  vcgen [copyCurrent,
+    appendFromCell_spec restore word rest output parts left label origin elapsed]
+  all_goals
+    cases rest <;>
+    simp_all [TMState.move, TMState.moveCost, BiTape.segment, BiTape.moveRight]
 
 private def copyBitsLoop (zero one : Γ) (code : Bool → List Γ) (count : Nat) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
@@ -101,10 +98,11 @@ private theorem copyBitsLoop_spec (zero one : Γ) (hne : zero ≠ one)
         output parts left label origin elapsed,
       ih (output ++ code bit) (StackTape.cons (some (if bit then one else zero)) left)
         (origin + 1) (elapsed + 2 * (bits.length + regionSpan parts + output.length + width) + 11)]
-    all_goals cases bit
-    all_goals simp_all [List.reverse_cons, StackTape.prepend_append, List.append_assoc]
-    all_goals ring_nf at *
-    all_goals simp_all
+    all_goals
+      cases bit <;>
+      simp_all [List.reverse_cons, StackTape.prepend_append, List.append_assoc] <;>
+      ring_nf at * <;>
+      simp_all
 
 /--
 This machine template copies a binary word to the output beyond `count` intervening regions.
@@ -146,7 +144,55 @@ def copyBitsAcross (tm : SingleTapeTM Γ) (zero one : Γ) (code : Bool → List 
       (bits.map (fun bit => if bit then one else zero)).reverse [] label (origin + bits.length)
       (elapsed + (width + 1) * bits.length ^ 2 +
         2 * bits.length * (regionSpan parts + output.length) + (width + 10) * bits.length)]
-  all_goals simp_all [copyBitsMoves]
-  all_goals lia
+  all_goals
+    simp_all [copyBitsMoves] <;>
+    lia
+
+/-- This counts the moves used to copy the source length and write its ending bit. -/
+@[expose] def lengthHeaderMoves (width size distance output : Nat) : Nat :=
+  copyBitsMoves width size distance output +
+    (2 * (size + distance + output + width * size + width) + 12)
+
+/--
+This machine template appends one represented true bit per source bit and a represented false
+bit after them. It preserves the source and the intervening regions and restores the head.
+The digit symbols, output representations, and number of regions are fixed with the program.
+-/
+def appendLengthHeader (tm : SingleTapeTM Γ) (zero one : Γ) (code : Bool → List Γ)
+    (count : Nat) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  copyBitsAcross tm zero one (fun _ => code true) count
+  appendFromRegion tm (code false) count
+
+/-- Writing the length header preserves its source and records the exact move count. -/
+@[spec] theorem appendLengthHeader_spec (zero one : Γ) (hne : zero ≠ one)
+    (code : Bool → List Γ) (width : Nat) (hwidth : ∀ bit, (code bit).length = width)
+    (bits : List Bool) (parts : List (List Γ)) (output : List Γ) (left : StackTape Γ)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        BiTape.segment (StackTape.cons none left)
+          (bits.map (fun bit => if bit then one else zero))
+          (StackTape.separateWords parts (StackTape.mapSome output))⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      appendLengthHeader tm zero one code parts.length
+    ⦃ fun _ cost final => final.config = ⟨label,
+        BiTape.segment (StackTape.cons none left)
+          (bits.map (fun bit => if bit then one else zero))
+          (StackTape.separateWords parts (StackTape.mapSome
+            (output ++ (List.replicate bits.length true ++ [false]).flatMap code)))⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed +
+          lengthHeaderMoves width bits.length (regionSpan parts) output.length ⦄ := by
+  have hlength : (bits.flatMap fun _ => code true).length = width * bits.length := by
+    simp [List.length_flatMap, hwidth, List.sum_replicate, Nat.mul_comm]
+  have hconstant := congrArg (List.flatMap code) (List.map_const' (l := bits) (b := true))
+  simp only [List.flatMap_map] at hconstant
+  vcgen [appendLengthHeader,
+    copyBitsAcross_spec zero one hne (fun _ => code true) width (fun _ => hwidth true)
+      bits parts output left label origin elapsed,
+    appendFromRegion_spec (code false) (bits.map (fun bit => if bit then one else zero))
+      parts (output ++ bits.flatMap (fun _ => code true)) left label origin
+      (elapsed + copyBitsMoves width bits.length (regionSpan parts) output.length)]
+  all_goals
+    simp_all [lengthHeaderMoves, List.append_assoc] <;>
+    ring_nf at *
 
 end Algolean.Algorithms.SingleTapeTuringMachines

@@ -79,14 +79,12 @@ private def kindBits : Kind → List Bool
     current.headPos = origin
 
 private def pairMoves (width size distance output : Nat) : Nat :=
-  copyBitsMoves width size distance output +
-    (2 * (size + distance + output + width * size + width) + 12) +
+  lengthHeaderMoves width size distance output +
     copyBitsMoves width size distance (output + width * (size + 1))
 
 private def writePairPart (zero one : Γ) (code : Bool → List Γ) (count : Nat) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
-  copyBitsAcross tm zero one (fun _ => code true) count
-  appendFromRegion tm (code false) count
+  appendLengthHeader tm zero one code count
   copyBitsAcross tm zero one code count
 
 private theorem writePairPart_spec (zero one : Γ) (hne : zero ≠ one)
@@ -106,23 +104,18 @@ private theorem writePairPart_spec (zero one : Γ) (hne : zero ≠ one)
             (StackTape.mapSome (output ++ (BooleanTapeEncoding.pair input []).flatMap code)))⟩ ∧
         final.headPos = origin ∧
         cost.steps = elapsed + pairMoves width input.length (regionSpan parts) output.length ⦄ := by
-  have hlength : (input.flatMap fun _ => code true).length = width * input.length := by
-    simp [List.length_flatMap, hwidth, List.sum_replicate, Nat.mul_comm]
-  have hconstant := congrArg (List.flatMap code) (List.map_const' (l := input) (b := true))
-  simp only [List.flatMap_map] at hconstant
+  have hlength : ((List.replicate input.length true ++ [false]).flatMap code).length =
+      width * (input.length + 1) := by
+    simp [List.length_flatMap, hwidth, List.sum_replicate, Nat.mul_comm, Nat.mul_add]
   vcgen [writePairPart,
-    copyBitsAcross_spec zero one hne (fun _ => code true) width (fun _ => hwidth true)
-      input parts output left label origin elapsed,
-    appendFromRegion_spec (code false) (input.map (fun bit => if bit then one else zero))
-      parts (output ++ input.flatMap (fun _ => code true)) left label origin
-      (elapsed + copyBitsMoves width input.length (regionSpan parts) output.length),
+    appendLengthHeader_spec zero one hne code width hwidth input parts output left
+      label origin elapsed,
     copyBitsAcross_spec zero one hne code width hwidth input parts
-      (output ++ input.flatMap (fun _ => code true) ++ code false) left label origin
-      (elapsed + copyBitsMoves width input.length (regionSpan parts) output.length +
-        (2 * (input.length + regionSpan parts + output.length +
-          width * input.length + width) + 12))]
-  all_goals simp_all [pairMoves, BooleanTapeEncoding.pair, List.append_assoc]
-  all_goals ring_nf at *
+      (output ++ (List.replicate input.length true ++ [false]).flatMap code) left label origin
+      (elapsed + lengthHeaderMoves width input.length (regionSpan parts) output.length)]
+  all_goals
+    simp_all [pairMoves, BooleanTapeEncoding.pair, List.append_assoc] <;>
+    ring_nf at *
 
 private def fieldBits (first : List Bool) : List (List Bool) → List Bool
   | [] => first
@@ -192,9 +185,10 @@ private theorem writeFields_spec (zero one : Γ) (hne : zero ≠ one)
         label (origin + (first.length + 1 : Nat))
         (elapsed + step + first.length + 1 +
           fieldMoves width next.length (rest.map List.length) written.length)]
-    all_goals simp_all [fieldsTape, fieldBits, fieldMoves, BooleanTapeEncoding.pair,
-      digit, later, written, step, regionSpan, List.append_assoc, List.map_map, Function.comp_def]
-    all_goals ring_nf at *
+    all_goals
+      simp_all [fieldsTape, fieldBits, fieldMoves, BooleanTapeEncoding.pair,
+        digit, later, written, step, regionSpan, List.append_assoc, List.map_map, Function.comp_def] <;>
+      ring_nf at *
 
 private def bodyBits (kind : Kind) (time position value : List Bool) : List Bool :=
   match kind with
@@ -247,8 +241,9 @@ private theorem writeBody_spec (zero one : Γ) (hne : zero ≠ one)
         label (origin + (time.length + 1 : Nat))
         (elapsed + time.length + 1 +
           fieldMoves width position.length [value.length] output.length)]
-  all_goals simp_all [AtFields, layout, fieldsTape, bodyBits, bodyMoves, digit, fieldBits]
-  all_goals lia
+  all_goals
+    simp_all [AtFields, layout, fieldsTape, bodyBits, bodyMoves, digit, fieldBits] <;>
+    lia
 
 /--
 This machine template appends a variable name using the three words on the tape. It chooses
@@ -294,17 +289,19 @@ of moves given by `moves`; the specification also covers empty binary fields.
   norm_num only [List.length_cons, List.length_nil] at hstart
   vcgen [writeName, hstart, writeBody_spec zero one hne code width hwidth kind
     time position value (output ++ (kindBits kind).flatMap code) left label origin clock]
-  all_goals simp_all [AtFields, layout, bits_eq, moves, clock, regionSpan, List.append_assoc]
-  all_goals lia
+  all_goals
+    simp_all [AtFields, layout, bits_eq, moves, clock, regionSpan, List.append_assoc] <;>
+    lia
 
 /-- The exact move count is quadratic in the source and previous output lengths. -/
 theorem moves_le (kind : Kind) (width time position value output : Nat) :
     moves kind width time position value output ≤
       8 * (width + 1) * (time + position + value + output + 4) ^ 2 := by
-  cases kind <;> simp only [moves, bodyMoves, kindBits, fieldMoves, pairMoves, copyBitsMoves,
+  cases kind <;> simp only [moves, bodyMoves, kindBits, fieldMoves, pairMoves, lengthHeaderMoves, copyBitsMoves,
     List.length_cons, List.length_nil, List.sum_cons, List.sum_nil]
-  all_goals ring_nf
-  all_goals lia
+  all_goals
+    ring_nf <;>
+    lia
 
 /-- The writer produces the stated name, preserves the source, and restores the head. -/
 theorem writeName_correct (zero one : Γ) (hne : zero ≠ one)
@@ -318,8 +315,9 @@ theorem writeName_correct (zero one : Γ) (hne : zero ≠ one)
   apply Spec.runs
   vcgen [writeName_spec zero one hne code width hwidth kind time position value output left
     s.config.state s.headPos 0]
-  all_goals cases hcfg : s.config
-  all_goals simp_all [AtFields]
+  all_goals
+    cases hcfg : s.config <;>
+    simp_all [AtFields]
 
 /--
 The writer finishes within the stated quadratic bound and produces the same output as in

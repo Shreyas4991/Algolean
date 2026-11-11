@@ -15,6 +15,8 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
 * `appendAcross` starts on a blank, crosses a fixed number of words, appends a fixed word
   to the final region, and returns to the starting blank.
 * `appendFromRegion` performs the same operation from the beginning of a source word.
+* `appendFromCell` temporarily marks an occupied source cell, appends beyond its region, and
+  restores that cell and the head.
 
 These are machine templates. The containing machine fixes the number of intervening regions
 and the appended word once. The words already on the tape may have arbitrary lengths, including
@@ -69,8 +71,9 @@ def appendAcross (tm : SingleTapeTM Symbol) (word : List Symbol) : Nat → Prog 
   | nil =>
     simp only [List.length_nil, appendAcross]
     vcgen [appendWord_spec none left output word label (origin + 1) (elapsed + 1)]
-    all_goals simp_all [regionSpan, TMState.move, TMState.moveCost]
-    all_goals lia
+    all_goals
+      simp_all [regionSpan, TMState.move, TMState.moveCost] <;>
+      lia
   | cons part parts ih =>
     simp only [List.length_cons, appendAcross]
     vcgen [seekRightBlank_segment_spec (StackTape.cons none left)
@@ -83,8 +86,9 @@ def appendAcross (tm : SingleTapeTM Symbol) (word : List Symbol) : Nat → Prog 
         label (origin + 1 + part.length)
         (elapsed + 1 + part.length +
           2 * (regionSpan parts + output.length + word.length) + 8)]
-    all_goals simp_all [regionSpan, TMState.move, TMState.moveCost]
-    all_goals lia
+    all_goals
+      simp_all [regionSpan, TMState.move, TMState.moveCost] <;>
+      lia
 /--
 This machine template appends a fixed word to the output beyond the source and `count` more
 regions. It preserves the source and returns to its first cell. That cell is the following
@@ -114,9 +118,40 @@ def appendFromRegion (tm : SingleTapeTM Symbol) (word : List Symbol) (count : Na
     label (origin - 1) (elapsed + 1)
   simp only [List.length_cons] at ha
   vcgen [appendFromRegion, ha]
-  all_goals cases input
-  all_goals simp_all [regionSpan, TMState.move, TMState.moveCost, BiTape.segment,
-    BiTape.moveLeft, BiTape.moveRight]
-  all_goals lia
+  all_goals
+    cases input <;>
+    simp_all [regionSpan, TMState.move, TMState.moveCost, BiTape.segment,
+      BiTape.moveLeft, BiTape.moveRight] <;>
+    lia
+
+/--
+This machine template appends a fixed word beyond the current source region and `count` more
+regions. It temporarily erases the scanned symbol to find its way back, then restores it.
+The containing machine fixes the restored symbol, appended word, and number of regions.
+-/
+def appendFromCell (tm : SingleTapeTM Symbol) (restore : Symbol) (word : List Symbol)
+    (count : Nat) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  tape ←ₜ none
+  appendAcross tm word (count + 1)
+  tape ←ₜ some restore
+
+/-- Appending from an occupied cell preserves the source and restores the head and control state. -/
+@[spec] theorem appendFromCell_spec (restore : Symbol) (word rest output : List Symbol)
+    (parts : List (List Symbol)) (left : StackTape Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, segment left (restore :: rest)
+        (StackTape.separateWords parts (StackTape.mapSome output))⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      appendFromCell tm restore word parts.length
+    ⦃ fun _ cost final => final.config = ⟨label, segment left (restore :: rest)
+        (StackTape.separateWords parts (StackTape.mapSome (output ++ word)))⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed +
+          2 * (rest.length + regionSpan parts + output.length + word.length) + 10 ⦄ := by
+  have ha := appendAcross_spec (tm := tm) word (rest :: parts) output left label origin elapsed
+  simp only [List.length_cons] at ha
+  vcgen [appendFromCell, ha]
+  all_goals
+    simp_all [regionSpan, TMState.write, BiTape.segment, BiTape.write] <;>
+    lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines

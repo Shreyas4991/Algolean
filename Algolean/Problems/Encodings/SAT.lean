@@ -198,6 +198,21 @@ theorem encoding_encode_cons (clause : Clause Variable) (rest : CNF Variable) :
     Encoding.comp, Encoding.list, words, List.map_append, List.map_map,
     Function.comp_def, Extended.flattenThreeEquiv, Extended.flattenEquiv, finSumFinEquiv]
 
+/--
+This writes the clauses with their usual separating symbols, leaving out the final symbol
+that ends the formula. A machine can append several such words before ending the full formula.
+-/
+def formulaPrefix (formula : CNF Variable) : List CodeSymbol :=
+  formula.flatMap fun clause => certificateEncoding.encode clause ++ [.inr 4]
+
+/-- Appending the final formula symbol to the clause encodings gives the existing SAT encoding. -/
+theorem encoding_encode_eq_formulaPrefix (formula : CNF Variable) :
+    encoding.encode formula = formulaPrefix formula ++ [.inr 5] := by
+  induction formula with
+  | nil => rfl
+  | cons clause rest ih =>
+    simp [encoding_encode_cons, formulaPrefix, ih, List.append_assoc]
+
 /-- Decoding returns a formula exactly when the whole word is that formula's encoding. -/
 @[simp] theorem decode_encoding_eq_some_iff {word : List CodeSymbol} {formula : CNF Variable} :
     encoding.decode word = some formula ↔ word = encoding.encode formula :=
