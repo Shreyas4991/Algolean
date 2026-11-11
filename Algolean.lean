@@ -65,6 +65,8 @@ public import Algolean.Complexity.Reductions.TMSATToSAT.Parsing
 public import Algolean.Complexity.Reductions.TMSATToSAT.Reduction
 public import Algolean.Complexity.Reductions.TMSATToSAT.Rows
 public import Algolean.Complexity.Reductions.TMSATToSAT.Size
+public import Algolean.Complexity.Reductions.TMSATToSAT.StateBounds
+public import Algolean.Complexity.Reductions.TMSATToSAT.StateFields
 public import Algolean.Complexity.Reductions.TMSATToSAT.Tape
 public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
 public import Algolean.Complexity.Reductions.TMSATToSAT.Variables
