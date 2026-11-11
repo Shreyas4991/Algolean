@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.MachineComposition
 

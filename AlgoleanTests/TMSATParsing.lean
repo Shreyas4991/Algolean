@@ -9,7 +9,7 @@ module
 public import AlgoleanTests.TMSATToSATTape
 public import Algolean.Complexity.Reductions.TMSATToSAT.Parsing
 public meta import Algolean.Complexity.Reductions.TMSATToSAT.Parsing
-public meta import Algolean.Algorithms.SingleTapeTuringMachines.Reading
+public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Reading
 
 /-!
 # Checking the TMSAT symbol reader and field boundaries

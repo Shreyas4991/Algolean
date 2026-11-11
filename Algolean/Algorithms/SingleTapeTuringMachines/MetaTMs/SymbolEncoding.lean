@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Expanding
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Expanding
 
 /-!
 # Replacing input symbols with fixed words

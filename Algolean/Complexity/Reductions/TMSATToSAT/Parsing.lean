@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.TMSATToSAT.Tape
-public import Algolean.Algorithms.SingleTapeTuringMachines.Reading
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Reading
 public import Algolean.Problems.Encodings.TMSAT
 
 /-!

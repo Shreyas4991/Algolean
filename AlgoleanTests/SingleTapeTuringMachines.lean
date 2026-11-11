@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Framed
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Framed
 
 /-!
 # Executing Boolean-word programs and copying encoded pairs
@@ -284,17 +284,19 @@ example : (incrementPolyTimeComputable (tm := machine)).program = increment mach
 
 -- The length header preserves both word boundaries, even when either word is empty.
 example (first second : List Bool) :
-    BooleanTapeEncoding.unpair (BooleanTapeEncoding.pair first second) = some (first, second) := by
+    Problems.BooleanTapeEncoding.unpair (Problems.BooleanTapeEncoding.pair first second) =
+      some (first, second) := by
   simp
 
 example (first second suffix : List Bool) :
-    BooleanTapeEncoding.unpair (BooleanTapeEncoding.pair first (second ++ suffix)) =
+    Problems.BooleanTapeEncoding.unpair
+      (Problems.BooleanTapeEncoding.pair first (second ++ suffix)) =
       some (first, second ++ suffix) := by simp
 
 -- Decoding rejects a missing delimiter and a first word shorter than the header claims.
-example : BooleanTapeEncoding.unpair [true, true] = none := by decide +kernel
+example : Problems.BooleanTapeEncoding.unpair [true, true] = none := by decide +kernel
 
-example : BooleanTapeEncoding.unpair [true, true, false, true] = none := by decide +kernel
+example : Problems.BooleanTapeEncoding.unpair [true, true, false, true] = none := by decide +kernel
 
 -- Empty input still produces the false delimiter of an encoded pair of empty words.
 example : observe (Copying.duplicate machine) (TMState.init machine []) 1000 =
@@ -318,7 +320,7 @@ example : observe (appendRightComputer (tm := machine) true).program
       some ⟨some false, [], [some true], some false, 0, 4, 2, 3⟩ := by decide +kernel
 
 example : observe (appendRightComputer (tm := machine) false).program
-    (TMState.init machine (BooleanTapeEncoding.pair [false, true] [true])) =
+    (TMState.init machine (Problems.BooleanTapeEncoding.pair [false, true] [true])) =
       some ⟨some true, [], [some true, some false, some false, some true, some true, some false],
         some false, 0, 14, 2, 8⟩ := by decide +kernel
 
@@ -362,7 +364,7 @@ example (input : List Bool) (s : TMState machine) (hs : s.config.BiTape = BiTape
     ∃ cost final,
       Completes (duplicateAppendRightComputer (tm := machine) true).program s cost final ∧
       final.config = {s.config with
-        BiTape := BiTape.mk₁ (BooleanTapeEncoding.pair input (input ++ [true]))} ∧
+        BiTape := BiTape.mk₁ (Problems.BooleanTapeEncoding.pair input (input ++ [true]))} ∧
       final.headPos = s.headPos - (input.length + 1 : ℕ) ∧
       cost.steps ≤ 4 * input.length ^ 2 + 17 * input.length + 9 :=
   (duplicateAppendRightComputer (tm := machine) true).correct input s hs

@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Pairing
-public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
+public import Algolean.Models.SingleTapeTM.Composition.Pairing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.Functions
 public import Algolean.Models.SingleTapeTM.Tape
@@ -652,13 +652,14 @@ def duplicate (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery t
   finishCopy tm
 
 /--
-Finishing the copy transforms the completed loop layout into `BooleanTapeEncoding.pair input input`
+Finishing the copy transforms the completed loop layout into
+`Problems.BooleanTapeEncoding.pair input input`
 and puts the head on the first output cell. From the blank after the source, the head finishes `2 *
 input.length + 1` cells to the left, using exactly `6 * input.length + 5` head moves.
 -/
 theorem finishCopy_correct (input : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = layout input []) :
-    Runs (finishCopy tm) s (BiTape.mk₁ (BooleanTapeEncoding.pair input input))
+    Runs (finishCopy tm) s (BiTape.mk₁ (Problems.BooleanTapeEncoding.pair input input))
       (s.headPos - (2 * input.length + 1 : ℕ)) (6 * input.length + 5) := by
   have hm : Runs (FreeM.lift (.move .Right)) s
       (segment (StackTape.cons none (sourceLeft input)) input StackTape.nil) (s.headPos + 1) 1 := by
@@ -703,7 +704,7 @@ input.length ^ 2 + 11 * input.length + 5` head moves. Empty input produces the o
 -/
 theorem duplicate_correct (input : List Bool) (s : TMState tm)
     (hs : s.config.BiTape = BiTape.mk₁ input) :
-    Runs (duplicate tm) s (BiTape.mk₁ (BooleanTapeEncoding.pair input input))
+    Runs (duplicate tm) s (BiTape.mk₁ (Problems.BooleanTapeEncoding.pair input input))
       (s.headPos - (input.length + 1 : ℕ)) (4 * input.length ^ 2 + 11 * input.length + 5) := by
   have hl : Runs (copyLoop tm) s (layout input []) (s.headPos + input.length)
       (4 * input.length ^ 2 + 5 * input.length) := by
@@ -748,9 +749,9 @@ of the input. It uses the physical duplication program and its quadratic head-mo
 head finishing at the beginning of the encoded output.
 -/
 noncomputable def duplicatePolyTimeComputable :
-    TMQuery.PolyTimeComputable (fun input => BooleanTapeEncoding.pair input input) :=
+    TMQuery.PolyTimeComputable (fun input => Problems.BooleanTapeEncoding.pair input input) :=
   EncodedComputer.polyTimeComputable (tm := tm)
-    (outputEncoding := fun p : List Bool × List Bool => BooleanTapeEncoding.pair p.1 p.2)
+    (outputEncoding := fun p : List Bool × List Bool => Problems.BooleanTapeEncoding.pair p.1 p.2)
     (f := fun input => (input, input))
     (position := fun input origin => origin - (input.length + 1 : ℕ))
     (poly := 4 * Polynomial.X ^ 2 + 11 * Polynomial.X + 5)

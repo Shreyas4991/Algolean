@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
 
 /-!
 # Moving between words separated by blank cells

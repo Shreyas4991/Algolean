@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Regions
-public import Algolean.Algorithms.SingleTapeTuringMachines.Writing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Regions
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
 
 /-!
 # Tape regions for writing the TMSAT-to-SAT reduction

@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Comparison
-public import Algolean.Algorithms.SingleTapeTuringMachines.CertificatePadding
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Comparison
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CertificatePadding
 public import Algolean.Problems.Certificates
 
 /-!

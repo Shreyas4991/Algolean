@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.TMSATToSAT.Parsing
-public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Increment
 
 /-!
 # Counting rows of an encoded transition table

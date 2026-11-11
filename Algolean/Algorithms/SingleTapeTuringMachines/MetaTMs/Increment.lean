@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
-public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
 
 /-!
 # Adding one to a binary word

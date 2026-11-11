@@ -6,9 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Augmented
-public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
-public import Algolean.Algorithms.SingleTapeTuringMachines.Gaps
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Augmented
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Gaps
 public import Algolean.Problems.Certificates
 
 /-!

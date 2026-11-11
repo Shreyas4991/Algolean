@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.BitOperations
-public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BitOperations
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 
 /-!
 # Appending a bit and complementing a block
