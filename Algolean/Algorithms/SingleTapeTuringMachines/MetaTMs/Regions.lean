@@ -172,4 +172,64 @@ theorem visitPreviousRegion_correct (restore : Γ) (action : Prog (TMQuery tm) U
   · rw [hmoves]
     lia
 
+/--
+A visit may also record its answer in the control state. The inserted program changes the
+preceding word, keeps its right boundary fixed, and sets the stated result. The visit restores
+the scanned symbol and head position while keeping that result.
+-/
+theorem visitPreviousRegion_completes (restore : Γ) (action : Prog (TMQuery tm) Unit)
+    (input output crossed suffix : List Γ) (tail : StackTape Γ)
+    (result : Option tm.State) (bound : Nat)
+    (haction : ∀ (s : TMState tm) (tail : StackTape Γ),
+      s.config.BiTape = BiTape.segment StackTape.nil input tail →
+      ∃ cost final, Completes action s cost final ∧
+        final.config = ⟨result, BiTape.segment StackTape.nil output tail⟩ ∧
+        final.headPos = s.headPos + input.length - output.length ∧ cost.steps ≤ bound)
+    (s : TMState tm)
+    (htape : s.config.BiTape = BiTape.segment
+      (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome input.reverse)))
+      (restore :: suffix) tail) :
+    ∃ cost final, Completes (visitPreviousRegion tm restore action) s cost final ∧
+      final.config = ⟨result, BiTape.segment
+        (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome output.reverse)))
+        (restore :: suffix) tail⟩ ∧ final.headPos = s.headPos ∧
+      cost.steps ≤ bound + 2 * crossed.length + input.length + output.length + 6 := by
+  let rest := StackTape.prepend suffix (StackTape.cons none tail)
+  have hs := (write_correct s none).seq (q := seekLeftEnd tm)
+    (second := BiTape.segment (StackTape.cons none (StackTape.mapSome input.reverse)) crossed rest)
+    (pos₂ := s.headPos - crossed.length) (time₂ := crossed.length + 2) (by
+      intro middle hmiddle hpos
+      simpa [rest, hpos] using seekLeftEnd_segment (StackTape.mapSome input.reverse)
+        crossed.reverse [] rest middle (by
+          simp [hmiddle, htape, rest, BiTape.segment, BiTape.write]))
+  have hp := hs.seq (q := previousRegion tm)
+    (second := BiTape.segment StackTape.nil input
+      (StackTape.prepend crossed (StackTape.cons none rest)))
+    (pos₂ := s.headPos - crossed.length - (input.length + 1 : Nat))
+    (time₂ := input.length + 3) (by
+      intro middle hmiddle hpos
+      simpa [hpos] using previousRegion_correct StackTape.nil input crossed rest middle
+        (by simpa using congrArg SingleTapeTM.Cfg.BiTape hmiddle))
+  obtain ⟨setup, middle, hc, hm, hh, hb⟩ := hp
+  obtain ⟨cost, changed, ha, ht, hpos, hbound⟩ := haction middle
+    (StackTape.prepend crossed (StackTape.cons none rest))
+    (congrArg SingleTapeTM.Cfg.BiTape hm)
+  have hn := nextRegion_correct (tm := tm) StackTape.nil output crossed rest changed (by simp [ht])
+  have hr := hn.seq (q := seekRightBlank tm)
+    (second := BiTape.segment
+      (StackTape.prepend crossed.reverse (StackTape.cons none (StackTape.mapSome output.reverse)))
+      [] rest)
+    (pos₂ := s.headPos) (time₂ := crossed.length) (by
+      intro current hcurrent hcurrentPos
+      simpa [hcurrentPos, hpos, hh, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using
+        seekRightBlank_segment (StackTape.cons none (StackTape.mapSome output.reverse))
+          crossed rest current (by simpa using congrArg SingleTapeTM.Cfg.BiTape hcurrent))
+  obtain ⟨back, final, hf, hfinal, hfpos, hback⟩ := hr.append_write (some restore)
+  refine ⟨setup + (cost + back), final, ?_, ?_, hfpos, ?_⟩
+  · simpa [visitPreviousRegion, bind_assoc] using hc.seq (ha.seq hf)
+  · simpa [ht, rest, BiTape.segment, BiTape.write] using hfinal
+  · simp only [TMCost.add_steps]
+    rw [hb, hback]
+    lia
+
 end Algolean.Algorithms.SingleTapeTuringMachines

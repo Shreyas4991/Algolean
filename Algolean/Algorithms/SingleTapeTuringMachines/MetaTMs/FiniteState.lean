@@ -7,21 +7,26 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Basic
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.While
 
 /-!
 # Reading a word and updating the machine's state
 
-* `scan` starts under the tape head, reads to the right, and stops on the first blank.
-* After reading symbol `a` in state `q`, it changes the state to `table.next q a` and moves right.
-* `scan_correct` proves that every tape symbol is preserved, the state changes follow this rule,
-  and the number of head moves equals the number of symbols read.
+`ScanTable` lists the control states and nonblank tape symbols. It specifies which state to
+enter after reading each symbol in each state.
 
-`ScanTable` lists the state names and tape symbols so that the program can compare them with
-the current state and the symbol under the head using ordinary conditionals. These lists and
-the rule `table.next` are chosen once when constructing the program. The same program runs on
-every input length; only the initial tape contents and machine state vary between runs.
+* `FiniteState.updateForSymbol` reads the symbol under the head and applies the table's rule
+  for a chosen state. It leaves the tape and head unchanged and does nothing on a blank cell.
+* `FiniteState.updateFromTable` reads the current state and tape symbol and applies their rule.
+  It leaves the tape and head unchanged. On a blank cell or in state `none`, it does nothing.
+* `scan` repeats these state updates while moving right and stops on the first blank. It
+  preserves every tape cell and makes one head move per symbol read.
+
+These are machine templates. The table and the state passed to `updateForSymbol` are fixed
+when constructing the containing machine, independently of the input and its length. The
+same finite program runs on every input length.
 -/
 
 @[expose] public section
@@ -125,6 +130,38 @@ def scan (table : ScanTable tm) : Prog (TMQuery tm) Unit := do [TMQuery tm]
     moveₜ .Right
 
 /--
+Scanning preserves the tape to the word's left and beyond the blank on its right. The final
+state follows the table's updates, and the number of head moves equals the scanned length.
+-/
+theorem scan_segment_correct (table : ScanTable tm) (left tail : StackTape Symbol)
+    (word : List Symbol) (label : tm.State) (s : TMState tm)
+    (htape : s.config.BiTape = BiTape.segment left word tail)
+    (hstate : s.config.state = some label) :
+    ∃ cost final, Completes (scan table) s cost final ∧
+      final.config = ⟨some (word.foldl table.next label),
+        BiTape.segment (StackTape.prepend word.reverse left) [] tail⟩ ∧
+      final.headPos = s.headPos + word.length ∧ cost.steps = word.length := by
+  induction word generalizing left label s with
+  | nil =>
+    refine ⟨0, s, completes_while_false _ _ s (by simp [htape]), ?_, by simp, rfl⟩
+    cases hcfg : s.config
+    simp_all
+  | cons symbol word ih =>
+    let updated : TMState tm := {s with config.state := some (table.next label symbol)}
+    let moved := updated.move .Right
+    have hu := updateFromTable_correct table label symbol s hstate (by simp [htape])
+    obtain ⟨cost, final, hr, hf, hp, hm⟩ := ih (StackTape.cons (some symbol) left)
+      (table.next label symbol) moved (by simp [moved, updated, TMState.move, htape]) rfl
+    refine ⟨(0 + updated.moveCost .Right) + cost, final,
+      Completes.while_step (by simp [htape]) (hu.seq (completes_move updated .Right)) hr,
+      ?_, ?_, ?_⟩
+    · simpa [List.reverse_cons, StackTape.prepend_append] using hf
+    · simp [moved, updated, TMState.move] at hp
+      simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
+      lia
+    · simp [TMState.moveCost, hm, Nat.add_comm]
+
+/--
 Starting in state `label`, the program reads the symbols of `right` from first to last.
 For example, reading `[a, b]` leaves it in state `table.next (table.next label a) b`.
 It stops on the following blank, preserves the tape, and makes exactly `right.length` head moves.
@@ -137,25 +174,9 @@ theorem scan_correct (table : ScanTable tm) (left right : List Symbol)
       final.config.BiTape = cursor (right.reverse ++ left) [] ∧
       final.config.state = some (right.foldl table.next label) ∧
       final.headPos = s.headPos + right.length ∧ cost.steps = right.length := by
-  induction right generalizing left label s with
-  | nil =>
-    exact ⟨0, s, completes_while_false _ _ s (by simp [htape]),
-      by simpa using htape, hstate, by simp, rfl⟩
-  | cons symbol right ih =>
-    let updated : TMState tm := {s with config.state := some (table.next label symbol)}
-    let moved := updated.move .Right
-    have hupdate : Completes (updateFromTable table) s 0 updated :=
-      updateFromTable_correct table label symbol s hstate (by simp [htape])
-    have hbody := hupdate.seq (completes_move updated .Right)
-    obtain ⟨cost, final, hrun, hfinal, hlabel, hpos, hsteps⟩ :=
-      ih (symbol :: left) (table.next label symbol) moved
-        (by simp [moved, updated, TMState.move, htape]) rfl
-    refine ⟨(0 + updated.moveCost .Right) + cost, final,
-      Completes.while_step (by simp [htape]) hbody hrun, ?_, hlabel, ?_, ?_⟩
-    · simpa [List.reverse_cons, List.append_assoc] using hfinal
-    · simp [moved, updated, TMState.move] at hpos
-      simp only [List.length_cons, Nat.cast_add, Nat.cast_one]
-      lia
-    · simp [TMState.moveCost, hsteps, Nat.add_comm]
+  obtain ⟨cost, final, hr, hf, hp, hm⟩ := scan_segment_correct table
+    (StackTape.mapSome left) StackTape.nil right label s
+      (by cases right <;> simpa [cursor, BiTape.segment] using htape) hstate
+  exact ⟨cost, final, hr, by simp [hf, cursor, BiTape.segment], by simp [hf], hp, hm⟩
 
 end Algolean.Algorithms.SingleTapeTuringMachines
