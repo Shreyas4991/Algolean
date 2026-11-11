@@ -6,6 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
+public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.Models.SingleTapeTM.Composition.MachineComposition
 public import Algolean.Problems.Encodings.Basic
 

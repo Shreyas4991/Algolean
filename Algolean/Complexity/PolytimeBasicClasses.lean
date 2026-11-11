@@ -6,47 +6,22 @@ Authors: Tanner Duve, Shreyas Srinivas
 
 module
 
-public import Algolean.Models.SingleTapeTM
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
+public import Algolean.Models.SingleTapeTM.Computability
 public import Algolean.Problems.Basic
-public import Mathlib.Algebra.Polynomial.Eval.Defs
 
 /-!
-# Turing machine programs with polynomial time bounds
+# The language classes P and NP
 
-This file defines `OutputsWithinTime`, `TimeComputable`, and `PolyTimeComputable` for Turing
-machine programs, and uses `PolyTimeComputable` to define the language classes `P` and `NP`.
-One fixed program must work on every input. It receives the input on the tape and leaves the
-output with the head at its first symbol.
+`P` contains the languages decided by one fixed Query program in polynomial time. The program
+computes a word-valued function and produces a chosen acceptance word exactly on yes inputs.
+`NP` contains languages whose yes answers have polynomially bounded certificates checked by a
+language in `P`.
 
-Time counts tape-head move instructions. Fuel separately limits execution: every instruction and
-loop test uses fuel, even if it has no time cost. Running out of fuel does not count as
-producing an answer.
-
-The language classes `P` and `NP` require at least two ordinary symbols. In `NP`, certificates
-use the input alphabet, so this assumption lets their symbols carry information beyond their
-length. The Turing machine model and the function-computability records also support alphabets
-with one symbol.
-
-[Functions.lean](Algolean/Models/SingleTapeTM/Composition/Functions.html) converts reusable
-Turing machine programs into these computability records. Its `Computes` proofs also preserve
-the control state and restore the head coordinate for any initial tape history, so programs can
-run in sequence on the same machine. The Boolean-tape examples in
-[BasicTMs.lean](Algolean/Algorithms/SingleTapeTuringMachines/BasicTMs.html) use those conversions.
-[NP.lean](Algolean/Complexity/NP.html) constructs the encoded-pair verifier used to prove `P ⊆ NP`.
-
-## Main definitions and results
-
-* [OutputsWithinTime](##Algolean.Algorithms.TMQuery.OutputsWithinTime) requires a program to
-  finish with the specified output within the allowed time.
-* [TimeComputable](##Algolean.Algorithms.TMQuery.TimeComputable) stores one program and a time
-  bound for every input.
-* [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable) adds a polynomial bound
-  on that time.
-* [P](##Algolean.Algorithms.P) describes problems answered by programs with polynomial time
-  bounds.
-* [NP](##Algolean.Algorithms.NP) describes problems whose yes answers have certificates, or
-  extra lists of symbols, that such programs can check.
+Both classes require at least two ordinary symbols. Certificates use the input alphabet, and
+the verifier reads the input and certificate separated by one added symbol. Its running time
+is measured in that complete word's length. The machine execution and function computation
+records are defined in `Models/SingleTapeTM/Computability`, independently of these classes.
 -/
 
 @[expose] public section
@@ -58,77 +33,6 @@ namespace Algorithms
 open Cslib.Turing Polynomial
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
-
-namespace TMQuery
-
-/--
-The program finishes with the specified output tape and uses at most the allowed number of head
-moves. Some finite amount of execution fuel must let it finish; the amount of fuel is separate
-from this time bound.
--/
-def OutputsWithinTime {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
-    (program : Prog (TMQuery tm) Unit) (input output : List Symbol) (time : ℕ) : Prop :=
-  ∃ fuel result final,
-    execute fuel program (TMState.init tm input) = some (result, final) ∧
-    final.machine.config.BiTape = BiTape.mk₁ output ∧ result.tell.steps ≤ time
-
-/--
-This record stores one program that computes the specified function on every input, together
-with a bound on its time as a function of input length.
--/
-structure TimeComputable (f : List Symbol → List Symbol) where
-  /-- This machine specifies the tape symbols, the named states, and the initial state. -/
-  tm : SingleTapeTM Symbol
-  /-- This field defines a way to check whether two tape symbols are equal. -/
-  [symbolDecidableEq : DecidableEq Symbol]
-  /-- This field defines a way to check whether two machine states are equal. -/
-  [stateDecidableEq : DecidableEq tm.State]
-  /-- The same program runs for every input and receives the input through its initial tape. -/
-  program : Prog (TMQuery tm) Unit
-  /-- This function gives the allowed number of head moves for each input length. -/
-  timeBound : ℕ → ℕ
-  /-- The program finishes with the required output within the allowed time on every input. -/
-  outputsFunInTime (input : List Symbol) :
-    OutputsWithinTime program input (f input) (timeBound input.length)
-
-/--
-This record adds a polynomial time bound to a
-[TimeComputable](##Algolean.Algorithms.TMQuery.TimeComputable) program.
--/
-structure PolyTimeComputable (f : List Symbol → List Symbol) extends TimeComputable f where
-  /-- This polynomial bounds the time as a function of input length. -/
-  poly : Polynomial ℕ
-  /-- The allowed time is at most the polynomial's value at every input length. -/
-  bounds : ∀ n, timeBound n ≤ poly.eval n
-
-/-- A completed execution also satisfies any larger time bound. -/
-theorem OutputsWithinTime.mono {tm : SingleTapeTM Symbol}
-    [DecidableEq Symbol] [DecidableEq tm.State] {program : Prog (TMQuery tm) Unit}
-    {input output : List Symbol} {time time' : ℕ}
-    (h : OutputsWithinTime program input output time) (hle : time ≤ time') :
-    OutputsWithinTime program input output time' := by
-  grind [OutputsWithinTime]
-
-/--
-This program computes the identity function by leaving every input unchanged and making no head
-moves.
--/
-noncomputable def TimeComputable.id : TimeComputable (Symbol := Symbol) id := by
-  classical
-  exact {
-    tm := SingleTapeTM.idComputer
-    program := pure ()
-    timeBound := fun _ => 0
-    outputsFunInTime := fun input =>
-      ⟨0, ⟨(), 0⟩, ⟨TMState.init _ input, 0⟩, rfl, rfl, le_rfl⟩ }
-
-/-- The program that leaves its input unchanged has a polynomial time bound of zero. -/
-noncomputable def PolyTimeComputable.id : PolyTimeComputable (Symbol := Symbol) id where
-  toTimeComputable := TimeComputable.id
-  poly := 0
-  bounds _ := by simp [TimeComputable.id]
-
-end TMQuery
 
 /--
 A problem belongs to this class when one fixed program computes a function in polynomial time

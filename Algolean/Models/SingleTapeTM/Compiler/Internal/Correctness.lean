@@ -8,7 +8,7 @@ module
 
 public import Algolean.Models.SingleTapeTM.Compiler.Internal.Machine
 public import Algolean.Models.SingleTapeTM.Compiler.Internal.Time
-public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Models.SingleTapeTM.Computability
 
 /-!
 # Relating query execution to compiled machine execution

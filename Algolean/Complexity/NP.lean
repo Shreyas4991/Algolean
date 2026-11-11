@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Augmented
+public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.Models.SingleTapeTM.Alphabet.Lift
 public import Algolean.Models.SingleTapeTM.Composition.MachineComposition
 

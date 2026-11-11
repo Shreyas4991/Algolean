@@ -6,9 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Models.SingleTapeTM.Description
 public import Algolean.Models.SingleTapeTM.Compiler.Size
-public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Models.SingleTapeTM.Computability
+public import Algolean.Models.SingleTapeTM.Description
 
 import Algolean.Models.SingleTapeTM.Compiler.Internal.Correctness
 import Algolean.Models.SingleTapeTM.Compiler.Internal.Description

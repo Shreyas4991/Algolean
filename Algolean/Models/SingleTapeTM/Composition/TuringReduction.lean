@@ -7,7 +7,8 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Composition.Oracle
-public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Problems.Basic
+public import Mathlib.Algebra.Polynomial.Eval.Defs
 
 /-!
 # Solving one problem by asking questions about another

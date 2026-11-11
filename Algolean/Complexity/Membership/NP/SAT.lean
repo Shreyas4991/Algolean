@@ -6,8 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.SAT.Verification
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
+public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Problems.SAT.Verification
 
 /-!
 # SAT belongs to NP

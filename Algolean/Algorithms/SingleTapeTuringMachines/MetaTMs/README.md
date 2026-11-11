@@ -91,6 +91,13 @@ exact tape, head position, and number of head moves. `Completes` also allows the
 to change. `Computer` and `EncodedComputer` combine a program with its correctness and time
 proofs; `PolyTimeComputable` records a polynomial time bound.
 
+For a complete program, `TMSolves` states correctness and time and total space bounds on every
+input word. `TMQuery.ComputesWithin` requires a complete output word under the final head.
+`TMQuery.DecidesWithin` observes a fixed tape or state condition at completion and permits
+other tape contents to remain. These predicates are defined in `Models/SingleTapeTM/Solves`.
+The computation records in `Models/SingleTapeTM/Computability` have proved conversions to and
+from the word-computation predicate, preserving the program and its time bound.
+
 The Query cost counts head moves. Compilation gives a transition-count bound with a constant
 factor and an additive constant, both fixed by the chosen program and alphabet. These constants
 are independent of the input and its length.
