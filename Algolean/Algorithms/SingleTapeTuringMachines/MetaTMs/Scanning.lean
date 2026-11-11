@@ -8,6 +8,7 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Basic
 public import Algolean.Models.SingleTapeTM.Composition.While
+public import Algolean.Models.SingleTapeTM.Tape
 
 /-!
 # Moving across a contiguous block
@@ -102,13 +103,14 @@ def seekRightBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TM
   whileₜ (notₜ tape =ₜ none) do
     moveₜ .Right
 
-/-- The rightward scan preserves the word and uses one move per remaining symbol. -/
-@[spec] theorem seekRightBlank_spec (left right : List Symbol) (label : Option tm.State)
-    (origin : ℤ) (elapsed : Nat) :
-    ⦃ fun cost current => current.config = ⟨label, cursor left right⟩ ∧
+/-- The scan stops on the next blank and preserves all cells beyond it. -/
+@[spec] theorem seekRightBlank_segment_spec (left tail : StackTape Symbol) (right : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left right tail⟩ ∧
         current.headPos = origin ∧ cost.steps = elapsed ⦄
       seekRightBlank tm
-    ⦃ fun _ cost final => final.config = ⟨label, cursor (right.reverse ++ left) []⟩ ∧
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.prepend right.reverse left) [] tail⟩ ∧
         final.headPos = origin + right.length ∧ cost.steps = elapsed + right.length ⦄ := by
   induction right generalizing left origin elapsed with
   | nil =>
@@ -118,10 +120,23 @@ def seekRightBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TM
   | cons bit right ih =>
     unfold seekRightBlank
     vcgen [Spec.while_step_spec (loop := seekRightBlank tm) (hloop := rfl),
-      ih (bit :: left) (origin + 1) (elapsed + 1)]
-    all_goals simp_all [TMState.move, TMState.moveCost,
-      List.reverse_cons, List.append_assoc, add_assoc]
+      ih (StackTape.cons (some bit) left) (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
+      StackTape.prepend_append, add_assoc]
     all_goals lia
+
+/-- The rightward scan preserves the word and uses one move per remaining symbol. -/
+@[spec] theorem seekRightBlank_spec (left right : List Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left right⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekRightBlank tm
+    ⦃ fun _ cost final => final.config = ⟨label, cursor (right.reverse ++ left) []⟩ ∧
+        final.headPos = origin + right.length ∧ cost.steps = elapsed + right.length ⦄ := by
+  vcgen [seekRightBlank_segment_spec (StackTape.mapSome left) StackTape.nil right
+    label origin elapsed]
+  all_goals simp_all [cursor, BiTape.segment]
+  all_goals split <;> simp_all
 
 /--
 Starting from `cursor left right`, the rightward scan crosses every symbol of `right` and stops on
@@ -162,6 +177,34 @@ private theorem seekLeftBlank_blank_spec (view : BiTape Symbol) (hblank : view.h
   vcgen [Spec.while_false_spec]
   simp_all
 
+/-- The scan stops on the blank before the word and preserves the regions on both sides. -/
+@[spec] theorem seekLeftBlank_segment_spec (base tail : StackTape Symbol)
+    (left : List Symbol) (bit : Symbol) (right : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        BiTape.segment (StackTape.prepend left (StackTape.cons none base)) (bit :: right) tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekLeftBlank tm
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.segment base []
+        (StackTape.prepend (left.reverse ++ bit :: right) (StackTape.cons none tail))⟩ ∧
+        final.headPos = origin - (left.length + 1 : Nat) ∧
+        cost.steps = elapsed + left.length + 1 ⦄ := by
+  induction left generalizing bit right origin elapsed with
+  | nil =>
+    unfold seekLeftBlank
+    vcgen [Spec.while_step_spec (loop := seekLeftBlank tm) (hloop := rfl),
+      seekLeftBlank_blank_spec
+        (BiTape.segment base [] (StackTape.prepend (bit :: right) (StackTape.cons none tail)))
+        rfl label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
+  | cons previous left ih =>
+    unfold seekLeftBlank
+    vcgen [Spec.while_step_spec (loop := seekLeftBlank tm) (hloop := rfl),
+      ih previous (bit :: right) (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
+      List.append_assoc, sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /-- The leftward scan preserves the word and stops on its preceding blank. -/
 @[spec] theorem seekLeftBlank_spec (left : List Symbol) (bit : Symbol) (right : List Symbol)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
@@ -171,19 +214,9 @@ private theorem seekLeftBlank_blank_spec (view : BiTape Symbol) (hblank : view.h
     ⦃ fun _ cost final => final.config = ⟨label, before (left.reverse ++ bit :: right)⟩ ∧
         final.headPos = origin - (left.length + 1 : Nat) ∧
         cost.steps = elapsed + left.length + 1 ⦄ := by
-  induction left generalizing bit right origin elapsed with
-  | nil =>
-    unfold seekLeftBlank
-    vcgen [Spec.while_step_spec (loop := seekLeftBlank tm) (hloop := rfl),
-      seekLeftBlank_blank_spec (before (bit :: right)) rfl label (origin - 1) (elapsed + 1)]
-    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
-  | cons previous left ih =>
-    unfold seekLeftBlank
-    vcgen [Spec.while_step_spec (loop := seekLeftBlank tm) (hloop := rfl),
-      ih previous (bit :: right) (origin - 1) (elapsed + 1)]
-    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
-      List.append_assoc, sub_eq_add_neg, add_assoc]
-    all_goals lia
+  vcgen [seekLeftBlank_segment_spec StackTape.nil StackTape.nil left bit right
+    label origin elapsed]
+  all_goals simp_all [cursor, before, BiTape.segment]
 
 /--
 Starting on the displayed `bit`, the leftward scan crosses that symbol and all of `left` before
@@ -214,6 +247,29 @@ def seekLeftEnd (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQue
   seekLeftBlank tm
   moveₜ .Right
 
+/-- Returning to the region's first cell preserves its contents and the neighboring regions. -/
+@[spec] theorem seekLeftEnd_segment_spec (base tail : StackTape Symbol) (left right : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, BiTape.segment (StackTape.prepend left (StackTape.cons none base)) right tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekLeftEnd tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.cons none base) (left.reverse ++ right) tail⟩ ∧
+        final.headPos = origin - left.length ∧ cost.steps = elapsed + left.length + 2 ⦄ := by
+  cases left with
+  | nil =>
+    vcgen [seekLeftEnd, seekLeftBlank_blank_spec
+      (BiTape.segment base [] (StackTape.prepend right (StackTape.cons none tail)))
+      rfl label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
+  | cons bit left =>
+    vcgen [seekLeftEnd, seekLeftBlank_segment_spec base tail left bit right
+      label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
+      List.append_assoc, sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /-- Returning to the first symbol preserves the word and counts both end moves. -/
 @[spec] theorem seekLeftEnd_spec (left right : List Symbol) (label : Option tm.State)
     (origin : ℤ) (elapsed : Nat) :
@@ -222,16 +278,9 @@ def seekLeftEnd (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQue
       seekLeftEnd tm
     ⦃ fun _ cost final => final.config = ⟨label, cursor [] (left.reverse ++ right)⟩ ∧
         final.headPos = origin - left.length ∧ cost.steps = elapsed + left.length + 2 ⦄ := by
-  cases left with
-  | nil =>
-    vcgen [seekLeftEnd,
-      seekLeftBlank_blank_spec (before right) rfl label (origin - 1) (elapsed + 1)]
-    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
-  | cons bit left =>
-    vcgen [seekLeftEnd, seekLeftBlank_spec left bit right label (origin - 1) (elapsed + 1)]
-    all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
-      List.append_assoc, sub_eq_add_neg, add_assoc]
-    all_goals lia
+  vcgen [seekLeftEnd_segment_spec StackTape.nil StackTape.nil left right label origin elapsed]
+  all_goals simp_all [cursor, BiTape.segment]
+  all_goals split <;> simp_all
 
 /--
 Starting from `cursor left right`, this program preserves the block and finishes on its first
