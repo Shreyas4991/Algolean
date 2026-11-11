@@ -78,6 +78,13 @@ variable [Fintype Γ] [DecidableEq Γ] {problem : Instance Γ}
   (List.finRange problem.certificateLength).flatMap fun position =>
     CNF.exactlyOne ((Finset.univ : Finset Γ).toList.map (Variable.certificate position))
 
+/-- These clauses choose exactly one symbol in every recorded tape cell at every time. -/
+@[expose] noncomputable def tapeClauses (problem : Instance Γ) : CNF (Variable problem) :=
+  (List.finRange (problem.time + 1)).flatMap fun time =>
+    (List.finRange (width problem)).flatMap fun position =>
+      CNF.exactlyOne ((Finset.univ : Finset (Option (TapeSymbol Γ))).toList.map
+        (Variable.tape time position))
+
 /--
 These clauses require one head position and state per row, and exactly one symbol per cell.
 The existing SAT construction for exactly one choice is used for each of these requirements.
@@ -86,10 +93,7 @@ noncomputable def choiceClauses (problem : Instance Γ) : CNF (Variable problem)
   certificateClauses problem ++
   ((List.finRange (problem.time + 1)).flatMap (fun time =>
     CNF.exactlyOne ((controlChoices problem).map (Variable.head time))) ++
-  (List.finRange (problem.time + 1)).flatMap (fun time =>
-    (List.finRange (width problem)).flatMap fun position =>
-      CNF.exactlyOne ((Finset.univ : Finset (Option (TapeSymbol Γ))).toList.map
-        (Variable.tape time position))))
+  tapeClauses problem)
 
 /-- This assignment records precisely the state, head position, and cells of each row. -/
 @[expose] def rowAssignment (certificate : List.Vector Γ problem.certificateLength)
@@ -104,7 +108,7 @@ private theorem choices_iff (problem : Instance Γ) (assignment : Variable probl
       (∀ position, ∃! symbol, assignment (.certificate position symbol) = true) ∧
       ((∀ time, ∃! control, assignment (.head time control) = true) ∧
       (∀ time position, ∃! symbol, assignment (.tape time position symbol) = true)) := by
-  simp only [choiceClauses, certificateClauses, CNF.satisfiedBy_append, CNF.satisfiedBy_flatMap,
+  simp only [choiceClauses, certificateClauses, tapeClauses, CNF.satisfiedBy_append, CNF.satisfiedBy_flatMap,
     List.mem_finRange, forall_const]
   apply and_congr
   · apply forall_congr'
@@ -257,12 +261,12 @@ theorem choiceClauses_bounds (problem : Instance Γ) :
               hflat (List.finRange (width problem)) _ limit
                 (fun position _ => hlength _ (htape time position)))
     simp only [List.length_finRange] at hc hh ht
-    simp only [choiceClauses, certificateClauses, List.length_append]
+    simp only [choiceClauses, certificateClauses, tapeClauses, List.length_append]
     change _ ≤ (problem.certificateLength + (problem.time + 1) * (width problem + 1)) * limit
     simp only [Nat.add_mul, Nat.mul_add, Nat.mul_one, Nat.one_mul, Nat.mul_assoc]
       at hc hh ht ⊢
     lia
-  · simp only [choiceClauses, certificateClauses, List.forall_mem_append, List.forall_mem_flatMap]
+  · simp only [choiceClauses, certificateClauses, tapeClauses, List.forall_mem_append, List.forall_mem_flatMap]
     exact ⟨fun position _ => hclause _ (hcert position),
       fun time _ => hclause _ (hhead time),
       fun time _ position _ => hclause _ (htape time position)⟩

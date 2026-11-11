@@ -390,7 +390,7 @@ private theorem writeItems_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
         simp only [itemWord, List.length_append] at hfirst
         dsimp [parts, regionSpan, itemBudget]
         simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
-          List.length_replicate, List.length_cons, List.length_nil, List.length_append]
+          List.length_replicate, List.length_cons, List.length_append]
         ring_nf at *
         lia
       have ha := appendAcross_le_spec (tm := tm) (code (.inr 3) ++ code (.inr 4))
@@ -417,23 +417,26 @@ private def items (formula : CNF (Option (TMSAT.TapeSymbol Γ))) :
     List (Option (Literal (Option (TMSAT.TapeSymbol Γ)))) :=
   formula.flatMap fun clause => clause.map some ++ [none]
 
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem items_word (code : CodeSymbol → List Γ) (time position : Nat)
     (formula : CNF (Option (TMSAT.TapeSymbol Γ))) :
     (items formula).flatMap (itemWord code time position) =
       (formulaPrefix (formula.rename fun symbol =>
         Naming.bits .tape (encodingNatBool.encode time) (encodingNatBool.encode position)
           (symbolBits symbol))).flatMap code := by
-  let name := fun symbol => Naming.bits .tape (encodingNatBool.encode time)
+  let name : Option (TMSAT.TapeSymbol Γ) → SAT.Variable := fun symbol =>
+    Naming.bits .tape (encodingNatBool.encode time)
     (encodingNatBool.encode position) (symbolBits symbol)
   have hc (clause : Clause (Option (TMSAT.TapeSymbol Γ))) :
       (clause.map some ++ [none]).flatMap (itemWord code time position) =
-        (certificateEncoding.encode (clause.rename name) ++ [(.inr 4 : CodeSymbol)]).flatMap code := by
+        (certificateEncoding.encode (clause.rename name) ++
+          [(.inr 4 : CodeSymbol)]).flatMap code := by
     induction clause with
     | nil => simp [itemWord, Clause.rename, certificateEncoding_encode_nil]
     | cons literal rest ih =>
       cases literal <;>
         simp [itemWord, sign, Clause.rename, Literal.rename, certificateEncoding_encode_pos,
-          certificateEncoding_encode_neg, certificateEncoding_encode_nil, name,
+          certificateEncoding_encode_neg, name,
           List.flatMap_append, List.flatMap_map, List.append_assoc, ih]
   induction formula with
   | nil => simp [items, formulaPrefix, CNF.rename]
@@ -446,30 +449,35 @@ private def rowWord (code : CodeSymbol → List Γ)
   (List.range positions).flatMap fun position =>
     (items (CNF.exactlyOne symbols)).flatMap (itemWord code time position)
 
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem rowWord_succ (code : CodeSymbol → List Γ)
     (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time positions : Nat) :
     rowWord code symbols time (positions + 1) = rowWord code symbols time positions ++
       (items (CNF.exactlyOne symbols)).flatMap (itemWord code time positions) := by
   simp [rowWord, List.range_succ]
 
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem rowWord_length_mono (code : CodeSymbol → List Γ)
     (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time : Nat) {first second : Nat}
     (h : first ≤ second) :
     (rowWord code symbols time first).length ≤ (rowWord code symbols time second).length :=
   ((List.range_sublist.mpr h).flatMap _).length_le
 
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_eq_rows (code : CodeSymbol → List Γ)
     (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions : Nat) :
     word code symbols times positions =
       (List.range times).flatMap fun time => rowWord code symbols time positions := by
   simp [word, rowWord, items_word, symbolBits]
 
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_succ (code : CodeSymbol → List Γ)
     (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions : Nat) :
     word code symbols (times + 1) positions = word code symbols times positions ++
       rowWord code symbols times positions := by
   simp [word_eq_rows, List.range_succ]
 
+omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_length_mono (code : CodeSymbol → List Γ)
     (symbols : List (Option (TMSAT.TapeSymbol Γ))) (positions : Nat) {first second : Nat}
     (h : first ≤ second) :
@@ -508,17 +516,21 @@ private theorem positions_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     have hi : time + timeRest + index + rest + input.length +
         (output ++ rowWord code symbols time index ++
           (items (CNF.exactlyOne symbols)).flatMap (itemWord code time index)).length ≤ size := by
-      rw [← List.append_assoc, ← rowWord_succ]
+      rw [List.append_assoc, ← rowWord_succ]
       simp only [List.length_append] at hp hsize ⊢
       lia
     vcgen [writeItems_spec zero one hne tick code width hwidth (items (CNF.exactlyOne symbols))
       time timeRest index rest input (output ++ rowWord code symbols time index) size
       (by simpa only [List.append_assoc] using hi) label position steps]
     all_goals
-      simp_all [BlockAction, body, bound, left, tails, marked, counterLeft, unaryWord,
+      simp_all [bound, left, tails, marked, counterLeft, unaryWord,
         rowWord_succ, List.append_assoc]
-  vcgen [forBlocks_spec tick [] positions (fun _ => left.tail) tails label body bound ha
-    origin elapsed]
+  have hrun := forBlocks_spec tick [] positions (fun _ => left.tail) tails label body bound ha
+    origin elapsed
+  change Std.WP.Triple
+    (forBlocks tm tick [] (writeItems zero one tick code (items (CNF.exactlyOne symbols))))
+    _ _ _ at hrun
+  vcgen [hrun]
   all_goals simp_all [left, tails, body, bound, counterLeft, unaryWord, rowWord]
 
 private def visitPositions (tick : Γ) (action : Prog (TMQuery tm) Unit) :
@@ -530,6 +542,52 @@ private def visitPositions (tick : Γ) (action : Prog (TMQuery tm) Unit) :
   previousRegion tm
   moveₜ .Left
 
+private def outerMarked (tick : Γ) (time timeRest positions : Nat)
+    (input output : List Γ) : BiTape Γ :=
+  BiTape.segment (StackTape.mapSome (List.replicate time tick).reverse) []
+    (StackTape.separateWords [List.replicate timeRest tick, List.replicate positions tick, input]
+      (StackTape.mapSome output))
+
+private theorem visitPositions_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
+    (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
+    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time timeRest positions : Nat)
+    (input output : List Γ) (size : Nat)
+    (hsize : time + timeRest + positions + input.length +
+      (output ++ rowWord code symbols time positions).length ≤ size)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, outerMarked tick time timeRest positions input output⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      visitPositions tick (writeItems (tm := tm) zero one tick code (items (CNF.exactlyOne symbols)))
+    ⦃ fun _ cost final => final.config = ⟨label,
+        outerMarked tick time timeRest positions input
+          (output ++ rowWord code symbols time positions)⟩ ∧
+        final.headPos = origin ∧ cost.steps ≤ elapsed + 2 * timeRest + 8 +
+          positions * ((items (CNF.exactlyOne symbols)).length * itemBudget width size + 2) ⦄ := by
+  let before := List.replicate time tick
+  let suffix := List.replicate timeRest tick
+  let source := List.replicate positions tick
+  let written := output ++ rowWord code symbols time positions
+  let inner := positions * ((items (CNF.exactlyOne symbols)).length * itemBudget width size + 2) + 2
+  have hp := positions_spec zero one hne tick code width hwidth symbols time timeRest positions
+    input output size hsize label (origin + (timeRest + 2 : Nat)) (elapsed + timeRest + 2)
+  vcgen [visitPositions,
+    seekRightBlank_le_spec (tm := tm) (StackTape.cons none (StackTape.mapSome before.reverse))
+      (StackTape.separateWords [source, input] (StackTape.mapSome output)) suffix
+      label (origin + 1) (elapsed + 1),
+    hp,
+    previousRegion_le_spec (tm := tm) (StackTape.mapSome before.reverse) suffix source
+      (StackTape.separateWords [input] (StackTape.mapSome written)) label
+      (origin + (timeRest + 2 : Nat)) (elapsed + timeRest + 2 + inner)]
+  all_goals
+    cases timeRest
+    all_goals cases positions
+    all_goals
+      simp_all [outerMarked, before, suffix, source, written, inner, counterLeft,
+        TMState.move, TMState.moveCost, BiTape.segment, BiTape.moveRight, BiTape.moveLeft,
+        List.replicate_succ]
+      all_goals lia
+
 /--
 This machine template writes the fixed symbol-choice clauses at every time and position
 specified by its two unary words. It reads both indices from the tape and restores the
@@ -540,9 +598,148 @@ def writeChoices (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSymbol 
   forBlocks tm tick []
     (visitPositions tick (writeItems zero one tick code (items (CNF.exactlyOne symbols))))
 
+/-- This states the source words, output, control state, and starting head position. -/
+@[expose] def AtInput (tick : Γ) (times positions : Nat) (input output : List Γ)
+    (label : Option tm.State) (origin : ℤ) (current : TMState tm) : Prop :=
+  current.config = ⟨label, layout tick times positions input output⟩ ∧ current.headPos = origin
+
+/-- This polynomial bounds execution in terms of source length and the total output length. -/
+noncomputable def timeBound (width : Nat) (symbols : List (Option (TMSAT.TapeSymbol Γ))) :
+    Polynomial Nat :=
+  Polynomial.C ((items (CNF.exactlyOne symbols)).length * 4096 * (width + 1) + 16) *
+    (Polynomial.X + 8) ^ 4
+
+omit [Inhabited Γ] [Fintype Γ] [Encodable Γ] in
+private theorem loopTime_le (width : Nat) (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (times positions size : Nat) (ht : times ≤ size) (hp : positions ≤ size) :
+    times * (2 * times + 10 +
+      positions * ((items (CNF.exactlyOne symbols)).length * itemBudget width size + 2)) + 2 ≤
+        (timeBound width symbols).eval size := by
+  calc
+    _ ≤ size * (2 * size + 10 +
+        size * ((items (CNF.exactlyOne symbols)).length * itemBudget width size + 2)) + 2 := by
+      gcongr
+    _ ≤ _ := by
+      simp only [timeBound, Polynomial.eval_mul, Polynomial.eval_C, Polynomial.eval_pow,
+        Polynomial.eval_add, Polynomial.eval_X, Polynomial.eval_ofNat, itemBudget]
+      ring_nf
+      lia
+
+/--
+The program appends exactly the SAT clauses for the two unary bounds. It preserves both
+bounds, the input, earlier output, and the starting head position. One polynomial bounds the
+execution for every pair of bounds and every input and output word.
+-/
+@[spec] theorem writeChoices_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
+    (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
+    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions : Nat)
+    (input output : List Γ) (size : Nat)
+    (hsize : times + positions + input.length +
+      (output ++ word code symbols times positions).length ≤ size)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => AtInput tick times positions input output label origin current ∧
+        cost.steps ≤ elapsed ⦄
+      writeChoices tm zero one tick code symbols
+    ⦃ fun _ cost final => AtInput tick times positions input
+        (output ++ word code symbols times positions) label origin final ∧
+        cost.steps ≤ elapsed + (timeBound width symbols).eval size ⦄ := by
+  let body := visitPositions tick
+    (writeItems (tm := tm) zero one tick code (items (CNF.exactlyOne symbols)))
+  let inner := (items (CNF.exactlyOne symbols)).length * itemBudget width size
+  let bound := 2 * times + 8 + positions * (inner + 2)
+  let tails := fun index => StackTape.separateWords [List.replicate positions tick, input]
+    (StackTape.mapSome (output ++ word code symbols index positions))
+  have ha : BlockAction tick [] times (fun _ => StackTape.nil) tails label body bound := by
+    intro index rest hcount position steps
+    have hp := word_length_mono code symbols positions (show index + 1 ≤ times by lia)
+    have hi : index + rest + positions + input.length +
+        (output ++ word code symbols index positions ++ rowWord code symbols index positions).length ≤
+          size := by
+      rw [List.append_assoc, ← word_succ]
+      simp only [List.length_append] at hp hsize ⊢
+      lia
+    vcgen [visitPositions_spec zero one hne tick code width hwidth symbols index rest positions
+      input (output ++ word code symbols index positions) size
+      (by simpa only [List.append_assoc] using hi) label position steps]
+    all_goals
+      simp_all [bound, inner, tails, outerMarked, unaryWord,
+        word_succ, List.append_assoc]
+      all_goals lia
+  have hz : word code symbols 0 positions = [] := rfl
+  have ht := loopTime_le width symbols times positions size (by lia) (by lia)
+  have hrun := forBlocks_spec tick [] times (fun _ => StackTape.nil) tails label body
+    bound ha origin elapsed
+  change Std.WP.Triple (forBlocks tm tick [] (visitPositions tick
+    (writeItems zero one tick code (items (CNF.exactlyOne symbols))))) _ _ _ at hrun
+  vcgen [writeChoices, hrun]
+  all_goals
+    simp_all [AtInput, layout, tails, body, bound, inner, unaryWord]
+    all_goals lia
+
 /-- This fixes all possible cell values once and writes their choices for every recorded cell. -/
 noncomputable def writeTapeChoices (tm : SingleTapeTM Γ) (zero one tick : Γ)
     (code : CodeSymbol → List Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   writeChoices tm zero one tick code (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+
+omit [Inhabited Γ] in
+/-- The writer's output is precisely the existing tape-symbol clauses, with their existing names. -/
+theorem word_eq_tapeClauses (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+    word code (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+        (problem.time + 1) (TMSATToSAT.width problem) =
+      (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code := by
+  let symbols := (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+  have hindices (n : Nat) : List.range n = (List.finRange n).map Fin.val := by
+    ext i <;> simp
+  have hmap (time : Fin (problem.time + 1)) (position : Fin (TMSATToSAT.width problem)) :
+      (CNF.exactlyOne (symbols.map (Variable.tape time position))).rename Variable.name =
+        (CNF.exactlyOne symbols).rename (fun symbol =>
+          Naming.bits .tape (encodingNatBool.encode time.val) (encodingNatBool.encode position.val)
+            (symbolBits symbol)) := by
+    rw [← CNF.rename_exactlyOne (Variable.tape time position)
+      (by intro first second h; cases h; rfl)]
+    simp only [CNF.rename, Clause.rename, List.map_map, Function.comp_def]
+    congr 1
+    funext clause
+    congr 1
+    funext literal
+    cases literal <;> simp [Literal.rename, Naming.bits, symbolBits, Variable.name]
+  have hformula : (tapeClauses problem).rename Variable.name =
+      (List.finRange (problem.time + 1)).flatMap fun time =>
+        (List.finRange (TMSATToSAT.width problem)).flatMap fun position =>
+          (CNF.exactlyOne symbols).rename (fun symbol =>
+            Naming.bits .tape (encodingNatBool.encode time.val) (encodingNatBool.encode position.val)
+              (symbolBits symbol)) := by
+    simp only [tapeClauses, CNF.rename, List.map_flatMap]
+    congr 1
+    funext time
+    congr 1
+    funext position
+    exact hmap time position
+  rw [hformula]
+  simp only [word, hindices, List.flatMap_map, formulaPrefix, List.flatMap_assoc, symbols,
+    CNF.rename, List.map_flatMap, symbolBits]
+
+/--
+The program writes exactly the tape-symbol clauses of the given instance. The instance occurs
+only in the specification. The running program reads its two bounds from the tape.
+-/
+@[spec] theorem writeTapeChoices_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
+    (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
+    (problem : TMSAT.Instance Γ) (input output : List Γ) (size : Nat)
+    (hsize : problem.time + 1 + TMSATToSAT.width problem + input.length +
+      (output ++ (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code).length ≤ size)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => AtInput tick (problem.time + 1) (TMSATToSAT.width problem)
+        input output label origin current ∧ cost.steps ≤ elapsed ⦄
+      writeTapeChoices tm zero one tick code
+    ⦃ fun _ cost final => AtInput tick (problem.time + 1) (TMSATToSAT.width problem) input
+        (output ++ (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code)
+        label origin final ∧ cost.steps ≤ elapsed +
+          (timeBound width (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList).eval size ⦄ := by
+  simpa only [writeTapeChoices, word_eq_tapeClauses] using
+    writeChoices_spec (tm := tm) zero one hne tick code width hwidth
+      (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+      (problem.time + 1) (TMSATToSAT.width problem) input output size
+      (by simpa only [word_eq_tapeClauses] using hsize) label origin elapsed
 
 end Algolean.Algorithms.TMSATToSAT.TapeChoices

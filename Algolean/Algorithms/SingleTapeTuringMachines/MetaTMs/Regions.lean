@@ -103,6 +103,23 @@ def previousRegion (tm : SingleTapeTM Γ) : Prog (TMQuery tm) Unit := do [TMQuer
     simp_all [TMState.move, TMState.moveCost]
     all_goals lia
 
+/-- Returning to the preceding word preserves the tape and increases its upper time bound. -/
+theorem previousRegion_le_spec (left : StackTape Γ) (preceding current : List Γ)
+    (tail : StackTape Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost initial => initial.config = ⟨label, BiTape.segment
+        (StackTape.cons none (StackTape.prepend preceding.reverse (StackTape.cons none left)))
+        current tail⟩ ∧ initial.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      previousRegion tm
+    ⦃ fun _ cost final => final.config = ⟨label,
+        BiTape.segment (StackTape.cons none left) preceding
+          (StackTape.prepend current (StackTape.cons none tail))⟩ ∧
+        final.headPos = origin - (preceding.length + 1 : Nat) ∧
+        cost.steps ≤ elapsed + preceding.length + 3 ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial machineState ⟨hcfg, hpos, hcost⟩
+  vcgen [previousRegion_spec left preceding current tail label origin initial.steps]
+  all_goals simp_all
+
 /--
 The head returns to the preceding word's first cell, or its ending blank if that word is empty.
 It preserves both words and their neighbors and uses the preceding word's length plus three moves.
