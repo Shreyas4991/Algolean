@@ -23,8 +23,6 @@ the input size.
 
 namespace Algolean.Algorithms.WordRAM
 
-
-
 /-- Lay out an array in consecutive RAM cells starting at address zero, with zero elsewhere.
 This specifies the initial memory supplied to the interpreter; it is not part of the search cost. -/
 def arrayMemory (input : Array (BitVec w)) : Memory w :=
@@ -60,28 +58,63 @@ open Cslib Cslib.FreeM Lean.Order Std.WP
 
 set_option experimental.vcgen true
 
-/-- Reason about word-RAM programs through `timeAndSpaceCost`,
-with memory predicates as assertions. -/
-local instance : HasHandler (WordRAM w) (Memory w → Prop) EStack⟨⟩ :=
-  timeAndSpaceCost.hasHandler
+/-- An index within the address space survives conversion to a word without wrapping. -/
+@[grind =]
+private theorem wordAddress_toNat (i : Nat) (hi : i < 2 ^ w) :
+    (BitVec.ofNat w i).toNat = i := Nat.mod_eq_of_lt hi
+
+@[simp, grind =]
+private theorem arrayMemory_ofNat (input : Array (BitVec w)) (hfits : input.size ≤ 2 ^ w)
+    (i : Nat) (hi : i < input.size) :
+    arrayMemory input (BitVec.ofNat w i) = input[i] := by
+  simp [arrayMemory, BitVec.toNat_ofNat, Nat.mod_eq_of_lt (lt_of_lt_of_le hi hfits), hi]
+
+@[simp, grind =]
+private theorem wordAddress_succ (i : Nat) :
+    BitVec.ofNat w i + 1#w = BitVec.ofNat w (i + 1) := by
+  simp [BitVec.ofNat_add]
+
+@[grind →]
+private theorem length_lt_of_range_eq {n cur : Nat} {pref suff : List Nat}
+    (h : List.range n = pref ++ cur :: suff) : pref.length < n := by
+  have := congrArg List.length h
+  simp at this
+  omega
 
 /-- Linear search returns the first match, or certifies that no array index contains the key. -/
 theorem linearSearch_spec (input : Array (BitVec w)) (key : BitVec w)
     (hfits : input.size ≤ 2 ^ w) :
-    ⦃fun _ => True⦄
+    ⦃fun mem => mem = arrayMemory input⦄
     linearSearch input key hfits
-    ⦃fun _ mem =>
+    ⦃fun r mem => mem = arrayMemory input ∧
       match r with
       | none => ∀ i, i < input.size → input[i]? ≠ some key
-      | some addr => IsFirstMatch input key addr
-    ⦄
-    := by
-    sorry
+      | some addr => IsFirstMatch input key addr⦄ := by
+  vcgen [linearSearch] invariants
+  · Invariant.withEarlyReturnNewDo
+      (onReturn := fun ret addr mem =>
+        IsFirstMatch input key addr ∧ ret = some addr ∧ mem = arrayMemory input)
+      (onContinue := fun pref _ addr mem =>
+        (∀ i, i < pref.length → input[i]? ≠ some key) ∧
+          addr = BitVec.ofNat w pref.length ∧ mem = arrayMemory input)
+  all_goals simp_all [CmpOp.eval, BinOp.eval]
+  all_goals grind [IsFirstMatch]
 
 theorem linearSearch_preserves (mem₀ : Memory w) :
   ⦃fun mem => mem = mem₀⦄ linearSearch input key hfits ⦃fun _ mem => mem = mem₀⦄ := by
-    sorry
+  vcgen [linearSearch] invariants
+  · Invariant.withEarlyReturnNewDo
+      (onReturn := fun ret addr mem => mem = mem₀)
+      (onContinue := fun pref _ addr mem => mem = mem₀)
+  all_goals simp_all [CmpOp.eval]
 
+
+theorem linearSearch_correct (input : Array (BitVec w)) (key : BitVec w)
+    (hfits : input.size ≤ 2 ^ w) :
+    match ((linearSearch input key hfits).evalM timeAndSpaceCost (arrayMemory input)).1 with
+    | none => ∀ i, i < input.size → input[i]? ≠ some key
+    | some addr => IsFirstMatch input key addr :=
+  (ModelM.evalM_of_triple timeAndSpaceCost (linearSearch_spec input key hfits) _ rfl).2
 
 end VCGen
 

@@ -318,6 +318,16 @@ theorem ModelM.query_spec [Monad m] [WPMonad m Pred EPred]
   let _inst := M.hasHandler
   exact Cslib.FreeM.Spec.lift_FreeM q
 
+
+theorem ModelM.evalM_of_triple {σ α : Type u} (M : ModelM Q (StateM σ) Cost) {P : Prog Q α}
+    {pre : σ → Prop} {post : α → σ → Prop}
+    (h : let _ : HasHandler Q (σ → Prop) EStack⟨⟩ := M.hasHandler
+      Triple P pre post ())
+    (s₀ : σ) (hpre : pre s₀) :
+    post (P.evalM M s₀).1 (P.evalM M s₀).2 := by
+  let _ : HasHandler Q (σ → Prop) EStack⟨⟩ := M.hasHandler
+  exact M.wp_le_wp_evalM P post () s₀ (h.le_wp s₀ hpre)
+
 end WeakestPrecondition
 
 end Algolean.Algorithms
