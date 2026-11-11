@@ -177,6 +177,18 @@ theorem segment_moveRight_iterate (left : StackTape Symbol) (crossed suffix : Li
     simpa [Function.iterate_succ_apply, List.reverse_cons, StackTape.prepend_append] using
       ih (StackTape.cons (some symbol) left)
 
+/-- Moving back across the displayed prefix restores the head to that prefix's first cell. -/
+theorem segment_moveLeft_iterate (left : StackTape Symbol) (crossed suffix : List Symbol)
+    (tail : StackTape Symbol) :
+    moveLeft^[crossed.length] (segment (StackTape.prepend crossed.reverse left) suffix tail) =
+      segment left (crossed ++ suffix) tail := by
+  induction crossed generalizing left with
+  | nil => simp
+  | cons symbol crossed ih =>
+    simp only [List.length_cons, List.reverse_cons, StackTape.prepend_append]
+    rw [Function.iterate_succ_apply', ih]
+    simp
+
 @[simp] theorem segment_write (left : StackTape Symbol) (old symbol : Symbol) (word : List Symbol)
     (tail : StackTape Symbol) :
     (segment left (old :: word) tail).write (some symbol) =

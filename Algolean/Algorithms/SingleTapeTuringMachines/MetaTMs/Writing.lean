@@ -43,6 +43,37 @@ def writeRight (tm : SingleTapeTM Symbol) : List Symbol → Prog (TMQuery tm) Un
     moveₜ .Right
     writeRight tm word
 
+/--
+Writing over an equally long prefix replaces just that prefix and advances by its length.
+The rest of the word and the tape beyond its separating blank remain unchanged.
+-/
+theorem writeRight_overwrite (left tail : StackTape Symbol) (word old suffix : List Symbol)
+    (hlen : old.length = word.length) (s : TMState tm)
+    (hs : s.config.BiTape = BiTape.segment left (old ++ suffix) tail) :
+    Runs (writeRight tm word) s
+      (BiTape.segment (StackTape.prepend word.reverse left) suffix tail)
+      (s.headPos + word.length) word.length := by
+  induction word generalizing left old s with
+  | nil =>
+    have hold : old = [] := List.eq_nil_of_length_eq_zero hlen
+    subst old
+    refine ⟨0, s, completes_pure s, ?_, by simp, rfl⟩
+    change s.config = {s.config with BiTape := BiTape.segment left suffix tail}
+    have ht : s.config.BiTape = BiTape.segment left suffix tail := by simpa using hs
+    rw [← ht]
+  | cons symbol word ih =>
+    cases old with
+    | nil => simp at hlen
+    | cons previous old =>
+      have hw := (write_correct s (some symbol)).append_move .Right
+      have hrest := hw.seq (q := writeRight tm word) (by
+        intro middle hm hp
+        simpa [List.reverse_cons, StackTape.prepend_append, hp, add_assoc] using
+          ih (StackTape.cons (some symbol) left) old (by simpa using hlen) middle
+            (by simp [hm, hs]))
+      simpa [writeRight, List.reverse_cons, StackTape.prepend_append,
+        add_assoc, add_comm, add_left_comm] using hrest
+
 /-- Writing on the blank right of a region adds the word and uses one move per written symbol. -/
 theorem writeRight_correct (left : StackTape Symbol) (word : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = segment left [] StackTape.nil) :

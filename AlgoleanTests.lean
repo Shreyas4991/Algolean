@@ -34,4 +34,5 @@ public import AlgoleanTests.TMSAT
 public import AlgoleanTests.TMSATParsing
 public import AlgoleanTests.TMSATToSAT
 public import AlgoleanTests.TMSATToSATTape
+public import AlgoleanTests.TMSATWriting
 public import AlgoleanTests.WordRAMExamples

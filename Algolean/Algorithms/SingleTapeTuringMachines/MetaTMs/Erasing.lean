@@ -6,20 +6,27 @@ Authors: Shreyas Srinivas
 
 module
 
+public import Algolean.Models.SingleTapeTM.Tape
+
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 
 /-!
-# Erasing a block and returning to its starting cell
+# Erasing tape cells
 
-The Turing machine program `eraseLeft` erases occupied cells while moving left and stops on the
-first blank. `eraseToLeft` starts on the blank after a block, erases back through it, and finishes
-at the coordinate where its first symbol used to be. `eraseBlock` first scans right from the
-beginning of the input and then uses this backward erasure to clear the whole block and restore the
-head.
+* `eraseAndMove` erases the current cell and moves one cell to the right.
+* `eraseRight` erases occupied cells while moving right and stops on the first blank. It preserves
+  the tape beyond that blank and makes one head move for each erased cell.
+* `eraseUntil` erases cells while moving right until it reaches a chosen symbol. It leaves that
+  symbol and everything after it unchanged.
+* `eraseLeft` erases occupied cells while moving left and stops on the first blank.
+* `eraseToLeft` starts on the blank after a block, erases the block, and finishes where its first
+  symbol used to be.
+* `eraseBlock` clears the input and restores the head to its starting position. For an input of
+  length `n`, including empty input, it uses exactly `2 * n + 2` head moves.
 
-The full program also handles empty input and uses exactly `2 * bits.length + 2` head moves. Erasing
-a symbol does not remove its cell from the recorded tape range, so previously allocated space
-remains part of the machine's history after the tape becomes blank.
+These are machine templates. The containing machine fixes their parameters once, independently
+of the input and its length. Erasing a symbol leaves its cell in the recorded tape history, so
+previously allocated space remains recorded after erasure.
 -/
 
 @[expose] public section
@@ -72,22 +79,36 @@ def eraseRight (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuer
   whileₜ (notₜ tape =ₜ none) do
     eraseAndMove tm
 
-/-- Erasing a word to the right clears the tape and uses one head move for each input symbol. -/
-theorem eraseRight_correct (word : List Symbol) (s : TMState tm)
-    (htape : s.config.BiTape = cursor [] word) :
-    Runs (eraseRight tm) s BiTape.nil (s.headPos + word.length) word.length := by
+/--
+Erasing the first word preserves the tape beyond its following blank and stops on that blank.
+The number of head moves equals the erased word's length.
+-/
+theorem eraseRight_segment (word : List Symbol) (tail : StackTape Symbol) (s : TMState tm)
+    (htape : s.config.BiTape = BiTape.segment StackTape.nil word tail) :
+    Runs (eraseRight tm) s (BiTape.segment StackTape.nil [] tail)
+      (s.headPos + word.length) word.length := by
   induction word generalizing s with
   | nil =>
-    simpa [eraseRight, htape] using runs_while_false (.not (.tapeIs none))
-      (eraseAndMove tm) s (by simp [htape, BiTape.nil])
+    simp [eraseRight, htape]
   | cons symbol rest ih =>
     unfold eraseRight
     apply runs_while_step (by simp [htape])
-    have hfirst := eraseAndMove_correct symbol rest s htape
+    have hfirst : Runs (eraseAndMove tm) s (BiTape.segment StackTape.nil rest tail)
+        (s.headPos + 1) 1 := by
+      cases rest <;>
+        simpa [eraseAndMove, htape, BiTape.segment, BiTape.write, BiTape.moveRight] using
+          (write_correct s none).append_move .Right
     have hr := hfirst.seq (q := eraseRight tm) (by
       intro middle hmiddle hpos
       simpa [hpos] using ih middle (by simp [hmiddle]))
     simpa [eraseRight, add_assoc, add_comm, add_left_comm] using hr
+
+/-- Erasing a word to the right clears the tape and uses one head move for each input symbol. -/
+theorem eraseRight_correct (word : List Symbol) (s : TMState tm)
+    (htape : s.config.BiTape = cursor [] word) :
+    Runs (eraseRight tm) s BiTape.nil (s.headPos + word.length) word.length := by
+  simpa [BiTape.segment, BiTape.nil] using eraseRight_segment word StackTape.nil s
+    (by cases word <;> simpa [cursor, BiTape.segment] using htape)
 
 /--
 This Turing machine program erases cells while moving right until it reaches `ending`.

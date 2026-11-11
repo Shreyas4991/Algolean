@@ -66,6 +66,7 @@ public import Algolean.Complexity.Reductions.TMSATToSAT.Size
 public import Algolean.Complexity.Reductions.TMSATToSAT.Tape
 public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
 public import Algolean.Complexity.Reductions.TMSATToSAT.Variables
+public import Algolean.Complexity.Reductions.TMSATToSAT.Writing
 public import Algolean.FreeWP.Effects
 public import Algolean.FreeWP.WP
 public import Algolean.FuelExecMonad
