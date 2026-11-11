@@ -30,7 +30,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines.SAT
 
 open Cslib Cslib.Turing TMQuery
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 /--
 This rule records what can come next while reading a formula and its certificate. For example,
@@ -278,35 +280,28 @@ def checkFormat : Prog (TMQuery formatMachine) Unit := do [TMQuery formatMachine
   seekLeftEnd formatMachine
 
 /--
-For every input word, the format checker finishes on its starting cell with the original tape.
-Its state is `inputEnd` exactly when the word is an encoded formula-certificate pair. It uses
-exactly twice the input length plus two head moves, whether the input is correctly written or not.
+The format checker preserves the tape, restores the head, and reports exactly the valid pairs.
 -/
-private theorem checkFormat_correct_impl (word : List Symbol) (s : TMState formatMachine)
-    (htape : s.config.BiTape = cursor [] word) :
-    ∃ cost final, Completes checkFormat s cost final ∧
-      final.config.BiTape = s.config.BiTape ∧ final.headPos = s.headPos ∧
-      (final.config.state = some .inputEnd ↔
-        ∃ formula certificate, word = (Alphabet.wordPair Problems.SAT.CodeSymbol).encode
-          (Problems.SAT.encoding.encode formula,
-            Problems.SAT.certificateEncoding.encode certificate)) ∧
-      cost.steps = 2 * word.length + 2 := by
-  let initial : TMState formatMachine := {s with config.state := some .clauseStart}
-  obtain ⟨a, middle, hscan, hmiddle, hstate, hpos, ha⟩ :=
-    scan_correct formatTable [] word .clauseStart initial (by simpa [initial] using htape) rfl
-  obtain ⟨b, final, hreturn, hfinal, hfinalPos, hb⟩ :=
-    seekLeftEnd_correct word.reverse [] middle (by simpa using hmiddle)
-  refine ⟨0 + a + b, final, (completes_update s .clauseStart).seq hscan |>.seq hreturn,
-    ?_, ?_, ?_, ?_⟩
-  · simpa [htape] using congrArg SingleTapeTM.Cfg.BiTape hfinal
-  · simp [hpos, initial] at hfinalPos
-    simpa using hfinalPos
-  · rw [show final.config.state = some (word.foldl formatNext .clauseStart) by
-      simpa [hstate, formatTable] using congrArg SingleTapeTM.Cfg.state hfinal]
-    simpa using Parsing.foldl_inputEnd_iff word
-  · simp only [TMCost.add_steps, zero_add, ha,
-      List.length_reverse] at hb ⊢
-    lia
+@[spec] theorem checkFormat_spec (word : List Symbol) (label : Option FormatState)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor [] word⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      checkFormat
+    ⦃ fun _ cost final => final.config.BiTape = cursor [] word ∧ final.headPos = origin ∧
+        (final.config.state = some .inputEnd ↔
+          ∃ formula certificate, word = (Alphabet.wordPair Problems.SAT.CodeSymbol).encode
+            (Problems.SAT.encoding.encode formula,
+              Problems.SAT.certificateEncoding.encode certificate)) ∧
+        cost.steps = elapsed + 2 * word.length + 2 ⦄ := by
+  have hformat := Parsing.foldl_inputEnd_iff word
+  vcgen [checkFormat, scan_spec (tm := formatMachine) formatTable StackTape.nil StackTape.nil
+      word .clauseStart origin elapsed,
+    seekLeftEnd_spec (tm := formatMachine) word.reverse []
+      (some (word.foldl formatTable.next .clauseStart))
+      (origin + word.length) (elapsed + word.length)]
+  all_goals cases word
+  all_goals simp_all [formatTable, cursor, BiTape.segment]
+  all_goals lia
 
 /--
 For every input word, the format checker finishes on its starting cell with the original tape.
@@ -321,8 +316,12 @@ theorem checkFormat_correct (word : List Symbol) (s : TMState formatMachine)
         ∃ formula certificate, word = (Alphabet.wordPair Problems.SAT.CodeSymbol).encode
           (Problems.SAT.encoding.encode formula,
             Problems.SAT.certificateEncoding.encode certificate)) ∧
-      cost.steps = 2 * word.length + 2 :=
-  checkFormat_correct_impl word s htape
+      cost.steps = 2 * word.length + 2 := by
+  apply Spec.completes
+  vcgen [checkFormat_spec word s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 
 end Algolean.Algorithms.SingleTapeTuringMachines.SAT

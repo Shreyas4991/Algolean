@@ -35,7 +35,9 @@ namespace Algolean.Algorithms.TMSATToSAT.Parsing
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Copying Alphabet Problems.TMSAT
 open Problems.TMSAT.CodeSymbol
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Γ : Type} [Fintype Γ]
 
@@ -317,6 +319,58 @@ private theorem firstSymbol_code (symbol : CodeSymbol) (suffix : List Γ) :
     have heq := (hprefix found).mp (of_decide_eq_true hp)
     simp [heq]
 
+/-- Testing the fixed symbol list preserves the input and advances past the first match. -/
+private theorem chooseSymbol_spec (label : Stage Γ) (candidates : List CodeSymbol)
+    (left tail : StackTape Γ) (word : List Γ) (hword : word ≠ [])
+    (previous : Option (State Γ)) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨previous, BiTape.segment left word tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      chooseSymbol label candidates
+    ⦃ fun _ cost final => final.config =
+        ⟨some (.inl ((firstSymbol candidates word).map (afterSymbol label) |>.getD .reject)),
+          BiTape.segment
+            (StackTape.prepend (word.take (consumed candidates word)).reverse left)
+            (word.drop (consumed candidates word)) tail⟩ ∧
+        final.headPos = origin + consumed candidates word ∧
+        cost.steps ≤ elapsed +
+          2 * (candidates.map fun symbol => (code (Γ := Γ) symbol).length).sum +
+          consumed candidates word ⦄ := by
+  induction candidates generalizing previous origin elapsed with
+  | nil =>
+    obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil hword
+    vcgen [chooseSymbol]
+    simp_all [firstSymbol, consumed, TMState.move, TMState.moveCost]
+  | cons symbol rest ih =>
+    rw [chooseSymbol]
+    apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+      ⟨some (if code symbol <+: word then .inr (label, symbol) else .inl label),
+        BiTape.segment left word tail⟩ ∧
+      current.headPos = origin ∧ cost.steps ≤ elapsed + 2 * (code (Γ := Γ) symbol).length)
+    · vcgen [checkPrefix_spec (tm := machine (Γ := Γ)) (.inr (label, symbol)) (.inl label)
+        (code symbol) word left tail previous origin elapsed]
+    · intro _
+      apply Std.WP.Triple.intro
+      rintro initial current ⟨hcfg, hpos, hbound⟩
+      by_cases hp : code symbol <+: word
+      · obtain ⟨suffix, rfl⟩ := hp
+        have hfound : firstSymbol (symbol :: rest) (code symbol ++ suffix) = some symbol := by
+          simp [firstSymbol]
+        vcgen [Spec.branch_true_spec]
+        refine ⟨by simp [hcfg], ?_⟩
+        dsimp only [binderNameHint]
+        vcgen [moveCells_spec (tm := machine (Γ := Γ)) .Right (code (Γ := Γ) symbol).length
+            (BiTape.segment left (code symbol ++ suffix) tail) (some (.inr (label, symbol)))
+            origin initial.steps]
+        all_goals simp_all [consumed, BiTape.segment_moveRight_iterate]
+        all_goals lia
+      · vcgen [Spec.branch_false_spec]
+        refine ⟨by simp [hcfg, hp], ?_⟩
+        dsimp only [binderNameHint]
+        vcgen [ih (some (.inl label)) origin
+          (elapsed + 2 * (code (Γ := Γ) symbol).length)]
+        all_goals simp_all [firstSymbol, consumed]
+        all_goals lia
+
 private theorem chooseSymbol_correct (label : Stage Γ) (candidates : List CodeSymbol)
     (left tail : StackTape Γ) (word : List Γ) (hword : word ≠ []) (s : TMState (machine (Γ := Γ)))
     (htape : s.config.BiTape = BiTape.segment left word tail) :
@@ -328,62 +382,10 @@ private theorem chooseSymbol_correct (label : Stage Γ) (candidates : List CodeS
       final.headPos = s.headPos + consumed candidates word ∧
       cost.steps ≤ 2 * (candidates.map fun symbol => (code (Γ := Γ) symbol).length).sum +
         consumed candidates word := by
-  induction candidates generalizing s with
-  | nil =>
-    obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil hword
-    let updated : TMState (machine (Γ := Γ)) := {s with config.state := some (.inl .reject)}
-    refine ⟨0 + updated.moveCost .Right, updated.move .Right,
-      (completes_update s (.inl .reject)).seq (completes_move updated .Right), ?_, ?_, ?_⟩
-    · simp [firstSymbol, consumed, updated, TMState.move, htape]
-    · simp [firstSymbol, consumed, updated, TMState.move]
-    · simp [firstSymbol, consumed, TMState.moveCost]
-  | cons symbol rest ih =>
-    obtain ⟨cost, middle, hc, hmiddle, hpos, hb⟩ :=
-      checkPrefix_correct (tm := machine (Γ := Γ)) (.inr (label, symbol)) (.inl label)
-        (code symbol) word left tail s htape
-    by_cases hp : code symbol <+: word
-    · obtain ⟨suffix, rfl⟩ := hp
-      have hfound : firstSymbol (symbol :: rest) (code symbol ++ suffix) = some symbol := by
-        simp [firstSymbol]
-      have hcount : consumed (symbol :: rest) (code symbol ++ suffix) =
-          (code (Γ := Γ) symbol).length := by simp [consumed, hfound]
-      have hmove := moveCells_correct .Right (code (Γ := Γ) symbol).length middle
-      obtain ⟨moves, moved, hm, hmoved, hmpos, hmsteps⟩ := hmove
-      let final : TMState (machine (Γ := Γ)) := {moved with
-        config.state := some (.inl (afterSymbol label symbol))}
-      have haction := hm.seq (completes_update moved (.inl (afterSymbol label symbol)))
-      have hbranch : Completes
-          (branch (tm := machine (Γ := Γ)) (.stateIs (some (.inr (label, symbol))))
-          (do moveCells (machine (Γ := Γ)) .Right (code (Γ := Γ) symbol).length
-              FreeM.lift (.update (.inl (afterSymbol label symbol))))
-          (chooseSymbol label rest)) middle (moves + 0) final := by
-        apply Completes.branch
-        simpa [hmiddle] using haction
-      refine ⟨cost + (moves + 0), final, ?_, ?_, ?_, ?_⟩
-      · simpa [chooseSymbol] using hc.seq hbranch
-      · simp [final, hmoved, hmiddle, htape, hfound, hcount,
-          BiTape.segment_moveRight_iterate]
-      · simp [final, hmpos, hpos, hcount]
-      · simp only [TMCost.add_steps, add_zero, hmsteps,
-          List.map_cons, List.sum_cons, hcount]
-        lia
-    · have hfound : firstSymbol (symbol :: rest) word = firstSymbol rest word := by
-        simp [firstSymbol, hp]
-      obtain ⟨more, final, hr, hfinal, hfpos, hbound⟩ := ih middle (by simpa [hmiddle] using htape)
-      have hbranch : Completes
-          (branch (tm := machine (Γ := Γ)) (.stateIs (some (.inr (label, symbol))))
-          (do moveCells (machine (Γ := Γ)) .Right (code (Γ := Γ) symbol).length
-              FreeM.lift (.update (.inl (afterSymbol label symbol))))
-          (chooseSymbol label rest)) middle more final := by
-        apply Completes.branch
-        simpa [hmiddle, hp] using hr
-      refine ⟨cost + more, final, ?_, ?_, ?_, ?_⟩
-      · simpa [chooseSymbol] using hc.seq hbranch
-      · simpa [hfound, consumed] using hfinal
-      · simpa [hpos, hfound, consumed] using hfpos
-      · simp only [TMCost.add_steps, List.map_cons, List.sum_cons]
-        simp only [consumed, hfound] at hbound ⊢
-        lia
+  apply Spec.completes
+  vcgen [chooseSymbol_spec label candidates left tail word hword s.config.state s.headPos 0]
+  all_goals cases hcfg : s.config
+  all_goals simp_all
 
 private noncomputable def nextStage (label : Stage Γ) (word : List Γ) : Stage Γ :=
   ((firstSymbol symbols word).map (afterSymbol label)).getD .reject
@@ -600,29 +602,20 @@ private theorem checkStructure_result (marker : Γ) (left tail : StackTape Γ)
     ∃ cost final, Completes checkStructure s cost final ∧
       final.config = ⟨some (.inl (readStages .header word)), s.config.BiTape⟩ ∧
       final.headPos = s.headPos ∧ cost.steps ≤ 301 * word.length + 4 := by
-  let initial : TMState (machine (Γ := Γ)) := {s with config.state := some (.inl .header)}
+  let initial : TMState (machine (Γ := Γ)) :=
+    {s with config := ⟨some (.inl .header), s.config.BiTape⟩}
   obtain ⟨cost, middle, hc, hmiddle, hpos, hb⟩ := scanDescription_correct .header
     (StackTape.cons (some marker) (StackTape.cons none left)) tail word initial
     (by simpa [initial] using htape) rfl
-  have hreturn := seekLeftEnd_segment left (word.reverse ++ [marker]) [] tail middle (by
-    simpa [StackTape.prepend_append] using congrArg SingleTapeTM.Cfg.BiTape hmiddle)
-  obtain ⟨more, returned, hr, hreturned, hrpos, hsteps⟩ := hreturn.append_move .Right
-  have hcomplete := (completes_update s (.inl .header)).seq (hc.seq hr)
-  refine ⟨0 + (cost + more), returned, ?_, ?_, ?_, ?_⟩
-  · simpa [checkStructure, bind_assoc] using hcomplete
-  · have ht := congrArg SingleTapeTM.Cfg.BiTape hreturned
-    have hs := congrArg SingleTapeTM.Cfg.state hreturned
-    cases hcfg : returned.config
-    simp only [hcfg] at hs ht ⊢
-    simp [hmiddle] at hs
-    simp only [hs]
-    congr 1
-    cases word <;>
-      simpa [htape, BiTape.segment, BiTape.moveRight, List.reverse_append] using ht
-  · simpa [hpos, initial, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using hrpos
-  · simp only [TMCost.add_steps, zero_add]
-    simp only [List.length_append, List.length_reverse, List.length_singleton] at hsteps
-    lia
+  apply Spec.completes
+  vcgen [checkStructure, Spec.steps hc 0,
+    seekLeftEnd_segment_spec (tm := machine (Γ := Γ)) left tail (word.reverse ++ [marker]) []
+      (some (.inl (readStages .header word))) (s.headPos + word.length) cost.steps]
+  all_goals cases word
+  all_goals cases hcfg : s.config
+  all_goals simp_all [initial, StackTape.prepend_append, BiTape.segment, BiTape.moveRight,
+    TMState.move, TMState.moveCost, List.reverse_append]
+  all_goals lia
 
 /--
 The structure check preserves every tape cell and returns to the first input cell after its

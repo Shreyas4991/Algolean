@@ -28,7 +28,9 @@ public section
 namespace Algolean.Algorithms.TMSATToSAT.Rows
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Alphabet Problems.TMSAT
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ] [DecidableEq Γ]
 
@@ -69,28 +71,33 @@ private theorem visitIncrement_correct (zero one : Γ) (hne : zero ≠ one) (res
         (restore :: suffix) tail) s.headPos moves ∧
       moves ≤ 8 * (crossed.length + bits.length + 2) := by
   let output := (incrementBits bits.reverse).reverse.map (fun bit => if bit then one else zero)
-  have haction (current : TMState (Parsing.machine (Γ := Γ))) (tail : StackTape Γ)
-      (hcurrent : current.config.BiTape = BiTape.segment StackTape.nil
-        (bits.map (fun bit => if bit then one else zero)) tail) :
-      ∃ moves, Runs (incrementLeft (Parsing.machine (Γ := Γ)) zero one) current
-        (BiTape.segment StackTape.nil output tail)
-        (current.headPos + (bits.map (fun bit => if bit then one else zero)).length - output.length)
-        moves ∧
-        moves ≤ 4 * bits.length + 5 := by
-    dsimp only [output] at *
-    simpa using incrementLeft_correct zero one hne bits tail current hcurrent
-  obtain ⟨moves, hr, hb⟩ := visitPreviousRegion_correct restore
-    (incrementLeft (Parsing.machine (Γ := Γ)) zero one)
-    (bits.map (fun bit => if bit then one else zero)) output
-    (marker :: crossed) suffix tail (4 * bits.length + 5) haction s (by
-      simpa [sourceView, List.reverse_cons, StackTape.prepend_append] using htape)
-  refine ⟨moves, ?_, ?_⟩
-  · simpa [visitIncrement, sourceView, output, List.reverse_cons,
-      StackTape.prepend_append] using hr
-  · have hlen := length_incrementBits_le bits.reverse
-    simp only [List.length_reverse] at hlen
-    simp only [output, List.length_map, List.length_cons, List.length_reverse] at hb
-    lia
+  have ha (neighbor : StackTape Γ) (position : ℤ) (elapsed : Nat) :
+      ⦃ fun cost current => current.config = ⟨s.config.state, BiTape.segment StackTape.nil
+          (bits.map (fun bit => if bit then one else zero)) neighbor⟩ ∧
+          current.headPos = position ∧ cost.steps ≤ elapsed ⦄
+        incrementLeft (Parsing.machine (Γ := Γ)) zero one
+      ⦃ fun _ cost final => final.config =
+          ⟨s.config.state, BiTape.segment StackTape.nil output neighbor⟩ ∧
+          final.headPos = position + bits.length - output.length ∧
+          cost.steps ≤ elapsed + 4 * bits.length + 5 ⦄ := by
+    apply Std.WP.Triple.intro
+    rintro initial current ⟨hcfg, hpos, hbound⟩
+    have hcount := carryCount_le_length bits.reverse
+    have hlength := length_incrementBits_le bits.reverse
+    vcgen [incrementLeft_spec (counter := Parsing.machine (Γ := Γ)) zero one hne bits
+      neighbor s.config.state position initial.steps]
+    all_goals simp_all [output]
+    all_goals lia
+  have hlength := length_incrementBits_le bits.reverse
+  apply Spec.runs_le
+  vcgen [visitIncrement,
+    visitPreviousRegion_spec restore (incrementLeft (Parsing.machine (Γ := Γ)) zero one)
+      (bits.map (fun bit => if bit then one else zero)) output (marker :: crossed) suffix tail
+      (4 * bits.length + 5) s.config.state s.config.state s.headPos 0
+      (by simpa only [List.length_map, add_assoc] using ha)]
+  all_goals cases hcfg : s.config
+  all_goals simp_all [sourceView, output, List.reverse_cons, StackTape.prepend_append]
+  all_goals lia
 
 private def checkFirstRow (zero one restore : Γ) :
     Prog (TMQuery (Parsing.machine (Γ := Γ))) Unit := do [TMQuery (Parsing.machine (Γ := Γ))]
@@ -115,12 +122,15 @@ private theorem returnToCursor_correct (zero one restore marker : Γ) (bits : Li
     Runs (do seekRightBlank (Parsing.machine (Γ := Γ)); FreeM.lift (.write (some restore))) s
       (sourceView zero one bits marker crossed (restore :: suffix) tail)
       (s.headPos + (crossed.length + 1 : Nat)) (crossed.length + 1) := by
-  have h := (Copying.seekRightBlank_segment
+  apply Spec.runs
+  vcgen [seekRightBlank_segment_spec
     (StackTape.cons none
       (StackTape.mapSome (bits.map (fun bit => if bit then one else zero)).reverse))
-    (marker :: crossed) (StackTape.prepend suffix (StackTape.cons none tail)) s htape).append_write
-      (some restore)
-  simpa [sourceView, List.reverse_cons, StackTape.prepend_append] using h
+    (StackTape.prepend suffix (StackTape.cons none tail)) (marker :: crossed)
+    s.config.state s.headPos 0]
+  all_goals cases hcfg : s.config
+  all_goals simp_all [sourceView, TMState.write, BiTape.segment, BiTape.write,
+    List.reverse_cons, StackTape.prepend_append]
 
 omit [Nontrivial Γ] in
 private theorem checkFirstRow_correct (zero one : Γ) (hne : zero ≠ one) (restore : Γ)
@@ -134,18 +144,21 @@ private theorem checkFirstRow_correct (zero one : Γ) (hne : zero ≠ one) (rest
       moves ≤ 16 * (crossed.length + bits.length + 2) := by
   let marker := if seen then one else zero
   let rest := StackTape.prepend suffix (StackTape.cons none tail)
-  have hs := (write_correct s none).seq (q := seekLeftEnd (Parsing.machine (Γ := Γ)))
-    (second := BiTape.segment
-      (StackTape.cons none
-        (StackTape.mapSome (bits.map (fun bit => if bit then one else zero)).reverse))
-      (marker :: crossed) rest)
-    (pos₂ := s.headPos - (crossed.length + 1 : Nat)) (time₂ := crossed.length + 3) (by
-      intro middle hmiddle hpos
-      simpa [rest, marker, hpos] using Copying.seekLeftEnd_segment
-        (StackTape.mapSome (bits.map (fun bit => if bit then one else zero)).reverse)
-        (crossed.reverse ++ [marker]) [] rest middle (by
-          simp [hmiddle, htape, sourceView, marker, rest, StackTape.prepend_append,
-            BiTape.segment, BiTape.write]))
+  have hs : Runs (do [TMQuery (Parsing.machine (Γ := Γ))]
+      tape ←ₜ none
+      seekLeftEnd (Parsing.machine (Γ := Γ))) s
+      (BiTape.segment
+        (StackTape.cons none
+          (StackTape.mapSome (bits.map (fun bit => if bit then one else zero)).reverse))
+        (marker :: crossed) rest)
+      (s.headPos - (crossed.length + 1 : Nat)) (crossed.length + 3) := by
+    apply Spec.runs
+    vcgen [seekLeftEnd_segment_spec (tm := Parsing.machine (Γ := Γ))
+      (StackTape.mapSome (bits.map (fun bit => if bit then one else zero)).reverse)
+      rest (crossed.reverse ++ [marker]) [] s.config.state s.headPos 0]
+    all_goals cases hcfg : s.config
+    all_goals simp_all [sourceView, marker, rest, TMState.write, BiTape.segment, BiTape.write,
+      StackTape.prepend_append]
   obtain ⟨cost, middle, hc, hmiddle, hpos, hsteps⟩ := hs
   cases seen with
   | false =>
@@ -228,64 +241,81 @@ private theorem countOne_correct (zero one : Γ) (hne : zero ≠ one)
       final.headPos = s.headPos + 12 ∧
       cost.steps ≤ 40 * (crossed.length + bits.length + 2) := by
   classical
-  obtain ⟨cost, middle, hc, hmiddle, hmpos, hb⟩ := checkPrefix_correct
-    (tm := Parsing.machine (Γ := Γ)) (.inl .rowEnd) (.inl .rowStart)
-    (code CodeSymbol.rowSeparator) (code symbol ++ suffix) _ tail s htape
-  have hp : code CodeSymbol.rowSeparator <+: code symbol ++ suffix ↔
-      symbol = CodeSymbol.rowSeparator := by
-    simpa only [code, eq_comm] using
-      finiteWordsOver_symbol_prefix_iff CodeSymbol.rowSeparator symbol suffix
-  have hbody : ∃ moves, Runs
-      (branch (tm := Parsing.machine (Γ := Γ)) (.stateIs (some (.inl .rowEnd)))
-        (if skipFirst then checkFirstRow zero one (rowByte zero)
-          else visitIncrement zero one (rowByte zero)) (pure ())) middle
-      (sourceView zero one (nextBits bits skipFirst seen symbol)
-        (if skipFirst && (seen || decide (symbol = CodeSymbol.rowSeparator)) then one else zero)
-        crossed (code symbol ++ suffix) tail) middle.headPos moves ∧
-      moves ≤ 16 * (crossed.length + bits.length + 2) := by
-    by_cases heq : symbol = CodeSymbol.rowSeparator
-    · subst symbol
-      obtain ⟨first, rest, hcode⟩ : ∃ first rest, code (Γ := Γ) CodeSymbol.rowSeparator =
-          first :: rest := List.exists_cons_of_ne_nil (by
-        intro hempty
-        have := code_length (Γ := Γ) CodeSymbol.rowSeparator
-        rw [hempty] at this
-        contradiction)
-      have hfirst : rowByte (Γ := Γ) zero = first := by simp [rowByte, hcode]
-      cases skipFirst with
-      | false =>
-        obtain ⟨moves, hr, hm⟩ := visitIncrement_correct zero one hne first zero bits crossed
-          (rest ++ suffix) tail middle (by simpa [hmiddle, hcode] using htape)
-        refine ⟨moves, Runs.branch ?_, by lia⟩
-        simpa [hmiddle, hp, hfirst, nextBits, hcode] using hr
-      | true =>
-        obtain ⟨moves, hr, hm⟩ := checkFirstRow_correct zero one hne first bits seen crossed
-          (rest ++ suffix) tail middle (by simpa [hmiddle, hcode] using htape)
-        refine ⟨moves, Runs.branch ?_, hm⟩
-        simpa [hmiddle, hp, hfirst, nextBits, hcode] using hr
-    · refine ⟨0, Runs.branch ?_, by simp⟩
-      have hcfg : middle.config = {middle.config with
-          BiTape := sourceView zero one bits (if skipFirst && seen then one else zero)
-            crossed (code symbol ++ suffix) tail} := by
-        cases hm : middle.config
-        simpa [hm] using (congrArg SingleTapeTM.Cfg.BiTape hmiddle).trans htape
-      exact ⟨0, middle, by simp [hmiddle, hp, heq],
-        by simpa [nextBits, heq] using hcfg, rfl, rfl⟩
-  obtain ⟨moves, hr, hbound⟩ := hbody
-  obtain ⟨currentCost, current, hbranch, hcurrent, hcurrentPos, hsteps⟩ := hr
-  have hmoved := moveCells_correct (tm := Parsing.machine (Γ := Γ)) .Right 12 current
-  obtain ⟨extra, final, hmove, hfinal, hfpos, he⟩ := hmoved
-  refine ⟨cost + (currentCost + extra), final, ?_, ?_, ?_, ?_⟩
-  · simpa [countOne, bind_assoc] using hc.seq (hbranch.seq hmove)
-  · have ht := congrArg SingleTapeTM.Cfg.BiTape hfinal
-    rw [show 12 = (code (Γ := Γ) symbol).length from (code_length symbol).symm] at ht
-    simpa [hcurrent, sourceView, BiTape.segment_moveRight_iterate,
-      List.reverse_append, StackTape.prepend_append] using ht
-  · simpa [hcurrentPos, hmpos] using hfpos
-  · simp only [TMCost.add_steps]
-    rw [hsteps, he]
-    have := code_length (Γ := Γ) CodeSymbol.rowSeparator
-    lia
+  apply Spec.completes
+  unfold countOne
+  apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+    ⟨some (if code CodeSymbol.rowSeparator <+: code symbol ++ suffix
+      then .inl .rowEnd else .inl .rowStart), s.config.BiTape⟩ ∧
+    current.headPos = s.headPos ∧ cost.steps ≤ 2 * (code (Γ := Γ) CodeSymbol.rowSeparator).length)
+  · vcgen [checkPrefix_spec (tm := Parsing.machine (Γ := Γ)) (.inl .rowEnd) (.inl .rowStart)
+      (code CodeSymbol.rowSeparator) (code symbol ++ suffix)
+      (StackTape.prepend crossed.reverse
+        (StackTape.cons (some (if skipFirst && seen then one else zero))
+          (StackTape.cons none
+            (StackTape.mapSome (bits.map (fun bit => if bit then one else zero)).reverse))))
+      tail s.config.state s.headPos 0]
+    all_goals cases hcfg : s.config
+    all_goals simp_all [sourceView]
+  · intro _
+    apply Std.WP.Triple.intro
+    rintro cost middle ⟨hmiddle, hmpos, hb⟩
+    have hp : code CodeSymbol.rowSeparator <+: code symbol ++ suffix ↔
+        symbol = CodeSymbol.rowSeparator := by
+      simpa only [code, eq_comm] using
+        finiteWordsOver_symbol_prefix_iff CodeSymbol.rowSeparator symbol suffix
+    have hbody : ∃ moves, Runs
+        (branch (tm := Parsing.machine (Γ := Γ)) (.stateIs (some (.inl .rowEnd)))
+          (if skipFirst then checkFirstRow zero one (rowByte zero)
+            else visitIncrement zero one (rowByte zero)) (pure ())) middle
+        (sourceView zero one (nextBits bits skipFirst seen symbol)
+          (if skipFirst && (seen || decide (symbol = CodeSymbol.rowSeparator)) then one else zero)
+          crossed (code symbol ++ suffix) tail) middle.headPos moves ∧
+        moves ≤ 16 * (crossed.length + bits.length + 2) := by
+      by_cases heq : symbol = CodeSymbol.rowSeparator
+      · subst symbol
+        obtain ⟨first, rest, hcode⟩ : ∃ first rest, code (Γ := Γ) CodeSymbol.rowSeparator =
+            first :: rest := List.exists_cons_of_ne_nil (by
+          intro hempty
+          have := code_length (Γ := Γ) CodeSymbol.rowSeparator
+          rw [hempty] at this
+          contradiction)
+        have hfirst : rowByte (Γ := Γ) zero = first := by simp [rowByte, hcode]
+        cases skipFirst with
+        | false =>
+          obtain ⟨moves, hr, hm⟩ := visitIncrement_correct zero one hne first zero bits crossed
+            (rest ++ suffix) tail middle (by simpa [hmiddle, hcode] using htape)
+          refine ⟨moves, Runs.branch ?_, by lia⟩
+          simpa [hmiddle, hp, hfirst, nextBits, hcode] using hr
+        | true =>
+          obtain ⟨moves, hr, hm⟩ := checkFirstRow_correct zero one hne first bits seen crossed
+            (rest ++ suffix) tail middle (by simpa [hmiddle, hcode] using htape)
+          refine ⟨moves, Runs.branch ?_, hm⟩
+          simpa [hmiddle, hp, hfirst, nextBits, hcode] using hr
+      · refine ⟨0, Runs.branch ?_, by simp⟩
+        have hcfg : middle.config = {middle.config with
+            BiTape := sourceView zero one bits (if skipFirst && seen then one else zero)
+              crossed (code symbol ++ suffix) tail} := by
+          cases hm : middle.config
+          simpa [hm] using (congrArg SingleTapeTM.Cfg.BiTape hmiddle).trans htape
+        exact ⟨0, middle, by simp [hmiddle, hp, heq],
+          by simpa [nextBits, heq] using hcfg, rfl, rfl⟩
+    obtain ⟨moves, hr, hbound⟩ := hbody
+    obtain ⟨currentCost, current, hbranch, hcurrent, hcurrentPos, hsteps⟩ := hr
+    have hmove (newBits : List Bool) (marker : Γ) :
+        BiTape.moveRight^[12] (sourceView zero one newBits marker crossed
+          (code symbol ++ suffix) tail) =
+        sourceView zero one newBits marker (crossed ++ code symbol) suffix tail := by
+      rw [← code_length (Γ := Γ) symbol]
+      simp [sourceView, BiTape.segment_moveRight_iterate, List.reverse_append,
+        StackTape.prepend_append]
+    vcgen [Spec.steps hbranch cost.steps,
+      moveCells_spec (tm := Parsing.machine (Γ := Γ)) .Right 12
+        (sourceView zero one (nextBits bits skipFirst seen symbol)
+          (if skipFirst && (seen || decide (symbol = CodeSymbol.rowSeparator)) then one else zero)
+          crossed (code symbol ++ suffix) tail)
+        current.config.state current.headPos (cost.steps + currentCost.steps)]
+    all_goals simp_all [code_length]
+    all_goals lia
 
 private def countResult (bits : List Bool) (skipFirst seen : Bool) :
     List CodeSymbol → List Bool × Bool
@@ -439,50 +469,49 @@ theorem collect_correct (zero one : Γ) (hne : zero ≠ one) (skipFirst : Bool)
   let result := countResult [false] skipFirst false word
   let digits := result.1.map (fun bit => if bit then one else zero)
   let marker := if skipFirst && result.2 then one else zero
-  have hstart := (nextRegion_correct (tm := Parsing.machine (Γ := Γ)) StackTape.nil
-    [zero] (zero :: input) tail s htape).append_move .Right
-  obtain ⟨setup, first, hs, hfirst, hfirstpos, hsetup⟩ := hstart
-  obtain ⟨cost, middle, hc, hmiddle, hmiddlepos, hb⟩ :=
-    countLoop_correct zero one hne skipFirst false [false] word [] tail first (by
-      cases hin : input <;>
-        simpa [sourceView, BiTape.segment, BiTape.moveRight, hin, ← hencode] using
-          congrArg SingleTapeTM.Cfg.BiTape hfirst)
-  have hreturn := (Copying.seekLeftEnd_segment
-    (StackTape.mapSome digits.reverse) (input.reverse ++ [marker]) [] tail middle (by
-      simpa [result, marker, digits, sourceView, ← hencode, StackTape.prepend_append]
-        using hmiddle)).append_write (some zero)
-  obtain ⟨back, returned, hr, hreturned, hrpos, hback⟩ := hreturn
-  have hprevious := previousRegion_correct (tm := Parsing.machine (Γ := Γ)) StackTape.nil
-    digits (zero :: input) tail returned (by
-      simpa [BiTape.segment, BiTape.write, StackTape.prepend_append] using
-        congrArg SingleTapeTM.Cfg.BiTape hreturned)
-  obtain ⟨previous, final, hp, hfinal, hfpos, hprevious⟩ := hprevious
-  let finish : TMState (Parsing.machine (Γ := Γ)) :=
-    {final with config.state := some (.inl .header)}
-  refine ⟨result.1, setup + (cost + (back + (previous + 0))), finish, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · simpa [collect, bind_assoc, finish] using
-      hs.seq (hc.seq (hr.seq (hp.seq (completes_update final (.inl .header)))))
-  · simp [finish, hfinal, digits, input]
-  · simp only [finish]
-    rw [hfpos, hrpos, hmiddlepos, hfirstpos]
-    simp only [digits, List.length_map, List.length_append, List.length_reverse,
-      List.length_singleton, Nat.cast_add, Nat.cast_one, Dir.offset]
-    lia
-  · have hv := countResult_value [false] skipFirst false word
+  have hv : binaryValue result.1.reverse = word.count CodeSymbol.rowSeparator -
+      (if skipFirst then 1 else 0) := by
+    have hv := countResult_value [false] skipFirst false word
     have hs := countResult_seen [false] skipFirst false word
     have hcount : word.count CodeSymbol.rowSeparator = 0 ↔ CodeSymbol.rowSeparator ∉ word :=
       List.count_eq_zero
     cases skipFirst <;> by_cases hm : CodeSymbol.rowSeparator ∈ word <;>
       simp [result, hs, hm] at hv ⊢ <;> lia
-  · simpa [result, Nat.add_comm] using countResult_length [false] skipFirst false word
-  · have hl := countResult_length [false] skipFirst false word
-    simp only [List.length_singleton] at hl
-    simp only [TMCost.add_steps, TMCost.zero_steps]
-    rw [hsetup, hback, hprevious]
-    simp only [List.length_singleton, List.length_nil, zero_add] at hb
-    simp only [List.length_append, List.length_reverse, List.length_singleton,
-      digits, List.length_map]
-    dsimp only [result] at *
-    nlinarith
+  have hbits : result.1.length ≤ word.length + 1 := by
+    simpa [result, Nat.add_comm] using countResult_length [false] skipFirst false word
+  refine ⟨result.1, ?_⟩
+  apply Spec.completes
+  unfold collect
+  rw [← bind_assoc]
+  apply Std.WP.Triple.bind (mid := fun _ cost current => current.config =
+    ⟨s.config.state, sourceView zero one [false] zero [] input tail⟩ ∧
+    current.headPos = s.headPos + 3 ∧ cost.steps = 3)
+  · vcgen [nextRegion_spec (tm := Parsing.machine (Γ := Γ)) StackTape.nil
+      [zero] (zero :: input) tail s.config.state s.headPos 0]
+    all_goals cases hcfg : s.config
+    all_goals simp_all [sourceView, TMState.move, TMState.moveCost, add_assoc, input]
+  · intro _
+    apply Std.WP.Triple.intro
+    rintro initial current ⟨hcfg, hpos, hsteps⟩
+    obtain ⟨cost, middle, hc, hmiddle, hmiddlepos, hb⟩ :=
+      countLoop_correct zero one hne skipFirst false [false] word [] tail current
+        (by simpa [← hencode] using congrArg SingleTapeTM.Cfg.BiTape hcfg)
+    have hbound : 3 + cost.steps + (input.length + 3) + (digits.length + 3) ≤
+        640 * (input.length + 1) ^ 2 := by
+      simp only [List.length_singleton, List.length_nil, zero_add] at hb
+      dsimp only [digits]
+      simp only [List.length_map]
+      nlinarith
+    vcgen [Spec.steps hc initial.steps,
+      seekLeftEnd_segment_spec (tm := Parsing.machine (Γ := Γ))
+        (StackTape.mapSome digits.reverse) tail (input.reverse ++ [marker]) []
+        middle.config.state (s.headPos + 3 + 12 * word.length) (initial.steps + cost.steps),
+      previousRegion_spec (tm := Parsing.machine (Γ := Γ)) StackTape.nil
+        digits (zero :: input) tail middle.config.state (s.headPos + 2)
+        (initial.steps + cost.steps + input.length + 3)]
+    all_goals cases hm : middle.config
+    all_goals simp_all [sourceView, marker, digits, ← hencode,
+      StackTape.prepend_append, TMState.write, List.reverse_append]
+    all_goals lia
 
 end Algolean.Algorithms.TMSATToSAT.Rows

@@ -35,7 +35,9 @@ public section
 namespace Algolean.Algorithms.TMSATToSAT.Tape
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Copying
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Γ : Type}
 
@@ -62,45 +64,24 @@ private def frameInput (marker : Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left
   seekLeftEnd tm
 
-private theorem frameInput_correct (marker : Γ) (input : List Γ) (s : TMState tm)
-    (htape : s.config.BiTape = BiTape.mk₁ input) :
-    Runs (frameInput (tm := tm) marker) s (layout marker [input, []])
-      (s.headPos - 1) (2 * input.length + 7) := by
+private theorem frameInput_spec (marker : Γ) (input : List Γ) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.mk₁ input⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      frameInput (tm := tm) marker
+    ⦃ fun _ cost final => final.config = ⟨label, layout marker [input, []]⟩ ∧
+        final.headPos = origin - 1 ∧ cost.steps = elapsed + 2 * input.length + 7 ⦄ := by
   have hmarker : StackTape.cons (some marker) StackTape.nil = StackTape.mapSome [marker] := rfl
-  have hp : Runs (do
-      FreeM.lift (.move .Left)
-      FreeM.lift (.write (some marker))
-      FreeM.lift (.move .Right)) s
-      (BiTape.segment (StackTape.cons (some marker) StackTape.nil) input StackTape.nil)
-      s.headPos 2 := by
-    have h := ((move_correct s .Left).append_write (some marker)).append_move .Right
-    cases input <;>
-      simpa [htape, bind_assoc, BiTape.segment, BiTape.mk₁, BiTape.nil, BiTape.moveLeft,
-        BiTape.moveRight, BiTape.write, sub_eq_add_neg] using h
-  have hs := hp.seq (q := seekRightBlank tm)
-    (second := BiTape.segment (StackTape.prepend input.reverse
-      (StackTape.cons (some marker) StackTape.nil)) [] StackTape.nil)
-    (pos₂ := s.headPos + input.length) (time₂ := input.length) (by
-      intro middle hmiddle hpos
-      simpa [hpos] using seekRightBlank_segment
-        (StackTape.cons (some marker) StackTape.nil) input StackTape.nil middle
-        (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  have ho := ((hs.append_move .Right).append_write (some marker)).append_move .Left
-  have hr := ho.seq (q := seekLeftEnd tm)
-    (second := layout marker [input, []]) (pos₂ := s.headPos - 1)
-    (time₂ := input.length + 3) (by
-      intro middle hmiddle hpos
-      have hleft : middle.config.BiTape = BiTape.segment
-          (StackTape.prepend (input.reverse ++ [marker]) StackTape.nil) []
-          (StackTape.mapSome [marker]) := by
-        simpa [BiTape.segment, BiTape.moveRight, BiTape.moveLeft, BiTape.write,
-          hmarker] using congrArg SingleTapeTM.Cfg.BiTape hmiddle
-      simpa [layout, hmarker, hpos, List.reverse_append, sub_eq_add_neg, add_assoc,
-        add_comm, add_left_comm] using
-        seekLeftEnd_segment StackTape.nil (input.reverse ++ [marker]) []
-          (StackTape.mapSome [marker]) middle (by simpa using hleft))
-  simpa [frameInput, bind_assoc, two_mul, Nat.add_assoc, Nat.add_comm,
-    Nat.add_left_comm] using hr
+  vcgen [frameInput,
+    seekRightBlank_segment_spec (StackTape.cons (some marker) StackTape.nil) StackTape.nil input
+      label origin (elapsed + 2),
+    seekLeftEnd_segment_spec StackTape.nil (StackTape.mapSome [marker])
+      (input.reverse ++ [marker]) [] label (origin + input.length) (elapsed + input.length + 4)]
+  all_goals cases input
+  all_goals simp_all [TMState.move, TMState.moveCost, TMState.write, layout,
+    BiTape.mk₁, BiTape.nil, BiTape.segment, BiTape.moveLeft, BiTape.moveRight, BiTape.write,
+    List.reverse_append, sub_eq_add_neg]
+  all_goals lia
 
 /-- This places a fixed number of empty regions before the current first region. -/
 private def prependEmpty (marker : Γ) : Nat → Prog (TMQuery tm) Unit
@@ -112,35 +93,23 @@ private def prependEmpty (marker : Γ) : Nat → Prog (TMQuery tm) Unit
     tape ←ₜ some marker
     prependEmpty marker count
 
-private theorem prependEmpty_correct (marker : Γ) (count : Nat) (current : List Γ)
-    (rest : List (List Γ)) (s : TMState tm)
-    (htape : s.config.BiTape = layout marker (current :: rest)) :
-    Runs (prependEmpty (tm := tm) marker count) s
-      (layout marker (List.replicate count [] ++ current :: rest))
-      (s.headPos - 2 * count) (2 * count) := by
-  induction count generalizing current rest s with
+private theorem prependEmpty_spec (marker : Γ) (count : Nat) (current : List Γ)
+    (rest : List (List Γ)) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost initial => initial.config = ⟨label, layout marker (current :: rest)⟩ ∧
+        initial.headPos = origin ∧ cost.steps = elapsed ⦄
+      prependEmpty (tm := tm) marker count
+    ⦃ fun _ cost final => final.config =
+        ⟨label, layout marker (List.replicate count [] ++ current :: rest)⟩ ∧
+        final.headPos = origin - 2 * count ∧ cost.steps = elapsed + 2 * count ⦄ := by
+  induction count generalizing current rest origin elapsed with
   | zero =>
-    refine ⟨0, s, completes_pure s, ?_, by simp, rfl⟩
-    simp only [List.replicate_zero, List.nil_append]
-    rw [← htape]
+    vcgen [prependEmpty]
+    simp_all
   | succ count ih =>
-    have hf : Runs (do
-        FreeM.lift (.move .Left)
-        FreeM.lift (.write none)
-        FreeM.lift (.move .Left)
-        FreeM.lift (.write (some marker))) s
-        (layout marker ([] :: current :: rest)) (s.headPos - 2) 2 := by
-      have h := (((move_correct s .Left).append_write none).append_move .Left).append_write
-        (some marker)
-      simpa [htape, layout, bind_assoc, BiTape.segment, BiTape.moveLeft, BiTape.write,
-        sub_eq_add_neg, add_assoc] using h
-    have hr := hf.seq (q := prependEmpty marker count)
-      (second := layout marker (List.replicate (count + 1) [] ++ current :: rest))
-      (pos₂ := s.headPos - 2 * (count + 1)) (time₂ := 2 * count) (by
-        intro middle hmiddle hpos
-        simpa [List.replicate_succ', hpos, sub_eq_add_neg, mul_add, add_assoc] using
-          ih [] (current :: rest) middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-    simpa [prependEmpty, bind_assoc, Nat.mul_add, Nat.add_comm] using hr
+    vcgen [prependEmpty, ih [] (current :: rest) (origin - 2) (elapsed + 2)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost, layout,
+      BiTape.segment, BiTape.moveLeft, BiTape.write, List.replicate_succ', sub_eq_add_neg]
+    all_goals lia
 
 /--
 This machine template preserves the input, places empty working regions before it, and places
@@ -152,6 +121,22 @@ def prepare (tm : SingleTapeTM Γ) (marker : Γ) (workCount : Nat) :
   frameInput marker
   prependEmpty marker workCount
 
+/-- Preparing the regions preserves the input and records the exact head position and move count. -/
+@[spec] theorem prepare_spec (marker : Γ) (workCount : Nat) (input : List Γ)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.mk₁ input⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      prepare tm marker workCount
+    ⦃ fun _ cost final => final.config =
+        ⟨label, layout marker (List.replicate workCount [] ++ [input, []])⟩ ∧
+        final.headPos = origin - (2 * workCount + 1 : Nat) ∧
+        cost.steps = elapsed + 2 * input.length + 2 * workCount + 7 ⦄ := by
+  vcgen [prepare, frameInput_spec marker input label origin elapsed,
+    prependEmpty_spec marker workCount input [[]] label (origin - 1)
+      (elapsed + 2 * input.length + 7)]
+  all_goals simp_all
+  all_goals lia
+
 /--
 Initialization preserves the input and control state and creates exactly the requested empty
 working regions and one empty output region. The theorem gives the exact head position and
@@ -162,14 +147,10 @@ theorem prepare_correct (marker : Γ) (workCount : Nat) (input : List Γ) (s : T
     Runs (prepare tm marker workCount) s
       (layout marker (List.replicate workCount [] ++ [input, []]))
       (s.headPos - (2 * workCount + 1 : Nat)) (2 * input.length + 2 * workCount + 7) := by
-  have hf := frameInput_correct marker input s htape
-  have hr := hf.seq (q := prependEmpty marker workCount)
-    (second := layout marker (List.replicate workCount [] ++ [input, []]))
-    (pos₂ := s.headPos - (2 * workCount + 1 : Nat)) (time₂ := 2 * workCount) (by
-      intro middle hmiddle hpos
-      simpa [hpos, sub_eq_add_neg, add_assoc, add_comm, add_left_comm] using
-        prependEmpty_correct marker workCount input [[]] middle
-          (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  simpa [prepare, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hr
+  apply Spec.runs
+  vcgen [prepare_spec marker workCount input s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 end Algolean.Algorithms.TMSATToSAT.Tape
