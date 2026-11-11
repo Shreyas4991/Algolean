@@ -19,6 +19,7 @@ public import Mathlib.Algebra.Order.Group.Nat
 * A variable name is a finite list of binary digits. Leading zeros distinguish names.
 * A literal is a variable or its negation. A clause is a disjunction of literals.
 * A formula is a conjunction of clauses. Its encoding uses the symbols described in `CodeSymbol`.
+* `formulaPrefix` writes the clauses without the final symbol that ends the formula.
 * `language` contains the encodings of satisfiable formulas.
   Incorrectly formatted lists are rejected.
 * `verifierEncoding` stores a formula and its certificate with one symbol between them.
@@ -197,6 +198,21 @@ theorem encoding_encode_cons (clause : Clause Variable) (rest : CNF Variable) :
   simp [encoding, certificateEncoding, Encoding.strict, Encoding.mapSymbols,
     Encoding.comp, Encoding.list, words, List.map_append, List.map_map,
     Function.comp_def, Extended.flattenThreeEquiv, Extended.flattenEquiv, finSumFinEquiv]
+
+/--
+This writes the clauses with their usual separating symbols, leaving out the final symbol
+that ends the formula. A machine can append several such words before ending the full formula.
+-/
+def formulaPrefix (formula : CNF Variable) : List CodeSymbol :=
+  formula.flatMap fun clause => certificateEncoding.encode clause ++ [.inr 4]
+
+/-- Appending the final formula symbol to the clause encodings gives the existing SAT encoding. -/
+theorem encoding_encode_eq_formulaPrefix (formula : CNF Variable) :
+    encoding.encode formula = formulaPrefix formula ++ [.inr 5] := by
+  induction formula with
+  | nil => rfl
+  | cons clause rest ih =>
+    simp [encoding_encode_cons, formulaPrefix, ih, List.append_assoc]
 
 /-- Decoding returns a formula exactly when the whole word is that formula's encoding. -/
 @[simp] theorem decode_encoding_eq_some_iff {word : List CodeSymbol} {formula : CNF Variable} :

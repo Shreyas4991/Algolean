@@ -31,16 +31,6 @@ variable {Γ : Type}
 
 open Formula
 
-private theorem size_pair_le (a b : Nat) : (Nat.pair a b).size ≤ 2 * (a.size + b.size) := by
-  have ha : a < 2 ^ (a.size + b.size) :=
-    (Nat.lt_size_self a).trans_le (Nat.pow_le_pow_right (by decide) (Nat.le_add_right _ _))
-  have hb : b < 2 ^ (a.size + b.size) :=
-    (Nat.lt_size_self b).trans_le (Nat.pow_le_pow_right (by decide) (Nat.le_add_left _ _))
-  have hmax := Nat.succ_le_of_lt (max_lt ha hb)
-  have h := (Nat.pair_lt_max_add_one_sq a b).trans_le (Nat.pow_le_pow_left hmax 2)
-  apply Nat.size_le.mpr
-  simpa [← pow_mul, Nat.mul_comm] using h
-
 private noncomputable def alphabetCodeBound [Fintype Γ] [Encodable Γ] : Nat :=
   max ((Finset.univ : Finset Γ).sup fun symbol => (Encodable.encode symbol).size)
     ((Finset.univ : Finset (Option (TapeSymbol Γ))).sup
@@ -48,7 +38,7 @@ private noncomputable def alphabetCodeBound [Fintype Γ] [Encodable Γ] : Nat :=
 
 private theorem variableName_length_le [Fintype Γ] [Encodable Γ] {problem : Instance Γ}
     (entry : Variable problem) :
-    (variableName entry).length ≤ 8 * (problem.certificateLength + problem.time +
+    (Variable.name entry).length ≤ 2 * (problem.certificateLength + problem.time +
       width problem + problem.verifier.states + alphabetCodeBound (Γ := Γ) + 2) := by
   classical
   have hsize (n : Nat) : n.size ≤ n := Nat.size_le.mpr Nat.lt_two_pow_self
@@ -67,38 +57,29 @@ private theorem variableName_length_le [Fintype Γ] [Encodable Γ] {problem : In
     | some state =>
       change state.val + 1 ≤ problem.verifier.states + 1
       exact state.isLt
-  simp only [variableName, length_encodingNatBool]
   cases entry with
   | certificate position symbol =>
-    have h₁ := size_pair_le 0 (Nat.pair position.val (Encodable.encode symbol))
-    have h₂ := size_pair_le position.val (Encodable.encode symbol)
-    have h₃ := hsize position.val
-    have h₄ := hsymbol symbol
-    have h₅ := position.isLt
-    simp only [variableCode, Nat.size_zero] at *
+    rw [Variable.length_name_certificate]
+    have hp := position.isLt
+    have hs := hsymbol symbol
+    have hn := hsize position.val
     lia
   | tape time position symbol =>
-    have h₁ := size_pair_le 1 (Nat.pair time.val (Nat.pair position.val (Encodable.encode symbol)))
-    have h₂ := size_pair_le time.val (Nat.pair position.val (Encodable.encode symbol))
-    have h₃ := size_pair_le position.val (Encodable.encode symbol)
-    have h₄ := hsize time.val
-    have h₅ := hsize position.val
-    have h₆ := hcell symbol
+    rw [Variable.length_name_tape]
     have ht := time.isLt
     have hp := position.isLt
-    simp only [variableCode, Nat.size_one] at *
+    have hs := hcell symbol
+    have hn := hsize time.val
+    have hm := hsize position.val
     lia
   | head time control =>
     obtain ⟨position, state⟩ := control
-    have h₁ := size_pair_le 2 (Nat.pair time.val (Nat.pair position.val (Encodable.encode state)))
-    have h₂ := size_pair_le time.val (Nat.pair position.val (Encodable.encode state))
-    have h₃ := size_pair_le position.val (Encodable.encode state)
-    have h₄ := hsize time.val
-    have h₅ := hsize position.val
-    have h₆ := hstate state
+    rw [Variable.length_name_head]
     have ht := time.isLt
     have hp := position.isLt
-    simp only [variableCode, show Nat.size 2 = 2 from rfl] at *
+    have hs := hstate state
+    have hn := hsize time.val
+    have hm := hsize position.val
     lia
 
 private def clauseCountExpression {R : Type} [Semiring R]
@@ -113,7 +94,7 @@ private def clauseCountExpression {R : Type} [Semiring R]
 private def lengthExpression {R : Type} [Semiring R]
     (alphabet code m time cells states : R) : R :=
   let literals := alphabet + 2 + cells * (states + 2) + cells + 3
-  let digits := 8 * (m + time + cells + states + code + 2)
+  let digits := 2 * (m + time + cells + states + code + 2)
   clauseCountExpression alphabet m time cells states * (literals * (digits + 2) + 2) + 1
 
 section Indexed
@@ -146,20 +127,20 @@ private theorem indexedFormula_bounds (problem : Instance Γ) (yes : Γ) :
       fun clause h => (hfl clause h).trans (by lia)⟩
 
 private theorem indexedFormula_encoded_length [Encodable Γ] (problem : Instance Γ) (yes : Γ) :
-    (SAT.encoding.encode ((indexedFormula problem yes).rename variableName)).length ≤
+    (SAT.encoding.encode ((indexedFormula problem yes).rename Variable.name)).length ≤
       lengthExpression (Fintype.card Γ) (alphabetCodeBound (Γ := Γ))
         problem.certificateLength problem.time (width problem) problem.verifier.states := by
   let literals := Fintype.card Γ + 2 + width problem * (problem.verifier.states + 2) +
     width problem + 3
-  let digits := 8 * (problem.certificateLength + problem.time + width problem +
+  let digits := 2 * (problem.certificateLength + problem.time + width problem +
     problem.verifier.states + alphabetCodeBound (Γ := Γ) + 2)
   obtain ⟨hc, hl⟩ := indexedFormula_bounds problem yes
-  have hclause : ∀ clause ∈ (indexedFormula problem yes).rename variableName,
+  have hclause : ∀ clause ∈ (indexedFormula problem yes).rename Variable.name,
       clause.length ≤ literals := by
     intro clause h
     obtain ⟨original, ho, rfl⟩ := List.mem_map.mp h
     simpa [Clause.rename] using hl original ho
-  have hname : ∀ literal ∈ ((indexedFormula problem yes).rename variableName).flatten,
+  have hname : ∀ literal ∈ ((indexedFormula problem yes).rename Variable.name).flatten,
       literal.name.length ≤ digits := by
     intro literal h
     obtain ⟨clause, hc, hl⟩ := List.mem_flatten.mp h
@@ -168,7 +149,7 @@ private theorem indexedFormula_encoded_length [Encodable Γ] (problem : Instance
     cases entry <;> exact variableName_length_le _
   have he := SAT.length_encoding_le _ literals digits hclause hname
   have hm := Nat.mul_le_mul_right (literals * (digits + 2) + 2)
-    (show ((indexedFormula problem yes).rename variableName).length ≤ _ from by
+    (show ((indexedFormula problem yes).rename Variable.name).length ≤ _ from by
       simpa only [CNF.rename, List.length_map] using hc)
   exact he.trans (Nat.add_le_add_right hm 1)
 

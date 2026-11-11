@@ -22,6 +22,8 @@ and every input length. For example:
   depends on the current input must instead be represented on the tape and processed by a loop.
 - `writePolynomial tm symbols word p` fixes the polynomial and the repeated word. Its running
   program reads the input length from the tape to determine how many copies to write.
+- `forUnary tm zero one tick unitTail action` fixes one action and the word representing each
+  unit. The count and position counter stay on the tape. The same action runs at every position.
 
 Lean allows a function to choose different template arguments for different inputs. That would
 describe a family of programs, rather than one machine computing on all inputs. The template's

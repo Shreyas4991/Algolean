@@ -32,10 +32,13 @@ public import AlgoleanTests.SingleTapeTMSolves
 public import AlgoleanTests.SingleTapeTMVerification
 public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.TMSAT
+public import AlgoleanTests.TMSATCertificateChoices
+public import AlgoleanTests.TMSATNaming
 public import AlgoleanTests.TMSATNumbers
 public import AlgoleanTests.TMSATParsing
 public import AlgoleanTests.TMSATStateFields
 public import AlgoleanTests.TMSATToSAT
 public import AlgoleanTests.TMSATToSATTape
+public import AlgoleanTests.TMSATVariableNames
 public import AlgoleanTests.TMSATWriting
 public import AlgoleanTests.WordRAMExamples

@@ -8,6 +8,7 @@ module
 
 public import Algolean.Complexity.Reductions.TMSATToSAT.Initial
 public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
+public import Algolean.Complexity.Reductions.TMSATToSAT.VariableNames
 public import Algolean.Problems.Encodings.SAT
 public import Algolean.Problems.Encodings.TMSAT
 
@@ -32,30 +33,6 @@ open Computability Problems Problems.SAT Problems.TMSAT
 variable {Γ : Type}
 
 namespace Formula
-
-/-- This numbers the certificate, tape, and head variables without identifying different choices. -/
-@[expose] def variableCode [Encodable Γ] {problem : Instance Γ} : Variable problem → Nat
-  | .certificate position symbol => Nat.pair 0 (Nat.pair position.val (Encodable.encode symbol))
-  | .tape time position symbol =>
-    Nat.pair 1 (Nat.pair time.val (Nat.pair position.val (Encodable.encode symbol)))
-  | .head time (position, state) =>
-    Nat.pair 2 (Nat.pair time.val (Nat.pair position.val (Encodable.encode state)))
-
-private theorem variableCode_injective [Encodable Γ] {problem : Instance Γ} :
-    Function.Injective (variableCode (problem := problem)) := by
-  intro first second h
-  cases first <;> cases second <;>
-    simp only [variableCode, Nat.pair_eq_pair] at h <;>
-    grind [Encodable.encode_injective, Fin.ext_iff]
-
-/-- This writes a variable’s number as a binary word for SAT’s existing variable type. -/
-@[expose] def variableName [Encodable Γ] {problem : Instance Γ} (entry : Variable problem) :
-    SAT.Variable := encodingNatBool.encode (variableCode entry)
-
-/-- Different certificate, tape, and head choices receive different SAT variable names. -/
-theorem variableName_injective [Encodable Γ] {problem : Instance Γ} :
-    Function.Injective (variableName (problem := problem)) :=
-  encodingNatBool.encode_injective.comp variableCode_injective
 
 section Indexed
 
@@ -125,13 +102,14 @@ variable [Fintype Γ]
 
 /--
 This constructs a CNF formula whose satisfying assignments describe an accepting computation
-of the given TMSAT instance. It uses SAT's existing binary variable names. The numbering of the
-alphabet is fixed once and does not depend on the instance or on the accepting certificate.
+of the given TMSAT instance. It uses binary names with separate fields for each variable's indices.
+The numbering of the alphabet is fixed once and does not depend on the instance or on the
+accepting certificate.
 -/
 @[expose] noncomputable def formula (problem : Instance Γ) (yes : Γ) : CNF SAT.Variable := by
   classical
   letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
-  exact (indexedFormula problem yes).rename variableName
+  exact (indexedFormula problem yes).rename Variable.name
 
 /--
 This converts an encoded TMSAT instance to the encoding of its CNF formula over the same

@@ -9,6 +9,7 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
 public import Mathlib.Data.Nat.Digits.Defs
+public import Algolean.Models.SingleTapeTM.Alphabet.Encoding
 
 /-!
 # Adding one to a binary word
@@ -100,6 +101,23 @@ theorem binaryValue_incrementBits (bits : List Bool) :
   induction bits with
   | nil => simp
   | cons bit bits ih => cases bit <;> simp_all <;> lia
+
+private theorem incrementBits_encodePosNum (p : PosNum) :
+    incrementBits (Computability.encodePosNum p) = Computability.encodePosNum p.succ := by
+  induction p <;> simp_all [Computability.encodePosNum, PosNum.succ, incrementBits]
+
+/-- Incrementing the chosen binary encoding gives the chosen encoding of the next number. -/
+@[simp] theorem incrementBits_encodingNatBool (n : Nat) :
+    incrementBits (Computability.encodingNatBool.encode n) =
+      Computability.encodingNatBool.encode (n + 1) := by
+  have h : (n + 1 : Num) = (n : Num).succ := by
+    apply Num.toNat_injective
+    simp [Num.succ_to_nat]
+  change incrementBits (Computability.encodeNum (n : Num)) =
+    Computability.encodeNum ((n + 1 : Nat) : Num)
+  rw [Nat.cast_add, Nat.cast_one, h]
+  cases (n : Num) <;> simp [Computability.encodeNum, Num.succ, Num.succ',
+    incrementBits_encodePosNum, Computability.encodePosNum]
 
 /--
 Adding one preserves the input length or increases it by one. The incremented word therefore has at
