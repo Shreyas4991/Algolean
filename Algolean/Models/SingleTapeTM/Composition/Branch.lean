@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Composition.Component
+public import Algolean.Models.SingleTapeTMSyntax
 
 /-!
 # Branch composition of single-tape query procedures
@@ -119,6 +120,7 @@ end Algolean.Algorithms
 namespace Algolean.Algorithms.Component
 
 open Cslib.Turing TMQuery
+open scoped TMQuery
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
@@ -130,7 +132,11 @@ variable {post : ι → TMState tm → TMCost → TMState tm → Prop}
     (yes : Component tm (fun i s => pre i s ∧ condition.eval s.config = true) post)
     (no : Component tm (fun i s => pre i s ∧ condition.eval s.config = false) post) :
     Component tm pre post where
-  program := TMQuery.branch condition yes.program no.program
+  program := do [TMQuery tm]
+    ifₜ condition then
+      yes.program
+    else
+      no.program
   correct i s hs := by
     by_cases h : condition.eval s.config = true
     · obtain ⟨cost, final, hc, hp⟩ := yes.correct i s ⟨hs, h⟩

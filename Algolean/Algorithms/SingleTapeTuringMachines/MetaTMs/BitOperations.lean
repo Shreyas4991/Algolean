@@ -8,6 +8,7 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Branch
+public import Algolean.Models.SingleTapeTM.Verification
 
 /-!
 # Flipping the bit under the head
@@ -23,7 +24,9 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
 
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec
+
+set_option experimental.vcgen true
 
 variable {tm : SingleTapeTM Bool} [DecidableEq tm.State]
 
@@ -50,21 +53,9 @@ head position and control state and uses no head moves or additional tape cells.
 theorem flipBit_correct (s : TMState tm) :
     Runs (flipBit tm) s (s.config.BiTape.write (s.config.BiTape.head.map Bool.not))
       s.headPos 0 := by
-  refine ⟨0, s.write (s.config.BiTape.head.map Bool.not), ?_, rfl, rfl, rfl⟩
-  unfold flipBit
-  apply Completes.branch
-  cases h : s.config.BiTape.head with
-  | none =>
-    simp only [TMCondition.eval, h, reduceCtorEq, decide_false, Bool.false_eq_true,
-      ↓reduceIte, Option.map_none]
-    apply Completes.branch
-    simpa [h] using completes_write s none
-  | some bit =>
-    cases bit with
-    | false =>
-      simp only [TMCondition.eval, h, Option.map_some, Bool.not_false]
-      apply Completes.branch
-      simpa [h] using completes_write s (some true)
-    | true => simpa [h] using completes_write s (some false)
+  apply Spec.runs
+  vcgen [flipBit]
+  all_goals simp_all [TMCondition.eval, TMState.write]
+  all_goals cases h : s.config.BiTape.head <;> simp_all
 
 end Algolean.Algorithms.SingleTapeTuringMachines

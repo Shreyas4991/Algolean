@@ -129,12 +129,12 @@ private theorem body_correct (cfg next : tm.Cfg) (s : TMState (machine tm))
     ∃ cost final, Completes (body tm) s cost final ∧
       final.config = encode tm next ∧ cost.steps = 1 := by
   cases cfg with
-  | mk label tape =>
+  | mk label inputTape =>
     cases label with
     | none => simp at hstep
     | some label =>
       obtain ⟨cost, final, hr, hf, ht⟩ := action_correct tm label s
-      have htape : s.config.BiTape = tape := by simp [hs, encode]
+      have htape : s.config.BiTape = inputTape := by simp [hs, encode]
       have hsymbols : Completes (forState tm label) s cost final := by
         apply select_correct _ _ _ s.config.BiTape.head s final cost (mem_values _) _ hr
         intro candidate
