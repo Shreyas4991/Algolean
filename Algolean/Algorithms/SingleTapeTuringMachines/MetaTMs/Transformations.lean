@@ -61,7 +61,7 @@ theorem appendBit_correct (bits : List Bool) (bit : Bool) (s : TMState tm)
     (middle.write (some bit)) (by simp [TMState.write, ht])
   apply Spec.runs
   vcgen [appendBit, Spec.steps hc 0, Spec.steps hr bits.length]
-  all_goals simp_all [TMState.write, add_assoc, add_comm, add_left_comm, two_mul]
+  all_goals simp_all [TMState.write, add_assoc, add_comm, two_mul]
 
 /--
 `complementRight tm` is a Turing machine program that flips each occupied Boolean cell from the
@@ -129,6 +129,6 @@ theorem complementBlock_correct (bits : List Bool) (s : TMState tm)
     (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht)
   apply Spec.runs
   vcgen [complementBlock, Spec.steps hc 0, Spec.steps hr bits.length]
-  all_goals simp_all [add_assoc, add_comm, add_left_comm, two_mul]
+  all_goals simp_all [add_assoc, add_comm, two_mul]
 
 end Algolean.Algorithms.SingleTapeTuringMachines
