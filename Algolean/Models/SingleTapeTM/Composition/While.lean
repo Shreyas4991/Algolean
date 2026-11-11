@@ -109,6 +109,7 @@ end Algolean.Algorithms
 namespace Algolean.Algorithms.Component
 
 open Cslib.Turing TMQuery
+open scoped TMQuery
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
@@ -124,7 +125,9 @@ def whileLoop {ι : Type} (condition : TMCondition tm) (invariant : ι → TMSta
       (fun i s cost final => invariant i final ∧ rank final < rank s ∧ cost.steps ≤ bound i)) :
     Component tm invariant (fun i s cost final => invariant i final ∧
       condition.eval final.config = false ∧ cost.steps ≤ rank s * bound i) where
-  program := TMQuery.whileLoop condition body.program
+  program := do [TMQuery tm]
+    whileₜ condition do
+      body.program
   correct i s hs := by
     generalize hn : rank s = n
     induction n using Nat.strong_induction_on generalizing s with

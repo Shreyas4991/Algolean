@@ -58,7 +58,7 @@ theorem writeTrue_not_constant_computation (time space : ℕ → ℕ) :
       (h.outputsWithinTime [false, false])
   have hfinal := (hc.unique (completes_write (TMState.init machine [false, false]) (some true))).2
   rw [hfinal] at ht
-  have hright := congrArg (fun tape : BiTape Bool => tape.right.head) ht
+  have hright := congrArg (fun resultTape : BiTape Bool => resultTape.right.head) ht
   change some false = none at hright
   cases hright
 

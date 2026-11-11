@@ -6,6 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
+public import Algolean.Models.SingleTapeTM.Verification
+
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
 
 /-!
@@ -25,7 +27,9 @@ its way back even when the current region is empty.
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery Copying
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
@@ -116,12 +120,10 @@ theorem setLeftCell_correct (old value : Option Symbol) (left : StackTape Symbol
     (hs : s.config.BiTape = segment (StackTape.cons old left) word tail) :
     Runs (setLeftCell tm value) s (segment (StackTape.cons value left) word tail)
       s.headPos 2 := by
-  refine ⟨_, _, ⟨3, rfl⟩, ?_, ?_, ?_⟩
-  · cases word <;>
-      simp [TMQuery.step, hs, Copying.segment, BiTape.segment, BiTape.moveLeft, BiTape.moveRight,
-        BiTape.write]
-  · simp [TMQuery.step, sub_eq_add_neg, add_assoc]
-  · rfl
+  apply Spec.runs
+  vcgen [setLeftCell]
+  cases word <;> simp_all [TMState.move, TMState.write, TMState.moveCost,
+    BiTape.segment, BiTape.moveLeft, BiTape.moveRight, BiTape.write]
 
 /--
 This appends the fixed word to the region under the head and returns to its first cell. It uses

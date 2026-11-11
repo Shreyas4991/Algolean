@@ -126,6 +126,7 @@ public import Algolean.Models.SingleTapeTM.Description
 public import Algolean.Models.SingleTapeTM.DescriptionEncoding
 public import Algolean.Models.SingleTapeTM.Solves
 public import Algolean.Models.SingleTapeTM.Tape
+public import Algolean.Models.SingleTapeTM.Verification
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
