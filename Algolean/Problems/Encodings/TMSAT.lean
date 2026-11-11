@@ -26,6 +26,13 @@ The alphabet `Γ` is fixed. Input symbols are represented by binary words determ
 `Encodable Γ` instance. Since `Γ` is finite, one constant bounds all these symbol-code lengths.
 Extra symbols separate the four parts of the instance.
 
+Each transition has separate fields for the written cell value, movement, and next state.
+The written cell values are numbered within the fixed finite tape alphabet, including blank.
+Movement code zero means no movement, one means left, and two means right. Next-state code
+zero means halt, and code `q + 1` means continue in state `q`. Separating these fields lets a
+machine read them without undoing a numeric pairing function. Decoding checks each field and
+rejects references to states missing from the table.
+
 In `encoding`, a bound of `k` is written as exactly `k` symbols. In `encodingOver`, each of those
 symbols is replaced by a fixed-length word over `Γ`. This multiplies the length of each bound
 by one fixed constant. The bound's value stays the same.
@@ -76,6 +83,8 @@ abbrev CodeSymbol := Extended PayloadSymbol 1
 
 /-- Equality of description symbols uses only their fixed alphabet tags and binary digits. -/
 instance : DecidableEq CodeSymbol := by
+  letI : DecidableEq SingleTapeTM.Description.MovementSymbol := inferInstance
+  letI : DecidableEq SingleTapeTM.Description.TransitionSymbol := inferInstance
   letI : DecidableEq SingleTapeTM.Description.RowSymbol := inferInstance
   letI : DecidableEq SingleTapeTM.Description.TableSymbol := inferInstance
   letI : DecidableEq SingleTapeTM.Description.BodySymbol := inferInstance
@@ -88,6 +97,12 @@ namespace CodeSymbol
 /-- This is one binary digit in a machine description, input-symbol number, or unary bound. -/
 def digit (bit : Bool) : CodeSymbol :=
   .inl (.inl (SingleTapeTM.Description.bitSymbol bit))
+
+/-- This separates the written cell value from the movement in one transition. -/
+def writeEnd : CodeSymbol := .inl (.inl (.inl (.inl (.inl (.inl (.inr 0))))))
+
+/-- This separates the movement from the next state in one transition. -/
+def movementEnd : CodeSymbol := .inl (.inl (.inl (.inl (.inl (.inl (.inl (.inr 0)))))))
 
 /-- This ends one transition's numeric code or one input symbol's numeric code. -/
 def entryEnd : CodeSymbol := .inl (.inl (.inl (.inl (.inl (.inr 0)))))

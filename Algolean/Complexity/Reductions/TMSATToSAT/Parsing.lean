@@ -45,7 +45,12 @@ inductive Stage (Γ : Type) [Fintype Γ] where
   | header
   /-- Binary digits describe the verifier's initial state. -/
   | initial
-  /-- Binary digits describe the transition at this fixed position within its row. -/
+  /-- The written cell value or movement begins at this fixed position within its row. -/
+  | transitionStart (column : Fin (Fintype.card (Option (TapeSymbol Γ)))) (movement : Bool)
+  /-- Binary digits record a written cell value or movement within the fixed alphabet bounds. -/
+  | transitionDigits (column : Fin (Fintype.card (Option (TapeSymbol Γ)))) (movement : Bool)
+      (value weight : Fin (Fintype.card (Option (TapeSymbol Γ)) + 1)) (last : Bool)
+  /-- Binary digits describe the next state at this fixed position within its row. -/
   | entry (column : Fin (Fintype.card (Option (TapeSymbol Γ))))
   /-- All transitions in the row have been read, so its ending must appear. -/
   | rowClose
@@ -78,6 +83,14 @@ instance : DecidableEq (Stage Γ) := by
     try first
       | exact isTrue rfl
       | (refine isFalse ?_; intro h; cases h; done)
+  · rename_i firstColumn firstMovement secondColumn secondMovement
+    exact decidable_of_iff
+      (firstColumn = secondColumn ∧ firstMovement = secondMovement) (by simp)
+  · rename_i firstColumn firstMovement firstValue firstWeight firstLast
+      secondColumn secondMovement secondValue secondWeight secondLast
+    exact decidable_of_iff
+      (firstColumn = secondColumn ∧ firstMovement = secondMovement ∧ firstValue = secondValue ∧
+        firstWeight = secondWeight ∧ firstLast = secondLast) (by simp)
   · rename_i first second
     exact decidable_of_iff (first = second) (by simp)
   · rename_i firstValue firstWeight firstLast secondValue secondWeight secondLast
@@ -88,7 +101,14 @@ instance : DecidableEq (Stage Γ) := by
 def stages : List (Stage Γ) :=
   [.header, .initial, .rowClose, .rowEnd, .rowStart, .machineEnd,
     .inputStart, .boundsStart, .certificate, .time, .reject] ++
-    (List.finRange (Fintype.card (Option (TapeSymbol Γ)))).map Stage.entry ++
+    (List.finRange (Fintype.card (Option (TapeSymbol Γ)))).flatMap (fun column =>
+      [Stage.entry column, Stage.transitionStart column false, Stage.transitionStart column true] ++
+      (List.finRange (Fintype.card (Option (TapeSymbol Γ)) + 1)).flatMap (fun value =>
+        (List.finRange (Fintype.card (Option (TapeSymbol Γ)) + 1)).flatMap fun weight =>
+          [Stage.transitionDigits column false value weight false,
+           Stage.transitionDigits column false value weight true,
+           Stage.transitionDigits column true value weight false,
+           Stage.transitionDigits column true value weight true])) ++
     (List.finRange (Fintype.card Γ + 1)).flatMap (fun value =>
       (List.finRange (Fintype.card Γ + 1)).flatMap fun weight =>
         [Stage.inputDigits value weight false, Stage.inputDigits value weight true])
@@ -97,6 +117,9 @@ def stages : List (Stage Γ) :=
 theorem mem_stages (label : Stage Γ) : label ∈ stages := by
   cases label with
   | inputDigits value weight last => cases last <;> simp [stages]
+  | transitionStart column movement => cases movement <;> simp [stages]
+  | transitionDigits column movement value weight last =>
+    cases movement <;> cases last <;> simp [stages]
   | _ => simp [stages]
 
 instance : Fintype (Stage Γ) := .ofList stages mem_stages
@@ -123,8 +146,33 @@ private def firstColumn : Fin (Fintype.card (Option (TapeSymbol Γ))) :=
   ⟨0, Fintype.card_pos⟩
 
 private def afterEntry (column : Fin (Fintype.card (Option (TapeSymbol Γ)))) : Stage Γ :=
-  if h : column.val + 1 < Fintype.card (Option (TapeSymbol Γ)) then .entry ⟨column.val + 1, h⟩
+  if h : column.val + 1 < Fintype.card (Option (TapeSymbol Γ)) then
+    .transitionStart ⟨column.val + 1, h⟩ false
   else .rowClose
+
+private def transitionDigit (column : Fin (Fintype.card (Option (TapeSymbol Γ))))
+    (movement : Bool) (value weight : Fin (Fintype.card (Option (TapeSymbol Γ)) + 1))
+    (bit : Bool) : Stage Γ :=
+  let next := value.val + if bit then weight.val else 0
+  if h : next < Fintype.card (Option (TapeSymbol Γ)) then
+    .transitionDigits column movement ⟨next, by lia⟩
+      ⟨min (2 * weight.val) (Fintype.card (Option (TapeSymbol Γ))), by lia⟩ bit
+  else .reject
+
+private def startTransitionDigit (column : Fin (Fintype.card (Option (TapeSymbol Γ))))
+    (movement bit : Bool) : Stage Γ :=
+  transitionDigit column movement ⟨0, by lia⟩
+    ⟨min 1 (Fintype.card (Option (TapeSymbol Γ))), by lia⟩ bit
+
+private def afterTransitionField (column : Fin (Fintype.card (Option (TapeSymbol Γ))))
+    (movement : Bool) : Stage Γ :=
+  if movement then .entry column else .transitionStart column true
+
+private def transitionEnding (movement : Bool) : CodeSymbol :=
+  if movement then movementEnd else writeEnd
+
+private def transitionBound (movement : Bool) : Nat :=
+  if movement then 3 else Fintype.card (Option (TapeSymbol Γ))
 
 private def inputDigit (value weight : Fin (Fintype.card Γ + 1)) (bit : Bool) : Stage Γ :=
   let next := value.val + if bit then weight.val else 0
@@ -141,14 +189,27 @@ private def afterSymbol (label : Stage Γ) (symbol : CodeSymbol) : Stage Γ :=
   | .header => if symbol = digit false ∨ symbol = digit true then .header
       else if symbol = headerEnd then .initial else .reject
   | .initial => if symbol = digit false ∨ symbol = digit true then .initial
-      else if symbol = initialEnd then .entry firstColumn else .reject
+      else if symbol = initialEnd then .transitionStart firstColumn false else .reject
+  | .transitionStart column movement =>
+      if symbol = digit false then startTransitionDigit column movement false
+      else if symbol = digit true then startTransitionDigit column movement true
+      else if symbol = transitionEnding movement then afterTransitionField column movement
+      else .reject
+  | .transitionDigits column movement value weight last =>
+      if symbol = digit false then transitionDigit column movement value weight false
+      else if symbol = digit true then transitionDigit column movement value weight true
+      else if symbol = transitionEnding movement ∧
+          (if last then value.val else value.val + weight.val) < transitionBound (Γ := Γ) movement
+        then afterTransitionField column movement
+      else .reject
   | .entry column =>
       if symbol = digit false ∨ symbol = digit true then .entry column
       else if symbol = entryEnd then afterEntry column else .reject
   | .rowClose => if symbol = listEnd then .rowEnd else .reject
   | .rowStart =>
-      if symbol = digit false ∨ symbol = digit true then .entry firstColumn
-      else if symbol = entryEnd then afterEntry firstColumn
+      if symbol = digit false then startTransitionDigit firstColumn false false
+      else if symbol = digit true then startTransitionDigit firstColumn false true
+      else if symbol = writeEnd then .transitionStart firstColumn true
       else if symbol = tableEnd then .machineEnd else .reject
   | .rowEnd => if symbol = rowSeparator then .rowStart else .reject
   | .machineEnd => if symbol = fieldSeparator then .inputStart else .reject
@@ -172,12 +233,12 @@ private noncomputable def chooseSymbol (label : Stage Γ) :
     List CodeSymbol → Prog (TMQuery (machine (Γ := Γ))) Unit
   | [] => do [TMQuery (machine (Γ := Γ))]
     state ←ₜ Sum.inl Stage.reject
-    FreeM.lift (.move .Right)
+    moveₜ .Right
   | symbol :: rest => do [TMQuery (machine (Γ := Γ))]
     checkPrefix (machine (Γ := Γ)) (.inr (label, symbol)) (.inl label) (code symbol)
     ifₜ state =ₜ some (Sum.inr (label, symbol)) then
       moveCells (machine (Γ := Γ)) .Right (code (Γ := Γ) symbol).length
-      FreeM.lift (.update (Sum.inl (afterSymbol label symbol)))
+      state ←ₜ Sum.inl (afterSymbol label symbol)
     else
       chooseSymbol label rest
 
@@ -186,7 +247,9 @@ private noncomputable def readOne : Prog (TMQuery (machine (Γ := Γ))) Unit :=
     (fun label => chooseSymbol label symbols)
 
 private noncomputable def scanDescription : Prog (TMQuery (machine (Γ := Γ))) Unit :=
-  whileLoop (.not (.tapeIs none)) readOne
+    do [TMQuery (machine (Γ := Γ))]
+  whileₜ (notₜ tape =ₜ none) do
+    readOne
 
 /--
 This fixed Query program reads the description's symbol encodings and field separators.
@@ -195,10 +258,10 @@ all comparison words are fixed once; tape tests select the comparisons during ex
 -/
 noncomputable def checkStructure : Prog (TMQuery (machine (Γ := Γ))) Unit :=
     do [TMQuery (machine (Γ := Γ))]
-  FreeM.lift (.update (Sum.inl Stage.header))
+  state ←ₜ Sum.inl Stage.header
   scanDescription
   seekLeftEnd (machine (Γ := Γ))
-  FreeM.lift (.move .Right)
+  moveₜ .Right
 
 private noncomputable def firstSymbol
     (candidates : List CodeSymbol) (word : List Γ) : Option CodeSymbol :=
@@ -208,10 +271,11 @@ private noncomputable def consumed (candidates : List CodeSymbol) (word : List �
   ((firstSymbol candidates word).map fun symbol => (code (Γ := Γ) symbol).length).getD 1
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-private theorem code_length (symbol : CodeSymbol) : (code (Γ := Γ) symbol).length = 10 := by
+private theorem code_length (symbol : CodeSymbol) : (code (Γ := Γ) symbol).length = 12 := by
   simp [code, CodeSymbol, PayloadSymbol, SingleTapeTM.Description.CodeSymbol,
     SingleTapeTM.Description.BodySymbol, SingleTapeTM.Description.TableSymbol,
-    SingleTapeTM.Description.RowSymbol, Extended]
+    SingleTapeTM.Description.RowSymbol, SingleTapeTM.Description.TransitionSymbol,
+        SingleTapeTM.Description.MovementSymbol, Extended]
 
 omit [Inhabited Γ] [Fintype Γ] in
 private theorem consumed_pos (candidates : List CodeSymbol) (word : List Γ) :
@@ -332,17 +396,19 @@ private theorem readOne_correct (label : Stage Γ) (left tail : StackTape Γ)
       final.config = ⟨some (.inl (nextStage label word)),
         BiTape.segment (StackTape.prepend (word.take (consumed symbols word)).reverse left)
           (word.drop (consumed symbols word)) tail⟩ ∧
-      final.headPos = s.headPos + consumed symbols word ∧ cost.steps ≤ 210 := by
+      final.headPos = s.headPos + consumed symbols word ∧ cost.steps ≤ 300 := by
   obtain ⟨cost, final, hc, hcfg, hpos, hb⟩ :=
     chooseSymbol_correct label symbols left tail word hword s htape
   refine ⟨cost, final, ?_, hcfg, hpos, ?_⟩
   · exact select_correct stages _ _ label s final cost (mem_stages label)
       (by intro candidate; simp [hstate, eq_comm]) hc
-  · have hsum : (symbols.map fun symbol => (code (Γ := Γ) symbol).length).sum = 100 := by
+  · have hsum : (symbols.map fun symbol => (code (Γ := Γ) symbol).length).sum = 144 := by
       simp [code_length, symbols, CodeSymbol, PayloadSymbol,
         SingleTapeTM.Description.CodeSymbol, SingleTapeTM.Description.BodySymbol,
-        SingleTapeTM.Description.TableSymbol, SingleTapeTM.Description.RowSymbol, Extended]
-    have hcount : consumed symbols word ≤ 10 := by
+        SingleTapeTM.Description.TableSymbol, SingleTapeTM.Description.RowSymbol,
+        SingleTapeTM.Description.TransitionSymbol,
+        SingleTapeTM.Description.MovementSymbol, Extended]
+    have hcount : consumed symbols word ≤ 12 := by
       unfold consumed
       cases firstSymbol symbols word <;> simp [code_length]
     rw [hsum] at hb
@@ -486,7 +552,7 @@ private theorem scanDescription_correct (label : Stage Γ) (left tail : StackTap
     ∃ cost final, Completes scanDescription s cost final ∧
       final.config = ⟨some (.inl (readStages label word)),
         BiTape.segment (StackTape.prepend word.reverse left) [] tail⟩ ∧
-      final.headPos = s.headPos + word.length ∧ cost.steps ≤ 210 * word.length := by
+      final.headPos = s.headPos + word.length ∧ cost.steps ≤ 300 * word.length := by
   induction hn : word.length using Nat.strong_induction_on generalizing label left word s with
   | h size ih =>
     cases word with
@@ -518,8 +584,8 @@ private theorem scanDescription_correct (label : Stage Γ) (left tail : StackTap
         rw [hfpos, hmpos]
         simp only [word, count, List.length_cons] at hle ⊢
         lia
-      · have hfirst : cost.steps ≤ 210 * count :=
-          hb.trans (Nat.le_mul_of_pos_right 210 hp)
+      · have hfirst : cost.steps ≤ 300 * count :=
+          hb.trans (Nat.le_mul_of_pos_right 300 hp)
         simp only [TMCost.add_steps]
         have htotal := Nat.add_le_add hfirst hbound
         simp only [List.length_drop] at htotal
@@ -533,7 +599,7 @@ private theorem checkStructure_result (marker : Γ) (left tail : StackTape Γ)
       (StackTape.cons (some marker) (StackTape.cons none left)) word tail) :
     ∃ cost final, Completes checkStructure s cost final ∧
       final.config = ⟨some (.inl (readStages .header word)), s.config.BiTape⟩ ∧
-      final.headPos = s.headPos ∧ cost.steps ≤ 211 * word.length + 4 := by
+      final.headPos = s.headPos ∧ cost.steps ≤ 301 * word.length + 4 := by
   let initial : TMState (machine (Γ := Γ)) := {s with config.state := some (.inl .header)}
   obtain ⟨cost, middle, hc, hmiddle, hpos, hb⟩ := scanDescription_correct .header
     (StackTape.cons (some marker) (StackTape.cons none left)) tail word initial
@@ -560,7 +626,7 @@ private theorem checkStructure_result (marker : Γ) (left tail : StackTape Γ)
 
 /--
 The structure check preserves every tape cell and returns to the first input cell after its
-marker. For every word, including malformed words, it uses at most `211 * word.length + 4`
+marker. For every word, including malformed words, it uses at most `301 * word.length + 4`
 head moves. The words on either side of the input region remain unchanged.
 -/
 theorem checkStructure_time_bound (marker : Γ) (left tail : StackTape Γ)
@@ -569,7 +635,7 @@ theorem checkStructure_time_bound (marker : Γ) (left tail : StackTape Γ)
       (StackTape.cons (some marker) (StackTape.cons none left)) word tail) :
     ∃ cost final, Completes checkStructure s cost final ∧
       final.config.BiTape = s.config.BiTape ∧ final.headPos = s.headPos ∧
-      cost.steps ≤ 211 * word.length + 4 := by
+      cost.steps ≤ 301 * word.length + 4 := by
   obtain ⟨cost, final, hc, hcfg, hpos, hb⟩ := checkStructure_result marker left tail word s htape
   exact ⟨cost, final, hc, by simpa using congrArg SingleTapeTM.Cfg.BiTape hcfg, hpos, hb⟩
 
@@ -586,7 +652,7 @@ theorem checkStructure_correct (marker : Γ) (left tail : StackTape Γ)
       final.config = ⟨some (.inl (match (finiteWordsOver CodeSymbol Γ).decode word with
         | none => .reject
         | some original => formatResult original)), s.config.BiTape⟩ ∧
-      final.headPos = s.headPos ∧ cost.steps ≤ 211 * word.length + 4 := by
+      final.headPos = s.headPos ∧ cost.steps ≤ 301 * word.length + 4 := by
   obtain ⟨cost, final, hc, hcfg, hpos, hb⟩ := checkStructure_result marker left tail word s htape
   refine ⟨cost, final, hc, ?_, hpos, hb⟩
   rw [readStages_decode] at hcfg

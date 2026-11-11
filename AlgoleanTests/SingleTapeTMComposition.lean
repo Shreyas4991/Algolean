@@ -24,14 +24,15 @@ different head origin, and relabel finite control inside a loop and a branch.
 namespace AlgoleanTests.SingleTapeTMComposition
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
+open scoped TMQuery
 
 /-- Reuse the Boolean control alphabet of the interpreter examples. -/
 abbrev machine := SingleTapeTMExamples.machine
 
 /-- Visit the next cell and return to the starting position. -/
-def excursion : Prog (TMQuery machine) Unit := do
-  FreeM.lift (.move .Right)
-  FreeM.lift (.move .Left)
+def excursion : Prog (TMQuery machine) Unit := do [TMQuery machine]
+  moveₜ .Right
+  moveₜ .Left
 
 /-- Sequential composition proves the tape and head are restored with exactly two moves. -/
 theorem excursion_runs (s : TMState machine) :
@@ -79,8 +80,9 @@ example (input : List Bool) (s : TMState machine) (hs : s.config.BiTape = BiTape
   exact ⟨a, middle, b, final, hc, ha.2.1, hb.2.1⟩
 
 /-- Exit a loop by setting the fixed control label to `true`. -/
-def finishLoop : Prog (TMQuery machine) Unit :=
-  whileLoop (.stateIs (some false)) (FreeM.lift (.update true))
+def finishLoop : Prog (TMQuery machine) Unit := do [TMQuery machine]
+  whileₜ (state =ₜ some false) do
+    state ←ₜ true
 
 theorem finishLoop_completes (s : TMState machine) (h : s.config.state = some false) :
     Completes finishLoop s 0 {s with config.state := some true} := by

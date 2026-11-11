@@ -183,7 +183,11 @@ def TimeComputable.onNonempty {f : List Symbol → List Symbol} (computer : Time
   letI := computer.stateDecidableEq
   exact {
     tm := computer.tm
-    program := branch (.tapeIs none) (FreeM.lift (.write (some fallback))) computer.program
+    program := do [TMQuery computer.tm]
+      ifₜ tape =ₜ none then
+        tape ←ₜ some fallback
+      else
+        computer.program
     timeBound := computer.timeBound
     computesWithin := by
       apply TMQuery.ComputesWithin.of_outputsWithinTime

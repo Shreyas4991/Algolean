@@ -104,8 +104,10 @@ While in state `walking`, this program moves right across temporarily replaced d
 If `restore` is true, it writes each original binary digit back before moving. At the first
 other symbol, it stops moving and sets the state to `resume`.
 -/
-private def walkMarkedLoop (restore : Bool) (resume : State) : Prog (TMQuery machine) Unit :=
-  whileLoop (.stateIs (some State.walking)) (walkMarkedBody restore resume)
+private def walkMarkedLoop (restore : Bool) (resume : State) :
+    Prog (TMQuery machine) Unit := do [TMQuery machine]
+  whileₜ (state =ₜ some State.walking) do
+    walkMarkedBody restore resume
 
 /--
 This program starts `walkMarkedLoop` in state `walking`. It stops on the first symbol that is
@@ -285,8 +287,9 @@ private def compareBody (value : Bool) : Prog (TMQuery machine) Unit := do [TMQu
         finishComparison false value
 
 /-- This loop repeats the digit comparisons until they record equal or different names. -/
-private def compareLoop (value : Bool) : Prog (TMQuery machine) Unit :=
-  whileLoop (.stateIs (some State.comparing)) (compareBody value)
+private def compareLoop (value : Bool) : Prog (TMQuery machine) Unit := do [TMQuery machine]
+  whileₜ (state =ₜ some State.comparing) do
+    compareBody value
 
 /-- This program begins comparing names at the first query digit, or at its ending if empty. -/
 private def compareNames (value : Bool) : Prog (TMQuery machine) Unit := do [TMQuery machine]
@@ -322,8 +325,9 @@ private def lookupBody : Prog (TMQuery machine) Unit := do [TMQuery machine]
       checkEntry false
 
 /-- This loop continues checking entries while the state says the name has not been found. -/
-private def lookupLoop : Prog (TMQuery machine) Unit :=
-  whileLoop (.stateIs (some State.searching)) lookupBody
+private def lookupLoop : Prog (TMQuery machine) Unit := do [TMQuery machine]
+  whileₜ (state =ₜ some State.searching) do
+    lookupBody
 
 /--
 This program looks up the binary name at the start of the tape in the certificate that follows

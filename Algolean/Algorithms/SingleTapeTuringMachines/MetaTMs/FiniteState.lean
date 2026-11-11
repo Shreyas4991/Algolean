@@ -68,7 +68,8 @@ including it. The same finite program runs on every input length.
 -/
 def updateForSymbol (table : ScanTable tm) (label : tm.State) : Prog (TMQuery tm) Unit :=
   select table.symbols (fun symbol => .tapeIs (some symbol))
-    (fun symbol => FreeM.lift (.update (table.next label symbol)))
+    (fun symbol => do [TMQuery tm]
+      state ←ₜ table.next label symbol)
 
 /--
 If the head is on `symbol`, the program sets the state to `table.next label symbol`.

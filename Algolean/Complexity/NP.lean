@@ -71,7 +71,7 @@ def TimeComputable.onFirstWord {f : List Symbol → List Symbol} (machine : Time
   letI := machine.stateDecidableEq
   exact {
     tm := machine.tm.extendAlphabet (markers := 1)
-    program := do
+    program := do [TMQuery (machine.tm.extendAlphabet (markers := 1))]
       SingleTapeTuringMachines.firstWord (machine.tm.extendAlphabet (markers := 1))
       machine.program.reduceProg (alphabetReduction (markers := 1))
     timeBound n := 2 * n + 4 + machine.timeBound n

@@ -20,8 +20,9 @@ public import Mathlib.Logic.Equiv.Finset
 * `wordEncoding` stores words over a fixed finite alphabet using binary symbol codes. Its size
   grows at most linearly with the number of input symbols.
 
-Each transition uses a binary numeric code. Separate markers delimit rows, tables, and fields.
-The machine's states are numbered from zero through `states`.
+Each transition has three separate binary fields: the symbol to write, the direction to move,
+and the next state. A missing next state means that the machine halts. Separate symbols end
+these fields, the rows, and the table. The states are numbered from zero through `states`.
 -/
 
 @[expose] public section
@@ -30,8 +31,14 @@ namespace Cslib.Turing.SingleTapeTM.Description
 
 open Computability Algolean.Algorithms.Alphabet
 
-/-- These symbols separate the transitions within one row of the table. -/
-abbrev RowSymbol := Extended Bool 2
+/-- These symbols separate the movement from the next state in a transition. -/
+abbrev MovementSymbol := Extended Bool 1
+
+/-- These symbols also separate the written symbol from the rest of a transition. -/
+abbrev TransitionSymbol := Extended MovementSymbol 1
+
+/-- These symbols also separate the transitions within one row of the table. -/
+abbrev RowSymbol := Extended TransitionSymbol 2
 
 /-- These symbols also separate the rows within the table. -/
 abbrev TableSymbol := Extended RowSymbol 2
@@ -44,10 +51,27 @@ abbrev CodeSymbol := Extended BodySymbol 1
 
 variable {Symbol : Type} [Fintype Symbol] [Encodable Symbol]
 
+/--
+This stores the symbol to write, the optional movement, and the optional next state separately.
+The written cell value is numbered using the fixed finite alphabet, including its blank value.
+The other two fields use their existing numeric encodings. Decoding checks all three fields,
+including whether the next state exists.
+-/
+def transitionEncoding (states : ℕ) :
+    Encoding (Transition Symbol states) TransitionSymbol :=
+  (((Encoding.ofEncodable (Fin (Fintype.card (Option Symbol)))).ofEquiv
+    Encodable.fintypeEquivFin).comp (words Bool 1)).pair
+      ((Encoding.ofEncodable (Option Bool)).pair
+        (Encoding.ofEncodable (Option (Fin (states + 1)))))
+
+/-- This includes binary words in the alphabet used for table rows. -/
+def rowBits : Encoding (List Bool) RowSymbol :=
+  ((words Bool 1).comp (words MovementSymbol 1)).comp (words TransitionSymbol 2)
+
 /-- A row records one transition for each scanned cell value, in numeric code order. -/
 def rowEncoding (states : ℕ) :
     Encoding (Option Symbol → Transition Symbol states) RowSymbol :=
-  ((Encoding.ofEncodable (Transition Symbol states)).finFunction
+  ((transitionEncoding states).finFunction
     (Fintype.card (Option Symbol))).ofEquiv
       (Equiv.arrowCongr Encodable.fintypeEquivFin (Equiv.refl _))
 
@@ -60,7 +84,7 @@ def tableEncoding (states : ℕ) :
 def bodyEncoding (states : ℕ) :
     Encoding (Fin (states + 1) ×
       (Fin (states + 1) → Option Symbol → Transition Symbol states)) BodySymbol :=
-  (((Encoding.ofEncodable (Fin (states + 1))).comp (words Bool 2)).comp
+  (((Encoding.ofEncodable (Fin (states + 1))).comp rowBits).comp
     (words RowSymbol 2)).pair (tableEncoding states)
 
 /--
@@ -68,7 +92,7 @@ The largest state number determines the valid states and the dimensions of the t
 Decoding recovers the entire description, including its initial state and every transition.
 -/
 def encoding : Encoding (Description Symbol) CodeSymbol :=
-  ((((encodingNatBool.comp (words Bool 2)).comp (words RowSymbol 2)).comp
+  ((((encodingNatBool.comp rowBits).comp (words RowSymbol 2)).comp
     (words TableSymbol 1)).sigma (bodyEncoding (Symbol := Symbol))).ofEquiv equiv
 
 /--
@@ -89,16 +113,17 @@ theorem states_le_length_of_decode {word : List CodeSymbol} {machine : Descripti
 
 /-- Boolean words use the original bits of the description alphabet and contain no markers. -/
 def bitEncoding : Encoding (List Bool) CodeSymbol :=
-  ((((encodingList Bool).comp (words Bool 2)).comp (words RowSymbol 2)).comp
+  ((((encodingList Bool).comp rowBits).comp (words RowSymbol 2)).comp
     (words TableSymbol 1)).comp (words BodySymbol 1)
 
 /-- This represents a bit as an ordinary symbol of the machine-description alphabet. -/
-def bitSymbol (bit : Bool) : CodeSymbol := .inl (.inl (.inl (.inl bit)))
+def bitSymbol (bit : Bool) : CodeSymbol := .inl (.inl (.inl (.inl (.inl (.inl bit)))))
 
 /-- Encoding a Boolean word replaces each bit with its corresponding description symbol. -/
 theorem encode_bitEncoding (bits : List Bool) :
     bitEncoding.encode bits = bits.map bitSymbol := by
-  simp [bitEncoding, bitSymbol, Encoding.comp, words, encodingList, List.map_map, Function.comp_def]
+  simp [bitEncoding, rowBits, bitSymbol, Encoding.comp, words, encodingList, List.map_map,
+    Function.comp_def]
 
 /-- Adding the description markers to the alphabet preserves the length of a Boolean word. -/
 @[simp] theorem length_bitEncoding (word : List Bool) :
@@ -108,7 +133,7 @@ theorem encode_bitEncoding (bits : List Bool) :
 /-- A successfully decoded Boolean word consists of its bits with the alphabet tags added. -/
 theorem decode_bitEncoding_eq_some_iff {word : List CodeSymbol} {bits : List Bool} :
     bitEncoding.decode word = some bits ↔ word = bitEncoding.encode bits := by
-  simp only [bitEncoding, Encoding.decode_comp_eq_some_iff, decode_words_eq_some_iff]
+  simp only [bitEncoding, rowBits, Encoding.decode_comp_eq_some_iff, decode_words_eq_some_iff]
   simp [encodingList, Encoding.comp, words]
 
 omit [Fintype Symbol] in
@@ -118,7 +143,8 @@ code has an ending, and the list has its own ending. The description alphabet st
 when the input alphabet changes.
 -/
 def wordEncoding : Encoding (List Symbol) CodeSymbol :=
-  (((Encoding.ofEncodable Symbol).list.comp (words RowSymbol 2)).comp
+  (((((Encoding.ofEncodable Symbol).comp
+    ((words Bool 1).comp (words MovementSymbol 1))).list).comp (words RowSymbol 2)).comp
     (words TableSymbol 1)).comp (words BodySymbol 1)
 
 omit [Fintype Symbol] in
@@ -162,7 +188,8 @@ theorem length_le_of_decode_wordEncoding {word : List CodeSymbol} {input : List 
   obtain ⟨row, hrow, h⟩ := (Encoding.decode_comp_eq_some_iff _ _).mp h
   rw [decode_words_eq_some_iff.mp hbody, decode_words_eq_some_iff.mp htable,
     decode_words_eq_some_iff.mp hrow]
-  simpa using Encoding.length_le_of_decode_list (Encoding.ofEncodable Symbol) h
+  simpa using Encoding.length_le_of_decode_list
+    ((Encoding.ofEncodable Symbol).comp ((words Bool 1).comp (words MovementSymbol 1))) h
 
 omit [Fintype Symbol] in
 /--

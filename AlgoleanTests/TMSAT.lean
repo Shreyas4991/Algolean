@@ -190,9 +190,13 @@ example : ((Encoding.ofEncodable Bool).finFunction 2).decode
     ((Encoding.ofEncodable Bool).list.encode [true]) = none := by decide +kernel
 
 -- A transition cannot refer to state one in a description with only state zero.
-example : (Encoding.ofEncodable (SingleTapeTM.Transition TapeSymbol 0)).decode
-    ((Encoding.ofEncodable (SingleTapeTM.Transition TapeSymbol 1)).encode
-      (some (.inl true), none, some 1)) = none := by decide +kernel
+example : (SingleTapeTM.Description.transitionEncoding (Symbol := TapeSymbol) 0).decode
+    ((SingleTapeTM.Description.transitionEncoding (Symbol := TapeSymbol) 1).encode
+      (some (.inl true), none, some 1)) = none := by
+  suffices (Encoding.ofEncodable (Option (Fin 1))).decode
+      ((Encoding.ofEncodable (Option (Fin 2))).encode (some 1)) = none by
+    simp [SingleTapeTM.Description.transitionEncoding, Encoding.pair, Encoding.comp, this]
+  decide +kernel
 
 -- Unary fields reject false bits.
 example : unaryEncoding.decode [true, false] = none := by decide
@@ -215,7 +219,7 @@ def threeStateAccept : SingleTapeTM.Description TapeSymbol where
 /-- The state header uses the noncanonical binary word `[false]` to represent the number two. -/
 def noncanonicalMachineCode : List SingleTapeTM.Description.CodeSymbol :=
   let header : List SingleTapeTM.Description.BodySymbol :=
-    ((([false] : List Bool).map Sum.inl).map Sum.inl).map Sum.inl
+    ((SingleTapeTM.Description.rowBits.encode [false]).map Sum.inl).map Sum.inl
   let body := (SingleTapeTM.Description.bodyEncoding (Symbol := TapeSymbol) 2).encode
     (threeStateAccept.initial, threeStateAccept.transition)
   header.map Sum.inl ++ .inr 0 :: (words SingleTapeTM.Description.BodySymbol 1).encode body
@@ -225,10 +229,11 @@ theorem noncanonicalMachineCode_decodes :
     SingleTapeTM.Description.encoding.decode noncanonicalMachineCode = some threeStateAccept := by
   simp only [SingleTapeTM.Description.encoding, Encoding.ofEquiv, noncanonicalMachineCode,
     Encoding.sigma, readWord_append_marker, Encoding.decode_encode]
-  rw [show (((encodingNatBool.comp (words Bool 2)).comp
+  rw [show (((encodingNatBool.comp SingleTapeTM.Description.rowBits).comp
     (words SingleTapeTM.Description.RowSymbol 2)).comp
       (words SingleTapeTM.Description.TableSymbol 1)).decode
-        (((([false] : List Bool).map Sum.inl).map Sum.inl).map Sum.inl) = some 2 from by decide]
+        (((SingleTapeTM.Description.rowBits.encode [false]).map Sum.inl).map Sum.inl) =
+          some 2 from by decide]
   simp only [Encoding.decode_encode]
   rfl
 
@@ -260,7 +265,14 @@ example : (encoding.over (Γ := Bool)).decode
 
 -- This word is shorter than the encoder's chosen representation of the same instance.
 example : noncanonicalWord.length + 1 =
-    (encoding.encode ⟨threeStateAccept, [false, true], 1, 2⟩).length := by decide +kernel
+    (encoding.encode ⟨threeStateAccept, [false, true], 1, 2⟩).length := by
+  simp [noncanonicalWord, noncanonicalPayload, noncanonicalMachineCode,
+    Algolean.Problems.TMSAT.encoding, Algolean.Problems.TMSAT.payloadEncoding,
+    Algolean.Problems.TMSAT.Instance.equiv, boundsEncoding, threeStateAccept, encodingList,
+    SingleTapeTM.Description.encoding, SingleTapeTM.Description.equiv,
+    SingleTapeTM.Description.rowBits, Encoding.ofEquiv, Encoding.sigma, Encoding.pair,
+    Encoding.comp, words, Encoding.ofEncodable, encodingNatBool, encodeNat, encodeNum, encodePosNum,
+    show (2 : Num) = .pos (.bit0 .one) from rfl]
 
 -- The decoder-side bound applies to the shorter word, including both independent unary fields.
 example : 2 + 1 + 2 + 3 ≤ noncanonicalWord.length :=

@@ -50,7 +50,7 @@ private def earlierCells : StackTape CodeSymbol :=
 private def program : Prog (TMQuery (control CodeSymbol)) Unit :=
   appendLiteral (control CodeSymbol) (.inl false) (.inl true) List.singleton
 
-private def formulaProgram : Prog (TMQuery (control CodeSymbol)) Unit := do
+private def formulaProgram : Prog (TMQuery (control CodeSymbol)) Unit := do [TMQuery (control CodeSymbol)]
   program
   nextRegion (control CodeSymbol)
   endClause (control CodeSymbol) List.singleton
@@ -62,7 +62,7 @@ private def booleanCode (symbol : CodeSymbol) : List Bool :=
     | .inl true => 1
     | .inr marker => marker.val + 2
 
-private def booleanProgram : Prog (TMQuery (control Bool)) Unit := do
+private def booleanProgram : Prog (TMQuery (control Bool)) Unit := do [TMQuery (control Bool)]
   appendLiteral (control Bool) false true booleanCode
   nextRegion (control Bool)
   endClause (control Bool) booleanCode

@@ -39,10 +39,11 @@ private noncomputable def rowByte (zero : Γ) : Γ :=
   (code CodeSymbol.rowSeparator).headD zero
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-private theorem code_length (symbol : CodeSymbol) : (code (Γ := Γ) symbol).length = 10 := by
+private theorem code_length (symbol : CodeSymbol) : (code (Γ := Γ) symbol).length = 12 := by
   simp [code, CodeSymbol, PayloadSymbol, SingleTapeTM.Description.CodeSymbol,
     SingleTapeTM.Description.BodySymbol, SingleTapeTM.Description.TableSymbol,
-    SingleTapeTM.Description.RowSymbol, Extended]
+    SingleTapeTM.Description.RowSymbol, SingleTapeTM.Description.TransitionSymbol,
+    SingleTapeTM.Description.MovementSymbol, Extended]
 
 private def sourceView (zero one : Γ) (bits : List Bool) (marker : Γ)
     (crossed remaining : List Γ) (tail : StackTape Γ) : BiTape Γ :=
@@ -98,7 +99,7 @@ private def checkFirstRow (zero one restore : Γ) :
   ifₜ tape =ₜ some zero then
     tape ←ₜ some one
     seekRightBlank (Parsing.machine (Γ := Γ))
-    FreeM.lift (.write (some restore))
+    tape ←ₜ some restore
   else
     seekRightBlank (Parsing.machine (Γ := Γ))
     tape ←ₜ some restore
@@ -203,11 +204,12 @@ private noncomputable def countOne (zero one : Γ) (skipFirst : Bool) :
       else visitIncrement zero one (rowByte zero))
   else
     pure ()
-  moveCells (Parsing.machine (Γ := Γ)) .Right 10
+  moveCells (Parsing.machine (Γ := Γ)) .Right 12
 
 private noncomputable def countLoop (zero one : Γ) (skipFirst : Bool) :
-    Prog (TMQuery (Parsing.machine (Γ := Γ))) Unit :=
-  whileLoop (.not (.tapeIs none)) (countOne zero one skipFirst)
+    Prog (TMQuery (Parsing.machine (Γ := Γ))) Unit := do [TMQuery (Parsing.machine (Γ := Γ))]
+  whileₜ (notₜ tape =ₜ none) do
+    countOne zero one skipFirst
 
 private def nextBits (bits : List Bool) (skipFirst seen : Bool) (symbol : CodeSymbol) :
     List Bool :=
@@ -223,8 +225,8 @@ private theorem countOne_correct (zero one : Γ) (hne : zero ≠ one)
       final.config.BiTape = sourceView zero one (nextBits bits skipFirst seen symbol)
         (if skipFirst && (seen || decide (symbol = CodeSymbol.rowSeparator)) then one else zero)
         (crossed ++ code symbol) suffix tail ∧
-      final.headPos = s.headPos + 10 ∧
-      cost.steps ≤ 32 * (crossed.length + bits.length + 2) := by
+      final.headPos = s.headPos + 12 ∧
+      cost.steps ≤ 40 * (crossed.length + bits.length + 2) := by
   classical
   obtain ⟨cost, middle, hc, hmiddle, hmpos, hb⟩ := checkPrefix_correct
     (tm := Parsing.machine (Γ := Γ)) (.inl .rowEnd) (.inl .rowStart)
@@ -271,12 +273,12 @@ private theorem countOne_correct (zero one : Γ) (hne : zero ≠ one)
         by simpa [nextBits, heq] using hcfg, rfl, rfl⟩
   obtain ⟨moves, hr, hbound⟩ := hbody
   obtain ⟨currentCost, current, hbranch, hcurrent, hcurrentPos, hsteps⟩ := hr
-  have hmoved := moveCells_correct (tm := Parsing.machine (Γ := Γ)) .Right 10 current
+  have hmoved := moveCells_correct (tm := Parsing.machine (Γ := Γ)) .Right 12 current
   obtain ⟨extra, final, hmove, hfinal, hfpos, he⟩ := hmoved
   refine ⟨cost + (currentCost + extra), final, ?_, ?_, ?_, ?_⟩
   · simpa [countOne, bind_assoc] using hc.seq (hbranch.seq hmove)
   · have ht := congrArg SingleTapeTM.Cfg.BiTape hfinal
-    rw [show 10 = (code (Γ := Γ) symbol).length from (code_length symbol).symm] at ht
+    rw [show 12 = (code (Γ := Γ) symbol).length from (code_length symbol).symm] at ht
     simpa [hcurrent, sourceView, BiTape.segment_moveRight_iterate,
       List.reverse_append, StackTape.prepend_append] using ht
   · simpa [hcurrentPos, hmpos] using hfpos
@@ -348,9 +350,9 @@ private theorem countLoop_correct (zero one : Γ) (hne : zero ≠ one)
       final.config.BiTape = sourceView zero one result.1
         (if skipFirst && result.2 then one else zero)
         (crossed ++ word.flatMap code) [] tail ∧
-      final.headPos = s.headPos + 10 * word.length ∧
-      cost.steps ≤ 32 * word.length *
-        (crossed.length + bits.length + 11 * word.length + 2) := by
+      final.headPos = s.headPos + 12 * word.length ∧
+      cost.steps ≤ 40 * word.length *
+        (crossed.length + bits.length + 13 * word.length + 2) := by
   induction word generalizing bits seen crossed s with
   | nil =>
     refine ⟨0, s, completes_while_false _ _ s (by simp [htape, sourceView]), ?_,
@@ -382,12 +384,12 @@ private theorem countLoop_correct (zero one : Γ) (hne : zero ≠ one)
       simp only [TMCost.add_steps, List.length_cons]
       calc
         cost.steps + more.steps ≤
-            32 * (crossed.length + bits.length + 11 * (rest.length + 1) + 2) +
-            32 * rest.length *
-              (crossed.length + bits.length + 11 * (rest.length + 1) + 2) := by
+            40 * (crossed.length + bits.length + 13 * (rest.length + 1) + 2) +
+            40 * rest.length *
+              (crossed.length + bits.length + 13 * (rest.length + 1) + 2) := by
           apply Nat.add_le_add
-          · exact hb.trans (Nat.mul_le_mul_left 32 (by lia))
-          · exact hbound.trans (Nat.mul_le_mul_left (32 * rest.length) (by lia))
+          · exact hb.trans (Nat.mul_le_mul_left 40 (by lia))
+          · exact hbound.trans (Nat.mul_le_mul_left (40 * rest.length) (by lia))
         _ = _ := by ring
 
 /--
@@ -403,12 +405,12 @@ noncomputable def collect (zero one : Γ) (skipFirst : Bool) :
   seekLeftEnd (Parsing.machine (Γ := Γ))
   tape ←ₜ some zero
   previousRegion (Parsing.machine (Γ := Γ))
-  FreeM.lift (.update (.inl .header))
+  state ←ₜ .inl .header
 
 /--
 The row counter preserves the encoded input and the tape beyond it. Starting with the single
 zero digit, it records the number of row separators, or one less when the first row is skipped.
-It returns to the first counter digit and takes at most `512 * (input.length + 1) ^ 2` head moves.
+It returns to the first counter digit and takes at most `640 * (input.length + 1) ^ 2` head moves.
 The input must consist of complete symbol encodings; the structure check establishes this fact.
 -/
 theorem collect_correct (zero one : Γ) (hne : zero ≠ one) (skipFirst : Bool)
@@ -425,13 +427,13 @@ theorem collect_correct (zero one : Γ) (hne : zero ≠ one) (skipFirst : Bool)
       binaryValue bits.reverse = word.count CodeSymbol.rowSeparator -
         (if skipFirst then 1 else 0) ∧
       bits.length ≤ word.length + 1 ∧
-      cost.steps ≤ 512 * (input.length + 1) ^ 2 := by
+      cost.steps ≤ 640 * (input.length + 1) ^ 2 := by
   classical
   let input := (finiteWordsOver CodeSymbol Γ).encode word
   dsimp only
   intro htape
   have hencode : input = word.flatMap code := encode_finiteWordsOver word
-  have hlen : input.length = 10 * word.length := by
+  have hlen : input.length = 12 * word.length := by
     rw [hencode, List.length_flatMap]
     simp [code_length, List.sum_replicate, Nat.mul_comm]
   let result := countResult [false] skipFirst false word

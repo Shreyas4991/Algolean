@@ -142,8 +142,9 @@ private def clauseBody : Prog (TMQuery machine) Unit := do [TMQuery machine]
       checkLiteral false
 
 /-- This loop checks literals until one is true or the clause has no literals left. -/
-private def clauseLoop : Prog (TMQuery machine) Unit :=
-  whileLoop (.stateIs (some (Sum.inr Flag.checking))) clauseBody
+private def clauseLoop : Prog (TMQuery machine) Unit := do [TMQuery machine]
+  whileₜ (state =ₜ some (Sum.inr Flag.checking)) do
+    clauseBody
 
 /-- This program erases the unneeded remainder of a clause and its following separator. -/
 private def finishClause : Prog (TMQuery machine) Unit := do [TMQuery machine]
@@ -172,8 +173,9 @@ private def formulaBody : Prog (TMQuery machine) Unit := do [TMQuery machine]
     pure ()
 
 /-- This loop checks clauses until the head reaches the formula's ending. -/
-private def formulaLoop : Prog (TMQuery machine) Unit :=
-  whileLoop (.not (.tapeIs (some formulaEnd))) formulaBody
+private def formulaLoop : Prog (TMQuery machine) Unit := do [TMQuery machine]
+  whileₜ (notₜ tape =ₜ some formulaEnd) do
+    formulaBody
 
 /--
 This program initially records true, so a formula with no clauses evaluates to true. It then

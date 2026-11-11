@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Computability
+public import Algolean.Models.SingleTapeTMSyntax
 
 /-!
 # Checking the fixed-program correctness interface
@@ -21,6 +22,7 @@ records preserves the program and time bound.
 namespace AlgoleanTests.SingleTapeTMSolves
 
 open Algolean.Algorithms Cslib Cslib.Turing TMQuery
+open scoped TMQuery
 
 /-- This machine has one control state and a Boolean tape alphabet. -/
 abbrev machine : SingleTapeTM Bool where
@@ -29,7 +31,8 @@ abbrev machine : SingleTapeTM Bool where
   tr _ symbol := (⟨symbol, none⟩, none)
 
 /-- This fixed program writes true under the head and leaves every other cell unchanged. -/
-def writeTrue : Prog (TMQuery machine) Unit := FreeM.lift (.write (some true))
+def writeTrue : Prog (TMQuery machine) Unit := do [TMQuery machine]
+  tape ←ₜ some true
 
 /--
 Leaving the input unchanged decides whether it equals the fixed acceptance word. Every result

@@ -56,6 +56,8 @@ def checkComparisons : IO Unit := do
 /--
 These checks read valid instances with several verifier sizes and bounds. They then alter a
 one-state verifier's description to check missing and extra transitions and malformed bounds.
+They also check invalid written cell values and movements, and an alternative binary spelling
+of a valid movement.
 An out-of-range initial state still has correct field boundaries, so it is checked separately
 against the existing decoder.
 -/
@@ -83,6 +85,18 @@ def checkFieldBoundaries : IO Unit := do
   let initialEnd := descriptionSymbol (.inl (.inr 0))
   let falseDigit := descriptionSymbol (SingleTapeTM.Description.bitSymbol false)
   let trueDigit := descriptionSymbol (SingleTapeTM.Description.bitSymbol true)
+  for (separator, digits) in [(CodeSymbol.writeEnd, [falseDigit, falseDigit, trueDigit]),
+      (CodeSymbol.movementEnd, [trueDigit, trueDigit])] do
+    let index := word.idxOf separator
+    let malformed := word.take index ++ digits ++ word.drop index
+    unless formatResult (Γ := Bool) malformed ≠ .time ∧
+        ((encoding (Γ := Bool)).decode malformed).isNone do
+      throw (IO.userError "The field reader accepted an invalid written cell or movement.")
+  let alternativeMovement := word.insertIdx (word.idxOf CodeSymbol.movementEnd) falseDigit
+  unless formatResult (Γ := Bool) alternativeMovement = .time ∧
+      (((encoding (Γ := Bool)).decode alternativeMovement).map
+        (fun problem => (problem.verifier.transition 0 none).2.1)) = some (some true) do
+    throw (IO.userError "The field reader misread an alternative spelling of a right move.")
   let missing := word.erase transitionEnd
   let extra := word.insertIdx (word.idxOf rowEnd) transitionEnd
   let noSeparator := word.erase (.inr 0)

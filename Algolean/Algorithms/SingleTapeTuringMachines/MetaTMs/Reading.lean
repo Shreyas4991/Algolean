@@ -44,8 +44,8 @@ machine fixes both arguments independently of the input and its length.
 -/
 def moveCells (tm : SingleTapeTM Γ) (direction : Dir) : Nat → Prog (TMQuery tm) Unit
   | 0 => pure ()
-  | count + 1 => do
-    FreeM.lift (.move direction)
+  | count + 1 => do [TMQuery tm]
+    moveₜ direction
     moveCells tm direction count
 
 /-- The fixed moves preserve the tape symbols and control state and have exactly the stated cost. -/
@@ -75,7 +75,8 @@ machine fixes the comparison word and both states once for every input length.
 -/
 def checkPrefix (tm : SingleTapeTM Γ) (yes no : tm.State) :
     List Γ → Prog (TMQuery tm) Unit
-  | [] => FreeM.lift (.update yes)
+  | [] => do [TMQuery tm]
+    state ←ₜ yes
   | symbol :: rest => do [TMQuery tm]
     ifₜ tape =ₜ some symbol then
       moveₜ .Right
@@ -128,7 +129,7 @@ theorem checkPrefix_correct (yes no : tm.State) (expected word : List Γ)
         · simp [Ne.symm heq]
 
 private def previousWord (tm : SingleTapeTM Γ) (found searching : tm.State)
-    (word : List Γ) : Prog (TMQuery tm) Unit := do
+    (word : List Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveCells tm .Left word.length
   checkPrefix tm found searching word
 
@@ -154,8 +155,9 @@ private theorem previousWord_correct (found searching : tm.State) (expected actu
     lia
 
 private def previousLoop (tm : SingleTapeTM Γ) (found searching : tm.State)
-    (word : List Γ) : Prog (TMQuery tm) Unit :=
-  whileLoop (.not (.stateIs (some found))) (previousWord tm found searching word)
+    (word : List Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  whileₜ (notₜ state =ₜ some found) do
+    previousWord tm found searching word
 
 private theorem previousLoop_correct (found searching : tm.State) (hne : found ≠ searching)
     (expected : List Γ) (blocks : List (List Γ))
@@ -206,8 +208,8 @@ It leaves every tape cell unchanged and records `found` in the control state. Th
 machine fixes the word and both control states once for all input lengths.
 -/
 def findPreviousWord (tm : SingleTapeTM Γ) (found searching : tm.State) (expected : List Γ) :
-    Prog (TMQuery tm) Unit := do
-  FreeM.lift (.update searching)
+    Prog (TMQuery tm) Unit := do [TMQuery tm]
+  state ←ₜ searching
   previousLoop tm found searching expected
 
 /--

@@ -128,8 +128,8 @@ The containing machine fixes the digit meaning one and both result states once.
 -/
 noncomputable def testZero (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (one : Γ) (zeroState positiveState : tm.State) :
-    Prog (TMQuery tm) Unit := do
-  FreeM.lift (.update zeroState)
+    Prog (TMQuery tm) Unit := do [TMQuery tm]
+  state ←ₜ zeroState
   scan (zeroTable one zeroState positiveState)
   seekLeftEnd tm
 

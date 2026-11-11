@@ -6,6 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
+public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.SingleTapeTM.Compiler.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 public import Algolean.Models.SingleTapeTM.Composition.While
@@ -62,16 +63,17 @@ private def direction : Option _root_.Turing.Dir → Dir
   | some .left => .Left
   | some .right => .Right
 
+open scoped TMQuery in
 /--
 For one fixed entry of the transition table, this writes its symbol, moves as specified, and
 records the next source state or the source machine's halt. Its arguments choose an instruction
 block when compiling the machine; the running program finds the entry through finite tests.
 -/
 private def action (label : tm.State) (symbol : Option Symbol) :
-    Prog (TMQuery (machine tm)) Unit := do
-  FreeM.lift (.write (tm.tr label symbol).1.symbol)
-  FreeM.lift (.move (direction (tm.tr label symbol).1.movement))
-  FreeM.lift (.update (tm.tr label symbol).2)
+    Prog (TMQuery (machine tm)) Unit := do [TMQuery (machine tm)]
+  tape ←ₜ (tm.tr label symbol).1.symbol
+  moveₜ (direction (tm.tr label symbol).1.movement)
+  state ←ₜ (tm.tr label symbol).2
 
 /-- This lists every value of a finite type once, when the program is constructed. -/
 private noncomputable def values (α : Type) [Fintype α] : List α := Finset.univ.toList
@@ -89,14 +91,16 @@ private noncomputable def forState (label : tm.State) : Prog (TMQuery (machine t
 private noncomputable def body : Prog (TMQuery (machine tm)) Unit :=
   select (values tm.State) (fun label => .stateIs (some (some label))) (forState tm)
 
+open scoped TMQuery in
 /--
 This fixed query program executes the supplied transition table until the source machine halts.
 It uses the same tape symbols and leaves the source machine's final tape under the same head.
 Its only extra control label records halting. Every source transition costs one query move
 instruction, including stationary transitions, which use the charged `Stop` instruction.
 -/
-noncomputable def compile : Prog (TMQuery (machine tm)) Unit :=
-  whileLoop (.not (.stateIs (some none))) (body tm)
+noncomputable def compile : Prog (TMQuery (machine tm)) Unit := do [TMQuery (machine tm)]
+  whileₜ (notₜ state =ₜ some none) do
+    body tm
 
 /-- One table entry gives the source's next configuration and costs exactly one move instruction. -/
 private theorem action_correct (label : tm.State) (s : TMState (machine tm)) :

@@ -148,7 +148,7 @@ an empty output region after it. It finishes at the first region's marker. The c
 machine fixes `marker` and `workCount` once, independently of the input and its length.
 -/
 def prepare (tm : SingleTapeTM Γ) (marker : Γ) (workCount : Nat) :
-    Prog (TMQuery tm) Unit := do
+    Prog (TMQuery tm) Unit := do [TMQuery tm]
   frameInput marker
   prependEmpty marker workCount
 

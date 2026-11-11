@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Composition.Component
+public import Algolean.Models.SingleTapeTMSyntax
 
 /-!
 # Running procedures in sequence on the same machine
@@ -141,6 +142,7 @@ end Algolean.Algorithms
 namespace Algolean.Algorithms.Component
 
 open Cslib Cslib.Turing TMQuery
+open scoped TMQuery
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
@@ -159,7 +161,9 @@ def andThen {ι κ : Type} {pre : ι → TMState tm → Prop}
     (compatible : ∀ i s cost t, pre i s → post i s cost t → nextPre (index i) t) :
     Component tm pre (fun i s cost final => ∃ a middle b,
       cost = a + b ∧ post i s a middle ∧ nextPost (index i) middle b final) where
-  program := do first.program; second.program
+  program := do [TMQuery tm]
+    first.program
+    second.program
   correct i s hs := by
     obtain ⟨a, t, ha, hp⟩ := first.correct i s hs
     obtain ⟨b, u, hb, hq⟩ := second.correct (index i) t (compatible i s a t hs hp)
@@ -170,6 +174,7 @@ end Algolean.Algorithms.Component
 namespace Algolean.Algorithms.EncodedComputer
 
 open Cslib Cslib.Turing TMQuery
+open scoped TMQuery
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
@@ -185,7 +190,9 @@ def seq {α β γ : Type} {ea : α → List Symbol} {eb : β → List Symbol} {e
     (first : EncodedComputer tm ea eb f a pa) (second : EncodedComputer tm eb ec g b pb) :
     EncodedComputer tm ea ec (g ∘ f) (fun input => a input + b (f input))
       (fun input origin => pb (f input) (pa input origin)) where
-  program := do first.program; second.program
+  program := do [TMQuery tm]
+    first.program
+    second.program
   correct input s hs := by
     obtain ⟨ca, t, hp, ht, hpos, ha⟩ := first.correct input s hs
     obtain ⟨cb, u, hq, hu, hup, hb⟩ := second.correct (f input) t (by simp [ht])
