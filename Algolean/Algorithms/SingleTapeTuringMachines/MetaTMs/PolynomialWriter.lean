@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 public import Mathlib.Combinatorics.Enumerative.Stirling
 public import Mathlib.Data.Nat.Choose.Sum
 
@@ -42,46 +42,7 @@ variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 private def chain (parts : List (List Symbol)) (output : List Symbol) : StackTape Symbol :=
   StackTape.separateWords parts (StackTape.mapSome output)
 
-private def span (parts : List (List Symbol)) : Nat :=
-  (parts.map List.length).sum + parts.length
-
-private def across (word : List Symbol) : Nat → Prog (TMQuery tm) Unit
-  | 0 => do [TMQuery tm]
-    moveₜ .Right
-    appendWord tm none word
-    moveₜ .Left
-  | n + 1 => do [TMQuery tm]
-    moveₜ .Right
-    seekRightBlank tm
-    across word n
-    seekLeftGap tm
-
-private theorem across_spec (word : List Symbol) (parts : List (List Symbol))
-    (output : List Symbol) (left : StackTape Symbol) (label : Option tm.State)
-    (origin : ℤ) (elapsed : Nat) :
-    ⦃ fun cost current => current.config = ⟨label, segment left [] (chain parts output)⟩ ∧
-        current.headPos = origin ∧ cost.steps = elapsed ⦄
-      across (tm := tm) word parts.length
-    ⦃ fun _ cost final => final.config = ⟨label, segment left [] (chain parts (output ++ word))⟩ ∧
-        final.headPos = origin ∧
-        cost.steps = elapsed + 2 * (span parts + output.length + word.length) + 8 ⦄ := by
-  induction parts generalizing left origin elapsed with
-  | nil =>
-    simp only [List.length_nil, across]
-    vcgen [appendWord_spec none left output word label (origin + 1) (elapsed + 1)]
-    all_goals simp_all [chain, span, TMState.move, TMState.moveCost]
-    all_goals lia
-  | cons part parts ih =>
-    simp only [List.length_cons, across]
-    vcgen [seekRightBlank_segment_spec (StackTape.cons none left)
-        (chain parts output) part label (origin + 1) (elapsed + 1),
-      ih (stackAppend part.reverse (StackTape.cons none left))
-        (origin + 1 + part.length) (elapsed + 1 + part.length),
-      seekLeftGap_segment_spec left part.reverse [] (chain parts (output ++ word))
-        label (origin + 1 + part.length)
-        (elapsed + 1 + part.length + 2 * (span parts + output.length + word.length) + 8)]
-    all_goals simp_all [chain, span, TMState.move, TMState.moveCost]
-    all_goals lia
+private abbrev span (parts : List (List Symbol)) : Nat := regionSpan parts
 
 private def picked (rest : Prog (TMQuery tm) Unit) (symbol : Symbol) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
@@ -95,7 +56,7 @@ private def chooseProgram (symbols : List Symbol) (word : List Symbol) (total : 
     Nat → Prog (TMQuery tm) Unit
   | 0 => do [TMQuery tm]
     seekRightBlank tm
-    across word total
+    appendAcross tm word total
   | depth + 1 => do [TMQuery tm]
     whileₜ (notₜ tape =ₜ none) do
       select symbols (fun symbol => .tapeIs (some symbol))
@@ -228,9 +189,9 @@ private theorem choose_zero (symbols word : List Symbol) (total N : Nat) :
   rw [htotal, Nat.add_zero]
   vcgen [seekRightBlank_segment_spec StackTape.nil (chain parts output) input
       label origin initial.steps,
-    across_spec word parts output (StackTape.mapSome input.reverse)
+    appendAcross_spec word parts output (StackTape.mapSome input.reverse)
       label (origin + input.length) (initial.steps + input.length)]
-  all_goals simp_all [copies]
+  all_goals simp_all [copies, chain, regionSpan]
   all_goals lia
 
 private theorem choose_iteration_spec (symbols word : List Symbol)
@@ -256,7 +217,7 @@ private theorem choose_iteration_spec (symbols word : List Symbol)
   have hinnerN : done.length + span (remaining :: parts) +
       (output ++ copies word (done.length.choose depth)).length + word.length + 1 ≤ N := by
     simp only [List.length_append, length_copies, sums_succ, Nat.add_mul] at hN
-    dsimp only [span] at hN ⊢
+    dsimp only [span, regionSpan] at hN ⊢
     simp only [List.map_cons, List.sum_cons, List.length_cons, List.length_append, length_copies]
     lia
   have htotal' : total = (remaining :: parts).length + depth := by
@@ -382,7 +343,7 @@ noncomputable def writeChooseTime (count : Nat) : Polynomial Nat :=
     word.length + 1
   have htime := runtime_le_quadratic count N input.length
   vcgen [writeChoose, choose_correct symbols word hcover count count N input [] output
-    label origin elapsed (by simp) (by simp [N, span])]
+    label origin elapsed (by simp) (by simp [N, span, regionSpan])]
   all_goals simp_all [writeChooseTime, N, chain, copies,
     add_assoc, add_comm, add_left_comm]
   all_goals lia
