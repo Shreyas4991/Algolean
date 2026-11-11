@@ -22,7 +22,7 @@ public section
 namespace AlgoleanTests.SingleTapeTMVerification
 
 open Algolean.Algorithms Cslib Cslib.Turing TMQuery SingleTapeTuringMachines
-open scoped TMQuery TMQuery.Spec
+open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
 
@@ -52,7 +52,6 @@ theorem state_loop_correct (s : TMState control) (hstate : s.config.state = some
       (current.config.state = some false ∨ current.config.state = some true)
   all_goals simp_all [TMCondition.eval]
   all_goals grind
-
 
 /-- The loop rule proves the exact tape, head position, and time of a scan over any word. -/
 theorem scan_correct (left right : List Γ) (s : TMState tm)
@@ -98,7 +97,6 @@ theorem scan_correct (left right : List Γ) (s : TMState tm)
         rw [hbefore, Int.toNat_natCast] at hrank
         rw [hafter, Int.toNat_natCast]
         lia
-
 
 /-- The cost and final tape range both record whether the move reaches a new cell. -/
 theorem move_tracks_space (s : TMState tm) :

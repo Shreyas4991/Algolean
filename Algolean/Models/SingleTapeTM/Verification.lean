@@ -17,7 +17,7 @@ public import Algolean.Models.SingleTapeTM.Composition.While
 * The conditional rule checks the selected branch. The loop rule uses an invariant and a
   decreasing natural-number measure to prove that the loop finishes.
 
-Open `scoped TMQuery.Spec` to use these rules. They use the existing `Completes` relation,
+Open `scoped Std.WP TMQuery.Spec` to use these rules. They use the existing `Completes` relation,
 which requires a successful run with finite interpreter fuel. Fuel exhaustion does not count
 as success. Interpreter fuel is kept inside the proofs, separately from time and space costs.
 -/

@@ -27,7 +27,7 @@ its way back even when the current region is empty.
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery Copying
-open scoped TMQuery TMQuery.Spec
+open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
 

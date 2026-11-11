@@ -24,7 +24,7 @@ namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery
 
-open scoped TMQuery TMQuery.Spec
+open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
 

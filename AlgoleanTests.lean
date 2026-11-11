@@ -29,6 +29,7 @@ public import AlgoleanTests.SingleTapeTMComposition
 public import AlgoleanTests.SingleTapeTMExamples
 public import AlgoleanTests.SingleTapeTMReductions
 public import AlgoleanTests.SingleTapeTMSolves
+public import AlgoleanTests.SingleTapeTMVerification
 public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.TMSAT
 public import AlgoleanTests.TMSATNumbers
