@@ -6,9 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
-public import Algolean.Algorithms.SingleTapeTuringMachines.Increment
-public import Algolean.Algorithms.SingleTapeTuringMachines.Transformations
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Increment
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Transformations
 public import Algolean.Models.SingleTapeTM.Composition.Functions
 
 /-!

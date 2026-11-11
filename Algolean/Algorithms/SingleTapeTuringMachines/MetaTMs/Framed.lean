@@ -6,15 +6,16 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.BasicTMs
-public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BasicTMs
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
 
 /-!
 # Transforming one word while preserving the other
 
 These verified Turing machine programs operate on a pair stored in the Boolean encoding from
-`Pairing`. `pairIdentityComputer` preserves the whole encoded pair. `appendRightComputer bit`
-appends a bit to the second logical word while preserving the unary header and first word. It does
+`Problems.BooleanTapeEncoding`. `pairIdentityComputer` preserves the whole encoded pair.
+`appendRightComputer bit` appends a bit to the second word while preserving the unary header
+and first word. It does
 this by appending to the complete encoded tape and then returning to the first encoded cell, so its
 bound counts a scan across the whole encoding.
 
@@ -41,7 +42,7 @@ state, and uses zero head moves.
 def pairIdentityComputer : PairComputer (tm := tm) id (fun _ => 0) where
   program := (Computer.identity (tm := tm)).program
   correct input s hs :=
-    (Computer.identity (tm := tm)).correct (BooleanTapeEncoding.pair input.1 input.2) s hs
+    (Computer.identity (tm := tm)).correct (Problems.BooleanTapeEncoding.pair input.1 input.2) s hs
 
 /--
 This value contains a verified Turing machine program that appends `bit` to the second word of an
@@ -52,11 +53,12 @@ length plus two head moves.
 @[simps program]
 def appendRightComputer (bit : Bool) :
     PairComputer (tm := tm) (fun input => (input.1, input.2 ++ [bit]))
-      (fun input => 2 * (BooleanTapeEncoding.pair input.1 input.2).length + 2) where
+      (fun input => 2 * (Problems.BooleanTapeEncoding.pair input.1 input.2).length + 2) where
   program := appendBit tm bit
   correct input s hs := by
-    simpa [appendBitComputer, BooleanTapeEncoding.pair_append_right] using
-      (appendBitComputer (tm := tm) bit).correct (BooleanTapeEncoding.pair input.1 input.2) s hs
+    simpa [appendBitComputer, Problems.BooleanTapeEncoding.pair_append_right] using
+      (appendBitComputer (tm := tm) bit).correct
+        (Problems.BooleanTapeEncoding.pair input.1 input.2) s hs
 
 /--
 This value contains a verified Turing machine program that physically duplicates the input and then
@@ -65,7 +67,7 @@ and finishes on its first cell, at `origin - (input.length + 1)`. Its bound of `
 + 17 * input.length + 9` head moves includes both copying and appending.
 -/
 def duplicateAppendRightComputer (bit : Bool) :
-    EncodedComputer tm id (fun input => BooleanTapeEncoding.pair input.1 input.2)
+    EncodedComputer tm id (fun input => Problems.BooleanTapeEncoding.pair input.1 input.2)
       (fun input => (input, input ++ [bit]))
       (fun input => 4 * input.length ^ 2 + 17 * input.length + 9)
       (fun input origin => origin - (input.length + 1 : ℕ)) :=
@@ -73,7 +75,7 @@ def duplicateAppendRightComputer (bit : Bool) :
     (pairOutputs (Copying.duplicateComputer (tm := tm)) (pairIdentityComputer (tm := tm))
       (appendRightComputer (tm := tm) bit)) (by
         intro input
-        simp only [BooleanTapeEncoding.length_pair]
+        simp only [Problems.BooleanTapeEncoding.length_pair]
         lia)
 
 /--
@@ -82,9 +84,10 @@ by `bit`. It uses the composed duplication-and-append program, including its qua
 bound and its final position at the first encoded output cell.
 -/
 noncomputable def duplicateAppendRightPolyTimeComputable (bit : Bool) :
-    TMQuery.PolyTimeComputable (fun input => BooleanTapeEncoding.pair input (input ++ [bit])) :=
+    TMQuery.PolyTimeComputable
+      (fun input => Problems.BooleanTapeEncoding.pair input (input ++ [bit])) :=
   EncodedComputer.polyTimeComputable (tm := tm)
-    (outputEncoding := fun p : List Bool × List Bool => BooleanTapeEncoding.pair p.1 p.2)
+    (outputEncoding := fun p : List Bool × List Bool => Problems.BooleanTapeEncoding.pair p.1 p.2)
     (f := fun input => (input, input ++ [bit]))
     (position := fun input origin => origin - (input.length + 1 : ℕ))
     (poly := 4 * X ^ 2 + 17 * X + 9)

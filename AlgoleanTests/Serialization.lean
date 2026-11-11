@@ -8,8 +8,8 @@ module
 
 public import AlgoleanTests.NPToTMSAT
 public import Algolean.Complexity.Reductions.NPToTMSAT.Reduction
-public meta import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter
-public meta import Algolean.Algorithms.SingleTapeTuringMachines.SymbolEncoding
+public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.PolynomialWriter
+public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.SymbolEncoding
 
 /-!
 # Checking the machines used by the TMSAT serializer

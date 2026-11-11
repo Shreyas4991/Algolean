@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Writing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
 public import Mathlib.Combinatorics.Enumerative.Stirling
 public import Mathlib.Data.Nat.Choose.Sum
 

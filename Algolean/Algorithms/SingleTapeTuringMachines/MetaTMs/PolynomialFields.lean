@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialWriter
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.PolynomialWriter
 
 /-!
 # Writing several parts whose lengths depend on the input length

@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Writing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Writing
 
 /-!
 # Making room for the symbols of an encoding

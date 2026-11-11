@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Copying
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Copying
 
 /-!
 # Writing fixed words and appending them to a tape region

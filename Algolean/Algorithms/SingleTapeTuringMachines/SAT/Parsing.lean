@@ -7,8 +7,8 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
-public import Algolean.Algorithms.SingleTapeTuringMachines.FiniteState
-public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.FiniteState
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 
 /-!
 # Checking how a formula and certificate are written

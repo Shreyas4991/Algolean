@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Basic
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Basic
 public import Algolean.Models.SingleTapeTM.Composition.Branch
 
 /-!

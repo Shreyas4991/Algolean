@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
-public import Algolean.Algorithms.SingleTapeTuringMachines.TMSAT
+public import Algolean.Algorithms.SingleTapeTuringMachines.TMSAT.Serialization
 public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 
 /-!

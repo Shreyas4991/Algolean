@@ -285,6 +285,25 @@ theorem decode_finiteWordsOver_eq_some_iff [Fintype α] [Nonempty α] [Nontrivia
   exact decode_finiteWords_eq_some_iff _ _ _
 
 omit [DecidableEq Γ] in
+/--
+An encoded symbol matches the beginning of another encoded symbol followed by any suffix
+exactly when the two symbols are equal. The fixed encoding length prevents a partial match.
+-/
+theorem finiteWordsOver_symbol_prefix_iff [Fintype α] [Nonempty α] [Nontrivial Γ]
+    (first second : α) (suffix : List Γ) :
+    (finiteWordsOver α Γ).encode [first] <+:
+      (finiteWordsOver α Γ).encode [second] ++ suffix ↔ first = second := by
+  constructor
+  · intro hp
+    have h := List.prefix_iff_eq_take.mp hp
+    have hlength : ((finiteWordsOver α Γ).encode [first]).length =
+        ((finiteWordsOver α Γ).encode [second]).length := by simp
+    rw [hlength, List.take_left] at h
+    simpa using (finiteWordsOver α Γ).encode_injective h
+  · rintro rfl
+    exact List.prefix_append _ _
+
+omit [DecidableEq Γ] in
 /-- Choosing the target symbols also preserves the length bound for every successful decoding. -/
 theorem length_le_of_decode_finiteWordsOver [Fintype α] [Nonempty α] [Nontrivial Γ]
     {word : List Γ} {decoded : List α}

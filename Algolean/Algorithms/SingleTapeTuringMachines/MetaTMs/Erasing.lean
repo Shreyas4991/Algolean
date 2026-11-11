@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Scanning
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
 
 /-!
 # Erasing a block and returning to its starting cell

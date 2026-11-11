@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.BasicTMs
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BasicTMs
 public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 public import Algolean.Models.SingleTapeTM.Composition.TuringReduction
 

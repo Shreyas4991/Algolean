@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
-public meta import Algolean.Algorithms.SingleTapeTuringMachines.CertificatePadding
+public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CertificatePadding
 
 /-!
 # Checking verifier normalization

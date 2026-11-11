@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.SymbolEncoding
-public import Algolean.Algorithms.SingleTapeTuringMachines.PolynomialFields
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.SymbolEncoding
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.PolynomialFields
 public import Mathlib.Tactic.GCongr
 
 /-!

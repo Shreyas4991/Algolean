@@ -74,6 +74,47 @@ abbrev PayloadSymbol := Extended SingleTapeTM.Description.CodeSymbol 1
 /-- This alphabet separates the machine-input pair from the two unary bounds. -/
 abbrev CodeSymbol := Extended PayloadSymbol 1
 
+/-- Equality of description symbols uses only their fixed alphabet tags and binary digits. -/
+instance : DecidableEq CodeSymbol := by
+  letI : DecidableEq SingleTapeTM.Description.RowSymbol := inferInstance
+  letI : DecidableEq SingleTapeTM.Description.TableSymbol := inferInstance
+  letI : DecidableEq SingleTapeTM.Description.BodySymbol := inferInstance
+  letI : DecidableEq SingleTapeTM.Description.CodeSymbol := inferInstance
+  letI : DecidableEq PayloadSymbol := inferInstance
+  infer_instance
+
+namespace CodeSymbol
+
+/-- This is one binary digit in a machine description, input-symbol number, or unary bound. -/
+def digit (bit : Bool) : CodeSymbol :=
+  .inl (.inl (SingleTapeTM.Description.bitSymbol bit))
+
+/-- This ends one transition's numeric code or one input symbol's numeric code. -/
+def entryEnd : CodeSymbol := .inl (.inl (.inl (.inl (.inl (.inr 0)))))
+
+/-- This ends a transition-table row or the encoded input word. -/
+def listEnd : CodeSymbol := .inl (.inl SingleTapeTM.Description.wordEnd)
+
+/-- This follows each completed row of the transition table. -/
+def rowSeparator : CodeSymbol := .inl (.inl (.inl (.inl (.inr 0))))
+
+/-- This ends the complete transition table. -/
+def tableEnd : CodeSymbol := .inl (.inl (.inl (.inl (.inr 1))))
+
+/-- This separates the initial state from the transition table. -/
+def initialEnd : CodeSymbol := .inl (.inl (.inl (.inr 0)))
+
+/-- This separates the largest state number from the rest of the verifier description. -/
+def headerEnd : CodeSymbol := .inl (.inl (.inr 0))
+
+/-- This separates the verifier from its input and the certificate length from the time bound. -/
+def fieldSeparator : CodeSymbol := .inl (.inr 0)
+
+/-- This separates the machine-input pair from the two bounds. -/
+def boundsSeparator : CodeSymbol := .inr 0
+
+end CodeSymbol
+
 variable {Γ : Type} [Fintype Γ] [Encodable Γ]
 
 /-- This encoding stores the complete verifier description and then the encoded input word. -/

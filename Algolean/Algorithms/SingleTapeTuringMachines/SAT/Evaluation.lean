@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
-public import Algolean.Algorithms.SingleTapeTuringMachines.Erasing
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 public import Mathlib.Tactic.GCongr
 public import Algolean.Models.SingleTapeTM.Composition.Relabel
 

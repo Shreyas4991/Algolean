@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Algorithms.SingleTapeTuringMachines.Serialization
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Serialization
 public import Algolean.Problems.TMSAT.Serialization
 
 /-!
