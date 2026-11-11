@@ -180,16 +180,16 @@ private theorem eraseRegions_spec (marker : Γ) (regions : List (List Γ)) (outp
     simp_all
   | cons region regions ih =>
     simp only [List.length_cons, eraseRegions]
-    vcgen [
-      eraseRight_segment_spec (tm := tm) StackTape.nil
+    vcgen [eraseRight_segment_spec (tm := tm) StackTape.nil
         (StackTape.separateWords ((regions ++ [output]).map (marker :: ·)) StackTape.nil)
         (marker :: region) label origin elapsed,
       ih (origin + (region.length + 2 : Nat)) (elapsed + region.length + 2)]
-    all_goals cases regions
     all_goals
-      simp_all [layout, TMState.move, TMState.moveCost, BiTape.segment, BiTape.moveRight,
-        List.map_append, StackTape.separateWords]
-      all_goals lia
+      cases regions
+      all_goals
+        simp_all [layout, TMState.move, TMState.moveCost, BiTape.segment, BiTape.moveRight,
+          List.map_append, StackTape.separateWords]
+        all_goals lia
 
 /--
 This machine template erases `count` regions preceding the output, then removes the output's
@@ -214,11 +214,12 @@ The exact move count includes each erased symbol and each separating blank cross
         final.headPos = origin + moves ∧ cost.steps = elapsed + moves ⦄ := by
   dsimp only
   vcgen [finish, eraseRegions_spec marker regions output label origin elapsed, eraseAndMove_spec]
-  all_goals cases output
   all_goals
-    simp_all [layout, TMState.move, TMState.moveCost, TMState.write,
-      BiTape.mk₁, BiTape.nil, BiTape.segment, BiTape.write, BiTape.moveRight]
-    all_goals lia
+    cases output
+    all_goals
+      simp_all [layout, TMState.move, TMState.moveCost, TMState.write,
+        BiTape.mk₁, BiTape.nil, BiTape.segment, BiTape.write, BiTape.moveRight]
+      all_goals lia
 
 /-- The cleanup program produces precisely the clean output tape with the stated move count. -/
 theorem finish_correct (marker : Γ) (regions : List (List Γ)) (output : List Γ)

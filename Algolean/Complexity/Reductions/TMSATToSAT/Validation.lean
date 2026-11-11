@@ -97,7 +97,8 @@ private theorem digit_rows (number : List Bool) :
   induction number with
   | nil => rfl
   | cons bit bits ih =>
-    cases bit <;> simpa [CodeSymbol.digit, CodeSymbol.rowSeparator, SingleTapeTM.Description.bitSymbol] using ih
+    cases bit <;>
+      simpa [CodeSymbol.digit, CodeSymbol.rowSeparator, SingleTapeTM.Description.bitSymbol] using ih
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem movement_prefix (symbol : CodeSymbol) (rest : List CodeSymbol) :
@@ -114,7 +115,8 @@ private noncomputable def view (before after : List CodeSymbol) (tail : StackTap
   BiTape.segment (StackTape.prepend (encode before).reverse StackTape.nil) (encode after) tail
 
 open scoped Classical in
-private theorem stateField_spec (zero one : Γ) (hne : zero ≠ one) (field : StateFields.Field)
+private theorem stateField_spec (zero one : Γ) (hne : zero ≠ one)
+    (field : StateFields.Field)
     (before after : List CodeSymbol) (number : List Bool)
     (hafter : CodeSymbol.headerEnd ∉ after) (tail : StackTape Γ)
     (label : Option (Parsing.State Γ)) (origin : ℤ) (elapsed : Nat) :
@@ -145,6 +147,14 @@ private theorem count_entry : [CodeSymbol.entryEnd].count CodeSymbol.rowSeparato
 
 attribute [local simp] count_movement count_entry digit_rows
 
+private theorem movement_beq_row :
+    (CodeSymbol.movementEnd == CodeSymbol.rowSeparator) = false := by decide
+
+private theorem entry_beq_row :
+    (CodeSymbol.entryEnd == CodeSymbol.rowSeparator) = false := by decide
+
+attribute [local simp] movement_beq_row entry_beq_row
+
 private theorem advance_spec (before crossed after : List CodeSymbol) (tail : StackTape Γ)
     (label : Option (Parsing.State Γ)) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config = ⟨label, view before (crossed ++ after) tail⟩ ∧
@@ -159,10 +169,13 @@ private theorem advance_spec (before crossed after : List CodeSymbol) (tail : St
     (StackTape.prepend (encode (Γ := Γ) before).reverse StackTape.nil)
     (encode (Γ := Γ) crossed) (encode (Γ := Γ) after) tail
   rw [encode_length] at hmove
-  vcgen [moveCells_spec (tm := tm (Γ := Γ)) .Right (12 * crossed.length) (view before (crossed ++ after) tail)
+  vcgen [moveCells_spec (tm := tm (Γ := Γ)) .Right (12 * crossed.length)
+    (view before (crossed ++ after) tail)
     label origin initial.steps]
   all_goals
     simp_all [view, List.reverse_append]
+
+private def skipEnd : Prog (TMQuery (tm (Γ := Γ))) Unit := moveCells tm .Right 12
 
 private noncomputable def nextStates (zero one : Γ) : Prog (TMQuery (tm (Γ := Γ))) Unit :=
     do [TMQuery (tm (Γ := Γ))]
@@ -176,7 +189,7 @@ private noncomputable def nextStates (zero one : Γ) : Prog (TMQuery (tm (Γ := 
         StateFields.check zero one .next
       else
         pure ()
-      moveCells tm .Right 12
+      skipEnd
 
 private theorem nextStates_reject_spec (zero one : Γ) (before after : List CodeSymbol)
     (tail : StackTape Γ) (origin : ℤ) (elapsed : Nat) :
@@ -211,7 +224,7 @@ private theorem nextStates_reject_spec (zero one : Γ) (before after : List Code
     apply Std.WP.Triple.intro
     rintro initial current ⟨hcfg, hpos, hcost⟩
     unfold nextStates
-    vcgen [Spec.while_step_spec (loop := nextStates zero one) (hloop := rfl),
+    vcgen [skipEnd, Spec.while_step_spec (loop := nextStates zero one) (hloop := rfl),
       seekRightBlank_segment_spec (tm := tm (Γ := Γ))
         (StackTape.prepend (encode (Γ := Γ) before).reverse StackTape.nil)
         tail (encode (Γ := Γ) (symbol :: after)) (some (.inl .reject)) origin initial.steps,
@@ -219,7 +232,7 @@ private theorem nextStates_reject_spec (zero one : Γ) (before after : List Code
         (initial.steps + (encode (Γ := Γ) (symbol :: after)).length)]
     all_goals
       simp_all [view, BiTape.segment, List.reverse_append,
-        StackTape.prepend_append, List.head?_eq_none_iff]
+        List.head?_eq_none_iff]
       all_goals lia
 
 private def pieceWord : CodeSymbol ⊕ List Bool → List CodeSymbol
@@ -257,8 +270,9 @@ private theorem no_header (pieces : List (CodeSymbol ⊕ List Bool)) (hsafe : Sa
     simp [pieceWord, CodeSymbol.headerEnd, CodeSymbol.movementEnd,
       CodeSymbol.entryEnd, CodeSymbol.digit, SingleTapeTM.Description.bitSymbol] at he
 
-open scoped Classical in
 set_option maxHeartbeats 1600000 in
+-- The induction combines the field comparisons and their bounds for the whole encoded word.
+open Classical in
 private theorem nextStates_spec (zero one : Γ) (hne : zero ≠ one)
     (pieces : List (CodeSymbol ⊕ List Bool)) (hsafe : SafePieces pieces)
     (before : List CodeSymbol) (tail : StackTape Γ) (origin : ℤ) (elapsed : Nat) :
@@ -289,9 +303,11 @@ private theorem nextStates_spec (zero one : Γ) (hne : zero ≠ one)
     | inl symbol =>
       have hsym := hsafe symbol (by simp)
       have hp := movement_prefix (Γ := Γ) symbol (piecesWord pieces)
-      have hm := advance_spec (Γ := Γ) before [symbol] (piecesWord pieces) tail
+      have hmBase := advance_spec (Γ := Γ) before [symbol] (piecesWord pieces) tail
         (some (.inl .header)) origin (elapsed + 24)
-      norm_num only [List.length_singleton, Nat.mul_one] at hm
+      norm_num only [List.length_singleton, Nat.mul_one] at hmBase
+      have hm := hmBase
+      change Std.WP.Triple (skipEnd (Γ := Γ)) _ _ _ at hm
       unfold nextStates
       vcgen [Spec.while_step_spec (loop := nextStates zero one) (hloop := rfl),
         checkPrefix_spec (tm := tm (Γ := Γ)) (.inl .initial) (.inl .header) (code .movementEnd)
@@ -301,7 +317,7 @@ private theorem nextStates_spec (zero one : Γ) (hne : zero ≠ one)
         hm, hr (before ++ [symbol]) (origin + 12) (elapsed + 36)]
       all_goals
         simp_all [piecesWord, pieceWord, NextValid, view, code_length,
-          BiTape.segment, List.append_assoc, List.reverse_append, StackTape.prepend_append]
+          BiTape.segment, List.append_assoc, List.reverse_append]
         all_goals try ring_nf
         all_goals lia
     | inr number =>
@@ -313,36 +329,88 @@ private theorem nextStates_spec (zero one : Γ) (hne : zero ≠ one)
       have hstart := advance_spec (Γ := Γ) before [CodeSymbol.movementEnd]
         (number.map CodeSymbol.digit ++ CodeSymbol.entryEnd :: word) tail
         (some (.inl .initial)) origin (elapsed + 24)
-      have hend (label : Option (Parsing.State Γ)) := advance_spec (Γ := Γ)
-        (crossed ++ number.map CodeSymbol.digit) [CodeSymbol.entryEnd] word tail label
-        (origin + 12 + (12 * number.length : Nat))
-        (elapsed + 36 + 4096 * (crossed.length + number.length + word.length + 2) ^ 2)
-      norm_num only [List.length_singleton, Nat.mul_one] at hstart hend
+      have hend (label : Option (Parsing.State Γ)) :
+          ⦃ fun cost current => current.config = ⟨label,
+              view (crossed ++ number.map CodeSymbol.digit) (CodeSymbol.entryEnd :: word) tail⟩ ∧
+              current.headPos = origin + 12 + (12 * number.length : Nat) ∧
+              cost.steps ≤ elapsed + 36 +
+                4096 * (crossed.length + number.length + word.length + 2) ^ 2 ⦄
+            skipEnd (Γ := Γ)
+          ⦃ fun _ cost final => final.config = ⟨label,
+              view (crossed ++ number.map CodeSymbol.digit ++ [CodeSymbol.entryEnd]) word tail⟩ ∧
+              final.headPos = origin + 12 + (12 * number.length : Nat) + 12 ∧
+              cost.steps ≤ elapsed + 48 +
+                4096 * (crossed.length + number.length + word.length + 2) ^ 2 ⦄ := by
+        have h := advance_spec (Γ := Γ)
+          (crossed ++ number.map CodeSymbol.digit) [CodeSymbol.entryEnd] word tail label
+          (origin + 12 + (12 * number.length : Nat))
+          (elapsed + 36 + 4096 * (crossed.length + number.length + word.length + 2) ^ 2)
+        norm_num only [List.length_singleton, Nat.mul_one, List.singleton_append] at h
+        have heq : elapsed + 36 +
+            4096 * (crossed.length + number.length + word.length + 2) ^ 2 + 12 =
+            elapsed + 48 + 4096 * (crossed.length + number.length + word.length + 2) ^ 2 := by
+          lia
+        rw [heq] at h
+        exact h
+      norm_num only [List.length_singleton, Nat.mul_one] at hstart
       have hrows : (crossed ++ word).count CodeSymbol.rowSeparator = rows := by
         simp only [crossed, rows, List.count_append, count_movement, Nat.add_zero]
       simp only [StateFields.Field.ending, StateFields.Field.Valid, hrows] at hfield
-      by_cases hvalid : Computability.decodeNat number ≤ rows
+      let nextBefore := crossed ++ number.map CodeSymbol.digit ++ [CodeSymbol.entryEnd]
+      let available := elapsed + 48 +
+        4096 * (crossed.length + number.length + word.length + 2) ^ 2
+      have hrestRows : (nextBefore ++ word).count CodeSymbol.rowSeparator = rows := by
+        simp [nextBefore, rows, crossed, List.count_append, List.count_cons]
+      have hcontinue :
+          ⦃ fun cost current => current.config =
+              ⟨some (.inl (if Computability.decodeNat number ≤ rows then .header else .reject)),
+                view nextBefore word tail⟩ ∧
+              current.headPos = origin + 12 + (12 * number.length : Nat) + 12 ∧
+              cost.steps ≤ available ⦄
+            nextStates zero one
+          ⦃ fun _ cost final => final.config =
+              ⟨some (.inl (if Computability.decodeNat number ≤ rows ∧ NextValid rows pieces
+                then .header else .reject)), view (nextBefore ++ word) [] tail⟩ ∧
+              final.headPos = origin + 12 + (12 * number.length : Nat) + 12 +
+                (12 * word.length : Nat) ∧
+              cost.steps ≤ available + 8192 * (word.length + 1) *
+                (nextBefore.length + word.length + 2) ^ 2 ⦄ := by
+        have hrestRows' : (nextBefore ++ piecesWord pieces).count CodeSymbol.rowSeparator =
+            rows := hrestRows
+        by_cases hv : Computability.decodeNat number ≤ rows
+        · simpa only [word, hv, ite_true, true_and, hrestRows'] using
+            hr nextBefore (origin + 12 + (12 * number.length : Nat) + 12) available
+        · vcgen [nextStates_reject_spec zero one nextBefore word tail
+            (origin + 12 + (12 * number.length : Nat) + 12) available]
+          all_goals
+            simp_all
+            all_goals ring_nf
+            all_goals lia
+      have hbudget : available + 8192 * (word.length + 1) *
+          (nextBefore.length + word.length + 2) ^ 2 ≤
+          elapsed + 8192 * ((pieceWord (.inr number) ++ word).length + 1) *
+            (before.length + (pieceWord (.inr number) ++ word).length + 2) ^ 2 := by
+        dsimp [available, nextBefore, crossed, pieceWord]
+        simp only [List.length_append, List.length_map, List.length_cons, List.length_nil]
+        ring_nf
+        lia
       all_goals unfold nextStates
       all_goals vcgen [Spec.while_step_spec (loop := nextStates zero one) (hloop := rfl),
         checkPrefix_spec (tm := tm (Γ := Γ)) (.inl .initial) (.inl .header) (code .movementEnd)
-          (encode (Γ := Γ) (CodeSymbol.movementEnd :: number.map CodeSymbol.digit ++ CodeSymbol.entryEnd :: word))
+          (encode (Γ := Γ)
+            (CodeSymbol.movementEnd :: number.map CodeSymbol.digit ++ CodeSymbol.entryEnd :: word))
           (StackTape.prepend (encode (Γ := Γ) before).reverse StackTape.nil) tail
           (some (.inl .header)) origin elapsed,
         hstart, hfield,
         hend (some (.inl (if Computability.decodeNat number ≤ rows then .header else .reject))),
-        hr (crossed ++ number.map CodeSymbol.digit ++ [CodeSymbol.entryEnd])
-          (origin + 12 + (12 * number.length : Nat) + 12)
-          (elapsed + 48 + 4096 * (crossed.length + number.length + word.length + 2) ^ 2),
-        nextStates_reject_spec zero one (crossed ++ number.map CodeSymbol.digit ++ [CodeSymbol.entryEnd])
-          word tail (origin + 12 + (12 * number.length : Nat) + 12)
-          (elapsed + 48 + 4096 * (crossed.length + number.length + word.length + 2) ^ 2)]
+        hcontinue]
       all_goals
-        simp_all [movement_prefix, piecesWord_cons, pieceWord, NextValid, view,
-          List.append_assoc, crossed, word, List.count_append, List.count_cons,
-          CodeSymbol.movementEnd, CodeSymbol.entryEnd, CodeSymbol.rowSeparator,
+        simp_all [piecesWord_cons, pieceWord, NextValid, view,
+          List.append_assoc, nextBefore, available, crossed, word, rows, List.count_append,
+          List.count_cons, digit_rows,
           List.reverse_append]
-        all_goals trace_state
         all_goals lia
+
 
 private noncomputable def afterLargest (zero one : Γ) : Prog (TMQuery (tm (Γ := Γ))) Unit :=
     do [TMQuery (tm (Γ := Γ))]

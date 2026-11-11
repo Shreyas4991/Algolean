@@ -75,6 +75,7 @@ public import Algolean.Complexity.Reductions.TMSATToSAT.StateBounds
 public import Algolean.Complexity.Reductions.TMSATToSAT.StateFields
 public import Algolean.Complexity.Reductions.TMSATToSAT.Tape
 public import Algolean.Complexity.Reductions.TMSATToSAT.TransitionClauses
+public import Algolean.Complexity.Reductions.TMSATToSAT.Validation
 public import Algolean.Complexity.Reductions.TMSATToSAT.VariableNames
 public import Algolean.Complexity.Reductions.TMSATToSAT.Variables
 public import Algolean.Complexity.Reductions.TMSATToSAT.Writing
