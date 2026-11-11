@@ -141,6 +141,13 @@ including it. The same finite program runs on every input length.
 def writeBit (tm : SingleTapeTM Bool) (bit : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   tape ←ₜ some bit
 
+/-- Writing the bit establishes any condition that holds after replacing the current cell. -/
+@[spec] theorem writeBit_spec {tm : SingleTapeTM Bool} [DecidableEq tm.State] (bit : Bool)
+    (post : Unit → TMCost → TMState tm → Prop) :
+    ⦃ fun cost current => post () cost (current.write (some bit)) ⦄
+      writeBit tm bit ⦃ post ⦄ := by
+  vcgen [writeBit]
+
 /-- Writing the bit preserves the head position and control state and uses no head moves. -/
 theorem writeBit_correct {tm : SingleTapeTM Bool} [DecidableEq tm.State]
     (s : TMState tm) (bit : Bool) :

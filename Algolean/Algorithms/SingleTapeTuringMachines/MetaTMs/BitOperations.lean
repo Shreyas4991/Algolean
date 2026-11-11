@@ -46,6 +46,20 @@ def flipBit (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
     else
       tape ←ₜ none
 
+/-- Flipping the current bit establishes the condition stated for that changed cell. -/
+@[spec] theorem flipBit_spec (post : Unit → TMCost → TMState tm → Prop) :
+    ⦃ fun cost current =>
+        post () cost (current.write (current.config.BiTape.head.map Bool.not)) ⦄
+      flipBit tm ⦃ post ⦄ := by
+  vcgen [flipBit]
+  all_goals
+    first
+    | solve | simp_all [TMCondition.eval]
+    | rename_i cost current h htrue hfalse
+      cases hhead : current.config.BiTape.head with
+      | none => simp_all [TMCondition.eval]
+      | some bit => cases bit <;> simp_all [TMCondition.eval]
+
 /--
 The program changes only the bit under the head and leaves a blank cell blank. It preserves the
 head position and control state and uses no head moves or additional tape cells.
@@ -54,8 +68,7 @@ theorem flipBit_correct (s : TMState tm) :
     Runs (flipBit tm) s (s.config.BiTape.write (s.config.BiTape.head.map Bool.not))
       s.headPos 0 := by
   apply Spec.runs
-  vcgen [flipBit]
-  all_goals simp_all [TMCondition.eval, TMState.write]
-  all_goals cases h : s.config.BiTape.head <;> simp_all
+  vcgen [flipBit_spec]
+  simp_all
 
 end Algolean.Algorithms.SingleTapeTuringMachines

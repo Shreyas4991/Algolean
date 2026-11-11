@@ -63,14 +63,26 @@ def eraseAndMove (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQu
   tape ←ₜ none
   moveₜ .Right
 
+/-- Erasing and moving establishes the condition stated for the resulting machine state. -/
+@[spec] theorem eraseAndMove_spec (post : Unit → TMCost → TMState tm → Prop) :
+    ⦃ fun cost current => post () (cost + current.moveCost .Right)
+        ((current.write none).move .Right) ⦄
+      eraseAndMove tm ⦃ post ⦄ := by
+  vcgen [eraseAndMove]
+  rename_i initial current h
+  have hcost : (current.write none).moveCost .Right = current.moveCost .Right := rfl
+  rw [hcost]
+  exact h
+
 /-- Erasing the first symbol and moving right leaves exactly the remaining word on the tape. -/
 theorem eraseAndMove_correct (symbol : Symbol) (rest : List Symbol) (s : TMState tm)
     (htape : s.config.BiTape = cursor [] (symbol :: rest)) :
     Runs (eraseAndMove tm) s (cursor [] rest) (s.headPos + 1) 1 := by
   apply Spec.runs
-  vcgen [eraseAndMove]
-  simp_all [TMState.move, TMState.write, TMState.moveCost, cursor,
-    BiTape.write, BiTape.moveRight]
+  vcgen [eraseAndMove_spec]
+  all_goals
+    cases hcfg : s.config
+    simp_all [TMState.move, TMState.write, TMState.moveCost, cursor, BiTape.write, BiTape.moveRight]
 
 /--
 This Turing machine program erases symbols while moving right and stops on the first blank.
@@ -83,6 +95,28 @@ def eraseRight (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuer
   whileₜ (notₜ tape =ₜ none) do
     eraseAndMove tm
 
+/-- Erasing the first word preserves the following region and counts every head move. -/
+@[spec] theorem eraseRight_spec (word : List Symbol) (tail : StackTape Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment StackTape.nil word tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseRight tm
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.segment StackTape.nil [] tail⟩ ∧
+        final.headPos = origin + word.length ∧ cost.steps = elapsed + word.length ⦄ := by
+  induction word generalizing origin elapsed with
+  | nil =>
+    unfold eraseRight
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons symbol rest ih =>
+    unfold eraseRight
+    vcgen [Spec.while_step_spec (loop := eraseRight tm) (hloop := rfl), eraseAndMove_spec,
+      ih (origin + 1) (elapsed + 1)]
+    all_goals cases rest
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      BiTape.segment, BiTape.write, BiTape.moveRight, add_assoc]
+    all_goals lia
+
 /--
 Erasing the first word preserves the tape beyond its following blank and stops on that blank.
 The number of head moves equals the erased word's length.
@@ -91,24 +125,11 @@ theorem eraseRight_segment (word : List Symbol) (tail : StackTape Symbol) (s : T
     (htape : s.config.BiTape = BiTape.segment StackTape.nil word tail) :
     Runs (eraseRight tm) s (BiTape.segment StackTape.nil [] tail)
       (s.headPos + word.length) word.length := by
-  induction word generalizing s with
-  | nil =>
-    unfold eraseRight
-    apply Spec.runs
-    vcgen [Spec.while_false_spec]
+  apply Spec.runs
+  vcgen [eraseRight_spec word tail s.config.state s.headPos 0]
+  all_goals
     cases hcfg : s.config
-    simp_all
-  | cons symbol rest ih =>
-    let moved := (s.write none).move .Right
-    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih moved (by
-      cases rest <;> simp [moved, TMState.move, TMState.write, htape, BiTape.segment,
-        BiTape.write, BiTape.moveRight])
-    unfold eraseRight
-    apply Spec.runs
-    vcgen [Spec.while_step_spec (loop := eraseRight tm) (hloop := rfl),
-      eraseAndMove, Spec.steps hc 1]
-    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost,
-      add_comm, add_left_comm]
+    simp_all 
 
 /-- Erasing a word to the right clears the tape and uses one head move for each input symbol. -/
 theorem eraseRight_correct (word : List Symbol) (s : TMState tm)
@@ -130,6 +151,28 @@ def eraseUntil (tm : SingleTapeTM Symbol) (ending : Symbol) : Prog (TMQuery tm) 
   whileₜ (notₜ tape =ₜ some ending) do
     eraseAndMove tm
 
+/-- Erasing stops at the next ending symbol and leaves that symbol and its suffix unchanged. -/
+@[spec] theorem eraseUntil_spec (ending : Symbol) (crossed rest : List Symbol)
+    (hcrossed : ending ∉ crossed) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor [] (crossed ++ ending :: rest)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseUntil tm ending
+    ⦃ fun _ cost final => final.config = ⟨label, cursor [] (ending :: rest)⟩ ∧
+        final.headPos = origin + crossed.length ∧ cost.steps = elapsed + crossed.length ⦄ := by
+  induction crossed generalizing origin elapsed with
+  | nil =>
+    unfold eraseUntil
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons symbol crossed ih =>
+    have hparts : ending ≠ symbol ∧ ending ∉ crossed := by simpa using hcrossed
+    unfold eraseUntil
+    vcgen [Spec.while_step_spec (loop := eraseUntil tm ending) (hloop := rfl), eraseAndMove_spec,
+      ih hparts.2 (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      cursor, BiTape.write, BiTape.moveRight, add_assoc]
+    all_goals lia
+
 /--
 If `crossed` contains no `ending`, the program erases exactly `crossed` and stops on the next
 occurrence of `ending`. The remaining word is the only occupied part of the tape.
@@ -139,25 +182,11 @@ theorem eraseUntil_correct (ending : Symbol) (crossed rest : List Symbol) (s : T
     (hcrossed : ending ∉ crossed) :
     Runs (eraseUntil tm ending) s (cursor [] (ending :: rest))
       (s.headPos + crossed.length) crossed.length := by
-  induction crossed generalizing s with
-  | nil =>
-    unfold eraseUntil
-    apply Spec.runs
-    vcgen [Spec.while_false_spec]
+  apply Spec.runs
+  vcgen [eraseUntil_spec ending crossed rest hcrossed s.config.state s.headPos 0]
+  all_goals
     cases hcfg : s.config
-    simp_all
-  | cons symbol crossed ih =>
-    have hparts : ending ≠ symbol ∧ ending ∉ crossed := by simpa using hcrossed
-    let moved := (s.write none).move .Right
-    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih moved
-      (by simp [moved, TMState.move, TMState.write, htape, cursor,
-        BiTape.write, BiTape.moveRight]) hparts.2
-    unfold eraseUntil
-    apply Spec.runs
-    vcgen [Spec.while_step_spec (loop := eraseUntil tm ending) (hloop := rfl),
-      eraseAndMove, Spec.steps hc 1]
-    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost,
-      add_comm, add_left_comm]
+    simp_all 
 
 /--
 `eraseLeft tm` is a Turing machine program that replaces the current occupied cell with a blank and
@@ -172,6 +201,41 @@ def eraseLeft (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery
     tape ←ₜ none
     moveₜ .Left
 
+/-- Starting the erasing loop on a blank tape leaves it unchanged. -/
+private theorem eraseLeft_blank_spec (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.nil⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseLeft tm
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.nil⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
+  unfold eraseLeft
+  vcgen [Spec.while_false_spec]
+  simp_all [BiTape.nil]
+
+/-- Erasing to the left clears the entire displayed word and counts one move per symbol. -/
+@[spec] theorem eraseLeft_spec (left : List Symbol) (bit : Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left [bit]⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseLeft tm
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.nil⟩ ∧
+        final.headPos = origin - (left.length + 1 : Nat) ∧
+        cost.steps = elapsed + left.length + 1 ⦄ := by
+  induction left generalizing bit origin elapsed with
+  | nil =>
+    unfold eraseLeft
+    vcgen [Spec.while_step_spec (loop := eraseLeft tm) (hloop := rfl),
+      eraseLeft_blank_spec label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      BiTape.nil, BiTape.moveLeft, BiTape.write, cursor, sub_eq_add_neg]
+  | cons previous left ih =>
+    unfold eraseLeft
+    vcgen [Spec.while_step_spec (loop := eraseLeft tm) (hloop := rfl),
+      ih previous (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /--
 Starting on the last symbol `bit`, this program erases that cell and the entire prefix `left`,
 leaving a completely blank tape. The head finishes `left.length + 1` cells to the left of its
@@ -180,24 +244,11 @@ starting coordinate, using exactly that many head moves.
 theorem eraseLeft_correct (left : List Symbol) (bit : Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor left [bit]) :
     Runs (eraseLeft tm) s BiTape.nil (s.headPos - (left.length + 1 : ℕ)) (left.length + 1) := by
-  induction left generalizing bit s with
-  | nil =>
-    let moved := (s.write none).move .Left
-    have hc : Completes (eraseLeft tm) moved 0 moved :=
-      completes_while_false _ _ _ (by simp [moved, TMState.move, TMState.write, hs, BiTape.nil, BiTape.moveLeft])
-    unfold eraseLeft
-    apply Spec.runs
-    vcgen [Spec.while_step_spec (loop := eraseLeft tm) (hloop := rfl), Spec.steps hc 1]
-    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost, sub_eq_add_neg]
-  | cons prev left ih =>
-    let moved := (s.write none).move .Left
-    obtain ⟨cost, final, hc, ht, hp, hm⟩ := ih prev moved
-      (by simp [moved, TMState.move, TMState.write, hs])
-    unfold eraseLeft
-    apply Spec.runs
-    vcgen [Spec.while_step_spec (loop := eraseLeft tm) (hloop := rfl), Spec.steps hc 1]
-    all_goals simp_all [moved, TMState.move, TMState.write, TMState.moveCost,
-      sub_eq_add_neg, add_comm, add_left_comm]
+  apply Spec.runs
+  vcgen [eraseLeft_spec left bit s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `eraseToLeft tm` is a Turing machine program that starts on the blank immediately after a contiguous
@@ -213,6 +264,25 @@ def eraseToLeft (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQue
   eraseLeft tm
   moveₜ .Right
 
+/-- Erasing the preceding word clears the tape and returns to its former first cell. -/
+@[spec] theorem eraseToLeft_spec (left : List Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor left []⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseToLeft tm
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.nil⟩ ∧
+        final.headPos = origin - left.length ∧ cost.steps = elapsed + left.length + 2 ⦄ := by
+  cases left with
+  | nil =>
+    vcgen [eraseToLeft, eraseLeft_blank_spec label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost,
+      BiTape.nil, BiTape.moveLeft, BiTape.moveRight, sub_eq_add_neg]
+  | cons bit left =>
+    vcgen [eraseToLeft, eraseLeft_spec left bit label (origin - 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.moveCost,
+      BiTape.nil, BiTape.moveRight, sub_eq_add_neg, add_assoc]
+    all_goals lia
+
 /--
 Starting from `cursor left []`, this program leaves the tape blank and finishes at `s.headPos -
 left.length`. It uses exactly `left.length + 2` head moves and preserves the control state,
@@ -221,20 +291,11 @@ including when `left` is empty.
 theorem eraseToLeft_correct (left : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor left []) :
     Runs (eraseToLeft tm) s BiTape.nil (s.headPos - left.length) (left.length + 2) := by
-  cases left with
-  | nil =>
-    have hc : Completes (eraseLeft tm) (s.move .Left) 0 (s.move .Left) :=
-      completes_while_false _ _ _ (by simp [TMState.move, hs, BiTape.nil, BiTape.moveLeft])
-    apply Spec.runs
-    vcgen [eraseToLeft, Spec.steps hc 1]
-    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg]
-  | cons bit left =>
-    obtain ⟨cost, final, hc, ht, hp, hm⟩ := eraseLeft_correct left bit (s.move .Left)
-      (by simp [TMState.move, hs])
-    apply Spec.runs
-    vcgen [eraseToLeft, Spec.steps hc 1]
-    all_goals simp_all [TMState.move, TMState.moveCost, sub_eq_add_neg,
-      add_comm, add_left_comm]
+  apply Spec.runs
+  vcgen [eraseToLeft_spec left s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 `eraseBlock tm` is a Turing machine program that starts at the beginning of the input block, scans
@@ -248,6 +309,19 @@ def eraseBlock (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuer
   seekRightBlank tm
   eraseToLeft tm
 
+/-- Erasing the input word restores the head and records the complete round trip. -/
+@[spec] theorem eraseBlock_spec (bits : List Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, cursor [] bits⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseBlock tm
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.nil⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed + 2 * bits.length + 2 ⦄ := by
+  vcgen [eraseBlock, seekRightBlank_spec [] bits label origin elapsed,
+    eraseToLeft_spec bits.reverse label (origin + bits.length) (elapsed + bits.length)]
+  all_goals simp_all
+  all_goals lia
+
 /--
 Erasing `bits` leaves a completely blank tape and restores the initial head coordinate. The program
 preserves the control state and uses exactly `2 * bits.length + 2` head moves, even when the input
@@ -256,11 +330,10 @@ is empty.
 theorem eraseBlock_correct (bits : List Symbol) (s : TMState tm)
     (hs : s.config.BiTape = cursor [] bits) :
     Runs (eraseBlock tm) s BiTape.nil s.headPos (2 * bits.length + 2) := by
-  obtain ⟨cost, middle, hc, ht, hp, hm⟩ := seekRightBlank_correct [] bits s hs
-  obtain ⟨more, final, hr, hf, hpos, htime⟩ := eraseToLeft_correct bits.reverse middle
-    (by simpa using congrArg SingleTapeTM.Cfg.BiTape ht)
   apply Spec.runs
-  vcgen [eraseBlock, Spec.steps hc 0, Spec.steps hr bits.length]
-  all_goals simp_all [add_assoc, add_comm, two_mul]
+  vcgen [eraseBlock_spec bits s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 end Algolean.Algorithms.SingleTapeTuringMachines
