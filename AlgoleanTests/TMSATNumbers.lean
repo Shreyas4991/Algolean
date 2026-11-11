@@ -8,14 +8,17 @@ module
 
 public import AlgoleanTests.TMSATToSATTape
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Decrement
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Reading
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Decrement
+public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Reading
 
 /-!
-# Running the binary-counter program
+# Running the counter and backward-search programs
 
 Subtraction is checked on all positive Boolean words of length at most seven, including words
-with leading zeros. The checks verify the output's numeric value, the neighboring tape contents,
-the final head position, and the proved move bound.
+with leading zeros. The output is checked by its numeric value. The backward search is checked
+with several intervening words and with other tape contents on both sides. Both checks verify
+the final head position and the proved move bounds.
 -/
 
 public section
@@ -57,6 +60,41 @@ def checkSubtraction : IO Unit := do
                 throw (IO.userError "Subtraction changed the wrong number, cells, head, or state.")
     words := words.flatMap fun word => [false :: word, true :: word]
 
-run_cmd Lean.Elab.Command.liftIO checkSubtraction
+/--
+This searches backward for a fixed three-bit word. The intervening three-bit words differ
+from the target. Each run checks the whole tape, the found state, and the number of moves.
+The tape on both sides of the searched words includes blanks that the search must preserve.
+-/
+def checkBackwardSearch : IO Unit := do
+  let expected := [true, false, true]
+  let left := StackTape.cons (some false) (StackTape.cons none (StackTape.mapSome [true]))
+  let tail := StackTape.cons (some false) (StackTape.cons none (StackTape.mapSome [true, false]))
+  let mut possibilities := [[]]
+  for _ in [:5] do
+    for blocks in possibilities do
+      let crossed := expected ++ blocks.flatten
+      for label in [none, some false, some true] do
+        for suffix in [[], [false], [true, false], expected] do
+          let initial : TMState TMSATToSATTape.control := {
+            config := ⟨label,
+              BiTape.segment (StackTape.prepend crossed.reverse left) suffix tail⟩
+            headPos := 7 }
+          let program := findPreviousWord TMSATToSATTape.control true false expected
+          match execute 10000 program initial with
+          | none => throw (IO.userError "The backward search ran out of fuel.")
+          | some (result, final) =>
+            unless tapeView final.machine.config.BiTape =
+                  tapeView (BiTape.segment left (crossed ++ suffix) tail) ∧
+                final.machine.config.state = some true ∧
+                final.machine.headPos = 7 - 3 * (blocks.length + 1 : Nat) ∧
+                result.tell.steps ≤ 9 * (blocks.length + 1) do
+              throw (IO.userError "The backward search changed the tape or found the wrong cell.")
+    possibilities := possibilities.flatMap fun blocks =>
+      [[false, false, false] :: blocks, [true, true, true] :: blocks,
+        [false, true, false] :: blocks]
+
+run_cmd Lean.Elab.Command.liftIO do
+  checkSubtraction
+  checkBackwardSearch
 
 end AlgoleanTests.TMSATNumbers
