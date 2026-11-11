@@ -142,20 +142,25 @@ private theorem finishEncoding_spec (symbols : List Symbol) (code : Symbol → L
         (by simp [output, List.append_assoc]) label (origin + input.length - 1)
         (initial.steps + input.length +
           ending.length * (4 * suffix.length + 3) + ending.length + 1)]
-    all_goals cases hx : input.reverse
-    all_goals simp_all [output, TMState.move, TMState.moveCost,
-      BiTape.segment, BiTape.mirror, BiTape.moveLeft, List.append_assoc]
-    all_goals lia
+    case vc1 => exact ⟨hcfg, hpos⟩
+    case vc2 => simp_all
+    case vc3 =>
+      cases hx : input.reverse
+      all_goals simp_all [TMState.move, TMState.moveCost,
+        BiTape.segment, BiTape.mirror, BiTape.moveLeft, sub_eq_add_neg]
+    case vc4 =>
+      simp_all [output, List.append_assoc]
+      lia
   · intro _
     apply Std.WP.Triple.intro
     rintro initial current ⟨hcfg, hpos, hsteps⟩
     vcgen [writeLeft_spec header.reverse StackTape.nil (StackTape.mapSome output)
       label origin (initial.steps + 1)]
-    all_goals simp_all [TMState.move, TMState.moveCost, output, List.append_assoc,
-      BiTape.segment, BiTape.mirror, BiTape.moveRight]
-    all_goals cases hx : header ++ (input.flatMap code ++ (ending ++ suffix))
-    all_goals simp_all [BiTape.mk₁]
-    all_goals lia
+    case vc1 =>
+      simp_all [TMState.move, TMState.moveCost, BiTape.segment, BiTape.mirror, BiTape.moveRight]
+    case vc2 =>
+      simp_all [TMState.move, TMState.moveCost, output, List.append_assoc]
+      lia
 
 /--
 This machine leaves `header`, the replaced input, `ending`, and the extra output parts in that
@@ -260,7 +265,7 @@ noncomputable def serializerComputer (code : Symbol → List Symbol)
     apply Spec.completes
     vcgen [serialize_spec (tm := control) symbols hcover code hne header ending fields input
       (some ()) 0 0]
-    all_goals simp_all [TMState.init]
+    all_goals simp_all [TMState.init, SingleTapeTM.initCfg, control]
   apply hc.outputsWithinTime (by simpa using congrArg SingleTapeTM.Cfg.BiTape hf)
   simpa [time] using hb
 

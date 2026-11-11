@@ -82,14 +82,18 @@ theorem updateForSymbol_correct (table : ScanTable tm)
     (hhead : s.config.BiTape.head = some symbol) :
     Completes (updateForSymbol table label) s 0
       {s with config.state := some (table.next label symbol)} := by
-  apply select_correct _ _ _ symbol s _ 0 (table.mem_symbols symbol)
+  change Completes (updateForSymbol table label) s 0
+    {s with config := ⟨some (table.next label symbol), s.config.BiTape⟩}
+  apply Spec.exact_completes
+  vcgen [updateForSymbol, Spec.select_spec table.symbols (fun symbol => .tapeIs (some symbol))
+    (fun symbol => do [TMQuery tm] state ←ₜ table.next label symbol)
+    symbol (table.mem_symbols symbol)]
+  rename_i initial current hpre
+  rcases hpre with ⟨rfl, rfl⟩
+  constructor
   · intro candidate
     simp [hhead, eq_comm]
-  · change Completes (do [TMQuery tm] state ←ₜ table.next label symbol) s 0
-      {s with config := ⟨some (table.next label symbol), s.config.BiTape⟩}
-    apply Spec.exact_completes
-    vcgen
-    simp_all
+  · vcgen
 
 /-- Reading a fixed symbol changes the control label and preserves the tape and head. -/
 @[spec] theorem updateForSymbol_spec (table : ScanTable tm) (label : tm.State)
@@ -102,11 +106,14 @@ theorem updateForSymbol_correct (table : ScanTable tm)
         final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
   apply Std.WP.Triple.intro
   rintro initial current ⟨hcfg, hpos, hsteps⟩
-  have hc : Completes (updateForSymbol table label) current 0
-      {current with config := ⟨some (table.next label symbol), current.config.BiTape⟩} :=
-    updateForSymbol_correct table label symbol current (by simp [hcfg, hhead])
-  vcgen [Spec.of_completes hc initial]
-  all_goals simp_all
+  vcgen [updateForSymbol, Spec.select_spec table.symbols (fun symbol => .tapeIs (some symbol))
+    (fun symbol => do [TMQuery tm] state ←ₜ table.next label symbol)
+    symbol (table.mem_symbols symbol)]
+  constructor
+  · intro candidate
+    simp [hcfg, hhead, eq_comm]
+  · vcgen
+    simp_all
 
 /--
 This Turing machine program compares the current state with each name in `table.states`, from
@@ -128,10 +135,21 @@ theorem updateFromTable_correct (table : ScanTable tm)
     (hstate : s.config.state = some label) (hhead : s.config.BiTape.head = some symbol) :
     Completes (updateFromTable table) s 0
       {s with config.state := some (table.next label symbol)} := by
-  apply select_correct _ _ _ label s _ 0 (table.mem_states label)
+  change Completes (updateFromTable table) s 0
+    {s with config := ⟨some (table.next label symbol), s.config.BiTape⟩}
+  apply Spec.exact_completes
+  vcgen [updateFromTable, Spec.select_spec table.states (fun label => .stateIs (some label))
+    (updateForSymbol table) label (table.mem_states label)]
+  rename_i initial current hpre
+  rcases hpre with ⟨rfl, rfl⟩
+  constructor
   · intro candidate
     simp [hstate, eq_comm]
-  · exact updateForSymbol_correct table label symbol s hhead
+  · have hc : Completes (updateForSymbol table label) current 0
+        {current with config := ⟨some (table.next label symbol), current.config.BiTape⟩} :=
+      updateForSymbol_correct table label symbol current hhead
+    vcgen [Spec.of_completes hc 0]
+    all_goals simp_all
 
 /-- The table chooses the next label from the current label and scanned symbol. -/
 @[spec] theorem updateFromTable_spec (table : ScanTable tm) (label : tm.State)
@@ -144,11 +162,13 @@ theorem updateFromTable_correct (table : ScanTable tm)
         final.headPos = origin ∧ cost.steps = elapsed ⦄ := by
   apply Std.WP.Triple.intro
   rintro initial current ⟨hcfg, hpos, hsteps⟩
-  have hc : Completes (updateFromTable table) current 0
-      {current with config := ⟨some (table.next label symbol), current.config.BiTape⟩} :=
-    updateFromTable_correct table label symbol current (by simp [hcfg]) (by simp [hcfg, hhead])
-  vcgen [Spec.of_completes hc initial]
-  all_goals simp_all
+  vcgen [updateFromTable, Spec.select_spec table.states (fun label => .stateIs (some label))
+    (updateForSymbol table) label (table.mem_states label)]
+  constructor
+  · intro candidate
+    simp [hcfg, eq_comm]
+  · vcgen [updateForSymbol_spec table label symbol view hhead (some label) origin elapsed]
+    all_goals simp_all
 
 end FiniteState
 
