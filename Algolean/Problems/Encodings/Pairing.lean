@@ -71,6 +71,15 @@ theorem pair_injective : Function.Injective (fun p : List Bool × List Bool => p
   rw [unpair_pair, unpair_pair] at this
   exact Option.some.inj this
 
+/-- Two encoded pairs are equal exactly when both of their words are equal. -/
+@[simp] theorem pair_eq_pair {first second first' second' : List Bool} :
+    pair first second = pair first' second' ↔ first = first' ∧ second = second' := by
+  constructor
+  · intro h
+    exact Prod.mk.inj (pair_injective h)
+  · rintro ⟨rfl, rfl⟩
+    rfl
+
 @[simp] theorem length_pair (first second : List Bool) :
     (pair first second).length = 2 * first.length + second.length + 1 := by
   simp [pair, Nat.succ_mul, Nat.add_assoc, Nat.add_comm]

@@ -34,7 +34,7 @@ theorem formula_satisfiable_iff (problem : Instance Γ) (yes : Γ) :
     formula problem yes ∈ CNF.satisfiable ↔ problem ∈ satisfiable yes := by
   classical
   let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
-  exact (CNF.rename_mem_satisfiable_iff _ _ variableName_injective).trans
+  exact (CNF.rename_mem_satisfiable_iff _ _ Variable.name_injective).trans
     (indexedFormula_satisfiable_iff problem yes)
 
 /-- The conversion preserves both yes and no answers, including rejection of malformed words. -/
