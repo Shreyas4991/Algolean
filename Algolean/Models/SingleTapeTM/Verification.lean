@@ -203,6 +203,16 @@ theorem runs {p : Prog (TMQuery tm) Unit} {s : TMState tm}
   obtain ⟨cost, final, hc, ht, hp, hm⟩ := completes h
   exact ⟨cost, final, hc, ht, hp, hm⟩
 
+/-- A verification proof with an upper time bound gives a completed run within that bound. -/
+theorem runs_le {p : Prog (TMQuery tm) Unit} {s : TMState tm}
+    {output : BiTape Γ} {position : ℤ} {time : Nat}
+    (h : Triple p (fun initial current => initial = 0 ∧ current = s)
+      (fun _ cost final => final.config = ⟨s.config.state, output⟩ ∧
+        final.headPos = position ∧ cost.steps ≤ time) ()) :
+    ∃ moves, Runs p s output position moves ∧ moves ≤ time := by
+  obtain ⟨cost, final, hc, ht, hp, hm⟩ := completes h
+  exact ⟨cost.steps, ⟨cost, final, hc, ht, hp, rfl⟩, hm⟩
+
 /-- Writing changes the current cell and leaves the accumulated cost unchanged. -/
 @[spec] theorem write_spec (symbol : Option Γ)
     (post : Unit → TMCost → TMState tm → Prop) :
@@ -287,6 +297,18 @@ theorem select_spec {α : Type} [DecidableEq α] (cases : List α)
   exact complete _ post initial current final cost
     (select_correct cases test action chosen current final cost hmem htest hc) hp
 
+/-- If none of the tests succeeds, case selection preserves the machine and its costs. -/
+theorem select_none_spec {α : Type} (cases : List α) (test : α → TMCondition tm)
+    (action : α → Prog (TMQuery tm) Unit) (post : Unit → TMCost → TMState tm → Prop) :
+    Triple (select cases test action)
+      (fun initial current =>
+        (∀ candidate ∈ cases, (test candidate).eval current.config = false) ∧
+        post () initial current) post () := by
+  apply Triple.intro
+  rintro initial current ⟨htest, hp⟩
+  apply complete _ post initial current current 0 (select_none cases test action current htest)
+  simpa using hp
+
 /-- A loop whose first test is false finishes without changing the state or cost. -/
 theorem while_false_spec (condition : TMCondition tm) (body : Prog (TMQuery tm) Unit)
     (post : Unit → TMCost → TMState tm → Prop) :
@@ -317,6 +339,31 @@ theorem while_step_spec (condition : TMCondition tm) (body loop : Prog (TMQuery 
   by_cases hcondition : condition.eval s.config = true
   · simpa [execute_while_succ, hcondition, hloop] using hc
   · simpa [execute_while_succ, hcondition] using hc
+
+/--
+This checks one iteration of a loop followed by another program. Naming their whole sequence
+lets an induction hypothesis verify the remaining iterations and that final program together.
+-/
+theorem while_step_seq_spec (condition : TMCondition tm)
+    (body next loop : Prog (TMQuery tm) Unit)
+    (hloop : loop = do whileLoop condition body; next)
+    (post : Unit → TMCost → TMState tm → Prop) :
+    Triple loop
+      (fun initial current => wp
+        (if condition.eval current.config then do body; loop else next) post () initial current)
+      post () := by
+  rw [hloop]
+  apply Triple.intro
+  intro initial current h
+  obtain ⟨cost, final, hc, hp⟩ := sound _ post initial current h
+  by_cases hcondition : condition.eval current.config = true
+  · have hbody : Completes (do body; whileLoop condition body; next) current cost final := by
+      simpa [hcondition, hloop, bind_assoc] using hc
+    exact complete _ post initial current final cost (hbody.while_step_seq hcondition) hp
+  · have hexit : condition.eval current.config = false := by simpa using hcondition
+    have hnext : Completes next current cost final := by simpa [hexit] using hc
+    exact complete _ post initial current final cost
+      (by simpa using (completes_while_false condition body current hexit).seq hnext) hp
 
 /-- A loop invariant describes the accumulated cost and machine state before each test. -/
 @[spec_invariant_type] def Invariant (tm : SingleTapeTM Γ) := TMCost → TMState tm → Prop

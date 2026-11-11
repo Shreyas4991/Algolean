@@ -142,6 +142,25 @@ theorem seekRightOccupied_correct (gap : Nat) (symbol : Symbol) (left right : St
     cases hcfg : s.config
     simp_all
 
+/-- The scan crosses the displayed gap, including a gap of length zero, and preserves the tape. -/
+@[spec] theorem seekRightOccupied_stack_spec (gap : Nat) (symbol : Symbol)
+    (left right : StackTape Symbol) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        ⟨(StackTape.blanks gap (StackTape.cons (some symbol) right)).head, left,
+          (StackTape.blanks gap (StackTape.cons (some symbol) right)).tail⟩⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      seekRightOccupied tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, ⟨some symbol, StackTape.blanks gap left, right⟩⟩ ∧
+        final.headPos = origin + gap ∧ cost.steps = elapsed + gap ⦄ := by
+  cases gap with
+  | zero =>
+    vcgen [occupied_spec .Right (seekRightOccupied tm) rfl symbol left right label origin elapsed]
+    all_goals simp_all
+  | succ gap =>
+    vcgen [seekRightOccupied_spec gap symbol left right label origin elapsed]
+    all_goals simp_all [add_assoc]
+
 /-- The rightward scan also handles a gap of length zero, when the head is already on a symbol. -/
 theorem seekRightOccupied_stack (gap : Nat) (symbol : Symbol) (left right : StackTape Symbol)
     (s : TMState tm)
@@ -151,9 +170,10 @@ theorem seekRightOccupied_stack (gap : Nat) (symbol : Symbol) (left right : Stac
     Runs (seekRightOccupied tm) s
       ⟨some symbol, StackTape.blanks gap left, right⟩
       (s.headPos + gap) gap := by
-  cases gap with
-  | zero => simp [seekRightOccupied, htape]
-  | succ gap =>
-    exact seekRightOccupied_correct gap symbol left right s (by simpa using htape)
+  apply Spec.runs
+  vcgen [seekRightOccupied_stack_spec gap symbol left right s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 end Algolean.Algorithms.SingleTapeTuringMachines

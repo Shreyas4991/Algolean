@@ -26,7 +26,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines.CertificatePadding
 
 open Cslib Cslib.Turing TMQuery Alphabet
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 variable {Γ : Type} [Fintype Γ] [DecidableEq Γ]
 
@@ -66,25 +68,18 @@ private theorem erase_advance_separated (leftWord : List (Extended Γ 1)) (gap :
 
 variable {tm : SingleTapeTM (Extended Γ 1)} [DecidableEq tm.State]
 
-private theorem eraseRight_separated (leftWord : List (Extended Γ 1)) (gap : Nat)
-    (remaining : List (Extended Γ 1)) (s : TMState tm)
-    (htape : s.config.BiTape = separated leftWord gap remaining) :
-    Runs (eraseRight tm) s (separated leftWord (remaining.length + gap) [])
-      (s.headPos + remaining.length) remaining.length := by
-  induction remaining generalizing gap s with
-  | nil => simp [eraseRight, htape, separated]
-  | cons symbol remaining ih =>
-    unfold eraseRight
-    apply runs_while_step (by simp [htape, separated])
-    have he : Runs (eraseAndMove tm) s (separated leftWord (gap + 1) remaining)
-        (s.headPos + 1) 1 := by
-      simpa only [eraseAndMove, htape, erase_advance_separated, Dir.offset, Nat.zero_add] using
-        (write_correct s none).append_move .Right
-    have hr := he.seq (q := eraseRight tm) (by
-      intro middle hmiddle hpos
-      simpa [hpos, Nat.add_assoc, add_assoc, add_comm, add_left_comm] using
-        ih (gap + 1) middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-    simpa [eraseRight, eraseAndMove, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hr
+private theorem eraseRight_separated_spec (leftWord : List (Extended Γ 1)) (gap : Nat)
+    (remaining : List (Extended Γ 1)) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, separated leftWord gap remaining⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseRight tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, separated leftWord (remaining.length + gap) []⟩ ∧
+        final.headPos = origin + remaining.length ∧ cost.steps = elapsed + remaining.length ⦄ := by
+  vcgen [eraseRight_segment_spec (StackTape.blanks gap (StackTape.mapSome leftWord))
+    StackTape.nil remaining label origin elapsed]
+  all_goals cases remaining
+  all_goals simp_all [separated, BiTape.segment, ← StackTape.blanks_add, add_comm]
 
 private def finish (keep : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   eraseRight tm
@@ -95,51 +90,28 @@ private def finish (keep : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
     eraseLeft tm
     moveₜ .Right
 
-private theorem finish_correct (keep : Bool) (first : Extended Γ 1) (leftWord : List (Extended Γ 1))
-    (gap : Nat) (remaining : List (Extended Γ 1)) (s : TMState tm)
-    (htape : s.config.BiTape = separated (first :: leftWord) gap remaining) :
-    Runs (finish (tm := tm) keep) s
-      (if keep then BiTape.mk₁ (first :: leftWord).reverse else BiTape.nil)
-      (s.headPos - (gap + (first :: leftWord).length : Nat))
-      (2 * remaining.length + gap + (first :: leftWord).length + 2) := by
-  have he := eraseRight_separated (first :: leftWord) gap remaining s htape
-  have hs := he.seq (q := seekLeftOccupied tm)
-    (second := cursor leftWord [first])
-    (pos₂ := s.headPos - (gap + 1 : Nat)) (time₂ := remaining.length + gap + 1) (by
-      intro middle hmiddle hpos
-      have hm : middle.config.BiTape =
-          ⟨none, StackTape.blanks (remaining.length + gap)
-            (StackTape.cons (some first) (StackTape.mapSome leftWord)), StackTape.nil⟩ := by
-        simpa [separated] using congrArg SingleTapeTM.Cfg.BiTape hmiddle
-      have hr := seekLeftOccupied_correct (remaining.length + gap) first
-        (StackTape.mapSome leftWord) StackTape.nil middle hm
-      convert hr using 1 <;>
-        simp [cursor, hpos, sub_eq_add_neg, add_assoc, add_comm, add_left_comm])
-  cases keep with
-  | true =>
-    have hr := hs.seq (q := seekLeftEnd tm)
-      (second := BiTape.mk₁ (first :: leftWord).reverse)
-      (pos₂ := s.headPos - (gap + (first :: leftWord).length : Nat))
-      (time₂ := leftWord.length + 2) (by
-        intro middle hmiddle hpos
-        have ht := congrArg SingleTapeTM.Cfg.BiTape hmiddle
-        have h := seekLeftEnd_correct leftWord [first] middle ht
-        convert h using 1 <;>
-          simp [cursor_start, List.reverse_cons, hpos, sub_eq_add_neg,
-            add_assoc, add_comm])
-    simpa [finish, two_mul, add_assoc, add_comm, add_left_comm] using hr
-  | false =>
-    have hr := hs.seq (q := do eraseLeft tm; FreeM.lift (.move .Right))
-      (second := BiTape.nil)
-      (pos₂ := s.headPos - (gap + (first :: leftWord).length : Nat))
-      (time₂ := leftWord.length + 2) (by
-        intro middle hmiddle hpos
-        have ht := congrArg SingleTapeTM.Cfg.BiTape hmiddle
-        have h := (eraseLeft_correct leftWord first middle ht).append_move .Right
-        convert h using 1 <;>
-          simp [hpos, BiTape.moveRight, BiTape.nil, sub_eq_add_neg,
-            add_assoc, add_comm, add_left_comm])
-    simpa [finish, two_mul, add_assoc, add_comm, add_left_comm] using hr
+private theorem finish_spec (keep : Bool) (first : Extended Γ 1)
+    (leftWord : List (Extended Γ 1)) (gap : Nat) (remaining : List (Extended Γ 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, separated (first :: leftWord) gap remaining⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      finish (tm := tm) keep
+    ⦃ fun _ cost final => final.config =
+        ⟨label, if keep then BiTape.mk₁ (first :: leftWord).reverse else BiTape.nil⟩ ∧
+        final.headPos = origin - (gap + (first :: leftWord).length : Nat) ∧
+        cost.steps = elapsed + 2 * remaining.length + gap + (first :: leftWord).length + 2 ⦄ := by
+  cases keep <;>
+    vcgen [finish, eraseRight_separated_spec (first :: leftWord) gap remaining label origin elapsed,
+      seekLeftOccupied_spec (remaining.length + gap) first
+        (StackTape.mapSome leftWord) StackTape.nil
+        label (origin + remaining.length) (elapsed + remaining.length),
+      seekLeftEnd_spec leftWord [first] label (origin - (gap + 1 : Nat))
+        (elapsed + 2 * remaining.length + gap + 1),
+      eraseLeft_spec leftWord first label (origin - (gap + 1 : Nat))
+        (elapsed + 2 * remaining.length + gap + 1)]
+  all_goals simp_all [← cursor_start, separated, cursor, TMState.move, TMState.moveCost,
+    BiTape.moveRight, BiTape.nil, List.reverse_cons, sub_eq_add_neg]
+  all_goals lia
 
 private def copySymbol (symbol : Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   tape ←ₜ some (.inr 0)
@@ -151,62 +123,27 @@ private def copySymbol (symbol : Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   seekRightOccupied tm
   eraseAndMove tm
 
-private theorem copySymbol_correct (symbol : Γ) (first : Extended Γ 1)
-    (leftWord remaining : List (Extended Γ 1)) (gap : Nat) (s : TMState tm)
-    (htape : s.config.BiTape = separated (first :: leftWord) (gap + 1)
-      (.inl symbol :: remaining)) :
-    Runs (copySymbol (tm := tm) symbol) s
-      (separated (.inl symbol :: first :: leftWord) (gap + 1) remaining)
-      (s.headPos + 1) (2 * gap + 5) := by
-  have hfirst : Runs (do FreeM.lift (.write (some (.inr 0))); FreeM.lift (.move .Left)) s
-      ⟨none, StackTape.blanks gap (StackTape.mapSome (first :: leftWord)),
-        StackTape.cons (some (.inr 0)) (StackTape.mapSome remaining)⟩
-      (s.headPos - 1) 1 := by
-    simpa [htape, separated, BiTape.write, BiTape.moveLeft, sub_eq_add_neg] using
-      (write_correct s (some (.inr 0))).append_move .Left
-  have hleft := hfirst.seq (q := seekLeftOccupied tm)
-    (second := ⟨some first, StackTape.mapSome leftWord,
-      StackTape.blanks (gap + 1) (StackTape.cons (some (.inr 0))
-        (StackTape.mapSome remaining))⟩)
-    (pos₂ := s.headPos - (gap + 2 : Nat)) (time₂ := gap + 1) (by
-      intro middle hmiddle hpos
-      have h := seekLeftOccupied_correct gap first (StackTape.mapSome leftWord)
-        (StackTape.cons (some (.inr 0)) (StackTape.mapSome remaining)) middle
-        (by simpa using congrArg SingleTapeTM.Cfg.BiTape hmiddle)
-      convert h using 1; simp [hpos, sub_eq_add_neg, add_comm, add_left_comm])
-  have hwrite := hleft.seq
-    (q := do FreeM.lift (.move .Right); FreeM.lift (.write (some (.inl symbol))))
-    (second := ⟨some (.inl symbol), StackTape.mapSome (first :: leftWord),
-      StackTape.blanks gap (StackTape.cons (some (.inr 0)) (StackTape.mapSome remaining))⟩)
-    (pos₂ := s.headPos - (gap + 1 : Nat)) (time₂ := 1) (by
-      intro middle hmiddle hpos
-      simpa [hmiddle, BiTape.moveRight, BiTape.write, hpos, sub_eq_add_neg,
-        add_assoc, add_comm, add_left_comm] using
-        (move_correct middle .Right).append_write (some (.inl symbol)))
-  let stack := StackTape.blanks gap
-    (StackTape.cons (some (.inr 0)) (StackTape.mapSome remaining))
-  have hmove := hwrite.append_move .Right
-  have hright := hmove.seq (q := seekRightOccupied tm)
-    (second := ⟨some (.inr 0),
-      StackTape.blanks gap (StackTape.mapSome (.inl symbol :: first :: leftWord)),
-      StackTape.mapSome remaining⟩)
-    (pos₂ := s.headPos) (time₂ := gap) (by
-      intro middle hmiddle hpos
-      have h := seekRightOccupied_stack gap (.inr 0)
-        (StackTape.mapSome (.inl symbol :: first :: leftWord))
-        (StackTape.mapSome remaining) middle
-        (by simpa [BiTape.moveRight, stack] using congrArg SingleTapeTM.Cfg.BiTape hmiddle)
-      convert h using 1; simp [hpos, sub_eq_add_neg, add_comm, add_left_comm])
-  have hr := hright.seq (q := eraseAndMove tm)
-    (second := separated (.inl symbol :: first :: leftWord) (gap + 1) remaining)
-    (pos₂ := s.headPos + 1) (time₂ := 1) (by
-      intro middle hmiddle hpos
-      have ht : middle.config.BiTape =
-          separated (.inl symbol :: first :: leftWord) gap (.inr 0 :: remaining) := by
-        simpa [separated] using congrArg SingleTapeTM.Cfg.BiTape hmiddle
-      simpa [eraseAndMove, ht, hpos, erase_advance_separated] using
-        (write_correct middle none).append_move .Right)
-  simpa [copySymbol, two_mul, add_assoc, add_comm, add_left_comm] using hr
+private theorem copySymbol_spec (symbol : Γ) (first : Extended Γ 1)
+    (leftWord remaining : List (Extended Γ 1)) (gap : Nat)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, separated (first :: leftWord) (gap + 1) (.inl symbol :: remaining)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      copySymbol (tm := tm) symbol
+    ⦃ fun _ cost final => final.config =
+        ⟨label, separated (.inl symbol :: first :: leftWord) (gap + 1) remaining⟩ ∧
+        final.headPos = origin + 1 ∧ cost.steps = elapsed + 2 * gap + 5 ⦄ := by
+  vcgen [copySymbol,
+    seekLeftOccupied_spec gap first (StackTape.mapSome leftWord)
+      (StackTape.cons (some (.inr 0)) (StackTape.mapSome remaining))
+      label (origin - 1) (elapsed + 1),
+    seekRightOccupied_stack_spec gap (.inr 0)
+      (StackTape.mapSome (.inl symbol :: first :: leftWord)) (StackTape.mapSome remaining)
+      label (origin - gap) (elapsed + gap + 4), eraseAndMove_spec]
+  all_goals cases remaining
+  all_goals simp_all [separated, TMState.write, TMState.move, TMState.moveCost,
+    BiTape.write, BiTape.moveLeft, BiTape.moveRight, sub_eq_add_neg]
+  all_goals lia
 
 private def body (symbols : List Γ) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   eraseAndMove tm
@@ -221,81 +158,66 @@ private def process (symbols : List Γ) (next stop : Γ) : Prog (TMQuery tm) Uni
   else
     finish false
 
-private theorem body_correct (symbols : List Γ) (hsymbols : ∀ symbol, symbol ∈ symbols)
+private theorem body_spec (symbols : List Γ) (hsymbols : ∀ symbol, symbol ∈ symbols)
     (next symbol : Γ) (first : Extended Γ 1) (leftWord remaining : List (Extended Γ 1))
-    (gap : Nat) (s : TMState tm)
-    (htape : s.config.BiTape = separated (first :: leftWord) gap
-      (.inl next :: .inl symbol :: remaining)) :
-    Runs (body (tm := tm) symbols) s
-      (separated (.inl symbol :: first :: leftWord) (gap + 1) remaining)
-      (s.headPos + 2) (2 * gap + 6) := by
-  have he : Runs (eraseAndMove tm) s
-      (separated (first :: leftWord) (gap + 1) (.inl symbol :: remaining))
-      (s.headPos + 1) 1 := by
-    simpa only [eraseAndMove, htape, erase_advance_separated, Dir.offset, Nat.zero_add] using
-      (write_correct s none).append_move .Right
-  have hr := he.seq
-    (q := select symbols (fun symbol => .tapeIs (some (.inl symbol))) (copySymbol (tm := tm)))
-    (second := separated (.inl symbol :: first :: leftWord) (gap + 1) remaining)
-    (pos₂ := s.headPos + 2) (time₂ := 2 * gap + 5) (by
-      intro middle hmiddle hpos
-      obtain ⟨cost, final, hc, ht, hp, hs⟩ := copySymbol_correct symbol first leftWord remaining gap
-        middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle)
-      refine ⟨cost, final, select_correct _ _ _ symbol middle final cost (hsymbols symbol) ?_ hc,
-        ht, ?_, hs⟩
-      · intro candidate
-        simp [hmiddle, separated, eq_comm]
-      · simpa [hpos, add_assoc] using hp)
-  simpa only [body, show 1 + (2 * gap + 5) = 2 * gap + 6 by lia] using hr
+    (gap : Nat) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, separated (first :: leftWord) gap (.inl next :: .inl symbol :: remaining)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      body (tm := tm) symbols
+    ⦃ fun _ cost final => final.config =
+        ⟨label, separated (.inl symbol :: first :: leftWord) (gap + 1) remaining⟩ ∧
+        final.headPos = origin + 2 ∧ cost.steps = elapsed + 2 * gap + 6 ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hsteps⟩
+  vcgen [body, eraseAndMove_spec,
+    Spec.select_spec symbols (fun symbol => .tapeIs (some (.inl symbol)))
+      (copySymbol (tm := tm)) symbol (hsymbols symbol)]
+  constructor
+  · intro candidate
+    simp [TMState.move, TMState.write, hcfg, separated, BiTape.write, BiTape.moveRight,
+      eq_comm]
+  · vcgen [copySymbol_spec symbol first leftWord remaining gap label (origin + 1) (elapsed + 1)]
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost, erase_advance_separated]
+    all_goals lia
 
-private theorem body_missing_symbol (symbols : List Γ) (next : Γ)
+private theorem body_missing_symbol_spec (symbols : List Γ) (next : Γ)
     (first : Extended Γ 1) (leftWord remaining : List (Extended Γ 1)) (gap : Nat)
-    (s : TMState tm)
-    (htape : s.config.BiTape = separated (first :: leftWord) gap (.inl next :: remaining))
-    (hmissing : ∀ symbol : Γ, remaining.head? ≠ some (.inl symbol)) :
-    Runs (body (tm := tm) symbols) s (separated (first :: leftWord) (gap + 1) remaining)
-      (s.headPos + 1) 1 := by
-  have he : Runs (eraseAndMove tm) s
-      (separated (first :: leftWord) (gap + 1) remaining) (s.headPos + 1) 1 := by
-    simpa only [eraseAndMove, htape, erase_advance_separated, Dir.offset, Nat.zero_add] using
-      (write_correct s none).append_move .Right
-  have hr := he.seq
-    (q := select symbols (fun symbol => .tapeIs (some (.inl symbol))) (copySymbol (tm := tm)))
-    (second := separated (first :: leftWord) (gap + 1) remaining)
-    (pos₂ := s.headPos + 1) (time₂ := 0) (by
-      intro middle hmiddle hpos
-      refine ⟨0, middle, select_none _ _ _ middle ?_, ?_, hpos, rfl⟩
-      · intro symbol _
-        simp [hmiddle, separated, hmissing symbol]
-      · simp [hmiddle])
-  simpa [body] using hr
+    (hmissing : ∀ symbol : Γ, remaining.head? ≠ some (.inl symbol))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, separated (first :: leftWord) gap (.inl next :: remaining)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      body (tm := tm) symbols
+    ⦃ fun _ cost final => final.config =
+        ⟨label, separated (first :: leftWord) (gap + 1) remaining⟩ ∧
+        final.headPos = origin + 1 ∧ cost.steps = elapsed + 1 ⦄ := by
+  vcgen [body, eraseAndMove_spec, Spec.select_none_spec]
+  cases remaining <;> simp_all [TMState.move, TMState.write, TMState.moveCost,
+    separated, BiTape.write, BiTape.moveRight]
 
-private theorem process_exit (symbols : List Γ) (next stop : Γ) (keep : Bool)
+private theorem process_exit_spec (symbols : List Γ) (next stop : Γ) (keep : Bool)
     (first : Extended Γ 1) (leftWord remaining : List (Extended Γ 1)) (gap : Nat)
-    (s : TMState tm) (htape : s.config.BiTape = separated (first :: leftWord) gap remaining)
     (hnext : remaining.head? ≠ some (.inl next))
-    (hstop : decide (remaining.head? = some (.inl stop)) = keep) :
-    Runs (process (tm := tm) symbols next stop) s
-      (if keep then BiTape.mk₁ (first :: leftWord).reverse else BiTape.nil)
-      (s.headPos - (gap + (first :: leftWord).length : Nat))
-      (2 * remaining.length + gap + (first :: leftWord).length + 2) := by
-  have hf := finish_correct keep first leftWord gap remaining s htape
-  have hb : Runs (branch (.tapeIs (some (.inl stop))) (finish (tm := tm) true) (finish false)) s
-      (if keep then BiTape.mk₁ (first :: leftWord).reverse else BiTape.nil)
-      (s.headPos - (gap + (first :: leftWord).length : Nat))
-      (2 * remaining.length + gap + (first :: leftWord).length + 2) := by
-    apply Runs.branch
-    cases keep with
-    | false =>
-      have hn := of_decide_eq_false hstop
-      simpa [htape, separated, hn] using hf
-    | true =>
-      have hy := of_decide_eq_true hstop
-      simpa [htape, separated, hy] using hf
-  have hcond : (TMCondition.tapeIs (tm := tm) (some (.inl next))).eval s.config = false := by
-    simp [htape, separated, hnext]
-  simpa [process] using hb.prepend
-    (completes_while_false (.tapeIs (some (.inl next))) (body symbols) s hcond) rfl
+    (hstop : decide (remaining.head? = some (.inl stop)) = keep)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, separated (first :: leftWord) gap remaining⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      process (tm := tm) symbols next stop
+    ⦃ fun _ cost final => final.config =
+        ⟨label, if keep then BiTape.mk₁ (first :: leftWord).reverse else BiTape.nil⟩ ∧
+        final.headPos = origin - (gap + (first :: leftWord).length : Nat) ∧
+        cost.steps = elapsed + 2 * remaining.length + gap + (first :: leftWord).length + 2 ⦄ := by
+  cases keep <;>
+    apply Std.WP.Triple.intro <;>
+    rintro initial current ⟨hcfg, hpos, hsteps⟩ <;>
+    vcgen [process, Spec.while_false_spec]
+  all_goals
+    refine ⟨by simp [hcfg, separated, hnext], ?_⟩
+    dsimp only [binderNameHint]
+    vcgen [finish_spec true first leftWord gap remaining label origin elapsed,
+      finish_spec false first leftWord gap remaining label origin elapsed]
+    all_goals simp_all [separated]
 
 private def output (next stop : Γ) (leftWord remaining : List (Extended Γ 1)) :
     BiTape (Extended Γ 1) :=
@@ -307,14 +229,16 @@ private def budget (leftWord : List (Extended Γ 1)) (gap : Nat)
     (remaining : List (Extended Γ 1)) : Nat :=
   (remaining.length + 1) * (2 * (leftWord.length + gap + remaining.length) + 6)
 
-private theorem process_stopped (symbols : List Γ) (next stop : Γ)
+private theorem process_stopped_spec (symbols : List Γ) (next stop : Γ)
     (first : Extended Γ 1) (leftWord remaining : List (Extended Γ 1)) (gap : Nat)
-    (s : TMState tm) (htape : s.config.BiTape = separated (first :: leftWord) gap remaining)
-    (hnext : remaining.head? ≠ some (.inl next)) :
-    ∃ moves, Runs (process (tm := tm) symbols next stop) s
-      (output next stop (first :: leftWord) remaining)
-      (s.headPos - (gap + (first :: leftWord).length : Nat)) moves ∧
-      moves ≤ budget (first :: leftWord) gap remaining := by
+    (hnext : remaining.head? ≠ some (.inl next))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, separated (first :: leftWord) gap remaining⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      process (tm := tm) symbols next stop
+    ⦃ fun _ cost final => final.config = ⟨label, output next stop (first :: leftWord) remaining⟩ ∧
+        final.headPos = origin - (gap + (first :: leftWord).length : Nat) ∧
+        cost.steps ≤ elapsed + budget (first :: leftWord) gap remaining ⦄ := by
   let keep := decide (remaining.head? = some (.inl stop))
   have hd : Problems.CertificatePadding.decode next stop (Alphabet.firstWord remaining) =
       if keep then some [] else none := by
@@ -330,24 +254,30 @@ private theorem process_stopped (symbols : List Γ) (next stop : Γ)
         · have hn : tag ≠ next := by simpa using hnext
           simp [keep, hs, Alphabet.firstWord_symbol,
             Problems.CertificatePadding.decode_other next stop tag hs hn]
-  have hr := process_exit symbols next stop keep first leftWord remaining gap s htape hnext rfl
-  refine ⟨2 * remaining.length + gap + (first :: leftWord).length + 2, ?_, ?_⟩
-  · cases hk : keep <;> simpa [output, hd, hk] using hr
-  · have hmul : 2 * ((first :: leftWord).length + gap + remaining.length) + 6 ≤
-        budget (first :: leftWord) gap remaining := by
-      exact Nat.le_mul_of_pos_left _ (by lia)
-    exact (by lia : 2 * remaining.length + gap + (first :: leftWord).length + 2 ≤
-      2 * ((first :: leftWord).length + gap + remaining.length) + 6).trans hmul
+  have hbudget : 2 * remaining.length + gap + (first :: leftWord).length + 2 ≤
+      budget (first :: leftWord) gap remaining := by
+    have hmul : 2 * ((first :: leftWord).length + gap + remaining.length) + 6 ≤
+        budget (first :: leftWord) gap remaining :=
+      Nat.le_mul_of_pos_left _ (by lia)
+    lia
+  vcgen [process_exit_spec symbols next stop keep first leftWord remaining gap hnext rfl
+    label origin elapsed]
+  all_goals cases hk : keep
+  all_goals simp_all [output]
+  all_goals lia
 
-private theorem process_invalid (symbols : List Γ) (next stop : Γ) (hne : next ≠ stop)
+private theorem process_invalid_spec (symbols : List Γ) (next stop : Γ) (hne : next ≠ stop)
     (first : Extended Γ 1) (leftWord remaining : List (Extended Γ 1)) (gap : Nat)
-    (s : TMState tm)
-    (htape : s.config.BiTape = separated (first :: leftWord) gap (.inl next :: remaining))
-    (hmissing : ∀ symbol : Γ, remaining.head? ≠ some (.inl symbol)) :
-    ∃ moves, Runs (process (tm := tm) symbols next stop) s
-      (output next stop (first :: leftWord) (.inl next :: remaining))
-      (s.headPos - (gap + (first :: leftWord).length : Nat)) moves ∧
-      moves ≤ budget (first :: leftWord) gap (.inl next :: remaining) := by
+    (hmissing : ∀ symbol : Γ, remaining.head? ≠ some (.inl symbol))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, separated (first :: leftWord) gap (.inl next :: remaining)⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      process (tm := tm) symbols next stop
+    ⦃ fun _ cost final => final.config =
+        ⟨label, output next stop (first :: leftWord) (.inl next :: remaining)⟩ ∧
+        final.headPos = origin - (gap + (first :: leftWord).length : Nat) ∧
+        cost.steps ≤ elapsed + budget (first :: leftWord) gap (.inl next :: remaining) ⦄ := by
   have hword : Alphabet.firstWord remaining = [] := by
     cases remaining with
     | nil => rfl
@@ -355,43 +285,39 @@ private theorem process_invalid (symbols : List Γ) (next stop : Γ) (hne : next
       cases tag with
       | inl symbol => exact False.elim (hmissing symbol rfl)
       | inr marker => rfl
-  obtain ⟨cost, middle, hc, hm, hp, hs⟩ :=
-    body_missing_symbol symbols next first leftWord remaining gap s htape hmissing
-  obtain ⟨moves, hr, hb⟩ := process_stopped symbols next stop first leftWord remaining (gap + 1)
-    middle (congrArg SingleTapeTM.Cfg.BiTape hm) (hmissing next)
-  have hseq := hr.prepend hc (by simp [hm])
-  have hloop : Runs (process (tm := tm) symbols next stop) s
-      (output next stop (first :: leftWord) remaining)
-      (middle.headPos - (gap + 1 + (first :: leftWord).length : Nat))
-      (cost.steps + moves) := by
-    apply Runs.while_step_seq (by simp [htape, separated])
-    simpa only [process, bind_assoc] using hseq
-  refine ⟨cost.steps + moves, ?_, ?_⟩
-  · convert hloop using 1
-    · simp [output, hword, Problems.CertificatePadding.decode, hne]
-    · simp [hp, sub_eq_add_neg, add_assoc, add_comm, add_left_comm]
-  · let B := 2 * ((first :: leftWord).length + gap + (remaining.length + 1)) + 6
-    have hbound : moves ≤ (remaining.length + 1) * B := by
-      simpa [budget, B, Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using hb
-    have hB : 1 ≤ B := by dsimp [B]; lia
-    have htotal := Nat.add_le_add (by simpa [hs] using hB) hbound
-    rw [hs]
-    apply htotal.trans
+  have hbudget : 1 + budget (first :: leftWord) (gap + 1) remaining ≤
+      budget (first :: leftWord) gap (.inl next :: remaining) := by
     simp only [budget, List.length_cons]
-    dsimp [B]
-    simp only [Nat.add_mul, Nat.mul_add, Nat.one_mul]
+    ring_nf
     lia
+  apply Std.WP.Triple.intro
+  rintro initial current hpre
+  apply (Spec.while_step_seq_spec (loop := process (tm := tm) symbols next stop)
+    (hloop := rfl) (post := _)).le_wp initial current
+  have htest : (TMCondition.tapeIs (tm := tm)
+      (some (.inl next))).eval current.config = true := by
+    simp [hpre.1, separated]
+  simp only [htest, ite_true]
+  vcgen [body_missing_symbol_spec symbols next first leftWord remaining gap hmissing
+      label origin elapsed,
+    process_stopped_spec symbols next stop first leftWord remaining (gap + 1)
+      (hmissing next) label (origin + 1) (elapsed + 1)]
+  all_goals simp_all [separated, output, Problems.CertificatePadding.decode]
+  all_goals lia
 
-private theorem process_correct (symbols : List Γ) (hsymbols : ∀ symbol, symbol ∈ symbols)
+private theorem process_spec (symbols : List Γ) (hsymbols : ∀ symbol, symbol ∈ symbols)
     (next stop : Γ) (hne : next ≠ stop) (first : Extended Γ 1)
-    (leftWord remaining : List (Extended Γ 1)) (gap : Nat) (s : TMState tm)
-    (htape : s.config.BiTape = separated (first :: leftWord) gap remaining) :
-    ∃ moves, Runs (process (tm := tm) symbols next stop) s
-      (output next stop (first :: leftWord) remaining)
-      (s.headPos - (gap + (first :: leftWord).length : Nat)) moves ∧
-      moves ≤ budget (first :: leftWord) gap remaining := by
+    (leftWord remaining : List (Extended Γ 1)) (gap : Nat)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, separated (first :: leftWord) gap remaining⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      process (tm := tm) symbols next stop
+    ⦃ fun _ cost final => final.config = ⟨label, output next stop (first :: leftWord) remaining⟩ ∧
+        final.headPos = origin - (gap + (first :: leftWord).length : Nat) ∧
+        cost.steps ≤ elapsed + budget (first :: leftWord) gap remaining ⦄ := by
   by_cases hnext : remaining.head? ≠ some (.inl next)
-  · exact process_stopped symbols next stop first leftWord remaining gap s htape hnext
+  · exact process_stopped_spec symbols next stop first leftWord remaining gap hnext
+      label origin elapsed
   · have hhead : remaining.head? = some (.inl next) := by simpa using hnext
     cases remaining with
     | nil => simp at hhead
@@ -399,46 +325,41 @@ private theorem process_correct (symbols : List Γ) (hsymbols : ∀ symbol, symb
       have htag : tag = .inl next := by simpa using hhead
       subst tag
       cases rest with
-      | nil => exact process_invalid symbols next stop hne first leftWord [] gap s htape (by simp)
+      | nil =>
+        exact process_invalid_spec symbols next stop hne first leftWord [] gap (by simp)
+          label origin elapsed
       | cons symbol remaining =>
         cases symbol with
         | inr marker =>
-          exact process_invalid symbols next stop hne first leftWord (.inr marker :: remaining)
-            gap s htape (by simp)
+          exact process_invalid_spec symbols next stop hne first leftWord (.inr marker :: remaining)
+            gap (by simp) label origin elapsed
         | inl symbol =>
-          obtain ⟨cost, middle, hc, hm, hp, hs⟩ :=
-            body_correct symbols hsymbols next symbol first leftWord remaining gap s htape
-          obtain ⟨moves, hr, hb⟩ := process_correct symbols hsymbols next stop hne (.inl symbol)
-            (first :: leftWord) remaining (gap + 1) middle (congrArg SingleTapeTM.Cfg.BiTape hm)
-          have hseq := hr.prepend hc (by simp [hm])
-          have hloop : Runs (process (tm := tm) symbols next stop) s
-              (output next stop (.inl symbol :: first :: leftWord) remaining)
-              (middle.headPos - (gap + 1 + (.inl symbol :: first :: leftWord).length : Nat))
-              (cost.steps + moves) := by
-            apply Runs.while_step_seq (by simp [htape, separated])
-            simpa only [process, bind_assoc] using hseq
-          refine ⟨cost.steps + moves, ?_, ?_⟩
-          · convert hloop using 1
-            · simp only [output, Alphabet.firstWord_symbol,
-                Problems.CertificatePadding.decode_next next stop hne]
-              cases Problems.CertificatePadding.decode next stop (Alphabet.firstWord remaining) <;>
-                simp [List.reverse_cons, List.append_assoc]
-            · simp [hp, sub_eq_add_neg, add_assoc, add_comm, add_left_comm]
-              lia
-          · let N := (first :: leftWord).length + gap +
-              (.inl next :: .inl symbol :: remaining).length
-            have hspan : (.inl symbol :: first :: leftWord).length + (gap + 1) +
-                remaining.length = N := by simp only [N, List.length_cons]; lia
-            have hbound : moves ≤ (remaining.length + 1) * (2 * N + 6) := by
-              simpa only [budget, hspan] using hb
-            have hbody : cost.steps ≤ 2 * N + 6 := by
-              simp only [N, List.length_cons] at *
-              lia
-            apply (Nat.add_le_add hbody hbound).trans
-            change (2 * N + 6) + (remaining.length + 1) * (2 * N + 6) ≤
-              ((.inl next :: .inl symbol :: remaining).length + 1) * (2 * N + 6)
-            simp only [List.length_cons, Nat.add_mul, Nat.one_mul]
+          have houtput : output next stop (.inl symbol :: first :: leftWord) remaining =
+              output next stop (first :: leftWord) (.inl next :: .inl symbol :: remaining) := by
+            simp only [output, Alphabet.firstWord_symbol,
+              Problems.CertificatePadding.decode_next next stop hne]
+            cases Problems.CertificatePadding.decode next stop (Alphabet.firstWord remaining) <;>
+              simp [List.reverse_cons, List.append_assoc]
+          have hbudget : 2 * gap + 6 +
+              budget (.inl symbol :: first :: leftWord) (gap + 1) remaining ≤
+                budget (first :: leftWord) gap (.inl next :: .inl symbol :: remaining) := by
+            simp only [budget, List.length_cons]
+            ring_nf
             lia
+          apply Std.WP.Triple.intro
+          rintro initial current hpre
+          apply (Spec.while_step_seq_spec (loop := process (tm := tm) symbols next stop)
+            (hloop := rfl) (post := _)).le_wp initial current
+          have htest : (TMCondition.tapeIs (tm := tm)
+              (some (.inl next))).eval current.config = true := by
+            simp [hpre.1, separated]
+          simp only [htest, ite_true]
+          vcgen [body_spec symbols hsymbols next symbol first leftWord remaining gap
+              label origin elapsed,
+            process_spec symbols hsymbols next stop hne (.inl symbol) (first :: leftWord)
+              remaining (gap + 1) label (origin + 2) (elapsed + 2 * gap + 6)]
+          all_goals simp_all [separated]
+          all_goals lia
 termination_by remaining.length
 
 /--
@@ -457,6 +378,47 @@ def unpad (tm : SingleTapeTM (Extended Γ 1)) (symbols : List Γ) (next stop : �
   process symbols next stop
 
 /--
+Removing padding returns the decoded input and certificate, or an empty word on a bad entry.
+It restores the head and uses at most `8 * (word.length + 2) ^ 2` moves.
+-/
+@[spec] theorem unpad_spec (symbols : List Γ) (hsymbols : ∀ symbol, symbol ∈ symbols)
+    (next stop : Γ) (hne : next ≠ stop) (word : List (Extended Γ 1))
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.mk₁ word⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      unpad tm symbols next stop
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.mk₁ (result next stop word)⟩ ∧
+        final.headPos = origin ∧ cost.steps ≤ elapsed + 8 * (word.length + 2) ^ 2 ⦄ := by
+  have hlength := lengths_firstWord_afterMarker_le word
+  have hspan : (.inr 0 :: (Alphabet.firstWord word).reverse.map
+        (Sum.inl : Γ → Extended Γ 1)).length + 0 + (afterMarker word).length ≤
+      word.length + 1 := by
+    simp only [List.length_cons, List.length_map, List.length_reverse, Nat.add_zero]
+    lia
+  have hbudget : budget (.inr 0 :: (Alphabet.firstWord word).reverse.map
+        (Sum.inl : Γ → Extended Γ 1)) 0 (afterMarker word) ≤
+      (word.length + 1) * (2 * (word.length + 1) + 6) := by
+    apply Nat.mul_le_mul (by lia) (Nat.add_le_add_right (Nat.mul_le_mul_left 2 hspan) 6)
+  have htotal : word.length + 1 +
+      (word.length + 1) * (2 * (word.length + 1) + 6) ≤ 8 * (word.length + 2) ^ 2 := by
+    calc
+      _ = (word.length + 1) * (2 * (word.length + 1) + 7) := by ring
+      _ ≤ (word.length + 2) * (8 * (word.length + 2)) := Nat.mul_le_mul (by lia) (by lia)
+      _ = _ := by ring
+  vcgen [unpad, seekSeparator_spec [] word label origin elapsed,
+    process_spec symbols hsymbols next stop hne (.inr 0)
+      ((Alphabet.firstWord word).reverse.map .inl) (afterMarker word) 0 label
+      (origin + (Alphabet.firstWord word).length + 1)
+      (elapsed + (Alphabet.firstWord word).length + 1)]
+  case vc1 => simp_all [cursor_start]
+  case vc2 => simp_all [TMState.move, TMState.moveCost, cursor, separated, BiTape.moveRight]
+  case vc3 =>
+    cases hd : Problems.CertificatePadding.decode next stop (Alphabet.firstWord (afterMarker word))
+    all_goals simp_all [output, result, wordPair_encode, List.reverse_cons, List.map_reverse,
+      show BiTape.mk₁ ([] : List (Extended Γ 1)) = BiTape.nil from rfl]
+    all_goals lia
+
+/--
 The fixed decoding program computes `result` on every word, including incorrectly written words.
 It returns the head to its starting coordinate, preserves the control state, and uses at most
 `8 * (n + 2) ^ 2` head moves on an input of length `n`.
@@ -466,41 +428,11 @@ theorem unpad_computes (symbols : List Γ) (hsymbols : ∀ symbol, symbol ∈ sy
     Computes (unpad tm symbols next stop) (result next stop)
       (fun word => 8 * (word.length + 2) ^ 2) := by
   intro word s htape
-  have hp := (seekSeparator_correct [] word s (by simpa [cursor_start] using htape)).append_move
-    .Right
-  obtain ⟨cost, middle, hc, hm, hpos, hsteps⟩ := hp
-  have hmid : middle.config.BiTape =
-      separated (.inr 0 :: (Alphabet.firstWord word).reverse.map .inl) 0
-        (afterMarker word) := by
-    simpa [cursor, separated, BiTape.moveRight] using congrArg SingleTapeTM.Cfg.BiTape hm
-  obtain ⟨moves, hr, hb⟩ := process_correct symbols hsymbols next stop hne (.inr 0)
-    ((Alphabet.firstWord word).reverse.map .inl) (afterMarker word) 0 middle hmid
-  have hseq := hr.prepend hc (by simp [hm])
-  refine ⟨cost.steps + moves, ?_, ?_⟩
-  · convert hseq using 1
-    · simp [unpad, bind_assoc]
-    · simp only [output, result]
-      cases Problems.CertificatePadding.decode next stop
-          (Alphabet.firstWord (afterMarker word)) <;>
-        simp [wordPair_encode, List.reverse_cons, List.map_reverse, BiTape.mk₁, BiTape.nil]
-    · simp [hpos, sub_eq_add_neg, add_assoc, add_comm, add_left_comm]
-  · have hlength := lengths_firstWord_afterMarker_le word
-    have hspan : (.inr 0 :: (Alphabet.firstWord word).reverse.map
-          (Sum.inl : Γ → Extended Γ 1)).length + 0 + (afterMarker word).length ≤
-        word.length + 1 := by
-      simp only [List.length_cons, List.length_map, List.length_reverse, Nat.add_zero]
-      lia
-    have hmoves : moves ≤ (word.length + 1) * (2 * (word.length + 1) + 6) :=
-      hb.trans (Nat.mul_le_mul (by lia) (Nat.add_le_add_right (Nat.mul_le_mul_left 2 hspan) 6))
-    have hcost : cost.steps ≤ word.length + 1 := by
-      lia
-    calc
-      cost.steps + moves ≤ (word.length + 1) +
-          (word.length + 1) * (2 * (word.length + 1) + 6) := Nat.add_le_add hcost hmoves
-      _ = (word.length + 1) * (2 * (word.length + 1) + 7) := by ring
-      _ ≤ (word.length + 2) * (8 * (word.length + 2)) :=
-        Nat.mul_le_mul (by lia) (by lia)
-      _ = 8 * (word.length + 2) ^ 2 := by ring
+  apply Spec.runs_le
+  vcgen [unpad_spec symbols hsymbols next stop hne word s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 private abbrev control (Γ : Type) [Fintype Γ] : SingleTapeTM (Extended Γ 1) where
   State := Unit

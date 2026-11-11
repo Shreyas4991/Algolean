@@ -95,6 +95,29 @@ def eraseRight (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuer
   whileₜ (notₜ tape =ₜ none) do
     eraseAndMove tm
 
+/-- Erasing a region preserves its neighbors and leaves one blank for each removed symbol. -/
+@[spec] theorem eraseRight_segment_spec (left tail : StackTape Symbol) (word : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left word tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      eraseRight tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.blanks word.length left) [] tail⟩ ∧
+        final.headPos = origin + word.length ∧ cost.steps = elapsed + word.length ⦄ := by
+  induction word generalizing left origin elapsed with
+  | nil =>
+    unfold eraseRight
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons symbol rest ih =>
+    unfold eraseRight
+    vcgen [Spec.while_step_spec (loop := eraseRight tm) (hloop := rfl), eraseAndMove_spec,
+      ih (StackTape.cons none left) (origin + 1) (elapsed + 1)]
+    all_goals cases rest
+    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
+      BiTape.segment, BiTape.write, BiTape.moveRight, add_assoc]
+    all_goals lia
+
 /-- Erasing the first word preserves the following region and counts every head move. -/
 @[spec] theorem eraseRight_spec (word : List Symbol) (tail : StackTape Symbol)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
@@ -103,19 +126,8 @@ def eraseRight (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuer
       eraseRight tm
     ⦃ fun _ cost final => final.config = ⟨label, BiTape.segment StackTape.nil [] tail⟩ ∧
         final.headPos = origin + word.length ∧ cost.steps = elapsed + word.length ⦄ := by
-  induction word generalizing origin elapsed with
-  | nil =>
-    unfold eraseRight
-    vcgen [Spec.while_false_spec]
-    simp_all
-  | cons symbol rest ih =>
-    unfold eraseRight
-    vcgen [Spec.while_step_spec (loop := eraseRight tm) (hloop := rfl), eraseAndMove_spec,
-      ih (origin + 1) (elapsed + 1)]
-    all_goals cases rest
-    all_goals simp_all [TMState.move, TMState.write, TMState.moveCost,
-      BiTape.segment, BiTape.write, BiTape.moveRight, add_assoc]
-    all_goals lia
+  vcgen [eraseRight_segment_spec StackTape.nil tail word label origin elapsed]
+  all_goals simp_all
 
 /--
 Erasing the first word preserves the tape beyond its following blank and stops on that blank.

@@ -190,6 +190,12 @@ theorem writeLeft_correct (word : List Symbol) (left right : StackTape Symbol) (
     cases hcfg : s.config
     simp_all
 
+/--
+This machine template starts on a blank before a word and moves that word right by `k` cells.
+It leaves `k` additional blanks before the word. The head moves right by `k` cells and stops
+immediately before the word.
+The containing machine fixes `k` and the alphabet comparisons independently of the input.
+-/
 private def widen (symbols : List Symbol) : Nat → Prog (TMQuery tm) Unit
   | 0 => pure ()
   | k + 1 => do [TMQuery tm]
@@ -197,6 +203,7 @@ private def widen (symbols : List Symbol) : Nat → Prog (TMQuery tm) Unit
     shiftRight tm symbols
     widen symbols k
 
+/-- Making room preserves both neighboring regions and counts every move made by the shifts. -/
 private theorem widen_spec (symbols : List Symbol) (hcover : ∀ symbol, symbol ∈ symbols)
     (k : Nat) (left : StackTape Symbol) (suffix : List Symbol)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :

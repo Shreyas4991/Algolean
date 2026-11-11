@@ -35,7 +35,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines
 
 open Cslib Cslib.Turing TMQuery Copying
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 /--
 This pure function subtracts one from a positive number whose least significant digit comes
@@ -66,15 +68,6 @@ theorem binaryValue_decrementBits (bits : List Bool) (hpositive : 0 < binaryValu
       simp [decrementBits]
       lia
     | true => simp [decrementBits, Nat.add_comm]
-
-private theorem carryTail_not_ne_nil (bits : List Bool) (hpositive : 0 < binaryValue bits) :
-    carryTail (bits.map Bool.not) ≠ [] := by
-  induction bits with
-  | nil => simp at hpositive
-  | cons bit bits ih =>
-    cases bit with
-    | false => exact ih (by simpa using hpositive)
-    | true => simp
 
 private theorem decrementBits_eq (bits : List Bool) (hpositive : 0 < binaryValue bits) :
     List.replicate (carryCount (bits.map Bool.not)) true ++
@@ -133,6 +126,31 @@ noncomputable def testZero (tm : SingleTapeTM Γ) [DecidableEq tm.State]
   scan (zeroTable one zeroState positiveState)
   seekLeftEnd tm
 
+/-- Testing for zero preserves the tape, records the answer, and restores the head. -/
+@[spec] theorem testZero_spec (zero one : Γ) (hne : zero ≠ one)
+    (zeroState positiveState : tm.State) (hstates : zeroState ≠ positiveState)
+    (bits : List Bool) (tail : StackTape Γ) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment StackTape.nil
+        (bits.map (fun bit => if bit then one else zero)) tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      testZero tm one zeroState positiveState
+    ⦃ fun _ cost final => final.config =
+        ⟨some (if binaryValue bits.reverse = 0 then zeroState else positiveState),
+          BiTape.segment StackTape.nil (bits.map (fun bit => if bit then one else zero)) tail⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed + 2 * bits.length + 2 ⦄ := by
+  vcgen [testZero,
+    scan_spec (zeroTable one zeroState positiveState) StackTape.nil tail
+      (bits.map (fun bit => if bit then one else zero)) zeroState origin elapsed,
+    seekLeftEnd_segment_spec StackTape.nil tail
+      (bits.map (fun bit => if bit then one else zero)).reverse []
+      (some ((bits.map (fun bit => if bit then one else zero)).foldl
+        (zeroTable one zeroState positiveState).next zeroState))
+      (origin + bits.length) (elapsed + bits.length)]
+  all_goals simp_all [zeroTable_result zero one hne zeroState positiveState hstates,
+    binaryValue_eq_zero_iff]
+  all_goals lia
+
 /--
 Testing a counter preserves its digits and the neighboring word. It records whether the number
 is zero, restores the first counter cell, and uses exactly twice its length plus two head moves.
@@ -146,21 +164,12 @@ theorem testZero_correct (zero one : Γ) (hne : zero ≠ one)
     ∃ cost final, Completes (testZero tm one zeroState positiveState) s cost final ∧
       final.config = ⟨some (if binaryValue bits.reverse = 0 then zeroState else positiveState),
         s.config.BiTape⟩ ∧ final.headPos = s.headPos ∧ cost.steps = 2 * bits.length + 2 := by
-  let initial : TMState tm := {s with config.state := some zeroState}
-  obtain ⟨cost, middle, hc, hm, hp, hb⟩ := scan_segment_correct
-    (zeroTable one zeroState positiveState) StackTape.nil tail
-      (bits.map (fun bit => if bit then one else zero)) zeroState initial
-        (by simpa [initial] using htape) rfl
-  obtain ⟨more, final, hr, hf, hh, ht⟩ := seekLeftEnd_segment StackTape.nil
-    (bits.map (fun bit => if bit then one else zero)).reverse [] tail middle
-      (by simp [hm])
-  refine ⟨0 + (cost + more), final, (completes_update s zeroState).seq (hc.seq hr),
-    ?_, ?_, ?_⟩
-  · simp [hf, hm, htape, zeroTable_result zero one hne zeroState positiveState hstates]
-  · simpa [hp, initial] using hh
-  · simp only [TMCost.add_steps, TMCost.zero_steps, hb, ht, List.length_reverse,
-      List.length_map, Nat.zero_add]
-    lia
+  apply Spec.completes
+  vcgen [testZero_spec zero one hne zeroState positiveState hstates bits tail
+    s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
 
 /--
 This machine template subtracts one from a positive binary counter and restores the head.
@@ -177,6 +186,46 @@ def decrementLeft (tm : SingleTapeTM Γ) (zero one : Γ) : Prog (TMQuery tm) Uni
   seekLeftEnd tm
 
 /--
+Subtraction uses the increment program with the two digit meanings exchanged.
+For a positive counter, the digit count stays unchanged and the head returns to its start.
+-/
+@[spec] theorem decrementLeft_spec (zero one : Γ) (hne : zero ≠ one) (bits : List Bool)
+    (hpositive : 0 < binaryValue bits.reverse) (tail : StackTape Γ)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment StackTape.nil
+        (bits.map (fun bit => if bit then one else zero)) tail⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      decrementLeft tm zero one
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.segment StackTape.nil
+        ((decrementBits bits.reverse).reverse.map (fun bit => if bit then one else zero)) tail⟩ ∧
+        final.headPos = origin ∧ cost.steps =
+          elapsed + 2 * bits.length + 2 * carryCount (bits.reverse.map Bool.not) + 4 ⦄ := by
+  let digit := fun bit : Bool => if bit then one else zero
+  let swapped := fun bit : Bool => if bit then zero else one
+  have hdigit : (fun bit : Bool => if bit then zero else one) ∘ Bool.not =
+      (fun bit => if bit then one else zero) := by
+    funext bit
+    cases bit <;> rfl
+  have hconvert : (incrementBits (bits.reverse.map Bool.not)).map Bool.not =
+      decrementBits bits.reverse := by
+    rw [← incrementBits_eq, ← decrementBits_eq bits.reverse hpositive]
+    simp
+  have hlength : (incrementBits (bits.reverse.map Bool.not)).length = bits.length := by
+    have h := congrArg List.length hconvert
+    simpa using h
+  have houtput : (incrementBits (bits.reverse.map Bool.not)).reverse.map swapped =
+      (decrementBits bits.reverse).reverse.map digit := by
+    have hfun : digit ∘ Bool.not = swapped := by
+      funext bit
+      cases bit <;> rfl
+    rw [← hconvert]
+    simp only [List.map_reverse, List.map_map, hfun]
+  change ⦃ _ ⦄ incrementLeft tm one zero ⦃ _ ⦄
+  vcgen [incrementLeft_spec one zero (Ne.symm hne) (bits.map Bool.not) tail label origin elapsed]
+  all_goals simp_all [digit, swapped, List.map_reverse, List.map_map]
+  all_goals lia
+
+/--
 On a positive input, subtraction preserves the counter's length, its neighboring word, and
 the control state. It restores the first counter cell and uses at most four times the number
 of digits plus four head moves.
@@ -189,73 +238,12 @@ theorem decrementLeft_correct (zero one : Γ) (hne : zero ≠ one) (bits : List 
     ∃ moves, Runs (decrementLeft tm zero one) s
       (BiTape.segment StackTape.nil output tail) s.headPos moves ∧
       moves ≤ 4 * bits.length + 4 := by
-  let digit := fun bit : Bool => if bit then one else zero
-  let swapped := fun bit : Bool => if bit then zero else one
-  let count := carryCount (bits.reverse.map Bool.not)
-  let higher := (carryTail (bits.reverse.map Bool.not)).tail.map swapped
-  let output := (decrementBits bits.reverse).reverse.map digit
-  have hswap (word : List Bool) : (word.map Bool.not).map swapped = word.map digit := by
-    simp only [List.map_map]
-    congr 1
-    funext bit
-    cases bit <;> rfl
-  have houtput : output.reverse = List.replicate count one ++ zero :: higher := by
-    simp only [output, List.map_reverse, List.reverse_reverse]
-    have hfun : digit ∘ Bool.not = swapped := by
-      funext bit
-      cases bit <;> rfl
-    have h := congrArg (List.map digit) (decrementBits_eq bits.reverse hpositive)
-    simp only [List.map_append, List.map_replicate, List.map_cons, List.map_map, hfun] at h
-    simpa [digit, count, higher] using h.symm
-  obtain ⟨rest, hrest⟩ : ∃ rest,
-      carryTail (bits.reverse.map Bool.not) = false :: rest := by
-    rcases carryTail_shape (bits.reverse.map Bool.not) with he | ⟨rest, he⟩
-    · exact False.elim (carryTail_not_ne_nil bits.reverse hpositive he)
-    · exact ⟨rest, he⟩
-  have hstart := (seekRightBlank_segment StackTape.nil (bits.map digit) tail s htape).append_move
-    .Left
-  have hc := hstart.seq (q := do
-      carryLeft tm one zero
-      FreeM.lift (.write (some zero)))
-    (second := BiTape.segment (StackTape.mapSome higher) (zero :: List.replicate count one) tail)
-    (pos₂ := s.headPos + bits.length - 1 - count) (time₂ := count) (by
-      intro middle hmiddle hpos
-      have hmirror : middle.config.BiTape =
-          (BiTape.segment (StackTape.cons none tail)
-            ((bits.reverse.map Bool.not).map swapped) StackTape.nil).mirror := by
-        have ht := congrArg SingleTapeTM.Cfg.BiTape hmiddle
-        cases hx : (bits.map digit).reverse <;>
-          simpa [hswap, List.map_reverse, hx, BiTape.segment, BiTape.mirror,
-            BiTape.moveLeft] using ht
-      have hw := (carryLeft_correct one zero hne.symm (StackTape.cons none tail) StackTape.nil
-        (bits.reverse.map Bool.not) middle hmirror).append_write (some zero)
-      rw [hrest] at hw
-      have hhigher : higher = rest.map swapped := by
-        dsimp only [higher]
-        rw [hrest]
-        rfl
-      rw [hhigher]
-      simpa [digit, count, swapped, hpos, BiTape.segment, BiTape.mirror,
-        BiTape.write, sub_eq_add_neg, add_assoc] using hw)
-  have he := hc.seq (q := seekRightBlank tm)
-    (second := BiTape.segment (StackTape.mapSome output.reverse) [] tail)
-    (pos₂ := s.headPos + bits.length) (time₂ := count + 1) (by
-      intro middle hmiddle hpos
-      simpa [houtput, hpos, sub_eq_add_neg, add_assoc] using
-        seekRightBlank_segment (StackTape.mapSome higher) (zero :: List.replicate count one)
-          tail middle (congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  have hr := he.seq (q := seekLeftEnd tm)
-    (second := BiTape.segment StackTape.nil output tail)
-    (pos₂ := s.headPos) (time₂ := output.length + 2) (by
-      intro middle hmiddle hpos
-      simpa [output, hpos] using seekLeftEnd_segment StackTape.nil output.reverse [] tail
-        middle (by simpa using congrArg SingleTapeTM.Cfg.BiTape hmiddle))
-  refine ⟨(bits.map digit).length + 1 + count + (count + 1) + (output.length + 2), ?_, ?_⟩
-  · simpa [decrementLeft, bind_assoc, output, digit] using hr
-  · have := carryCount_le_length (bits.reverse.map Bool.not)
-    simp only [List.length_map, List.length_reverse] at *
-    dsimp only [count, output] at *
-    simp only [List.length_map, List.length_reverse, length_decrementBits] at *
-    lia
+  have hcount := carryCount_le_length (bits.reverse.map Bool.not)
+  apply Spec.runs_le
+  vcgen [decrementLeft_spec zero one hne bits hpositive tail s.config.state s.headPos 0]
+  all_goals
+    cases hcfg : s.config
+    simp_all
+  all_goals lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines
