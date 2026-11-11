@@ -33,7 +33,9 @@ public section
 namespace Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 
 open Cslib Cslib.Turing TMQuery Problems.SAT Polynomial
-open scoped TMQuery
+open scoped TMQuery TMQuery.Spec Std.WP
+
+set_option experimental.vcgen true
 
 /--
 This Lean function specifies the required answer. A correctly written pair gives the formula's
@@ -165,9 +167,12 @@ private theorem evaluateInput_correct (formula : CNF Variable) (certificate : Ce
 private theorem rejectInput_correct (word : List Symbol) (s : TMState machine)
     (htape : s.config.BiTape = BiTape.mk₁ word) :
     Runs rejectInput s (BiTape.mk₁ [digit false]) (s.headPos + word.length) word.length := by
-  simpa [rejectInput, BiTape.nil, BiTape.mk₁, BiTape.write] using
-    (eraseRight_correct word s (by simpa [cursor_start] using htape)).append_write
-      (some (digit false))
+  apply Spec.runs
+  vcgen [rejectInput, eraseRight_spec (tm := machine) word StackTape.nil
+    s.config.state s.headPos 0]
+  all_goals cases word
+  all_goals cases hcfg : s.config
+  all_goals simp_all [TMState.write, BiTape.mk₁, BiTape.nil, BiTape.write, BiTape.segment]
 
 /--
 For every input word on an otherwise blank tape, the verifier finishes with exactly one symbol,

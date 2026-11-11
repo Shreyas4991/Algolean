@@ -77,7 +77,7 @@ def seekRightSymbol (tm : SingleTapeTM Symbol) (symbol : Symbol) : Prog (TMQuery
     all_goals lia
 
 /--
-If `crossed` contains no `symbol`, the program crosses exactly that crossed and stops on the
+If `crossed` contains no `symbol`, the program crosses exactly those cells and stops on the
 following occurrence of `symbol`. It preserves the tape and state and uses `crossed.length` moves.
 -/
 theorem seekRightSymbol_correct (symbol : Symbol) (left crossed suffix : List Symbol)

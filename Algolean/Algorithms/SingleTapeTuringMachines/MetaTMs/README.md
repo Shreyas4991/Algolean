@@ -85,11 +85,19 @@ cost. Check their assumptions before composing templates. Some require an otherw
 tape; others preserve neighboring words separated by blanks. All regions are parts of the
 same physical tape.
 
-Use the composition theorems in `Models/SingleTapeTM/Composition` to combine the individual
-proofs. `Runs` describes a completed computation that preserves the control state, with an
-exact tape, head position, and number of head moves. `Completes` also allows the control state
-to change. `Computer` and `EncodedComputer` combine a program with its correctness and time
-proofs; `PolyTimeComputable` records a polynomial time bound.
+Each public program has a public `@[spec]` theorem. Use these specifications to compose proofs
+with `vcgen`: open `scoped TMQuery.Spec Std.WP` and enable `experimental.vcgen`. State what is
+true before and after the program using `⦃ precondition ⦄ program ⦃ postcondition ⦄`. A call to
+`vcgen [program, child_spec ...]` uses the child program's specification and leaves the tape
+and arithmetic facts to prove. The tape descriptions, head coordinates, and elapsed costs in
+a specification are proof arguments; they do not become arguments to the running program.
+
+The existing execution theorems remain useful when an execution itself is needed. `Runs`
+describes a completed computation that preserves the control state, with an exact tape, head
+position, and number of head moves. `Completes` also allows the control state to change.
+`Spec.runs` and `Spec.completes` derive these statements from Hoare-style proofs. `Computer`
+and `EncodedComputer` combine a program with its correctness and time proofs;
+`PolyTimeComputable` records a polynomial time bound.
 
 For a complete program, `TMSolves` states correctness and time and total space bounds on every
 input word. The final tape contains exactly an allowed output word, with its first cell under

@@ -58,6 +58,7 @@ public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
 public import Algolean.Complexity.Reductions.NPToTMSAT.Reduction
 public import Algolean.Complexity.Reductions.NPToTMSAT.Verifier
 public import Algolean.Complexity.Reductions.TMSATToSAT.Computation
+public import Algolean.Complexity.Reductions.TMSATToSAT.Fields
 public import Algolean.Complexity.Reductions.TMSATToSAT.Formula
 public import Algolean.Complexity.Reductions.TMSATToSAT.Initial
 public import Algolean.Complexity.Reductions.TMSATToSAT.Parsing
