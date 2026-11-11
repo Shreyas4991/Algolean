@@ -42,7 +42,9 @@ noncomputable def writer :
     else
       pure ()
   timeBound _ := 0
-  outputsFunInTime input := by
+  computesWithin := by
+    apply ComputesWithin.of_outputsWithinTime
+    intro input
     refine ⟨2, ⟨(), 0⟩,
       ⟨{TMState.init writerControl input with
         config.BiTape := BiTape.mk₁ (true :: input.tail)}, 0⟩, ?_, rfl, le_rfl⟩
@@ -61,8 +63,8 @@ noncomputable def boolIdentity : TMQuery.PolyTimeComputable (id : List Bool → 
   tm := boolControl
   program := pure ()
   timeBound _ := 0
-  outputsFunInTime input := ⟨0, ⟨(), 0⟩, ⟨TMState.init boolControl input, 0⟩,
-    rfl, rfl, le_rfl⟩
+  computesWithin := ComputesWithin.of_outputsWithinTime (fun input =>
+    ⟨0, ⟨(), 0⟩, ⟨TMState.init boolControl input, 0⟩, rfl, rfl, le_rfl⟩)
   poly := 0
   bounds _ := by simp
 
@@ -160,19 +162,19 @@ theorem differentAlphabets_inP :
 Composing the zero-move word conversion with appending false gives a linear time bound.
 The bound includes the possible extra output symbol produced by the first program.
 -/
-theorem reduction_then_append_bound (input : List Bool) :
+theorem reduction_then_append_bound :
     let combined := shortWordReduction.computer.comp
       (SingleTapeTuringMachines.appendBitPolyTimeComputable (tm := writerControl) false)
     let := combined.symbolDecidableEq
     let := combined.stateDecidableEq
-    OutputsWithinTime combined.program input ((true :: input.tail) ++ [false])
-      (2 * input.length + 4) := by
+    ComputesWithin combined.program (fun input => (true :: input.tail) ++ [false])
+      (fun n => 2 * n + 4) (fun n => max 1 n + (2 * n + 4)) := by
   have hpoly : (SingleTapeTuringMachines.appendBitPolyTimeComputable
       (tm := writerControl) false).poly = 2 * Polynomial.X + 2 := rfl
-  convert shortWordReduction.composition_time_bound
-    (SingleTapeTuringMachines.appendBitPolyTimeComputable (tm := writerControl) false) input using 1
-  simp [shortWordReduction, writer, hpoly, Nat.mul_add]
-  lia
+  have htime (n : ℕ) : 2 + 2 * n + 2 = 2 * n + 4 := by lia
+  simpa [shortWordReduction, writer, hpoly, Function.comp_def, Nat.mul_add, htime] using
+    shortWordReduction.composition_time_bound
+      (SingleTapeTuringMachines.appendBitPolyTimeComputable (tm := writerControl) false)
 
 /-- This program executes one `.Stop` instruction, which costs one head move without moving. -/
 def stop : Prog (TMQuery writerControl) Unit := do [TMQuery writerControl]

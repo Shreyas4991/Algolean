@@ -47,8 +47,8 @@ def identityVerifier : TMQuery.TimeComputable (id : List TapeSymbol → List Tap
   tm := rejectingControl
   program := pure ()
   timeBound _ := 0
-  outputsFunInTime input :=
-    ⟨0, ⟨(), 0⟩, ⟨TMState.init rejectingControl input, 0⟩, rfl, rfl, le_rfl⟩
+  computesWithin := TMQuery.ComputesWithin.of_outputsWithinTime (fun input =>
+    ⟨0, ⟨(), 0⟩, ⟨TMState.init rejectingControl input, 0⟩, rfl, rfl, le_rfl⟩)
 
 -- A completed query program still needs the compiled machine's halting transition.
 example : Instance.ofQueryVerifier identityVerifier [true] 2 ∈ satisfiable := by

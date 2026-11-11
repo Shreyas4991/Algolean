@@ -6,8 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.SAT.Verification
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
+public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Problems.SAT.Verification
 
 /-!
 # SAT belongs to NP
@@ -25,13 +26,6 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 @[expose] public section
 
 namespace Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
-
-/--
-This language contains the correctly encoded formula-certificate pairs whose listed values make
-all clauses true. Incorrectly written words are excluded. Missing values mean false, and a
-repeated variable uses its first listed value.
--/
-def acceptedPairs : Language Symbol := {word | result word = true}
 
 /--
 The SAT certificate checker recognizes this language in polynomial time. Its fixed program

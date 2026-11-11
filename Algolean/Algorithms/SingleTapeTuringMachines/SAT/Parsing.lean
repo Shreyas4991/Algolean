@@ -9,6 +9,7 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Basic
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.FiniteState
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
+public import Algolean.Models.SingleTapeTM.Solves
 
 /-!
 # Checking how a formula and certificate are written
@@ -17,8 +18,10 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Scanning
   any tape symbols. It finishes in state `FormatState.inputEnd` exactly for correctly written pairs.
 * A correct pair contains an encoded formula, `certificateSeparator`, and an encoded certificate.
   Missing endings, misplaced symbols, and data after the certificate are rejected.
-* `checkFormat_correct` proves this description and counts exactly `2 * word.length + 2` head moves,
-  for every input, including incorrectly written inputs.
+* `checkFormat_correct` gives the common decision, time, and total space statement for every
+  input, including incorrectly written inputs.
+* `checkFormat_execution` records tape preservation and the exact `2 * word.length + 2` move
+  count when using the checker inside another program.
 
 This program checks only how the input is written. A certificate may omit variables or list a name
 more than once. Checking whether its values satisfy the formula is a separate operation.
@@ -312,7 +315,7 @@ For every input word, the format checker finishes on its starting cell with the 
 Its state is `inputEnd` exactly when the word is an encoded formula-certificate pair. It uses
 exactly twice the input length plus two head moves, whether the input is correctly written or not.
 -/
-theorem checkFormat_correct (word : List Symbol) (s : TMState formatMachine)
+theorem checkFormat_execution (word : List Symbol) (s : TMState formatMachine)
     (htape : s.config.BiTape = cursor [] word) :
     ∃ cost final, Completes checkFormat s cost final ∧
       final.config.BiTape = s.config.BiTape ∧ final.headPos = s.headPos ∧
@@ -322,5 +325,22 @@ theorem checkFormat_correct (word : List Symbol) (s : TMState formatMachine)
             Problems.SAT.certificateEncoding.encode certificate)) ∧
       cost.steps = 2 * word.length + 2 :=
   checkFormat_correct_impl word s htape
+
+/--
+The fixed format checker decides whether its input is a complete encoded formula-certificate
+pair. It accepts in state `inputEnd` within `2 * n + 2` move instructions. Total space includes
+the initial input and is bounded by `max 1 n + (2 * n + 2)`.
+-/
+theorem checkFormat_correct :
+    DecidesWithin checkFormat (Set.range Problems.SAT.verifierEncoding.encode)
+      (.stateIs (some .inputEnd))
+      (fun n => 2 * n + 2) (fun n => max 1 n + (2 * n + 2)) := by
+  apply TMSolves.of_time_bound
+  intro word
+  obtain ⟨cost, final, hc, _, _, hvalid, ht⟩ :=
+    checkFormat_execution word (TMState.init formatMachine word) (by rw [cursor_start]; rfl)
+  refine ⟨cost, final, hc, ?_, ht.le⟩
+  simpa [Set.mem_range, Prod.exists, Problems.SAT.verifierEncoding_encode,
+    eq_comm] using hvalid
 
 end Algolean.Algorithms.SingleTapeTuringMachines.SAT

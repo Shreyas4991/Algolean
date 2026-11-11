@@ -214,7 +214,8 @@ noncomputable def serializerComputer (code : Symbol → List Symbol)
     timeBound := fun n => time.eval n
     poly := time
     bounds := fun _ => le_rfl
-    outputsFunInTime := ?_ }
+    computesWithin := ?_ }
+  apply TMQuery.ComputesWithin.of_outputsWithinTime
   intro input
   obtain ⟨firstMoves, hf, hb⟩ := writeFields_correct (tm := control) symbols hcover fields input []
     (TMState.init control input) (by rw [mapSome_nil]; exact (BiTape.segment_start input).symm)

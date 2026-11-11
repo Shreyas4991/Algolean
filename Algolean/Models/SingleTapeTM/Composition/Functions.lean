@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Models.SingleTapeTM.Composition.Sequential
-public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Models.SingleTapeTM.Computability
 
 /-!
 # Reusing Turing machine programs that compute functions
@@ -22,17 +22,19 @@ packages these proofs as [TimeComputable](##Algolean.Algorithms.TMQuery.TimeComp
 [PolyTimeComputable](##Algolean.Algorithms.TMQuery.PolyTimeComputable) records.
 
 Those records are defined in
-[PolytimeBasicClasses.lean](Algolean/Complexity/PolytimeBasicClasses.html), where they are used
-to define `P` and `NP`. The theorem `Completes.outputsWithinTime` below connects completed
-executions to those records.
+[Computability.lean](Algolean/Models/SingleTapeTM/Computability.html).
+The language classes `P` and `NP` use the same records. The theorem
+`Completes.outputsWithinTime` in that file connects completed executions to those records.
 The concrete examples in
-[BasicTMs.lean](Algolean/Algorithms/SingleTapeTuringMachines/BasicTMs.html) use these conversions
-to obtain witnesses for the same complexity definitions.
+[BasicTMs.lean](Algolean/Algorithms/SingleTapeTuringMachines/MetaTMs/BasicTMs.html)
+use these conversions to obtain witnesses for the same complexity definitions.
 
 ## Main definitions and results
 
 * [Computes](##Algolean.Algorithms.TMQuery.Computes) states the requirements for a reusable
   program.
+* `Computes.computesWithin` connects a reusable computation to the common correctness and
+  resource interface on an initialized tape.
 * [Computes.comp](##Algolean.Algorithms.TMQuery.Computes.comp) composes two programs and adds
   their time bounds.
 * [Computes.space](##Algolean.Algorithms.TMQuery.Computes.space) bounds the number of cells
@@ -53,20 +55,6 @@ open Cslib Cslib.Turing Polynomial
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
-
-/--
-A Turing machine program that completes on the initialized input tape with the required output
-and at most `time` head moves satisfies `OutputsWithinTime`. The proof reuses the completed
-execution's fuel and resource count; the final absolute head coordinate may differ from its
-initial value, provided the head points to the first output cell.
--/
-theorem Completes.outputsWithinTime {program : Prog (TMQuery tm) Unit}
-    {input output : List Symbol} {cost : TMCost} {final : TMState tm} {time : ℕ}
-    (h : Completes program (TMState.init tm input) cost final)
-    (outputTape : final.config.BiTape = BiTape.mk₁ output) (bound : cost.steps ≤ time) :
-    OutputsWithinTime program input output time := by
-  obtain ⟨fuel, h⟩ := h
-  exact ⟨fuel, ⟨(), cost⟩, ⟨final, 0⟩, h, outputTape, bound⟩
 
 /--
 The program computes the specified function within the time allowed for each input. It must work
@@ -187,20 +175,26 @@ theorem Computes.output_length_le {p : Prog (TMQuery tm) Unit} {f : List Symbol 
   lia
 
 /--
-This construction packages the program and its correctness proof as a
-[TimeComputable](##Algolean.Algorithms.TMQuery.TimeComputable) record. Its time bound depends
-only on the input length.
+A reusable word computation satisfies the common correctness and resource interface on an
+initialized tape. Total space is bounded by the initial input space plus the running time.
+-/
+theorem Computes.computesWithin {p : Prog (TMQuery tm) Unit} {f : List Symbol → List Symbol}
+    {timeBound : ℕ → ℕ} (h : Computes p f (fun input => timeBound input.length)) :
+    ComputesWithin p f timeBound (fun n => max 1 n + timeBound n) := by
+  apply ComputesWithin.of_outputsWithinTime
+  intro input
+  obtain ⟨moves, ⟨cost, final, completed, hcfg, _, hc⟩, ht⟩ :=
+    h input (TMState.init tm input) rfl
+  exact completed.outputsWithinTime (by simp [hcfg]) (by lia)
+
+/--
+This construction packages the same program and time bound as a `TimeComputable` record
+through the common correctness interface.
 -/
 def Computes.timeComputable {p : Prog (TMQuery tm) Unit} {f : List Symbol → List Symbol}
     {timeBound : ℕ → ℕ} (h : Computes p f (fun input => timeBound input.length)) :
-    TimeComputable f where
-  tm := tm
-  program := p
-  timeBound := timeBound
-  outputsFunInTime input := by
-    obtain ⟨moves, ⟨cost, final, completed, hcfg, _, hc⟩, ht⟩ :=
-      h input (TMState.init tm input) rfl
-    exact completed.outputsWithinTime (by simp [hcfg]) (by lia)
+    TimeComputable f :=
+  h.computesWithin.timeComputable
 
 /--
 This construction packages the program and its polynomial time bound as a
@@ -304,7 +298,9 @@ def timeComputable {β : Type} {outputEncoding : β → List Symbol} {f : List S
   tm := tm
   program := machine.program
   timeBound := timeBound
-  outputsFunInTime input := by
+  computesWithin := by
+    apply TMQuery.ComputesWithin.of_outputsWithinTime
+    intro input
     obtain ⟨cost, final, completed, hcfg, _, ht⟩ :=
       machine.correct input (TMState.init tm input) rfl
     exact completed.outputsWithinTime (by simp [hcfg]) ht

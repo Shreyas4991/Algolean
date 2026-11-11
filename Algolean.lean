@@ -119,8 +119,10 @@ public import Algolean.Models.SingleTapeTM.Composition.Relabel
 public import Algolean.Models.SingleTapeTM.Composition.Sequential
 public import Algolean.Models.SingleTapeTM.Composition.TuringReduction
 public import Algolean.Models.SingleTapeTM.Composition.While
+public import Algolean.Models.SingleTapeTM.Computability
 public import Algolean.Models.SingleTapeTM.Description
 public import Algolean.Models.SingleTapeTM.DescriptionEncoding
+public import Algolean.Models.SingleTapeTM.Solves
 public import Algolean.Models.SingleTapeTM.Tape
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
