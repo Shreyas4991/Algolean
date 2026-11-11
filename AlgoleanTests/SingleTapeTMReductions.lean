@@ -215,6 +215,25 @@ def suffixSearch (Symbol : Type) [Inhabited Symbol] [Fintype Symbol] :
     else
       pure ()
 
+/-- A yes control state alone cannot replace the required clean acceptance word. -/
+example (time : ℕ) :
+    ¬(TuringReduction.identityInterface Bool).DecidesWithin (fun _ => true)
+      (TuringReduction.identityInterface Bool).ask [false, false] [true] True time := by
+  rintro ⟨output, fuel, result, final, hrun, htape, haccept, _⟩
+  have houtput := haccept.mpr trivial
+  subst output
+  cases fuel with
+  | zero =>
+    simp [OracleInterface.ask, OracleInterface.execute, FreeM.lift,
+      -FreeM.liftBind_eq, FuelExecMonad.execute_zero_liftBind] at hrun
+  | succ fuel =>
+    rw [OracleInterface.execute_ask_succ (TuringReduction.identityInterface Bool)
+      (fun _ => true)] at hrun
+    obtain ⟨rfl, rfl⟩ := Option.some.inj hrun
+    have hright := congrArg (fun contents : BiTape Bool => contents.right.head) htape
+    change some false = none at hright
+    cases hright
+
 -- Two requests and one head move cost three steps. Both requests run inside structured control.
 example :
     ((TuringReduction.identityInterface Bool).execute (fun input => input == [false]) 8

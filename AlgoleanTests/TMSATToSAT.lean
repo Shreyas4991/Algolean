@@ -93,17 +93,32 @@ private def earlyHaltComputation : Computation earlyHaltProblem where
 /-- The description with repeated halted rows proves acceptance within the original bound. -/
 example : earlyHaltProblem ∈ satisfiable true := by
   rw [mem_satisfiable_iff_exists_computation]
-  exact ⟨earlyHaltComputation, ⟨rfl, rfl⟩⟩
+  refine ⟨earlyHaltComputation, ?_⟩
+  rw [Computation.Accepting, ← Row.toCfg_mem_accepting]
+  exact ⟨rfl, rfl⟩
 
 /-- The complete CNF formula remains satisfiable when acceptance happens before the time bound. -/
 example : formula earlyHaltProblem true ∈ CNF.satisfiable := by
   rw [formula_satisfiable_iff, mem_satisfiable_iff_exists_computation]
-  exact ⟨earlyHaltComputation, ⟨rfl, rfl⟩⟩
+  refine ⟨earlyHaltComputation, ?_⟩
+  rw [Computation.Accepting, ← Row.toCfg_mem_accepting]
+  exact ⟨rfl, rfl⟩
 
 /-- The complete formula is unsatisfiable when there is no time for the first transition. -/
 example : formula (⟨writeAndHalt, [], 0, 0⟩ : Instance Bool) true ∉ CNF.satisfiable := by
   rw [formula_satisfiable_iff]
   simp
+
+/-- The final clauses reject a halted accepting head when a separator remains on the tape. -/
+example : formula (⟨writeAndHalt, [true], 0, 1⟩ : Instance Bool) true ∉ CNF.satisfiable := by
+  rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
+  intro h
+  obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
+  have hright := congrArg (fun result => result.map (fun cfg => cfg.BiTape.right.head)) hstep
+  rw [Option.map_some, congrArg (fun tape => tape.right.head) hfinal.2] at hright
+  simp [SingleTapeTM.Description.machine, writeAndHalt, SingleTapeTM.initCfg,
+    Algolean.Algorithms.Alphabet.wordPair_encode, BiTape.mk₁, BiTape.optionMove,
+    BiTape.write, StackTape.mapSome, StackTape.head] at hright
 
 /-- Writing true does not make the formula satisfiable when the head then halts over false. -/
 example : formula (⟨writeThenMove, [false, false], 0, 1⟩ : Instance Bool) true ∉
@@ -112,7 +127,7 @@ example : formula (⟨writeThenMove, [false, false], 0, 1⟩ : Instance Bool) tr
   intro h
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
   have hhead := congrArg (fun result => result.map (fun cfg => cfg.BiTape.head)) hstep
-  rw [Option.map_some, hfinal.2] at hhead
+  rw [Option.map_some, congrArg BiTape.head hfinal.2] at hhead
   simp [SingleTapeTM.Description.machine, writeThenMove, SingleTapeTM.initCfg,
     Algolean.Algorithms.Alphabet.wordPair_encode, BiTape.mk₁, BiTape.optionMove,
     BiTape.move, BiTape.moveRight, BiTape.write, StackTape.head, StackTape.mapSome] at hhead

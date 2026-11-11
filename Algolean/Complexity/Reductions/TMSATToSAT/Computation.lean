@@ -164,13 +164,65 @@ def step (row : Row verifier width) : Option (Row verifier width) :=
             simp only [hr, List.length_cons] at this ⊢
             lia }
 
-/-- A row accepts when the machine has halted with the chosen symbol under its head. -/
+/-- A row accepts when it has halted with only the chosen symbol left on the recorded tape. -/
 def Accepting (row : Row verifier width) (yes : Γ) : Prop :=
-  row.state = none ∧ row.symbol = some (.inl yes)
+  row.state = none ∧ row.symbol = some (.inl yes) ∧
+    ∀ position : Fin width, position ≠ row.headIndex → row.cells[position.val] = none
+
+private theorem blank_away_from_head_iff (row : Row verifier width) :
+    (∀ position : Fin width, position ≠ row.headIndex → row.cells[position.val] = none) ↔
+      (∀ cell ∈ row.left, cell = none) ∧ ∀ cell ∈ row.right, cell = none := by
+  have hwidth := row.length_eq
+  constructor
+  · intro h
+    constructor
+    · have hleft : ∀ cell ∈ row.left.reverse, cell = none := by
+        rw [List.forall_mem_iff_getElem]
+        intro i hi
+        have hil : i < row.left.length := by simpa using hi
+        let position : Fin width := ⟨i, by lia⟩
+        have hp : position ≠ row.headIndex := by
+          intro heq
+          have := congrArg Fin.val heq
+          dsimp [position, headIndex] at this
+          lia
+        simpa [position, cells, List.getElem_append, hil] using h position hp
+      simpa only [List.mem_reverse] using hleft
+    · rw [List.forall_mem_iff_getElem]
+      intro i hi
+      let position : Fin width := ⟨row.left.length + (i + 1), by lia⟩
+      have hp : position ≠ row.headIndex := by
+        intro heq
+        have := congrArg Fin.val heq
+        dsimp [position, headIndex] at this
+        lia
+      have hnot : ¬row.left.length + (i + 1) < row.left.length := by lia
+      simpa [position, cells, List.getElem_append, hnot] using h position hp
+  · rintro ⟨hl, hr⟩ position hp
+    have hneq : position.val ≠ row.left.length := by
+      intro heq
+      exact hp (Fin.ext heq)
+    by_cases hlt : position.val < row.left.length
+    · have hrev : position.val < row.left.reverse.length := by simpa using hlt
+      have hmem : row.left.reverse[position.val] ∈ row.left := by
+        simpa only [List.mem_reverse] using List.getElem_mem hrev
+      simpa [cells, List.getElem_append, hlt] using hl _ hmem
+    · have hindex : position.val - row.left.length - 1 < row.right.length := by
+        have := position.isLt
+        lia
+      have hsub : position.val - row.left.length ≠ 0 := by lia
+      have hget : row.cells[position.val] = row.right[position.val - row.left.length - 1] := by
+        simp [cells, List.getElem_append, hlt, List.getElem_cons, hsub]
+      rw [hget]
+      exact hr _ (List.getElem_mem hindex)
 
 /-- Acceptance of a row is exactly acceptance of the configuration it represents. -/
 @[simp] theorem toCfg_mem_accepting [Fintype Γ] (row : Row verifier width) (yes : Γ) :
-    row.toCfg ∈ accepting yes verifier ↔ row.Accepting yes := Iff.rfl
+    row.toCfg ∈ accepting yes verifier ↔ row.Accepting yes := by
+  change (row.state = none ∧
+    (⟨row.symbol, StackTape.ofList row.left, StackTape.ofList row.right⟩ : BiTape _) =
+      ⟨some (.inl yes), StackTape.nil, StackTape.nil⟩) ↔ _
+  simp [Accepting, blank_away_from_head_iff]
 
 private def advance (row : Row verifier width) : Row verifier width := row.step.getD row
 
@@ -251,6 +303,7 @@ private theorem iterate_nextCfg_accepting
     (word : List (TapeSymbol Γ)) (time : Nat) :
     (nextCfg verifier)^[time] (verifier.machine.initCfg word) ∈ accepting yes verifier ↔
       AcceptsWithin yes verifier word time := by
+  rw [acceptsWithin_iff_exists]
   constructor
   · intro h
     exact ⟨_, h, iterate_nextCfg_relates verifier _ time⟩
@@ -395,7 +448,8 @@ private def ofCertificate (problem : Instance Γ)
       step_iterate_initial problem certificate i.val i.isLt
 
 /--
-The computation accepts when its last row has halted with the accepting symbol under the head.
+The computation accepts when its last row has halted with exactly the one-symbol acceptance
+word on the tape, with the head on that symbol.
 -/
 def Accepting (computation : Computation problem) (yes : Γ) : Prop :=
   (computation.rows (Fin.last problem.time)).Accepting yes

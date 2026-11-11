@@ -106,15 +106,15 @@ noncomputable def tmsatSerializer (verifier : SingleTapeTM.Description (TapeSymb
     computesWithin := ?_ }
   apply (computer.computesWithin_poly.mono hbound
     (fun n => Nat.add_le_add_left (hbound n) (max 1 n))).consequence
-  intro input cfg htape
+  intro input output houtput
   have hword : Serialization.header verifier ++ input.flatMap Serialization.symbolCode ++
       Serialization.ending ++ fieldsWord (boundsFields m t) input.length =
         encodingOver.encode
           (⟨verifier, input, m.eval input.length, t.eval input.length⟩ : Instance Γ) := by
     rw [Serialization.encode_instance]
     simp [boundsFields, fieldsWord, List.append_assoc]
-  change cfg.BiTape = BiTape.mk₁ _ at htape ⊢
-  simpa only [hword] using htape
+  change output = _ at houtput ⊢
+  simpa only [hword] using houtput
 
 private theorem tmsatSerializer_poly_impl
     (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (m t : Polynomial Nat) :

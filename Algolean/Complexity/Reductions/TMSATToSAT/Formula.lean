@@ -61,13 +61,15 @@ section Indexed
 
 variable [Fintype Γ] [DecidableEq Γ]
 
-/-- These clauses require the machine to halt with the accepting symbol under its head. -/
+/-- These clauses require a halted head over the accepting symbol and blanks everywhere else. -/
 @[expose] def finalClauses (problem : Instance Γ) (yes : Γ) : CNF (Variable problem) :=
   Clause.atLeastOne ((List.finRange (width problem)).map fun position =>
     Variable.head (Fin.last problem.time) (position, none)) ::
-  (List.finRange (width problem)).map fun position =>
-    Clause.implies [.head (Fin.last problem.time) (position, none)]
-      (.tape (Fin.last problem.time) position (some (.inl yes)))
+  (List.finRange (width problem)).flatMap fun position =>
+    [Clause.implies [.head (Fin.last problem.time) (position, none)]
+       (.tape (Fin.last problem.time) position (some (.inl yes))),
+     Clause.atLeastOne [.head (Fin.last problem.time) (position, none),
+       .tape (Fin.last problem.time) position none]]
 
 omit [Fintype Γ] in
 private theorem finalClauses_iff (problem : Instance Γ) (yes : Γ)
@@ -75,9 +77,10 @@ private theorem finalClauses_iff (problem : Instance Γ) (yes : Γ)
     (rows : Fin (problem.time + 1) → Row problem.verifier (width problem)) :
     (finalClauses problem yes).SatisfiedBy (rowAssignment certificate rows) ↔
       (rows (Fin.last problem.time)).Accepting yes := by
-  simp only [finalClauses, CNF.satisfiedBy_iff_forall_clause]
+  simp only [finalClauses, CNF.satisfiedBy_iff_forall_clause, List.forall_mem_cons,
+    List.forall_mem_flatMap]
   simp [rowAssignment, Prod.mk.injEq, Row.Accepting, and_imp]
-  grind
+  grind [Row.cells_headIndex]
 
 /-- This joins the clauses for the certificate, initial tape, transitions, and final acceptance. -/
 @[expose] noncomputable def indexedFormula (problem : Instance Γ) (yes : Γ) :

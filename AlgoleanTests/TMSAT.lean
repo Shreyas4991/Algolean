@@ -50,10 +50,12 @@ def identityVerifier : TMQuery.TimeComputable (id : List TapeSymbol → List Tap
   computesWithin := TMQuery.ComputesWithin.of_outputsWithinTime (fun input =>
     ⟨0, ⟨(), 0⟩, ⟨TMState.init rejectingControl input, 0⟩, rfl, rfl, le_rfl⟩)
 
--- A completed query program still needs the compiled machine's halting transition.
-example : Instance.ofQueryVerifier identityVerifier [true] 2 ∈ satisfiable := by
+-- An unchanged input with a true first bit still has the separator and certificate on its tape.
+example : Instance.ofQueryVerifier identityVerifier [true] 2 ∉ satisfiable := by
   rw [mem_satisfiable_ofQueryVerifier_iff]
-  exact ⟨[false, false], rfl, rfl⟩
+  rintro ⟨certificate, hlength, houtput⟩
+  have := congrArg List.length houtput
+  simp [wordPair_encode, hlength] at this
 
 -- An accepting bit in the certificate cannot replace a rejecting bit at the output head.
 example : Instance.ofQueryVerifier identityVerifier [false] 1 ∉ satisfiable := by
@@ -67,7 +69,7 @@ example : encoding.encode (Instance.ofQueryVerifier identityVerifier [] 1) ∉ l
   rintro ⟨certificate, _, hhead⟩
   simp [wordPair_encode] at hhead
 
-/-- This verifier accepts in one stationary transition by writing a true bit and halting. -/
+/-- This verifier writes a true bit and halts in one stationary transition. -/
 def accept : SingleTapeTM.Description TapeSymbol where
   states := 0
   initial := 0
@@ -79,17 +81,16 @@ def reject : SingleTapeTM.Description TapeSymbol where
   initial := 0
   transition _ _ := (some (.inl false), none, none)
 
-/-- This verifier moves right once and then halts, leaving the scanned symbol unchanged. -/
+/-- This verifier erases the first cell, moves right once, and halts over the next cell. -/
 def readCertificate : SingleTapeTM.Description TapeSymbol where
   states := 1
   initial := 0
   transition state symbol :=
-    if state = 0 then (symbol, some true, some 1) else (symbol, none, none)
+    if state = 0 then (none, some true, some 1) else (symbol, none, none)
 
 -- A stationary write and halt takes one transition, rather than zero transitions.
-example (input : List Bool) (certificateLength : ℕ) :
-    (⟨accept, input, certificateLength, 1⟩ : Instance) ∈ satisfiable := by
-  refine ⟨List.replicate certificateLength false, by simp, ?_⟩
+example : (⟨accept, [], 0, 1⟩ : Instance) ∈ satisfiable := by
+  refine ⟨[], rfl, ?_⟩
   apply (acceptsWithin_one_iff true _ _).mpr
   exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl true))⟩, ⟨rfl, rfl⟩, rfl⟩
 
@@ -103,21 +104,39 @@ example (input : List Bool) (certificateLength : ℕ) :
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
   simp only [Algolean.Problems.TMSAT.accepting, Set.mem_ofPred_eq] at hfinal
   have hhead := congrArg (fun result => result.map (fun cfg => cfg.BiTape.head)) hstep
-  rw [Option.map_some, hfinal.2] at hhead
+  rw [Option.map_some, congrArg BiTape.head hfinal.2] at hhead
   simp [SingleTapeTM.Description.machine, reject, SingleTapeTM.initCfg,
-    BiTape.optionMove, BiTape.write] at hhead
+    BiTape.optionMove, BiTape.write, BiTape.mk₁] at hhead
 
 -- A running state with a true bit under the head is not an accepting configuration.
 example : (⟨some (0 : Fin 1), BiTape.mk₁ [.inl true]⟩ : accept.machine.Cfg) ∉
     accepting accept := by
   simp [Algolean.Problems.TMSAT.accepting]
 
--- On empty input, the verifier reads the certificate's first bit after crossing the separator.
+/-- Halting over true still rejects when another symbol remains to the right. -/
+example : (⟨none, BiTape.mk₁ [.inl true, .inl false]⟩ : accept.machine.Cfg) ∉
+    accepting accept := by
+  intro h
+  have hright := congrArg (fun tape => tape.right.head) h.2
+  change (some (.inl false) : Option TapeSymbol) = none at hright
+  cases hright
+
+/-- Halting over true still rejects when another symbol remains to the left. -/
+example : (⟨none, (BiTape.mk₁ [.inl false, .inl true]).moveRight⟩ : accept.machine.Cfg) ∉
+    accepting accept := by
+  intro h
+  have hleft := congrArg (fun tape => tape.left.head) h.2
+  change (some (.inl false) : Option TapeSymbol) = none at hleft
+  cases hleft
+
+-- Erasing the separator leaves a clean answer one cell to the right of the original head.
 example : (⟨readCertificate, [], 1, 2⟩ : Instance) ∈ satisfiable := by
-  let tape : BiTape TapeSymbol := (BiTape.mk₁ [.inr 0, .inl true]).moveRight
+  let tape : BiTape TapeSymbol := ((BiTape.mk₁ [.inr 0, .inl true]).write none).moveRight
   let middle : readCertificate.machine.Cfg := ⟨some (1 : Fin 2), tape⟩
   let final : readCertificate.machine.Cfg := ⟨none, tape⟩
-  refine ⟨[true], by decide, final, ⟨rfl, rfl⟩, ?_⟩
+  refine ⟨[true], by decide, ?_⟩
+  apply (acceptsWithin_iff_exists true _ _ _).mpr
+  refine ⟨final, ⟨rfl, rfl⟩, ?_⟩
   exact (RelatesWithinSteps.single (b := middle) (by rfl)).trans
     (RelatesWithinSteps.single (by rfl))
 
@@ -137,26 +156,29 @@ example : (⟨readCertificate, [], 1, 1⟩ : Instance) ∉ satisfiable := by
 
 -- Increasing the time bound cannot introduce a certificate of a different length.
 example : (⟨readCertificate, [], 0, 2⟩ : Instance) ∉ satisfiable := by
-  rw [mem_satisfiable_zero_length]
+  rw [mem_satisfiable_zero_length, acceptsWithin_iff_exists]
   rintro ⟨final, hfinal, steps, hle, hrun⟩
   have hcases : steps = 0 ∨ steps = 1 ∨ steps = 2 := by lia
   rcases hcases with h | h | h
   · subst steps
-    exact not_acceptsWithin_zero true _ _ ⟨final, hfinal, 0, le_rfl, hrun⟩
+    exact not_acceptsWithin_zero true _ _
+      ((acceptsWithin_iff_exists true _ _ _).mpr ⟨final, hfinal, 0, le_rfl, hrun⟩)
   · subst steps
-    exact readCertificate_not_accept_one _ ⟨final, hfinal, 1, le_rfl, hrun⟩
+    exact readCertificate_not_accept_one _
+      ((acceptsWithin_iff_exists true _ _ _).mpr ⟨final, hfinal, 1, le_rfl, hrun⟩)
   · subst steps
     obtain ⟨middle, hfirst, hrest⟩ := hrun.succ'
-    change some (⟨some (1 : Fin 2), (BiTape.mk₁ [.inr 0]).moveRight⟩ :
+    change some (⟨some (1 : Fin 2), ((BiTape.mk₁ [.inr 0]).write none).moveRight⟩ :
       readCertificate.machine.Cfg) = some middle at hfirst
     cases Option.some.inj hfirst
     obtain ⟨last, hzero, hlast⟩ := hrest.succ
     have heq := hzero.zero
     subst last
-    change some (⟨none, (BiTape.mk₁ [.inr 0]).moveRight⟩ :
+    change some (⟨none, ((BiTape.mk₁ [.inr 0]).write none).moveRight⟩ :
       readCertificate.machine.Cfg) = some final at hlast
     cases Option.some.inj hlast
-    exact (by decide : (none : Option TapeSymbol) ≠ some (.inl true)) hfinal.2
+    exact (by decide : (none : Option TapeSymbol) ≠ some (.inl true))
+      (congrArg BiTape.head hfinal.2)
 
 -- Every finite description, including its transition function, survives encoding and decoding.
 example (verifier : SingleTapeTM.Description TapeSymbol) :
@@ -252,32 +274,32 @@ def writesAndHalts {Γ : Type} (yes : Γ) :
   transition _ _ := (some (.inl yes), none, none)
 
 /--
-For any fixed finite alphabet, writing the chosen symbol and halting accepts every input and
-certificate length in one transition. This includes alphabets with just one symbol.
+For any fixed finite alphabet, overwriting the separator accepts an empty input and certificate
+in one transition. This includes alphabets with just one symbol.
 -/
 theorem accepts_chosen_symbol {Γ : Type} [Fintype Γ]
-    (yes : Γ) (input : List Γ) (length : ℕ) :
-    (⟨writesAndHalts yes, input, length, 1⟩ : Algolean.Problems.TMSAT.Instance Γ) ∈
+    (yes : Γ) :
+    (⟨writesAndHalts yes, [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance Γ) ∈
       Algolean.Problems.TMSAT.satisfiable yes := by
-  refine ⟨List.replicate length yes, by simp, ?_⟩
+  refine ⟨[], rfl, ?_⟩
   apply (acceptsWithin_one_iff yes _ _).mpr
   exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl yes))⟩, ⟨rfl, rfl⟩, rfl⟩
 
 /-- A three-symbol instance accepts when its chosen accepting symbol is two. -/
 theorem ternary_accepts :
-    (⟨writesAndHalts (2 : Fin 3), [0, 1, 2], 4, 1⟩ : Algolean.Problems.TMSAT.Instance (Fin 3)) ∈
-      Algolean.Problems.TMSAT.satisfiable 2 := accepts_chosen_symbol _ _ _
+    (⟨writesAndHalts (2 : Fin 3), [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance (Fin 3)) ∈
+      Algolean.Problems.TMSAT.satisfiable 2 := accepts_chosen_symbol _
 
 /-- The same three-symbol instance rejects when the chosen accepting symbol is one. -/
 theorem ternary_rejects_other_symbol :
-    (⟨writesAndHalts (2 : Fin 3), [0, 1, 2], 4, 1⟩ : Algolean.Problems.TMSAT.Instance (Fin 3)) ∉
+    (⟨writesAndHalts (2 : Fin 3), [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance (Fin 3)) ∉
       Algolean.Problems.TMSAT.satisfiable 1 := by
   rintro ⟨certificate, _, h⟩
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff (1 : Fin 3) _ _).mp h
   have hhead := congrArg (fun result => result.map (fun cfg => cfg.BiTape.head)) hstep
-  rw [Option.map_some, hfinal.2] at hhead
+  rw [Option.map_some, congrArg BiTape.head hfinal.2] at hhead
   simp [SingleTapeTM.Description.machine, writesAndHalts, SingleTapeTM.initCfg,
-    BiTape.optionMove, BiTape.write] at hhead
+    BiTape.optionMove, BiTape.write, BiTape.mk₁] at hhead
 
 /-- Complete instances over a three-symbol alphabet survive encoding and decoding. -/
 theorem ternary_encoding_roundtrip (problem : Algolean.Problems.TMSAT.Instance (Fin 3)) :
@@ -286,24 +308,28 @@ theorem ternary_encoding_roundtrip (problem : Algolean.Problems.TMSAT.Instance (
 
 /-- A one-symbol input alphabet is permitted without assuming a second ordinary symbol. -/
 theorem unary_accepts :
-    (⟨writesAndHalts (), [(), ()], 3, 1⟩ : Algolean.Problems.TMSAT.Instance Unit) ∈
-      Algolean.Problems.TMSAT.satisfiable () := accepts_chosen_symbol _ _ _
+    (⟨writesAndHalts (), [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance Unit) ∈
+      Algolean.Problems.TMSAT.satisfiable () := accepts_chosen_symbol _
 
-/-- Compiling a query verifier preserves acceptance at symbol two over a three-symbol alphabet. -/
+/-- Compilation rejects an unchanged pair even when its first symbol is the accepting symbol. -/
 theorem ternary_compiled_query :
     Instance.ofQueryVerifier
-      (TMQuery.TimeComputable.id (Symbol := Extended (Fin 3) 1)) [2] 2 ∈
+      (TMQuery.TimeComputable.id (Symbol := Extended (Fin 3) 1)) [2] 2 ∉
       Algolean.Problems.TMSAT.satisfiable (2 : Fin 3) := by
   rw [mem_satisfiable_ofQueryVerifier_iff]
-  exact ⟨[0, 1], rfl, rfl⟩
+  rintro ⟨certificate, hlength, houtput⟩
+  have := congrArg List.length houtput
+  simp [wordPair_encode, hlength] at this
 
-/-- Encoding the compiled verifier preserves its answer over a one-symbol alphabet. -/
+/-- Encoding preserves rejection of an unchanged input-certificate pair over one symbol. -/
 theorem unary_compiled_encoding :
     Algolean.Problems.TMSAT.encoding.encode (Instance.ofQueryVerifier
-      (TMQuery.TimeComputable.id (Symbol := Extended Unit 1)) [()] 1) ∈
+      (TMQuery.TimeComputable.id (Symbol := Extended Unit 1)) [()] 1) ∉
       Algolean.Problems.TMSAT.language () := by
   rw [encode_ofQueryVerifier_mem_language_iff]
-  exact ⟨[()], rfl, rfl⟩
+  rintro ⟨certificate, hlength, houtput⟩
+  have := congrArg List.length houtput
+  simp [wordPair_encode, hlength] at this
 
 /-- Successfully decoded bounds apply to three-symbol inputs as well as Boolean inputs. -/
 theorem ternary_decoded_size {word : List CodeSymbol}

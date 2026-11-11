@@ -108,7 +108,7 @@ private def clauseCountExpression {R : Type} [Semiring R]
   let choices := symbols + heads
   (m + (time + 1) * (cells + 1)) * (choices ^ 2 + 1) +
     ((1 + cells * (alphabet + 1)) +
-      (time * heads * symbols * (1 + heads + cells) + (cells + 1)))
+      (time * heads * symbols * (1 + heads + cells) + (2 * cells + 1)))
 
 private def lengthExpression {R : Type} [Semiring R]
     (alphabet code m time cells states : R) : R :=
@@ -129,10 +129,11 @@ private theorem indexedFormula_bounds (problem : Instance Γ) (yes : Γ) :
   obtain ⟨hc, hcl⟩ := choiceClauses_bounds problem
   obtain ⟨hi, hil⟩ := initialClauses_bounds problem
   obtain ⟨hs, hsl⟩ := stepClauses_bounds problem
-  have hf : (finalClauses problem yes).length = width problem + 1 := by simp [finalClauses]
+  have hf : (finalClauses problem yes).length = 2 * width problem + 1 := by
+    simp [finalClauses, List.length_flatMap, Nat.mul_comm]
   have hfl : ∀ clause ∈ finalClauses problem yes, clause.length ≤ width problem + 2 := by
     simp only [finalClauses, List.forall_mem_cons, Clause.length_atLeastOne,
-      List.length_map, List.length_finRange, List.forall_mem_map, Clause.length_implies,
+      List.length_map, List.length_finRange, List.forall_mem_flatMap, Clause.length_implies,
       List.length_cons, List.length_nil]
     simp
   constructor

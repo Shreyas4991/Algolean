@@ -12,8 +12,10 @@ public import Algolean.Problems.Basic
 /-!
 # Correctness, time, and space for one fixed program
 
-`TMSolves` requires one Query program to finish on every input with an allowed final
-configuration. Time counts move instructions, including stationary moves. Space counts every
+`TMSolves` requires one Query program to finish on every input with an allowed output word.
+The tape must contain exactly that word, with the head at its first cell and blanks everywhere
+outside the word. This is CSLib's output convention. The head need not return to its starting cell.
+Time counts move instructions, including stationary moves. Space counts every
 initial input cell and every cell reached during execution, with at least one cell for empty
 input. Erasing a cell does not remove it from this count.
 
@@ -21,11 +23,10 @@ The program is fixed before the statement quantifies over input words. Its input
 the initialized tape. Lean arguments used to construct the program must therefore be chosen
 independently of that input and its length. The program's type alone does not enforce this.
 
-`TMQuery.ComputesWithin` requires the complete output word under the final head, as in CSLib's
-function computation interface. `TMQuery.DecidesWithin` instead observes a fixed tape or state
-condition when the program finishes. It permits other tape contents to remain. The condition
-uses the machine's finite test syntax, so observing the answer cannot perform an arbitrary
-Lean computation.
+`TMQuery.ComputesWithin` specifies one output for each input. `TMQuery.DecidesWithin` requires
+the output to equal a fixed acceptance word exactly on inputs in the language. Rejection may
+produce any other complete word. Both use CSLib's clean-output convention. Internal components
+that report answers in control states or retain temporary regions use `Component` and `Runs`.
 
 These predicates use the existing `Completes` execution relation. Completion means that the
 Query program finishes; it does not require the underlying control label to be `none`.
@@ -41,19 +42,19 @@ variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable (tm : SingleTapeTM Symbol) [DecidableEq Symbol] [DecidableEq tm.State]
 
 /--
-One fixed program finishes on every input in an allowed configuration, within the given time
-and total space bounds. Both bounds are functions of input length. The specification describes
-the required result; it is not an instruction evaluated by the running machine.
+One fixed program finishes on every input with an allowed output word on an otherwise blank
+tape, with the head at its first cell. Time and total space are bounded by functions of input
+length. The specification describes the output; the running machine does not evaluate it.
 -/
-def TMSolves (program : Prog (TMQuery tm) Unit) (spec : List Symbol → Set tm.Cfg)
+def TMSolves (program : Prog (TMQuery tm) Unit) (spec : List Symbol → Set (List Symbol))
     (time space : ℕ → ℕ) : Prop :=
-  ∀ input, ∃ cost final, TMQuery.Completes program (TMState.init tm input) cost final ∧
-    final.config ∈ spec input ∧ cost.steps ≤ time input.length ∧
+  ∀ input, ∃ output cost final, TMQuery.Completes program (TMState.init tm input) cost final ∧
+    final.config.BiTape = BiTape.mk₁ output ∧ output ∈ spec input ∧ cost.steps ≤ time input.length ∧
       final.spaceUsed ≤ space input.length
 
 namespace TMSolves
 
-variable {tm} {program : Prog (TMQuery tm) Unit} {spec spec' : List Symbol → Set tm.Cfg}
+variable {tm} {program : Prog (TMQuery tm) Unit} {spec spec' : List Symbol → Set (List Symbol)}
 variable {time space time' space' : ℕ → ℕ}
 
 /-- Increasing either resource bound preserves the correctness statement. -/
@@ -61,27 +62,29 @@ theorem mono (h : TMSolves tm program spec time space)
     (htime : ∀ n, time n ≤ time' n) (hspace : ∀ n, space n ≤ space' n) :
     TMSolves tm program spec time' space' := by
   intro input
-  obtain ⟨cost, final, hc, hs, ht, hb⟩ := h input
-  exact ⟨cost, final, hc, hs, ht.trans (htime _), hb.trans (hspace _)⟩
+  obtain ⟨output, cost, final, hc, ho, hs, ht, hb⟩ := h input
+  exact ⟨output, cost, final, hc, ho, hs, ht.trans (htime _), hb.trans (hspace _)⟩
 
-/-- Allowing more final configurations preserves correctness and both resource bounds. -/
+/-- Allowing more output words preserves correctness and both resource bounds. -/
 theorem consequence (h : TMSolves tm program spec time space)
     (hpost : ∀ input, spec input ⊆ spec' input) : TMSolves tm program spec' time space := by
   intro input
-  obtain ⟨cost, final, hc, hs, ht, hb⟩ := h input
-  exact ⟨cost, final, hc, hpost input hs, ht, hb⟩
+  obtain ⟨output, cost, final, hc, ho, hs, ht, hb⟩ := h input
+  exact ⟨output, cost, final, hc, ho, hpost input hs, ht, hb⟩
 
 /--
 A time bound also gives a total space bound: the initial input occupies `max 1 n` cells, and
 each charged move reaches at most one new cell. The result and program are unchanged.
 -/
 theorem of_time_bound
-    (h : ∀ input, ∃ cost final, TMQuery.Completes program (TMState.init tm input) cost final ∧
-      final.config ∈ spec input ∧ cost.steps ≤ time input.length) :
+    (h : ∀ input, ∃ output cost final,
+      TMQuery.Completes program (TMState.init tm input) cost final ∧
+      final.config.BiTape = BiTape.mk₁ output ∧ output ∈ spec input ∧
+        cost.steps ≤ time input.length) :
     TMSolves tm program spec time (fun n => max 1 n + time n) := by
   intro input
-  obtain ⟨cost, final, hc, hs, ht⟩ := h input
-  refine ⟨cost, final, hc, hs, ht, ?_⟩
+  obtain ⟨output, cost, final, hc, ho, hs, ht⟩ := h input
+  refine ⟨output, cost, final, hc, ho, hs, ht, ?_⟩
   change final.cellsAllocated.card ≤ _
   rw [hc.space_eq]
   change (TMState.init tm input).spaceUsed + cost.cellsAllocated ≤ _
@@ -91,7 +94,7 @@ theorem of_time_bound
 /-- Total space includes the input and at least the initial head cell, even without any moves. -/
 theorem space_lower_bound (h : TMSolves tm program spec time space) (input : List Symbol) :
     max 1 input.length ≤ space input.length := by
-  obtain ⟨cost, final, hc, _, _, hb⟩ := h input
+  obtain ⟨output, cost, final, hc, _, _, _, hb⟩ := h input
   have heq := hc.space_eq
   change final.cellsAllocated.card ≤ _ at hb
   rw [heq] at hb
@@ -112,16 +115,16 @@ The absolute head coordinate and final control label are unrestricted.
 -/
 abbrev ComputesWithin (program : Prog (TMQuery tm) Unit) (f : List Symbol → List Symbol)
     (time space : ℕ → ℕ) : Prop :=
-  TMSolves tm program (fun input => {cfg | cfg.BiTape = BiTape.mk₁ (f input)}) time space
+  TMSolves tm program (fun input => {f input}) time space
 
 /--
-The program finishes on every word within the time and total space bounds. The chosen machine
-condition is true at completion exactly on words in the language. Other tape cells may retain
-their contents. The condition is fixed for the language and every input length.
+The program finishes on every input with a complete output word on an otherwise blank tape,
+with the head at its first cell. Its output equals the fixed acceptance word exactly when the
+input belongs to the language. Rejection may produce any other complete word.
 -/
 abbrev DecidesWithin (program : Prog (TMQuery tm) Unit) (language : Language Symbol)
-    (accept : TMCondition tm) (time space : ℕ → ℕ) : Prop :=
-  TMSolves tm program (fun input => {cfg | accept.eval cfg = true ↔ input ∈ language}) time space
+    (accept : List Symbol) (time space : ℕ → ℕ) : Prop :=
+  TMSolves tm program (fun input => {output | output = accept ↔ input ∈ language}) time space
 
 end TMQuery
 

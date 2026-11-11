@@ -117,7 +117,7 @@ private theorem checkInput_correct (word : List Symbol) (s : TMState machine)
   let source : TMState formatMachine :=
     ⟨⟨some formatMachine.q₀, s.config.BiTape⟩, s.headPos, s.cellsAllocated, s.cellsVisited⟩
   obtain ⟨cost, final, hr, hf, hp, hformat, ht⟩ :=
-    checkFormat_execution word source (by simpa [source, cursor_start] using htape)
+    checkFormat_correct word source (by simpa [source, cursor_start] using htape)
   let inject : FormatState → machine.State := Sum.inl
   have hrun := hr.relabel inject Sum.inl_injective
   have hsource : source.relabel inject =
@@ -233,7 +233,7 @@ theorem verify_correct :
   intro word
   obtain ⟨cost, final, hc, hf, _, ht⟩ :=
     verify_correct_impl word (TMState.init machine word) rfl
-  exact ⟨cost, final, hc, hf, ht⟩
+  exact ⟨[digit (result word)], cost, final, hc, hf, rfl, ht⟩
 
 /--
 This language contains the correctly encoded formula-certificate pairs whose listed values
@@ -248,12 +248,12 @@ under its final head exactly on those pairs. The same time and total space bound
 every input word, including malformed words.
 -/
 theorem verify_decides :
-    DecidesWithin verify acceptedPairs (.tapeIs (some (digit true)))
+    DecidesWithin verify acceptedPairs [digit true]
       (fun n => 27 * (n + 1) ^ 4) (fun n => max 1 n + 27 * (n + 1) ^ 4) := by
   apply verify_correct.consequence
-  intro word cfg htape
-  change cfg.BiTape = BiTape.mk₁ [digit (result word)] at htape
-  simp [htape, acceptedPairs, digit, BiTape.mk₁]
+  intro word output houtput
+  have heq : output = [digit (result word)] := houtput
+  simp [heq, acceptedPairs, digit]
 
 /-- This record stores the verifier and its common correctness and resource proof. -/
 noncomputable def computer : PolyTimeComputable (fun word => [digit (result word)]) where
