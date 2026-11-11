@@ -11,7 +11,7 @@ public import Algolean.Models.SingleTapeTM.Computability
 /-!
 # Checking the fixed-program correctness interface
 
-These examples distinguish deciding a language from producing a complete output word. They
+These examples require both language deciders and function computations to leave clean output. They
 also check that space includes the initial head cell and that conversion to computation
 records preserves the program and time bound.
 -/
@@ -32,17 +32,16 @@ abbrev machine : SingleTapeTM Bool where
 def writeTrue : Prog (TMQuery machine) Unit := FreeM.lift (.write (some true))
 
 /--
-The program decides the language containing every word by leaving true under the head. It may
-retain the rest of the input, uses no moves, and needs only the space occupied initially.
+Leaving the input unchanged decides whether it equals the fixed acceptance word. Every result
+is a complete clean word; rejection need not use a single predetermined word.
 -/
-theorem writeTrue_decides :
-    DecidesWithin writeTrue Set.univ (.tapeIs (some true)) (fun _ => 0) (fun n => max 1 n) := by
+theorem identity_decides :
+    DecidesWithin (pure () : Prog (TMQuery machine) Unit) {[true]} [true]
+      (fun _ => 0) (fun n => max 1 n) := by
   intro input
-  let initial := TMState.init machine input
-  refine ⟨0, initial.write (some true), completes_write initial (some true), ?_, by simp, ?_⟩
-  · simp [TMState.write, BiTape.write]
-  · change initial.spaceUsed ≤ _
-    exact (TMState.spaceUsed_init machine input).le
+  refine ⟨input, 0, TMState.init machine input, completes_pure _, rfl, ?_, by simp, ?_⟩
+  · rfl
+  · exact (TMState.spaceUsed_init machine input).le
 
 /--
 Writing true under the head does not compute the constant one-symbol output function: on a
@@ -51,16 +50,27 @@ two-symbol input, the second cell remains occupied. Larger resource bounds do no
 theorem writeTrue_not_constant_computation (time space : ℕ → ℕ) :
     ¬ComputesWithin writeTrue (fun _ => [true]) time space := by
   intro h
-  obtain ⟨cost, final, hc, ht, _, _⟩ := h [false, false]
+  obtain ⟨cost, final, hc, ht, _⟩ :=
+    (OutputsWithinTime.iff_completes (program := writeTrue)).mp
+      (h.outputsWithinTime [false, false])
   have hfinal := (hc.unique (completes_write (TMState.init machine [false, false]) (some true))).2
   rw [hfinal] at ht
   have hright := congrArg (fun tape : BiTape Bool => tape.right.head) ht
   change some false = none at hright
   cases hright
 
+/-- A true symbol with leftover input does not satisfy the clean-output decision convention. -/
+theorem writeTrue_not_decides (time space : ℕ → ℕ) :
+    ¬DecidesWithin writeTrue Set.univ [true] time space := by
+  intro h
+  apply writeTrue_not_constant_computation time space
+  apply h.consequence
+  intro input output houtput
+  exact houtput.mpr (Set.mem_univ input)
+
 /-- Even an empty input requires one tape cell, so a zero total space bound is impossible. -/
 theorem not_zero_space (program : Prog (TMQuery machine) Unit)
-    (spec : List Bool → Set machine.Cfg) (time : ℕ → ℕ) :
+    (spec : List Bool → Set (List Bool)) (time : ℕ → ℕ) :
     ¬TMSolves machine program spec time (fun _ => 0) := by
   intro h
   have := h.space_lower_bound []

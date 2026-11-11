@@ -126,7 +126,9 @@ theorem OutputsWithinTime.iff_completes {input output : List Symbol} {bound : �
 /-- Forgetting the space bound recovers the existing per-input output and time predicate. -/
 theorem ComputesWithin.outputsWithinTime (h : ComputesWithin program f time space)
     (input : List Symbol) : OutputsWithinTime program input (f input) (time input.length) := by
-  obtain ⟨cost, final, hc, ht, hb, _⟩ := h input
+  obtain ⟨output, cost, final, hc, ht, ho, hb, _⟩ := h input
+  have heq : output = f input := ho
+  subst output
   exact hc.outputsWithinTime ht hb
 
 end FixedProgram
@@ -153,8 +155,11 @@ space bounded by the initial input space plus that time bound.
 -/
 theorem ComputesWithin.of_outputsWithinTime
     (h : ∀ input, OutputsWithinTime program input (f input) (time input.length)) :
-    ComputesWithin program f time (fun n => max 1 n + time n) :=
-  TMSolves.of_time_bound (fun input => OutputsWithinTime.iff_completes.mp (h input))
+    ComputesWithin program f time (fun n => max 1 n + time n) := by
+  apply TMSolves.of_time_bound
+  intro input
+  obtain ⟨cost, final, hc, ht, hb⟩ := OutputsWithinTime.iff_completes.mp (h input)
+  exact ⟨f input, cost, final, hc, ht, rfl, hb⟩
 
 /-- The same program and time bound give a record with the automatic space bound from time. -/
 def ComputesWithin.timeComputable (h : ComputesWithin program f time space) :

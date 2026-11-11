@@ -35,6 +35,17 @@ def ofList {Symbol : Type} (cells : List (Option Symbol)) : StackTape Symbol :=
 @[simp] theorem ofList_cons {Symbol : Type} (cell : Option Symbol) (cells : List (Option Symbol)) :
     ofList (cell :: cells) = cons cell (ofList cells) := rfl
 
+/-- A finite cell list describes a blank tape stack exactly when every listed cell is blank. -/
+@[simp] theorem ofList_eq_nil_iff {Symbol : Type} (cells : List (Option Symbol)) :
+    ofList cells = nil ↔ ∀ cell ∈ cells, cell = none := by
+  induction cells with
+  | nil => simp
+  | cons cell cells ih =>
+    rw [ofList_cons, StackTape.eq_iff]
+    simp only [head_cons, tail_cons]
+    change (cell = none ∧ ofList cells = nil) ↔ _
+    simp only [ih, List.forall_mem_cons]
+
 /-- A list of blank cells describes a completely blank side of the tape. -/
 @[simp] theorem ofList_replicate_none {Symbol : Type} (n : Nat) :
     ofList (List.replicate n (none : Option Symbol)) = nil := by
@@ -112,6 +123,14 @@ theorem prepend_append {Symbol : Type} (first second : List Symbol) (tail : Stac
 end StackTape
 
 namespace BiTape
+
+/-- Different words give different clean tapes with their first cells under the head. -/
+theorem mk₁_injective {Symbol : Type} : Function.Injective (mk₁ (Symbol := Symbol)) := by
+  let read (tape : BiTape Symbol) := tape.head.toList ++ tape.right.toList.filterMap id
+  have hread (word : List Symbol) : read (mk₁ word) = word := by
+    cases word <;> simp [read, mk₁, nil, StackTape.mapSome, StackTape.nil]
+  intro first second h
+  exact (hread first).symm.trans ((congrArg read h).trans (hread second))
 
 /--
 This describes a word beginning under the head, with an arbitrary tape on its left and another

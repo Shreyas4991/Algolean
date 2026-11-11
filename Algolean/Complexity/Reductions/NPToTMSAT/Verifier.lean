@@ -14,9 +14,10 @@ public import Algolean.Problems.Certificates
 /-!
 # Preparing NP verifiers for TMSAT
 
-* `NP.exists_head_verifier` provides a polynomial-time verifier that returns one answer symbol.
+* `NP.exists_single_symbol_verifier` gives a polynomial-time verifier that leaves one answer
+  symbol on an otherwise blank tape.
   It compares the original verifier's whole output with its acceptance word.
-* `NP.exists_exact_head_verifier` constructs a polynomial-time verifier with exact certificate
+* `NP.exists_exact_length_verifier` constructs a polynomial-time verifier with exact certificate
   lengths and one-symbol answers.
 * `NP.fixed_length_certificates` replaces certificates of bounded length with certificates of
   exactly `2 * q(n) + 1` symbols. Decoding removes the added symbols before verification.
@@ -44,13 +45,13 @@ An NP language has a polynomial-time verifier whose output is a single symbol. T
 first runs the original computation, then compares its entire output with the acceptance word.
 The certificate length is still bounded above by a polynomial in the original input length.
 -/
-theorem NP.exists_head_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
+theorem NP.exists_single_symbol_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
     ∃ (f : List (Extended Γ 1) → List (Extended Γ 1)) (q : Polynomial ℕ),
       Nonempty (TMQuery.PolyTimeComputable f) ∧
       (∀ word, f word = [.inl yes] ∨ f word = [.inr 0]) ∧
       ∀ input, input ∈ L ↔ ∃ certificate : List Γ,
         certificate.length ≤ q.eval input.length ∧
-          (f ((wordPair Γ).encode (input, certificate))).head? = some (.inl yes) := by
+          f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
   classical
   obtain ⟨A, q, ⟨g, accepted, ⟨computer⟩, hg⟩, hL⟩ := h
   let f := fun word => [if g word = accepted then (.inl yes : Extended Γ 1) else .inr 0]
@@ -69,7 +70,7 @@ theorem NP.exists_head_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
 Every bounded certificate can be replaced by a certificate of exactly `2 * q(n) + 1` symbols.
 The fixed-length word records the original certificate and unused padding. Conversely, every
 successfully decoded word of that length gives a certificate within the original bound.
-The decoder used in `NP.exists_exact_head_verifier` implements this certificate representation.
+The decoder used in `NP.exists_exact_length_verifier` implements this certificate representation.
 -/
 theorem NP.fixed_length_certificates {L : Language Γ} (h : L ∈ NP)
     [DecidableEq Γ] (next stop : Γ) (hne : next ≠ stop) (yes : Γ) :
@@ -78,26 +79,26 @@ theorem NP.fixed_length_certificates {L : Language Γ} (h : L ∈ NP)
       (∀ word, f word = [.inl yes] ∨ f word = [.inr 0]) ∧
       ∀ input, input ∈ L ↔ ∃ word : List Γ, word.length = 2 * q.eval input.length + 1 ∧
         ∃ certificate, Problems.CertificatePadding.decode next stop word = some certificate ∧
-          (f ((wordPair Γ).encode (input, certificate))).head? = some (.inl yes) := by
-  obtain ⟨f, q, computer, answers, hcorrect⟩ := NP.exists_head_verifier h yes
+          f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
+  obtain ⟨f, q, computer, answers, hcorrect⟩ := NP.exists_single_symbol_verifier h yes
   refine ⟨f, q, computer, answers, fun input => ?_⟩
   exact (hcorrect input).trans
     (Problems.CertificatePadding.exists_fixed_length_iff next stop hne _ _)
 
 /--
 An input belongs to an NP language exactly when some certificate of the stated polynomial
-length makes this verifier leave the accepting symbol under its head. The length condition
+length makes this verifier produce exactly the one-symbol acceptance word. The length condition
 restricts the certificates considered in this theorem. The fixed program removes the added
 certificate symbols, rejects failed decoding, runs the original verifier, and compares its
 whole output with the acceptance word. Its time bound includes all these operations.
 -/
-theorem NP.exists_exact_head_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
+theorem NP.exists_exact_length_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
     ∃ (f : List (Extended Γ 1) → List (Extended Γ 1)) (q : Polynomial ℕ),
       Nonempty (TMQuery.PolyTimeComputable f) ∧
       (∀ word, f word = [.inl yes] ∨ f word = [.inr 0]) ∧
       ∀ input, input ∈ L ↔ ∃ certificate : List Γ,
         certificate.length = q.eval input.length ∧
-          (f ((wordPair Γ).encode (input, certificate))).head? = some (.inl yes) := by
+          f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
   classical
   obtain ⟨stop, hstop⟩ := exists_ne yes
   have hne : yes ≠ stop := Ne.symm hstop
@@ -109,9 +110,9 @@ theorem NP.exists_exact_head_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ
     ⟨(SingleTapeTuringMachines.CertificatePadding.computer yes stop hne).comp
       (computer.onNonempty (.inr 0))⟩
   have hword (input word : List Γ) :
-      (normalized ((wordPair Γ).encode (input, word))).head? = some (.inl yes) ↔
+      normalized ((wordPair Γ).encode (input, word)) = [.inl yes] ↔
         ∃ certificate, Problems.CertificatePadding.decode yes stop word = some certificate ∧
-          (f ((wordPair Γ).encode (input, certificate))).head? = some (.inl yes) := by
+          f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
     dsimp only [normalized, prepare]
     simp only [SingleTapeTuringMachines.CertificatePadding.result_wordPair]
     cases hd : Problems.CertificatePadding.decode yes stop word <;>

@@ -92,9 +92,11 @@ to change. `Computer` and `EncodedComputer` combine a program with its correctne
 proofs; `PolyTimeComputable` records a polynomial time bound.
 
 For a complete program, `TMSolves` states correctness and time and total space bounds on every
-input word. `TMQuery.ComputesWithin` requires a complete output word under the final head.
-`TMQuery.DecidesWithin` observes a fixed tape or state condition at completion and permits
-other tape contents to remain. These predicates are defined in `Models/SingleTapeTM/Solves`.
+input word. The final tape contains exactly an allowed output word, with its first cell under
+the head and blanks everywhere outside the word. This follows CSLib's output convention.
+The final head need not be at the original input position. `TMQuery.ComputesWithin` specifies the output as a
+function of the input. `TMQuery.DecidesWithin` requires a fixed acceptance word exactly on yes
+inputs. These predicates are defined in `Models/SingleTapeTM/Solves`.
 The computation records in `Models/SingleTapeTM/Computability` store this word-computation
 statement in their `computesWithin` field. Their `outputsFunInTime` accessor derives the
 per-input execution statement when a compiler or composition proof needs it.

@@ -9,6 +9,7 @@ module
 public import Algolean.Problems.Basic
 public import Algolean.Models.SingleTapeTM.Description
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
+public import Algolean.Models.SingleTapeTM.Tape
 
 /-!
 # Turing machine satisfiability
@@ -19,9 +20,11 @@ public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 * Certificates have exactly the specified length, measured in symbols of `Γ`.
 
 The machine receives the input, then one separate symbol, then the certificate. It accepts
-by halting with the chosen accepting symbol under the head. The alphabet and accepting symbol
-are fixed for the problem. Every transition counts as one step, including
-stationary steps. The definitions also allow alphabets containing just one symbol.
+by halting with exactly the one-symbol word `[yes]` on an otherwise blank tape, with the head
+on that symbol. This is CSLib's clean-output convention. The final symbol need not occupy the
+original input position. The alphabet and accepting symbol are fixed for the problem.
+Every transition counts as one step, including stationary steps. The definitions also allow
+alphabets containing just one symbol.
 
 The separate certificate length and time bound follow Definition 2.7 in David Steurer's
 [*P vs. NP and Diagonalization*, CS 6810, Lecture 2 (2012)][steurer2012].
@@ -54,17 +57,32 @@ structure Instance where
 
 variable {Γ}
 
-/-- A configuration accepts when the machine has halted with the chosen symbol under its head. -/
+/-- The halted tape contains only the chosen accepting symbol, with the head on that symbol. -/
 def accepting (yes : Γ) (verifier : SingleTapeTM.Description (TapeSymbol Γ)) :
     Set verifier.machine.Cfg :=
-  {configuration | configuration.state = none ∧ configuration.BiTape.head = some (.inl yes)}
+  {configuration | configuration.state = none ∧
+    configuration.BiTape = BiTape.mk₁ [.inl yes]}
 
 /-- The machine reaches an accepting configuration after at most the specified transitions. -/
 def AcceptsWithin (yes : Γ) (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (word : List (TapeSymbol Γ)) (time : ℕ) : Prop :=
-  ∃ final ∈ accepting yes verifier,
-    RelatesWithinSteps verifier.machine.TransitionRelation
-      (verifier.machine.initCfg word) final time
+  verifier.machine.OutputsWithinTime word [.inl yes] time
+
+/-- TMSAT's accepting configuration is exactly CSLib's halting configuration for `[yes]`. -/
+theorem mem_accepting_iff (yes : Γ) (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (cfg : verifier.machine.Cfg) :
+    cfg ∈ accepting yes verifier ↔ cfg = verifier.machine.haltCfg [.inl yes] := by
+  cases cfg
+  simp [accepting, SingleTapeTM.haltCfg]
+
+/-- The standard output relation is equivalent to reaching an accepting configuration in time. -/
+theorem acceptsWithin_iff_exists (yes : Γ)
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (word : List (TapeSymbol Γ)) (time : ℕ) :
+    AcceptsWithin yes verifier word time ↔ ∃ final ∈ accepting yes verifier,
+      RelatesWithinSteps verifier.machine.TransitionRelation
+        (verifier.machine.initCfg word) final time := by
+  simp [mem_accepting_iff, AcceptsWithin, SingleTapeTM.OutputsWithinTime]
 
 /-- A yes instance has a certificate of the specified length that the verifier accepts in time. -/
 def satisfiable (yes : Γ) : DecisionProblem (Instance Γ) :=
@@ -76,13 +94,14 @@ def satisfiable (yes : Γ) : DecisionProblem (Instance Γ) :=
 @[simp] theorem not_acceptsWithin_zero (yes : Γ)
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (word : List (TapeSymbol Γ)) : ¬AcceptsWithin yes verifier word 0 := by
-  simp [AcceptsWithin, accepting, SingleTapeTM.initCfg]
+  simp [AcceptsWithin, SingleTapeTM.OutputsWithinTime, SingleTapeTM.initCfg, SingleTapeTM.haltCfg]
 
-/-- Acceptance within one transition requires that transition to halt with an accepting symbol. -/
+/-- Acceptance within one transition requires that transition to halt with the clean answer. -/
 theorem acceptsWithin_one_iff (yes : Γ) (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (word : List (TapeSymbol Γ)) : AcceptsWithin yes verifier word 1 ↔
       ∃ final ∈ accepting yes verifier, verifier.machine.step (verifier.machine.initCfg word) =
         some final := by
+  rw [acceptsWithin_iff_exists]
   constructor
   · rintro ⟨final, hfinal, steps, hle, hrun⟩
     cases steps with
@@ -102,20 +121,19 @@ theorem acceptsWithin_one_iff (yes : Γ) (verifier : SingleTapeTM.Description (T
 theorem AcceptsWithin.mono {yes : Γ} {verifier : SingleTapeTM.Description (TapeSymbol Γ)}
     {word : List (TapeSymbol Γ)} {time time' : ℕ} (h : AcceptsWithin yes verifier word time)
     (hle : time ≤ time') : AcceptsWithin yes verifier word time' := by
-  obtain ⟨final, hfinal, hrun⟩ := h
-  exact ⟨final, hfinal, RelatesWithinSteps.mono hle hrun⟩
+  exact RelatesWithinSteps.mono hle h
 
 /--
 If the verifier produces a specified output within the bound, it accepts exactly when that
-output starts with the chosen accepting symbol. Determinism prevents a different halting tape
+output is exactly the one-symbol acceptance word. Determinism prevents a different halting tape
 from accepting.
 -/
 theorem acceptsWithin_iff_of_outputsWithinTime (yes : Γ)
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     {word output : List (TapeSymbol Γ)} {time : ℕ}
     (houtput : verifier.machine.OutputsWithinTime word output time) :
-    AcceptsWithin yes verifier word time ↔ output.head? = some (.inl yes) := by
-  have hhead : (BiTape.mk₁ output).head = output.head? := by cases output <;> rfl
+    AcceptsWithin yes verifier word time ↔ output = [.inl yes] := by
+  rw [acceptsWithin_iff_exists]
   have hterminal {a b : verifier.machine.Cfg} (ha : a.state = none)
       (h : ReflTransGen verifier.machine.TransitionRelation a b) : a = b := by
     rcases h.cases_head with heq | ⟨next, hstep, _⟩
@@ -132,9 +150,10 @@ theorem acceptsWithin_iff_of_outputsWithinTime (yes : Γ)
           houtput.choose_spec.2.reflTransGen with h | h
       · exact hterminal hfinal.1 h
       · exact (hterminal rfl h).symm
-    simpa only [hsame, SingleTapeTM.haltCfg, hhead] using hfinal.2
+    simpa only [hsame, SingleTapeTM.haltCfg, BiTape.mk₁_injective.eq_iff] using hfinal.2
   · intro h
-    exact ⟨verifier.machine.haltCfg output, ⟨rfl, hhead.trans h⟩, houtput⟩
+    subst output
+    exact ⟨verifier.machine.haltCfg [.inl yes], ⟨rfl, rfl⟩, houtput⟩
 
 /-- Allowing more time preserves acceptance without changing the required certificate length. -/
 theorem mem_satisfiable_mono {yes : Γ} {problem : Instance Γ}
@@ -155,6 +174,6 @@ theorem mem_satisfiable_mono {yes : Γ} {problem : Instance Γ}
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (input : List Γ) (certificateLength : ℕ) :
     (⟨verifier, input, certificateLength, 0⟩ : Instance Γ) ∉ satisfiable yes := by
-  simp [satisfiable, AcceptsWithin, accepting, SingleTapeTM.initCfg]
+  simp [satisfiable]
 
 end Algolean.Problems.TMSAT
