@@ -72,7 +72,6 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public import Algolean.Algorithms.Strassen
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
-public import Algolean.Algorithms.WordRAMLinearSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.Classes.NP
 public import Algolean.Complexity.Classes.NP.Verification
@@ -176,6 +175,7 @@ public import Algolean.Models.SingleTapeTM.Verification
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
+public import Algolean.Models.WordRAMSyntax
 public import Algolean.Problems.Basic
 public import Algolean.Problems.Encodings.Alphabet
 public import Algolean.Problems.Encodings.Basic
@@ -185,5 +185,7 @@ public import Algolean.Problems.Encodings.SAT
 public import Algolean.Problems.SAT.Basic
 public import Algolean.Problems.SAT.Constraints
 public import Algolean.Problems.SAT.Verification
+public import Algolean.Problems.WordRAM.Computes
+public import Algolean.Problems.WordRAM.Solves
 public import Algolean.QueryComposition
 public import Algolean.QueryModel

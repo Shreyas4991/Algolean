@@ -41,4 +41,6 @@ public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.SymbolCopying
 public import AlgoleanTests.Tape
 public import AlgoleanTests.VerifierNormalization
-public import AlgoleanTests.WordRAMExamples
+public import AlgoleanTests.WordRAM
+public import AlgoleanTests.WordRAMSolves
+public import AlgoleanTests.WordRAMSyntax
