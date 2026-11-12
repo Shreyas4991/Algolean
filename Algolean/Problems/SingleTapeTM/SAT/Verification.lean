@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.Encodings.SAT
+public import Algolean.Problems.SingleTapeTM.Encodings.SAT
 
 /-!
 # Certificates for Boolean satisfiability

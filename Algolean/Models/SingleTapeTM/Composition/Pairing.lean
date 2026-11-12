@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.Encodings.Pairing
+public import Algolean.Problems.SingleTapeTM.Encodings.Pairing
 public import Algolean.Models.SingleTapeTM.Composition.Sequential
 
 /-!

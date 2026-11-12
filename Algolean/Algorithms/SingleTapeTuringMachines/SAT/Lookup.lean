@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
-public import Algolean.Problems.SAT.Verification
+public import Algolean.Problems.SingleTapeTM.SAT.Verification
 
 /-!
 # Looking up a binary variable name in a certificate

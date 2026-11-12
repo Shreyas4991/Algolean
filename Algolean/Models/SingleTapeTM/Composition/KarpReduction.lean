@@ -8,7 +8,7 @@ module
 
 public import Algolean.Complexity.Classes.P
 public import Algolean.Models.SingleTapeTM.Composition.MachineComposition
-public import Algolean.Problems.Encodings.Basic
+public import Algolean.Problems.SingleTapeTM.Encodings.Basic
 
 /-!
 # Solving one problem by converting its input

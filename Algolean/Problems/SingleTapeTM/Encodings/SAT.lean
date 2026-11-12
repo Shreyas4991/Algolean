@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Problems.SAT.Basic
-public import Algolean.Problems.Encodings.Alphabet
+public import Algolean.Problems.SingleTapeTM.Encodings.Alphabet
 public import Algolean.Models.SingleTapeTM.Alphabet.List
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 public import Mathlib.Algebra.Order.BigOperators.Group.List
@@ -77,7 +77,7 @@ A certificate lists variables and proposed truth values. The literal type record
 name takes precedence, and a name absent from the list is assigned false.
 
 This finite list can be written on a Turing machine's tape. `Certificate.assignment` in
-`Problems.SAT.Verification` converts it into the assignment function already used in
+`Problems.SingleTapeTM.SAT.Verification` converts it into the assignment function already used in
 `Problems.SAT.Basic` to evaluate formulas and define satisfiability.
 -/
 abbrev Certificate := Clause Variable

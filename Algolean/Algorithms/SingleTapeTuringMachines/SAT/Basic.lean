@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.Encodings.SAT
+public import Algolean.Problems.SingleTapeTM.Encodings.SAT
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
 public import Mathlib.Data.Fintype.OfMap
 public import Mathlib.Tactic.FinCases
@@ -21,8 +21,8 @@ public import Mathlib.Tactic.FinCases
 * `FormatState` records which part of the formula or certificate the machine is reading.
 
 The same name may appear several times in a certificate, and some names may be absent. These
-are allowed by the format. The assignment function in `Problems.SAT.Verification` gives each
-name its first listed value, or false if it is absent.
+are allowed by the format. The assignment function in
+`Problems.SingleTapeTM.SAT.Verification` gives each name its first value, or false if it is absent.
 -/
 
 @[expose] public section

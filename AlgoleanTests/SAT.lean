@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.SAT.Verification
+public import Algolean.Problems.SingleTapeTM.SAT.Verification
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Parsing
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
@@ -16,7 +16,7 @@ public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Lookup
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Evaluation
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public meta import Algolean.Models.SingleTapeTM.Alphabet.Pair
-public meta import Algolean.Problems.Encodings.SAT
+public meta import Algolean.Problems.SingleTapeTM.Encodings.SAT
 
 /-!
 # Checking SAT encodings and certificates
