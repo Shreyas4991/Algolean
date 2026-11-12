@@ -93,7 +93,7 @@ private def earlyHaltComputation : Computation earlyHaltProblem where
   next i := by fin_cases i <;> rfl
 
 /-- The description with repeated halted rows proves acceptance within the original bound. -/
-example : earlyHaltProblem ∈ satisfiable true := by
+example : earlyHaltProblem ∈ accepted true := by
   rw [mem_accepted_iff_exists_computation]
   refine ⟨earlyHaltComputation, ?_⟩
   rw [Computation.Accepting, ← Row.toCfg_mem_accepting]
@@ -112,8 +112,9 @@ example : formula (⟨writeAndHalt, [], 0, 0⟩ : BoundedVerification Bool) true
   simp
 
 /-- The final clauses reject a halted accepting head when a separator remains on the tape. -/
-example : formula (⟨writeAndHalt, [true], 0, 1⟩ : BoundedVerification Bool) true ∉ CNF.satisfiable := by
-  rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
+example : formula (⟨writeAndHalt, [true], 0, 1⟩ : BoundedVerification Bool) true ∉
+    CNF.satisfiable := by
+  rw [formula_satisfiable_iff, mem_accepted_zero_length]
   intro h
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
   have hright := congrArg (fun result => result.map (fun cfg => cfg.BiTape.right.head)) hstep
@@ -125,7 +126,7 @@ example : formula (⟨writeAndHalt, [true], 0, 1⟩ : BoundedVerification Bool) 
 /-- Writing true does not make the formula satisfiable when the head then halts over false. -/
 example : formula (⟨writeThenMove, [false, false], 0, 1⟩ : BoundedVerification Bool) true ∉
     CNF.satisfiable := by
-  rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
+  rw [formula_satisfiable_iff, mem_accepted_zero_length]
   intro h
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
   have hhead := congrArg (fun result => result.map (fun cfg => cfg.BiTape.head)) hstep
@@ -142,7 +143,7 @@ private def unaryAccept : SingleTapeTM.Description (TapeSymbol Unit) where
 
 /-- A verifier over a one-symbol alphabet still gives a satisfiable formula when it accepts. -/
 example : formula (⟨unaryAccept, [], 0, 1⟩ : BoundedVerification Unit) () ∈ CNF.satisfiable := by
-  rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
+  rw [formula_satisfiable_iff, mem_accepted_zero_length]
   apply (acceptsWithin_one_iff () _ _).mpr
   exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl ()))⟩, ⟨rfl, rfl⟩, rfl⟩
 

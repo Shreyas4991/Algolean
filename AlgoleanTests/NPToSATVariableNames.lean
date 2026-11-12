@@ -22,7 +22,8 @@ public section
 
 namespace AlgoleanTests.NPToSATVariableNames
 
-open Algolean.Problems Cslib.Turing.SingleTapeTM.BoundedVerification Algolean.Algorithms.NPToTMSAT Computability
+open Algolean.Problems Cslib.Turing.SingleTapeTM.BoundedVerification
+open Algolean.Algorithms.NPToTMSAT Computability
 
 /-- This instance has four certificate symbols, two times, and a verifier with two states. -/
 private abbrev exampleInstance : BoundedVerification (Fin 4) where
