@@ -9,7 +9,7 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CertificatePadding
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Comparison
 public import Algolean.Complexity.Classes.NP
-public import Algolean.Problems.Certificates
+public import Algolean.Problems.Encodings.Certificates
 public import Algolean.Models.SingleTapeTM.BoundedVerificationCompiler
 
 /-!

@@ -177,9 +177,9 @@ public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
 public import Algolean.Problems.Basic
-public import Algolean.Problems.Certificates
 public import Algolean.Problems.Encodings.Alphabet
 public import Algolean.Problems.Encodings.Basic
+public import Algolean.Problems.Encodings.Certificates
 public import Algolean.Problems.Encodings.Pairing
 public import Algolean.Problems.Encodings.SAT
 public import Algolean.Problems.SAT.Basic
