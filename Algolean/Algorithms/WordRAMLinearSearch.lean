@@ -120,7 +120,7 @@ theorem linearSearch_cost_correctness_spec (input : Array (BitVec w)) (key : Bit
         (∀ i, i < pref.length → input[i]? ≠ some key) ∧
           addr = BitVec.ofNat w pref.length ∧ mem = arrayMemory input ∧
           cost.time = c₀.time + 3 * pref.length ∧
-          cost.addresses ⊆ c₀.addresses ∪ (Finset.range pref.length).image (BitVec.ofNat w))
+          cost.addresses ⊆ c₀.addresses ∪ inputRegion input)
   all_goals simp_all [CmpOp.eval, BinOp.eval]
   all_goals grind [IsFirstMatch]
 
