@@ -185,5 +185,7 @@ public import Algolean.Problems.Encodings.SAT
 public import Algolean.Problems.SAT.Basic
 public import Algolean.Problems.SAT.Constraints
 public import Algolean.Problems.SAT.Verification
+public import Algolean.Problems.WordRAM.Computes
+public import Algolean.Problems.WordRAM.Solves
 public import Algolean.QueryComposition
 public import Algolean.QueryModel
