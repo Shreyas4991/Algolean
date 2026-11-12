@@ -12,7 +12,7 @@ import Mathlib.Data.Fintype.EquivFin
 /-!
 # Numbering the states of a transition-table machine
 
-This file represents a finite single-tape machine using the numbered states required by TMSAT.
+This file represents a finite single-tape machine using numbered states.
 Renaming the states preserves every transition, the initial configuration, and the halting tape.
 It therefore preserves execution times exactly.
 -/

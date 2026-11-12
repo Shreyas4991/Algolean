@@ -6,13 +6,14 @@ Authors: Shreyas Srinivas
 
 module
 
-public import AlgoleanTests.NPToTMSAT
-public import Algolean.Complexity.Reductions.NPToTMSAT.Reduction
+public import AlgoleanTests.Tape
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.PolynomialWriter
+public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.SymbolEncoding
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.PolynomialWriter
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.SymbolEncoding
 
 /-!
-# Checking the machines used by the TMSAT serializer
+# Checking tape preservation, counting, and symbol encoding
 
 The counting tests run each fixed program on all short Boolean inputs, including the empty
 word and inputs too short to contribute any copies. The encoding tests use both a Boolean
@@ -25,7 +26,8 @@ and head position, including preservation of the suffix written before encoding 
 namespace AlgoleanTests.Serialization
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
-open Algolean.Algorithms.SingleTapeTuringMachines NPToTMSAT
+open Algolean.Algorithms.SingleTapeTuringMachines
+open AlgoleanTests.Tape (tapeView)
 
 /-- This machine has one control state. The query programs define its instructions. -/
 abbrev control (Symbol : Type) [Inhabited Symbol] [Fintype Symbol] : SingleTapeTM Symbol where
@@ -128,29 +130,5 @@ run_cmd Lean.Elab.Command.liftIO do
   checkCounting
   checkEncoding [false, true] (fun bit => if bit then [true, false, true] else [false]) []
   checkEncoding ([0, 1, 2] : List (Fin 3)) (fun symbol => [symbol, 2, symbol]) [2, 0]
-
--- The complete serializer works over both alphabets without requiring an extra numeric encoding.
-example (verifier : SingleTapeTM.Description (Problems.TMSAT.TapeSymbol Bool))
-    (m t : Polynomial Nat) :
-    Nonempty (PolyTimeComputable (fun input => Problems.TMSAT.encodingOver.encode
-      (⟨verifier, input, m.eval input.length, t.eval input.length⟩ :
-        Problems.TMSAT.Instance Bool))) :=
-  ⟨tmsatSerializer verifier m t⟩
-
-example {L : Algorithms.Language (Fin 3)} (h : L ∈ NP) :
-    Nonempty (KarpReduction L (Problems.TMSAT.languageOver (1 : Fin 3))) :=
-  NP.karpReducible_tmsat h 1
-
--- Quadratic bounds give a time polynomial of degree at most four.
-example (verifier : SingleTapeTM.Description (Problems.TMSAT.TapeSymbol Bool)) :
-    (tmsatSerializer verifier (Polynomial.X ^ 2) (Polynomial.X ^ 2)).poly.natDegree ≤ 4 := by
-  have h := tmsatSerializer_natDegree_le verifier (Polynomial.X ^ 2) (Polynomial.X ^ 2)
-  rw [Polynomial.natDegree_X_pow] at h
-  simpa using h
-
--- Constant bounds still require reading and encoding inputs of arbitrary length.
-example (verifier : SingleTapeTM.Description (Problems.TMSAT.TapeSymbol Bool)) :
-    (tmsatSerializer verifier 0 0).poly.natDegree ≤ 2 := by
-  simpa using tmsatSerializer_natDegree_le verifier 0 0
 
 end AlgoleanTests.Serialization

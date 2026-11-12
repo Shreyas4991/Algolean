@@ -40,6 +40,9 @@ and [list](##Computability.Encoding.list) formats give lengths in terms of the e
 
 namespace Computability
 
+/-- Zero is represented by the empty binary word. -/
+@[simp, grind =] theorem encodeNatBool_zero : encodingNatBool.encode 0 = [] := rfl
+
 /--
 The first digit has place value one, the next has place value two, and so on. If the word ends
 in false, the decoder also adds one at the next place value after the last digit. This describes

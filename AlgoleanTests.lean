@@ -1,5 +1,6 @@
 module  -- shake: keep-all --deprecated_module: ignore
 
+public import AlgoleanTests.BoundedVerification
 public import AlgoleanTests.CircuitExamples
 public import AlgoleanTests.DeutschJozsaExamples
 public import AlgoleanTests.FreeMonadWP
@@ -7,13 +8,19 @@ public import AlgoleanTests.FuelExecMonad
 public import AlgoleanTests.GroupExamples
 public import AlgoleanTests.HadamardExamples
 public import AlgoleanTests.KMPExamples
+public import AlgoleanTests.MetaTMCounters
+public import AlgoleanTests.MetaTMNavigation
+public import AlgoleanTests.MetaTMReading
 public import AlgoleanTests.MinThree
 public import AlgoleanTests.ModelM
 public import AlgoleanTests.ModelMWP
 public import AlgoleanTests.ModelStateM
 public import AlgoleanTests.ModelStateMWP
 public import AlgoleanTests.NP
-public import AlgoleanTests.NPToTMSAT
+public import AlgoleanTests.NPToSATCertificateChoices
+public import AlgoleanTests.NPToSATFormula
+public import AlgoleanTests.NPToSATOutput
+public import AlgoleanTests.NPToSATVariableNames
 public import AlgoleanTests.NaivePatternSearchExamples
 public import AlgoleanTests.Problems
 public import AlgoleanTests.ProgExamples
@@ -31,14 +38,7 @@ public import AlgoleanTests.SingleTapeTMReductions
 public import AlgoleanTests.SingleTapeTMSolves
 public import AlgoleanTests.SingleTapeTMVerification
 public import AlgoleanTests.SingleTapeTuringMachines
-public import AlgoleanTests.TMSAT
-public import AlgoleanTests.TMSATCertificateChoices
-public import AlgoleanTests.TMSATNaming
-public import AlgoleanTests.TMSATNumbers
-public import AlgoleanTests.TMSATParsing
-public import AlgoleanTests.TMSATStateFields
-public import AlgoleanTests.TMSATToSAT
-public import AlgoleanTests.TMSATToSATTape
-public import AlgoleanTests.TMSATVariableNames
-public import AlgoleanTests.TMSATWriting
+public import AlgoleanTests.SymbolCopying
+public import AlgoleanTests.Tape
+public import AlgoleanTests.VerifierNormalization
 public import AlgoleanTests.WordRAMExamples

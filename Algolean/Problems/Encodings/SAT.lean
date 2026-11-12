@@ -19,6 +19,7 @@ public import Mathlib.Algebra.Order.Group.Nat
 * A variable name is a finite list of binary digits. Leading zeros distinguish names.
 * A literal is a variable or its negation. A clause is a disjunction of literals.
 * A formula is a conjunction of clauses. Its encoding uses the symbols described in `CodeSymbol`.
+* `literalPrefix` writes one literal, including the symbol that ends its variable name.
 * `formulaPrefix` writes the clauses without the final symbol that ends the formula.
 * `language` contains the encodings of satisfiable formulas.
   Incorrectly formatted lists are rejected.
@@ -185,6 +186,21 @@ theorem certificateEncoding_encode_neg (name : Variable) (rest : Certificate) :
     words, encodingList, Literal.equiv, List.map_append, List.map_map,
     Function.comp_def, Extended.flattenThreeEquiv, Extended.flattenEquiv, finSumFinEquiv]
 
+/-- This writes a literal's sign and binary name, followed by the symbol ending that name. -/
+def literalPrefix : Literal Variable → List CodeSymbol
+  | .pos name => .inr 0 :: name.map Sum.inl ++ [.inr 2]
+  | .neg name => .inr 1 :: name.map Sum.inl ++ [.inr 2]
+
+/-- A clause writes its literals in order, followed by the symbol ending the clause. -/
+theorem certificateEncoding_encode_eq_flatMap (clause : Certificate) :
+    certificateEncoding.encode clause = clause.flatMap literalPrefix ++ [.inr 3] := by
+  induction clause with
+  | nil => simp [certificateEncoding_encode_nil]
+  | cons literal rest ih =>
+    cases literal <;>
+      simp [certificateEncoding_encode_pos, certificateEncoding_encode_neg, literalPrefix,
+        ih, List.append_assoc]
+
 /-- With no clauses to record, the encoding is just `Sum.inr 5`, which ends the formula. -/
 theorem encoding_encode_nil : encoding.encode [] = [(.inr 5 : CodeSymbol)] := rfl
 
@@ -205,6 +221,18 @@ that ends the formula. A machine can append several such words before ending the
 -/
 def formulaPrefix (formula : CNF Variable) : List CodeSymbol :=
   formula.flatMap fun clause => certificateEncoding.encode clause ++ [.inr 4]
+
+/-- Joining two clause lists joins their encodings before the formula's final symbol. -/
+@[simp] theorem formulaPrefix_append (first second : CNF Variable) :
+    formulaPrefix (first ++ second) = formulaPrefix first ++ formulaPrefix second := by
+  simp [formulaPrefix]
+
+/-- Renaming the variables writes the renamed literals in each clause's original order. -/
+theorem formulaPrefix_rename {α : Type*} (formula : CNF α) (name : α → Variable) :
+    formulaPrefix (formula.rename name) = formula.flatMap fun clause =>
+      clause.flatMap (fun literal => literalPrefix (literal.rename name)) ++ [.inr 3, .inr 4] := by
+  simp [formulaPrefix, CNF.rename, Clause.rename, certificateEncoding_encode_eq_flatMap,
+    List.flatMap_map, List.append_assoc]
 
 /-- Appending the final formula symbol to the clause encodings gives the existing SAT encoding. -/
 theorem encoding_encode_eq_formulaPrefix (formula : CNF Variable) :
@@ -262,6 +290,15 @@ complete formula. The alphabet needs only two distinct symbols; no numbering of 
 noncomputable def encodingOver : Encoding (CNF Variable) Γ :=
   encoding.over
 
+/-- The encoded formula writes its clauses in order and then the symbol ending the formula. -/
+theorem encodingOver_encode_eq_formulaPrefix (formula : CNF Variable) :
+    (encodingOver (Γ := Γ)).encode formula =
+      (formulaPrefix formula).flatMap
+        (fun symbol => (finiteWordsOver CodeSymbol Γ).encode [symbol]) ++
+          (finiteWordsOver CodeSymbol Γ).encode [.inr 5] := by
+  simp only [encodingOver, Encoding.over, Encoding.comp]
+  rw [encoding_encode_eq_formulaPrefix, encode_finiteWordsOver_append, encode_finiteWordsOver]
+
 /-- Writing a formula over `Γ` multiplies the length of its existing encoding by eight. -/
 @[simp] theorem length_encodingOver (formula : CNF Variable) :
     ((encodingOver (Γ := Γ)).encode formula).length = (encoding.encode formula).length * 8 := by
@@ -284,7 +321,7 @@ theorem length_eq_of_decodeOver {word : List Γ} {formula : CNF Variable}
 This is SAT represented over `Γ`. A word belongs when it decodes to a satisfiable formula;
 words that fail to decode do not belong.
 -/
-noncomputable def languageOver : Language Γ := encodedLanguage CNF.satisfiable encodingOver
+def languageOver : Language Γ := encodedLanguage CNF.satisfiable encodingOver
 
 /-- Encoding a formula over `Γ` preserves whether it has a satisfying assignment. -/
 @[simp] theorem encode_mem_languageOver (formula : CNF Variable) :

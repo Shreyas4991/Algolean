@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BasicTMs
-public import Algolean.Complexity.NP
+public import Algolean.Complexity.Classes.NP
 
 /-!
 # Checking encoded certificates and the verifier program

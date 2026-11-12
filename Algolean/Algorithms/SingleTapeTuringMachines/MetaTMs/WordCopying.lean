@@ -9,8 +9,9 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 
 /-!
-# Copying binary words across intervening tape regions
+# Copying words across intervening tape regions
 
+* `copySymbolsAcross` copies a word over the finite alphabet using fixed symbol representations.
 * `copyBitsAcross` reads a binary word, appends the chosen representation of each bit to
   a later output region, and returns to the source's first cell.
 * `appendLengthHeader` writes one true bit per source bit, followed by a false bit.
@@ -18,8 +19,8 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 * `copyBitsMoves` gives its exact number of head moves when both bit representations have
   the same length. Empty source words and empty intervening regions are allowed.
 
-This is a machine template. The containing machine fixes the digit symbols, the two output
-representations, and the number of intervening regions. It reads every source bit from the
+These are machine templates. The containing machine fixes the alphabet cases, symbol
+representations, and number of intervening regions. It reads each source symbol from the
 tape. The source, intervening regions, earlier output, and cells farther left are preserved.
 -/
 
@@ -195,5 +196,100 @@ def appendLengthHeader (tm : SingleTapeTM Γ) (zero one : Γ) (code : Bool → L
   all_goals
     simp_all [lengthHeaderMoves, List.append_assoc]
     all_goals ring_nf at *
+
+private def copySymbolsLoop (symbols : List Γ) (code : Γ → List Γ) (count : Nat) :
+    Prog (TMQuery tm) Unit := do [TMQuery tm]
+  whileₜ (notₜ tape =ₜ none) do
+    select symbols (fun symbol => .tapeIs (some symbol))
+      (fun symbol => copyCurrent symbol (code symbol) count)
+
+private theorem copySymbolsLoop_spec (symbols : List Γ) (hcover : ∀ symbol, symbol ∈ symbols)
+    (code : Γ → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
+    (input : List Γ) (parts : List (List Γ)) (output : List Γ) (left : StackTape Γ)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left input
+        (StackTape.separateWords parts (StackTape.mapSome output))⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      copySymbolsLoop (tm := tm) symbols code parts.length
+    ⦃ fun _ cost final => final.config = ⟨label,
+        BiTape.segment (StackTape.prepend input.reverse left) []
+          (StackTape.separateWords parts (StackTape.mapSome (output ++ input.flatMap code)))⟩ ∧
+        final.headPos = origin + input.length ∧ cost.steps = elapsed +
+          (width + 1) * input.length ^ 2 +
+            2 * input.length * (regionSpan parts + output.length) +
+              (width + 10) * input.length ⦄ := by
+  induction input generalizing output left origin elapsed with
+  | nil =>
+    unfold copySymbolsLoop
+    vcgen [Spec.while_false_spec]
+    simp_all
+  | cons symbol input ih =>
+    have hs :
+        ⦃ fun cost current => current.config = ⟨label, BiTape.segment left (symbol :: input)
+            (StackTape.separateWords parts (StackTape.mapSome output))⟩ ∧
+            current.headPos = origin ∧ cost.steps = elapsed ⦄
+          select symbols (fun symbol => .tapeIs (some symbol))
+            (fun symbol => copyCurrent (tm := tm) symbol (code symbol) parts.length)
+        ⦃ fun _ cost final => final.config = ⟨label,
+            BiTape.segment (StackTape.cons (some symbol) left) input
+              (StackTape.separateWords parts (StackTape.mapSome (output ++ code symbol)))⟩ ∧
+            final.headPos = origin + 1 ∧ cost.steps = elapsed +
+              2 * (input.length + regionSpan parts + output.length + width) + 11 ⦄ := by
+      apply Std.WP.Triple.intro
+      rintro initial current ⟨hcfg, hpos, hcost⟩
+      vcgen [Spec.select_spec symbols (fun symbol => .tapeIs (some symbol))
+        (fun symbol => copyCurrent (tm := tm) symbol (code symbol) parts.length)
+        symbol (hcover symbol)]
+      constructor
+      · intro candidate
+        simp [hcfg, eq_comm]
+      · vcgen [copyCurrent_spec symbol (code symbol) input output parts left label origin elapsed]
+        all_goals simp_all
+    unfold copySymbolsLoop
+    vcgen [Spec.while_step_spec
+        (loop := copySymbolsLoop (tm := tm) symbols code parts.length) (hloop := rfl), hs,
+      ih (output ++ code symbol) (StackTape.cons (some symbol) left) (origin + 1)
+        (elapsed + 2 * (input.length + regionSpan parts + output.length + width) + 11)]
+    all_goals
+      simp_all [List.reverse_cons, StackTape.prepend_append, List.append_assoc]
+      all_goals ring_nf at *
+      all_goals lia
+
+/--
+This machine template copies a word across a fixed number of intervening words. It writes the
+chosen representation of each symbol, preserves its source, and returns to the source's first
+cell. The containing machine fixes the symbol list and representations independently of the input.
+-/
+def copySymbolsAcross (tm : SingleTapeTM Γ) (symbols : List Γ) (code : Γ → List Γ)
+    (count : Nat) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+  copySymbolsLoop symbols code count
+  seekLeftEnd tm
+
+/-- Copying a word preserves every source cell and records the exact head-move count. -/
+@[spec] theorem copySymbolsAcross_spec (symbols : List Γ) (hcover : ∀ symbol, symbol ∈ symbols)
+    (code : Γ → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
+    (input : List Γ) (parts : List (List Γ)) (output : List Γ) (left : StackTape Γ)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        BiTape.segment (StackTape.cons none left) input
+          (StackTape.separateWords parts (StackTape.mapSome output))⟩ ∧
+        current.headPos = origin ∧ cost.steps = elapsed ⦄
+      copySymbolsAcross tm symbols code parts.length
+    ⦃ fun _ cost final => final.config = ⟨label,
+        BiTape.segment (StackTape.cons none left) input
+          (StackTape.separateWords parts (StackTape.mapSome (output ++ input.flatMap code)))⟩ ∧
+        final.headPos = origin ∧ cost.steps = elapsed +
+          copyBitsMoves width input.length (regionSpan parts) output.length ⦄ := by
+  vcgen [copySymbolsAcross,
+    copySymbolsLoop_spec symbols hcover code width hwidth input parts output
+      (StackTape.cons none left) label origin elapsed,
+    seekLeftEnd_segment_spec left
+      (StackTape.separateWords parts (StackTape.mapSome (output ++ input.flatMap code)))
+      input.reverse [] label (origin + input.length)
+      (elapsed + (width + 1) * input.length ^ 2 +
+        2 * input.length * (regionSpan parts + output.length) + (width + 10) * input.length)]
+  all_goals
+    simp_all [copyBitsMoves]
+    all_goals lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines

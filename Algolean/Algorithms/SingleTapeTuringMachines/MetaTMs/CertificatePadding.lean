@@ -9,7 +9,7 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Augmented
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Gaps
-public import Algolean.Problems.Certificates
+public import Algolean.Problems.Encodings.Certificates
 
 /-!
 # Removing the extra symbols from a padded certificate
@@ -363,13 +363,10 @@ private theorem process_spec (symbols : List Γ) (hsymbols : ∀ symbol, symbol 
 termination_by remaining.length
 
 /--
-This removes certificate padding from the word on the tape. The list `symbols` provides the
-finite symbol comparisons and must cover the alphabet. It is chosen once with the program,
-independently of the input word and its length. A failed decoding gives an empty output.
-Successful decoding retains the input and recovered certificate and discards the unused suffix.
-
-This is a machine template. The containing Turing machine fixes its parameters once when
-including it. The same finite program runs on every input length.
+This template removes the extra certificate symbols, preserving the input and recovered
+certificate and erasing the unused suffix. Failed decoding gives an empty output.
+The containing machine fixes all parameters once. The list `symbols` must contain every
+alphabet symbol so the program can test every possible certificate symbol.
 -/
 def unpad (tm : SingleTapeTM (Extended Γ 1)) (symbols : List Γ) (next stop : Γ) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
@@ -444,11 +441,11 @@ This packages the certificate decoder as a polynomial-time Turing machine. The c
 alphabet determines its symbol comparisons; all inputs run the same program.
 -/
 noncomputable def computer (next stop : Γ) (hne : next ≠ stop) :
-    PolyTimeComputable (result next stop) := by
-  classical
-  apply Computes.polyTimeComputable (tm := control Γ)
+    PolyTimeComputable (result next stop) :=
+  Computes.polyTimeComputable (tm := control Γ)
     (p := unpad (control Γ) Finset.univ.toList next stop)
     (poly := 8 * (Polynomial.X + 2) ^ 2)
-  simpa using unpad_computes (tm := control Γ) (Finset.univ.toList) (by simp) next stop hne
+    (by
+      simpa using unpad_computes (tm := control Γ) (Finset.univ.toList) (by simp) next stop hne)
 
 end Algolean.Algorithms.SingleTapeTuringMachines.CertificatePadding

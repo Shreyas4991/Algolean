@@ -45,9 +45,46 @@ variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 @[expose] def unaryWord (unit : List Γ) (count : Nat) : List Γ :=
   (List.replicate count unit).flatten
 
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
+/-- Zero repetitions contain no symbols. -/
+@[simp, grind =] theorem unaryWord_zero (unit : List Γ) : unaryWord unit 0 = [] := rfl
+
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
+/-- One repetition contains exactly the chosen word. -/
+@[simp, grind =] theorem unaryWord_one (unit : List Γ) : unaryWord unit 1 = unit := by
+  simp [unaryWord]
+
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
+/-- Repeating a one-symbol word gives the usual unary representation. -/
+@[simp, grind =] theorem unaryWord_singleton (tick : Γ) (count : Nat) :
+    unaryWord [tick] count = List.replicate count tick := by
+  induction count <;> simp_all [unaryWord, List.replicate_succ]
+
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
+/-- Each repetition contributes the length of the chosen word. -/
+@[simp, grind =] theorem length_unaryWord (unit : List Γ) (count : Nat) :
+    (unaryWord unit count).length = count * unit.length := by
+  simp [unaryWord, List.length_flatten]
+
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
+/-- One further repetition places another copy of the word at the beginning. -/
+theorem unaryWord_succ (unit : List Γ) (count : Nat) :
+    unaryWord unit (count + 1) = unit ++ unaryWord unit count := by
+  simp [unaryWord, List.replicate_succ]
+
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
+/-- Counts add by concatenating their unary representations. -/
+@[simp, grind =] theorem unaryWord_add (unit : List Γ) (first second : Nat) :
+    unaryWord unit (first + second) = unaryWord unit first ++ unaryWord unit second := by
+  simp only [unaryWord, List.replicate_add, List.flatten_append]
+
 /-- This is the existing binary number encoding, reversed to match a counter growing left. -/
 @[expose] def counterWord (zero one : Γ) (index : Nat) : List Γ :=
   (encodingNatBool.encode index).reverse.map (fun bit => if bit then one else zero)
+
+omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
+/-- An empty counter represents zero. -/
+@[simp, grind =] theorem counterWord_zero (zero one : Γ) : counterWord zero one 0 = [] := rfl
 
 /-- This describes the counter and the two parts of the temporarily interrupted unary word. -/
 @[expose] def counterTape (zero one : Γ) (index : Nat) (before after : List Γ)
@@ -94,7 +131,8 @@ def forUnary (tm : SingleTapeTM Γ) (zero one tick : Γ) (unitTail : List Γ)
 @[expose] def forUnaryMoves (unit count actionBound : Nat) : Nat :=
   count * (actionBound + 8 * (unit + 1) * (count + 1)) + 4 * (unit + 1) * (count + 1)
 
-private theorem incrementIndex_spec (zero one : Γ) (hne : zero ≠ one) (index : Nat)
+/-- Incrementing the counter preserves its following tape and its canonical number encoding. -/
+@[spec] theorem incrementCounterWord_spec (zero one : Γ) (hne : zero ≠ one) (index : Nat)
     (tail : StackTape Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config =
         ⟨label, BiTape.segment StackTape.nil (counterWord zero one index) tail⟩ ∧
@@ -179,7 +217,7 @@ private theorem step_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ) (unit
           final.headPos = position + index.size - (index + 1).size ∧
           cost.steps ≤ steps + (bound + 4 * index.size + 5) ⦄ := by
     vcgen [hact position steps,
-      incrementIndex_spec zero one hne index
+      incrementCounterWord_spec zero one hne index
         (StackTape.separateWords (before :: after :: extra)
           (StackTape.mapSome (output (index + 1)))) label position (steps + bound)]
     all_goals

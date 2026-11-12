@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
-public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Complexity.Classes.NP
 public import Algolean.Problems.SAT.Verification
 
 /-!
