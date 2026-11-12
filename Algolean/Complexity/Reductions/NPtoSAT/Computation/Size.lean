@@ -12,9 +12,10 @@ import Mathlib.Tactic.GCongr
 /-!
 # The length of a fixed verifier's SAT formula
 
-The bounds count clauses, literals, and binary variable names. For a fixed verifier and
-polynomial certificate and time bounds, the encoded formula has polynomial length in the
-original input length. The alphabet and verifier contribute fixed constants.
+* The length estimate counts clauses, literals, and the bits in variable names.
+* `fixedVerifierLengthBound` bounds the encoded formula length by a polynomial in the
+  original input length when the certificate and time bounds are polynomial.
+* The alphabet and verifier contribute constants, since both are fixed for the reduction.
 -/
 
 open Cslib.Turing.SingleTapeTM

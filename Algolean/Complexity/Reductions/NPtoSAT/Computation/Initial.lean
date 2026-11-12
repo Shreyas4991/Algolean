@@ -11,13 +11,15 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 /-!
 # Clauses for the initial input and certificate
 
-The verifier starts with the input word on its tape, followed by one separating symbol and
-the certificate. All other cells are blank. We describe the cells from `-t` through
-`input.length + certificateLength + t`, where `t` is the allowed number of transitions.
+* `initialSource` describes each cell of the initial tape: the input word, a separating
+  symbol, the certificate, and blank cells on both sides.
+* `initialClauses` requires the first row to describe that tape, with the head over the start
+  of the input and the verifier in its initial state. Certificate variables choose the
+  symbols placed in the certificate cells.
+* The correctness theorem identifies these requirements with the verifier's initial row.
 
-These clauses require the first row of the computation to describe that initial tape. They
-also put the head over the start of the input and set the verifier's initial state. The
-certificate symbols are chosen by the Boolean assignment, one symbol for each certificate cell.
+The rows include cells from `-t` through `input.length + certificateLength + t`, where `t`
+is the allowed number of transitions.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -164,9 +166,9 @@ theorem initialClauses_iff (problem : BoundedVerification Γ)
 
 omit [DecidableEq Γ] in
 /--
-The initial-tape clauses number at most one plus the tape width times the alphabet size plus
-one. Every such clause contains at most two literals: a fixed symbol, or an implication from
-a certificate choice to its tape cell.
+There are at most `1 + width * (alphabet size + 1)` initial-tape clauses. Each contains at
+most two literals: one requiring a fixed symbol, or an implication from a certificate choice
+to its tape cell.
 -/
 theorem initialClauses_bounds (problem : BoundedVerification Γ) :
     (initialClauses problem).length ≤ 1 + width problem * (Fintype.card Γ + 1) ∧

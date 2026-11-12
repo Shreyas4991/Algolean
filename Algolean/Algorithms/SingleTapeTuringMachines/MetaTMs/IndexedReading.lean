@@ -12,9 +12,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.FiniteState
 /-!
 # Finding a word position recorded in a binary counter
 
-The reader walks through a word while decreasing a binary counter farther left. It stops at
-its requested position or at the blank ending the word. The word and every intervening word
-are preserved. Leading zeros are permitted in the counter.
+The binary counter to the left records the requested position in a word. The reader decreases
+that counter as it moves right through the word. It stops at the requested cell or the ending
+blank. The word and every intervening word are preserved. Leading zeros are allowed in the counter.
 
 This is a machine template. The containing machine fixes the digit symbols, control states,
 alphabet comparisons, and number of intervening words once. The counter and word are tape data.
@@ -200,7 +200,7 @@ private theorem indexedBody_cons_spec (symbols : List Γ)
 
 /--
 This states where the indexed reader stops. The head reaches the requested source position
-or its ending blank, and the binary counter records the unvisited part of the requested index.
+or its ending blank. The counter records how many more cells the original request would cross.
 -/
 @[expose] def AtIndex (zero one : Γ) (zeroState : tm.State) (bits : List Bool)
     (near : List (List Γ)) (before input : List Γ) (tail : StackTape Γ) (origin : ℤ)

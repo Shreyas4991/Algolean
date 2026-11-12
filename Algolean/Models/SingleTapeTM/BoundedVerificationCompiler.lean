@@ -12,7 +12,8 @@ public import Algolean.Models.SingleTapeTM.BoundedVerification
 /-!
 # Compiling bounded verifiers
 
-* `ofQueryVerifier` compiles a fixed Query verifier and records a sufficient transition bound.
+* `ofQueryVerifier` converts a fixed Query verifier to a transition table and records its
+  time bound.
 * `mem_accepted_ofQueryVerifier_iff` proves that compilation preserves exactly which
   certificates make the verifier return its one-symbol acceptance word.
 

@@ -9,18 +9,19 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.EarlierUnaryWriting
 
 /-!
-# Writing unary counts from a blank-marked position
+# Writing counts while remembering a position with a blank
 
 * `onPrefixAtMark` runs a fixed program on the word before the current blank and returns to
   that blank. The program may change the surrounding tape while preserving that word.
-* `appendCurrentAtMark` writes the count immediately before the current blank.
-* `appendEarlierAtMark` writes a count stored farther left on the same tape.
+* `appendCurrentAtMark` counts the repeated symbols immediately before the current blank and
+  appends that number to the output.
+* `appendEarlierAtMark` does the same for a word farther left on the tape.
 
 Each count is stored by repeating one fixed symbol. Both templates write the count in binary
 and can write the number of binary digits before those digits. They preserve the source words,
 erase the temporary counter, and return to the original blank. The containing machine fixes
-the digit symbols, output representations, and
-numbers of intervening words once. The counts are read from the tape.
+the digit symbols, output representations, and numbers of intervening words once. The counts
+are read from the tape.
 -/
 
 public section
@@ -129,12 +130,12 @@ theorem onPrefixAtMark_output_spec (action : Prog (TMQuery tm) Unit)
   exact appendEarlierUnary_spec zero one hne tick code width hwidth header count
     before between crossed parts output label position steps
 
-/-- This is a common quadratic allowance for writing one count from a marked position. -/
+/-- This is a shared quadratic bound for writing one count from a temporarily erased cell. -/
 @[expose] def markedNumberBudget (width size : Nat) : Nat :=
   4096 * (width + 1) * (size + 16) ^ 2
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-/-- Writing an earlier count uses at most the common quadratic allowance. -/
+/-- Writing an earlier count satisfies the shared quadratic bound. -/
 theorem appendEarlierAtMark_moves_le (header : Bool) (width count size : Nat)
     (before between : List (List Γ)) (crossed : List Γ) (parts : List (List Γ)) (output : Nat)
     (hsize : count + regionSpan before + regionSpan between + crossed.length +
@@ -166,7 +167,7 @@ theorem appendEarlierAtMark_moves_le (header : Bool) (width count size : Nat)
   lia
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-/-- Writing the current count uses at most the common quadratic allowance. -/
+/-- Writing the current count satisfies the shared quadratic bound. -/
 theorem appendCurrentAtMark_moves_le (header : Bool) (width count size : Nat)
     (near parts : List (List Γ)) (output : Nat)
     (hsize : count + regionSpan near + regionSpan parts + output ≤ size) :

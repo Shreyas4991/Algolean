@@ -12,11 +12,12 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 
 /-!
-# Leaving the completed SAT word on the tape
+# Leaving the completed SAT formula on the tape
 
-The program adds the symbol ending the formula and erases the five unary bounds and preserved
-input. It then removes the temporary symbol before the output. The final tape contains exactly the
-SAT word, with the head at its first symbol, as required by CSLib's computation convention.
+* `finish` writes the symbol ending the formula, erases the five remaining bounds and preserved
+  input, and removes the temporary symbol before the output.
+* `finish_spec` states that only the SAT formula remains and that the head points to its first
+  symbol. This is CSLib's output convention. The number of moves is linear in the tape size.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -114,15 +115,15 @@ private theorem clearSource_spec (tick : Γ) (times positions states : Nat)
     all_goals lia
 
 /--
-This fixed program finishes a formula, erases the source words and input, and removes the
-temporary symbol before the output. It leaves only the formula, with the head at its first symbol.
+This template ends the formula, erases the bounds and input, and removes the temporary symbol
+before the output. It leaves only the formula, with the head at its first symbol.
 -/
 def finish (tm : SingleTapeTM Γ) (code : CodeSymbol → List Γ) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
   appendFromRegion tm (code (.inr 5)) 5
   clearSource tm
 
-/-- Finishing produces a clean output tape and uses a linear number of moves in the tape size. -/
+/-- Finishing leaves only the output formula and uses a linear number of moves in the tape size. -/
 @[spec] theorem finish_spec (tick : Γ) (code : CodeSymbol → List Γ)
     (times positions states : Nat) (input output : List Γ)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :

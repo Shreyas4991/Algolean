@@ -15,9 +15,11 @@ public import Mathlib.Logic.Equiv.List
 /-!
 # A SAT formula for a bounded verifier computation
 
-The clauses describe the initial tape, each transition, and a clean accepting output.
-Their satisfying assignments correspond exactly to accepting computations with the stated
-certificate and time bounds. Variable names use the existing binary SAT representation.
+* `indexedFormula` joins the clauses for symbol choices, the initial tape, each transition,
+  and acceptance with only one symbol left on the tape.
+* `formula` gives the variables binary names in the existing SAT representation.
+* The correctness theorems say that the formula is satisfiable exactly when the verifier
+  accepts some certificate of the required length within the time bound.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -106,7 +108,7 @@ variable [Fintype Γ]
 
 /--
 This constructs a CNF formula whose satisfying assignments describe an accepting computation
-of the given bounded verification. Its binary variable names record their indices separately.
+of the given verifier within its bounds. The variable names encode each index separately.
 The numbering of the alphabet is fixed once for all inputs and certificates.
 -/
 @[expose] noncomputable def formula (problem : BoundedVerification Γ) (yes : Γ) :

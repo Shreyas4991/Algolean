@@ -160,7 +160,7 @@ private theorem initializeCounter_spec (zero one : Γ) (hne : zero ≠ one)
     counterWord, Nat.add_comm, Nat.add_left_comm, Nat.add_assoc]
   all_goals lia
 
-/-- This writes one more than the count in a chosen earlier unary word and returns to the head. -/
+/-- This writes one more than an earlier word's count and returns to the starting head position. -/
 def appendEarlierUnarySuccessor (tm : SingleTapeTM Γ) (zero one tick : Γ)
     (code : Bool → List Γ) (header : Bool) (before between distance : Nat) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]

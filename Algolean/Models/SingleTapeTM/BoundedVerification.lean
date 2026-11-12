@@ -26,9 +26,9 @@ The bound counts every transition, including transitions that leave the head in 
 
 namespace Cslib.Turing.SingleTapeTM
 
-/-- These data describe a verifier's bounded computation on an input and an unknown certificate. -/
+/-- These data fix a verifier, an input, a certificate length, and a transition bound. -/
 structure BoundedVerification (Γ : Type) where
-  /-- This finite description specifies the deterministic verifier. -/
+  /-- This transition table specifies the deterministic verifier. -/
   verifier : Description (Algolean.Algorithms.Alphabet.Extended Γ 1)
   /-- This is the input whose certificate the verifier checks. -/
   input : List Γ
@@ -52,7 +52,7 @@ def accepting (yes : Γ) (verifier : SingleTapeTM.Description (TapeSymbol Γ)) :
   {configuration | configuration.state = none ∧
     configuration.BiTape = BiTape.mk₁ [.inl yes]}
 
-/-- The machine reaches an accepting configuration after at most the specified transitions. -/
+/-- The machine halts within the transition bound with only the accepting symbol on its tape. -/
 def AcceptsWithin (yes : Γ) (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (word : List (TapeSymbol Γ)) (time : ℕ) : Prop :=
   verifier.machine.OutputsWithinTime word [.inl yes] time
@@ -85,7 +85,7 @@ def accepted (yes : Γ) : Set (BoundedVerification Γ) :=
     (word : List (TapeSymbol Γ)) : ¬AcceptsWithin yes verifier word 0 := by
   simp [AcceptsWithin, SingleTapeTM.OutputsWithinTime, SingleTapeTM.initCfg, SingleTapeTM.haltCfg]
 
-/-- Acceptance within one transition requires that transition to halt with the clean answer. -/
+/-- Acceptance in one transition requires halting with only the accepting symbol on the tape. -/
 theorem acceptsWithin_one_iff (yes : Γ) (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (word : List (TapeSymbol Γ)) : AcceptsWithin yes verifier word 1 ↔
       ∃ final ∈ accepting yes verifier, verifier.machine.step (verifier.machine.initCfg word) =
@@ -113,9 +113,8 @@ theorem AcceptsWithin.mono {yes : Γ} {verifier : SingleTapeTM.Description (Tape
   exact RelatesWithinSteps.mono hle h
 
 /--
-If the verifier produces a specified output within the bound, it accepts exactly when that
-output is exactly the one-symbol acceptance word. Determinism prevents a different halting tape
-from accepting.
+If the verifier produces an output within the bound, it accepts exactly when that output is
+the single accepting symbol. A deterministic machine cannot also halt with a different output.
 -/
 theorem acceptsWithin_iff_of_outputsWithinTime (yes : Γ)
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -159,7 +158,7 @@ theorem mem_accepted_mono {yes : Γ} {problem : BoundedVerification Γ}
       AcceptsWithin yes verifier ((wordPair Γ).encode (input, [])) time := by
   simp [accepted]
 
-/-- The initial state is not a halting state, so no instance accepts in zero transitions. -/
+/-- The initial state has not halted, so no bounded computation accepts in zero transitions. -/
 @[simp] theorem not_mem_accepted_zero (yes : Γ)
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (input : List Γ) (certificateLength : ℕ) :

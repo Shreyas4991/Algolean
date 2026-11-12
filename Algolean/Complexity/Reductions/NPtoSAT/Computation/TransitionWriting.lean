@@ -15,16 +15,16 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CellMarking
 /-!
 # Writing the requirements for verifier transitions
 
-* `writeTapeUpdateClause` writes the requirement that a selected cell has its specified next
-  symbol when the selected head position and old cell symbol hold.
-* Its specification uses the existing implication clause and SAT encoding. It preserves the
-  input, selected indices, and head position and gives a quadratic bound on head moves.
-* `writeUnchangedClauses` repeats these requirements for every transition, head position,
-  state, and different tape cell. It restores the unary bounds and the original head position.
+* `writeTapeUpdateClause` writes a clause describing a cell's next symbol, given the head
+  position and the cell's old symbol.
+* Its specification identifies the exact clause, proves that the input, counts, and head
+  position are preserved, and gives a quadratic bound on head moves.
+* `writeUnchangedClauses` writes clauses requiring each cell away from the verifier's head
+  to keep its symbol. It restores the counting words and the original head position.
 
-The containing program includes these templates for the finitely many symbol choices of its
-fixed alphabet. It chooses between them by reading the verifier description. The indices and
-bounds are read from the tape, rather than chosen when constructing the program.
+These are machine templates. The containing program fixes the symbols and the verifier
+whose transitions it describes. The running program reads the time, position, and state
+indices and their bounds from the tape.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -329,7 +329,8 @@ noncomputable def writeUnchangedClauses (tm : SingleTapeTM Γ) [DecidableEq tm.S
   markFirst tick (ChoiceIteration.afterFirstTime tm tick
     (writeUnchangedLeaf zero one tick code symbols different equal extra))
 
-/-- This is the leaf's position comparison and the fixed list of cell-preservation clauses. -/
+/-- This bounds comparing two selected positions and writing the clauses that preserve the
+second cell's symbol when the positions differ. -/
 @[expose] def unchangedLeafTime (width size symbols : Nat) : Nat :=
   comparisonTime size + symbols * tapeUpdateTime width size + 2
 
@@ -338,7 +339,7 @@ noncomputable def writeUnchangedClauses (tm : SingleTapeTM Γ) [DecidableEq tm.S
   ChoiceIteration.iterationMoves size (unchangedLeafTime width size symbols) + 2
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
-/-- The total move bound is polynomial in the source and complete output lengths. -/
+/-- The total time bound is polynomial in the source and complete output lengths. -/
 theorem unchangedTime_le (width size symbols : Nat) :
     unchangedTime width size symbols ≤
       4194304 * (symbols + 1) * (width + 1) * (size + 16) ^ 7 := by

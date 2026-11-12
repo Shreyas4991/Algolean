@@ -11,19 +11,17 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ControlWriting
 public import Algolean.Complexity.Reductions.NPtoSAT.Formula
 
 /-!
-# Writing clauses for one fixed verifier
+# Writing the transition clauses for a fixed verifier
 
-* `writeTransitions` writes clauses for the symbol written at the verifier's current head,
-  its next head position and state, and the symbols preserved in all other cells.
-* `writeTransitions_spec` identifies the exact encoded clauses. It proves that the source words
-  and head position are preserved and bounds the number of head moves.
-* `transitionTimeBound` is the bounding polynomial for the fixed verifier and chosen symbol
-  representations.
+* `writeTransitions` writes clauses stating what the verifier writes under its head, where its
+  head moves and which state it enters, and which other tape cells stay unchanged.
+* `writeTransitions_spec` states the exact appended formula and proves that the input, bounds,
+  and head position are restored.
+* `transitionTimeBound` bounds the number of head moves by a polynomial.
 
-The verifier's finite transition table is fixed when constructing the reduction machine.
-The program contains a fixed list of cases for its states and tape symbols. The time,
-positions, and state numbers are read from unary words on the tape.
-
+The verifier's finite transition table is fixed when constructing this template. The program
+has a fixed list of cases for the verifier's states and tape symbols. It reads time, position,
+and state selections from runs of symbols on the tape.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -526,8 +524,9 @@ private noncomputable def symbols : List (Option (TapeSymbol Γ)) :=
   (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
 
 /--
-This fixed program writes the clauses for symbols written by one verifier. It contains the
-verifier's finite transition cases. It reads only the input word and unary bounds from its tape.
+This template writes the clauses describing the symbol left under the verifier's head.
+The verifier's transition cases are fixed with the program; the input and bounds are read
+from the tape.
 -/
 private noncomputable def writeScannedClauses (tm : SingleTapeTM Γ)
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -590,8 +589,8 @@ private theorem eval_statesPolynomial (width size : Nat) {count : Nat}
     ring
 
 /--
-This polynomial bounds the fixed verifier's scanned-cell clauses. Its coefficients depend
-only on that verifier, the alphabet, and the fixed width of the written SAT symbols.
+This polynomial bounds writing the clauses for the cell under the verifier's head. Its
+coefficients depend only on the verifier, alphabet, and fixed representation of formula symbols.
 -/
 private noncomputable def scannedTimeBound
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -663,9 +662,8 @@ private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
     List.map_flatMap, List.flatMap_map, List.flatMap_assoc, hclause, symbols]
 
 /--
-The fixed verifier's writing program appends exactly the existing scanned-cell clauses.
-It preserves every bound and the original input and returns its head to the first time cell.
-The polynomial's coefficients are fixed independently of the input and its length.
+The program appends the clauses describing the written symbol, preserves the input and bounds,
+and returns to the first symbol of the time bound. The polynomial is fixed with the verifier.
 -/
 @[spec] private theorem writeScannedClauses_spec
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -1033,9 +1031,9 @@ private theorem controlLeafWord_indices
       choice.firstPosition.1 choice.firstState.1 choice.secondPosition.1 choice.secondState.1 := rfl
 
 /--
-This fixed program writes the requirements on the verifier's next head position and state.
-Its finite transition cases are part of the program. Both selected positions are read from
-unary words, and the program preserves those words and the original input.
+This template writes the clauses describing the verifier's next head position and state.
+Its transition cases are fixed with the program. It reads the selected positions from the tape
+and preserves the bounds and original input.
 -/
 private noncomputable def writeControlClauses (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -1135,7 +1133,7 @@ private theorem eval_controlLeafPolynomial
   simp [controlLeafPolynomial, controlLeafMoves, Polynomial.eval_listSum,
     eval_controlSymbolPolynomial, Function.comp_def]
 
-/-- This polynomial bounds writing the next-head requirements for the fixed verifier. -/
+/-- This polynomial bounds writing the next-head clauses for the fixed verifier. -/
 private noncomputable def controlTimeBound
     (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
   ChoiceIteration.iterationPolynomial (controlLeafPolynomial verifier width) + 2
@@ -1284,9 +1282,8 @@ private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
       List.flatMap_append, List.append_nil] using hc.symm
 
 /--
-The fixed verifier's control program writes exactly the requirements on the next head and state.
-It preserves the unary bounds, original input, and head position. The time polynomial is fixed
-for the verifier and alphabet.
+The program writes the clauses describing the next head position and state. It preserves the
+bounds, original input, and head position within the fixed polynomial move bound.
 -/
 @[spec] private theorem writeControlClauses_spec
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -1317,17 +1314,16 @@ for the verifier and alphabet.
   all_goals simp_all [AtInput, ChoiceIteration.layout, controlWord_eq, eval_controlTimeBound,
     Nat.add_assoc]
 
-/-- This polynomial bounds all transition requirements written for the fixed verifier. -/
+/-- This polynomial bounds writing all transition clauses for the fixed verifier. -/
 noncomputable def transitionTimeBound
     (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
   scannedTimeBound verifier width + controlTimeBound verifier width +
     Polynomial.C (4194304 * ((symbols (Γ := Γ)).length + 1) * (width + 1)) * (Polynomial.X + 16) ^ 7
 
 /--
-This fixed program writes the requirements for every transition of one verifier. It writes
-what the scanned cell becomes, where the next head goes, and which other cells stay unchanged.
-The verifier's finite transition cases are fixed with the program. The input word and bounds
-are read from the tape and preserved.
+This template writes the clauses for every transition of the verifier. It describes the
+written symbol, the next head and state, and the cells that stay unchanged. The transition cases
+are fixed with the program; the input and bounds are read from the tape and preserved.
 -/
 noncomputable def writeTransitions (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -1338,9 +1334,8 @@ noncomputable def writeTransitions (tm : SingleTapeTM Γ) [DecidableEq tm.State]
   TransitionWriting.writeUnchangedClauses tm zero one tick code symbols yes no extra
 
 /--
-The transition program appends exactly the clauses for the fixed verifier's consecutive
-configurations. It preserves the original input, all bounds, and its starting head position.
-The displayed polynomial bounds every head move made by the program.
+The program appends the clauses for consecutive configurations of the verifier and preserves
+the input, bounds, and starting head position. The displayed polynomial bounds all head moves.
 -/
 @[spec] theorem writeTransitions_spec
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))

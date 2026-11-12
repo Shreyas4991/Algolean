@@ -13,15 +13,14 @@ import Mathlib.Data.List.Perm.Basic
 /-!
 # SAT formulas for a fixed NP verifier
 
-* `formula` describes the bounded computation of one fixed verifier on the given input and
-  an unknown certificate. Its satisfying assignments describe accepting computations.
-* `encode` writes that formula in the existing SAT encoding over the input alphabet.
+* `formula` describes the computation of one fixed verifier on the given input and an unknown
+  certificate. Its satisfying assignments describe accepting computations within the time bound.
+* `encode` represents that formula as a word over the input alphabet.
 * `encode_mem_languageOver` states that the encoded formula is satisfiable exactly when the
   verifier accepts a certificate within the time bound.
 
-The verifier and both polynomials are fixed for the language. The construction reuses the
-existing computation clauses and their correctness proof. The output is a SAT instance over
-the same finite alphabet as the input.
+The verifier and its certificate and time polynomials are fixed for the language. The clauses
+are ordered to match the reduction machine's output.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -38,8 +37,8 @@ open Cslib.Turing Computability Problems
 variable {Γ : Type} [Fintype Γ]
 
 /--
-These clauses exclude forbidden next heads. The next head is chosen before the scanned symbol,
-so the machine can write all fixed symbol cases during one visit to a pair of head choices.
+These clauses forbid incorrect changes to the verifier's head and state. They are ordered by
+current head, next head, and then scanned symbol, matching the reduction machine's visits.
 -/
 @[expose] noncomputable def controlClauses (problem : BoundedVerification Γ) :
     SAT.CNF (NPToSAT.Computation.Variable problem) :=
@@ -84,8 +83,8 @@ private theorem controlClauses_perm (problem : BoundedVerification Γ) :
   by_cases h : NPToSAT.Computation.controlAllowed problem first symbol second <;> simp [h]
 
 /--
-These clauses require successive recorded configurations to follow the fixed verifier's
-transition rule. They describe the written symbol, the next head, and the unchanged cells.
+These clauses require consecutive configurations of the verifier to follow its transition
+rule. They describe the written symbol, the next head and state, and the unchanged cells.
 -/
 @[expose] noncomputable def stepClauses (problem : BoundedVerification Γ) :
     SAT.CNF (NPToSAT.Computation.Variable problem) :=
@@ -113,7 +112,7 @@ private theorem indexedFormula_perm [DecidableEq Γ] (problem : BoundedVerificat
       (NPToSAT.Computation.initialClauses problem)).append_left
         (NPToSAT.Computation.choiceClauses problem)
 
-/-- This describes the accepting computations of the fixed verifier on one input word. -/
+/-- This formula describes the accepting computations of the fixed verifier on one input word. -/
 @[expose] noncomputable def formula (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) : SAT.CNF SAT.Variable :=
   (indexedFormula
@@ -154,7 +153,7 @@ private theorem encoding_length_eq_of_perm {first second : SAT.CNF SAT.Variable}
       [.inr 5]).length_eq
   simpa only [SAT.encoding_encode_eq_formulaPrefix, SAT.formulaPrefix] using hp
 
-/-- This writes the fixed verifier's computation formula using the existing SAT encoding. -/
+/-- This represents the fixed verifier's computation formula as a word over the input alphabet. -/
 @[expose] noncomputable def encode [Nontrivial Γ]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) : List Γ :=
@@ -172,7 +171,7 @@ theorem encode_mem_languageOver [Nontrivial Γ]
   exact (satisfiable_iff_of_perm (formula_perm verifier certificate time yes input)).trans
     (NPToSAT.Computation.formula_satisfiable_iff _ yes)
 
-/-- The length of the encoded formula is bounded by a polynomial in the input length. -/
+/-- The encoded formula has length bounded by a polynomial in the input length. -/
 theorem encode_length_le [Nontrivial Γ]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) :

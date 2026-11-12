@@ -12,8 +12,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryWriting
 /-!
 # Writing the binary value of an earlier unary word
 
-* `appendEarlierUnary` visits a chosen earlier unary word and appends its binary value to the
-  output. It can include the existing word-length header used in paired binary names.
+* `appendEarlierUnary` visits an earlier word that represents a number by repeating one symbol.
+  It appends that number in binary to the output. It can first write the number of binary digits
+  so that the decoder can distinguish consecutive numbers.
 * All source words and the starting head position are preserved. The temporary counter is
   erased before the program returns.
 

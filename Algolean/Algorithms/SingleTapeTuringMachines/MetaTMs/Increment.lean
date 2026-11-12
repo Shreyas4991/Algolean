@@ -217,13 +217,10 @@ theorem carryRight_correct (left bits : List Bool) (s : TMState tm)
     simp_all
 
 /--
-`increment tm` is a Turing machine program that adds one to the binary word beginning under the
-head, with the least significant bit first. It clears the initial ones, writes one at the first zero
-or blank, and returns to the starting cell. Empty input becomes `[true]`, and an input of all ones
-gains a new bit at its right end.
-
-This is a machine template. The containing Turing machine fixes its parameters once when
-including it. The same finite program runs on every input length.
+This template adds one to a binary word whose least significant bit comes first. It changes
+the initial ones to zeros, writes one at the first zero or blank, and restores the head.
+Empty input becomes `[true]`, and a word of all ones gains a bit on the right. The containing
+machine fixes `tm` once for all inputs.
 -/
 def increment (tm : SingleTapeTM Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   carryRight tm

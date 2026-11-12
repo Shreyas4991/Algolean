@@ -13,9 +13,10 @@ public import AlgoleanTests.Tape
 /-!
 # Running the direct reduction's output cleanup
 
-These checks require the final tape to contain exactly the previous output followed by the
-formula's ending word. They check the final head and move bound and include empty source
-bounds, empty input and output, and inputs containing the extra first symbol.
+These checks require the final tape to contain only the accumulated output followed by the
+formula's ending symbol in its chosen encoding. They check the final head position and move
+bound, including zero bounds, empty inputs and outputs, and inputs containing the extra symbol
+used to locate the start of the input.
 -/
 
 open Cslib.Turing.SingleTapeTM

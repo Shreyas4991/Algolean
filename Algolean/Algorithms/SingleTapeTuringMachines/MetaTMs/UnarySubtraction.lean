@@ -12,8 +12,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Decrement
 /-!
 # Subtracting a unary word from a binary counter
 
-* `subtractBlocks` subtracts the length of a unary word from a binary counter farther left.
-  The result stays zero if the subtraction reaches zero before the source word ends.
+* `subtractBlocks` subtracts the number of repetitions of a fixed word from an earlier binary
+  counter. Each repetition subtracts one, regardless of its length. The result stays zero if
+  the subtraction reaches zero before the source word ends.
 * The source word, intervening words, and head position are preserved. Leading zeros may
   remain in the counter, so its length does not change.
 
@@ -54,7 +55,7 @@ variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
     rw [subtractDigits]
     split_ifs <;> simpa only [List.length_reverse, length_decrementBits] using ih
 
-/-- Saturating subtraction agrees with subtraction of natural numbers. -/
+/-- Reading the resulting digits gives subtraction of natural numbers, which stops at zero. -/
 theorem subtractDigits_value (bits : List Bool) (count : Nat) :
     binaryValue (subtractDigits bits count).reverse = binaryValue bits.reverse - count := by
   induction count with

@@ -19,7 +19,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnarySuccesso
 * `writeTapeLiteral` writes a signed tape variable for a selected time and position. It can
   use the following time instead, which is needed for the result of a verifier transition.
 * Each writer uses the existing variable names and SAT representation. It preserves the selected
-  counts, original input, and head position and gives a quadratic move bound.
+  counts, original input, and head position and gives a quadratic time bound.
 
 The time, position, and state counts are stored as repetitions of one tape symbol. The same
 finite program reads these counts on every run. The alphabet symbol and the choices of sign,
@@ -42,7 +42,7 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This is the sign, variable kind, time, and position before the final value field. -/
+/-- This is the start of an encoded literal: its sign, variable kind, time, and position. -/
 @[expose] def prefixWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
     (positive head successor second : Bool) : List Γ :=
   code (if positive then .inr 0 else .inr 1) ++ code (.inl true) ++ code (.inl head) ++
@@ -51,7 +51,7 @@ variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
       (if second then choice.secondPosition.1 else choice.firstPosition.1)).flatMap
         (fun bit => code (.inl bit))
 
-/-- This writes a variable prefix whose selected time and position are read from the tape. -/
+/-- This starts a literal by reading its time and position from the selected tape cells. -/
 def writePrefix (zero one tick : Γ) (code : CodeSymbol → List Γ)
     (positive head successor second : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   appendAcross tm (code (if positive then .inr 0 else .inr 1) ++
@@ -62,7 +62,7 @@ def writePrefix (zero one tick : Γ) (code : CodeSymbol → List Γ)
   else
     appendEarlierAtMark zero one tick (fun bit => code (.inl bit)) true 2 5 11
 
-/-- Writing the common variable prefix preserves all selected cells and the head position. -/
+/-- Writing the start of a literal preserves the selected cells and the head position. -/
 @[spec] theorem writePrefix_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (choice : ActiveChoices) (positive head successor second : Bool)
@@ -321,9 +321,10 @@ variable [Encodable Γ]
     (tapeName choice successor second symbol).flatMap (fun bit => code (.inl bit)) ++ code (.inr 2)
 
 /--
-This writes a tape literal for a selected position and time, or the following time. All choices
-and the tape symbol are fixed with the containing machine; the time and position are read from
-the tape. It preserves the selected counts and returns to their second-state blank.
+This writes a tape literal at the selected time or the following time. The containing machine
+fixes the sign, symbol, and which position word to read; the tape gives the time and position.
+The writer preserves the five selected indices and returns to the blank marking the second
+selected state.
 -/
 def writeTapeLiteral (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSymbol → List Γ)
     (positive successor second : Bool) (symbol : Option (TapeSymbol Γ)) :

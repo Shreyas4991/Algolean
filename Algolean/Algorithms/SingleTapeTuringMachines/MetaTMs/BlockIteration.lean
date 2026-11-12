@@ -13,7 +13,8 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryIteratio
 # Repeating a program at each position in a unary word
 
 * `forBlocks` runs the same program once for each repetition of a fixed, nonempty word.
-  It temporarily erases the repetition's first symbol so the program can find its position.
+  Each repetition represents one unit of the count. The loop temporarily erases its first
+  symbol so the program can find that position again.
 * The action restores that position and preserves the repeated word. It may change the tape
   on either side of the word. The loop restores the word and returns to its first cell.
 * Cells farther left may contain other data. This allows one loop to run inside another.

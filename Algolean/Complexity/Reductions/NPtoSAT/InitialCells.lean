@@ -12,11 +12,13 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
 /-!
 # Writing the initial tape cells in order
 
-The program selects time zero and visits every recorded tape position. At each position it
-runs the containing machine's fixed cell writer. It restores every bound and the head position.
+* `writeCells` selects time zero and visits each position of the verifier's simulated tape.
+  At each position it runs the same fixed program to write the clauses for that cell.
+* `writeCells_spec` joins those outputs in position order and proves that the input, bounds,
+  and head position are restored.
 
-The action and control state are fixed when constructing the containing machine. The width,
-state count, original input, and selected positions are read from the tape.
+The containing machine fixes the cell-writing program and its control state. The position
+and state counts and the input are read from the tape.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -34,13 +36,15 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This selects time zero and runs the same fixed cell writer at every recorded position. -/
+/-- This selects time zero and runs the same fixed cell writer at every simulated tape position. -/
 def writeCells (tm : SingleTapeTM Γ) (tick : Γ) (label : tm.State)
     (action : Prog (TMQuery tm) Unit) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   state ←ₜ label
   markFirst tick (forSelectedTimePositions tm tick action)
 
-/-- The program joins the cell writer's outputs and restores every source word and the head. -/
+/--
+The program joins the cell writer's outputs and restores the input, bounds, and head position.
+-/
 @[spec] theorem writeCells_spec (tick : Γ) (label : tm.State)
     (action : Prog (TMQuery tm) Unit) (time positions states : Nat)
     (hpositions : 0 < positions) (hstates : 0 < states) (input output : List Γ)

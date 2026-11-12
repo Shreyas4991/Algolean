@@ -15,7 +15,7 @@ import Mathlib.Tactic.GCongr
 # Counting a unary word into a binary counter
 
 * `countBlocks` adds the number of repetitions of a fixed word to a binary counter farther left.
-  The counter uses the same number encoding as `counterWord`.
+  Each repetition contributes one, even when the repeated word has several symbols.
 * The source word and intervening words are preserved. The head returns to the source's first
   cell. The counter may grow left into blank cells.
 * The source may itself be the part of a word before a temporarily erased cell. This allows
@@ -43,8 +43,8 @@ private def bumpCounter (zero one : Γ) (count : Nat) : Prog (TMQuery tm) Unit :
   seekRightBlank tm
 
 /--
-This machine template adds the source's unary count to the binary counter. It visits the
-counter once per source repetition, preserves every other cell, and restores the head.
+This template adds the number of repetitions of `tick :: unitTail` to the binary counter.
+It visits the counter once per repetition, preserves every other cell, and restores the head.
 -/
 def countBlocks (tm : SingleTapeTM Γ) (zero one tick : Γ) (unitTail : List Γ) (near : Nat) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]

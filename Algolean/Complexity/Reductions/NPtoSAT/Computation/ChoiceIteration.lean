@@ -12,12 +12,15 @@ public import Mathlib.Algebra.Polynomial.Eval.Defs
 /-!
 # Visiting all five choices on the reduction's tape
 
+The tape stores five bounds as lengths of repeated-symbol words. A loop selects one cell in
+each word; the number of preceding cells gives the selected index.
+
 * `forFiveChoices` visits every time, first position, first state, second position, and second
   state in that order. All five indices are read from unary words on the tape.
 * `afterFirstTime` runs these loops just after a temporarily erased first time cell. It returns
   to that erased cell after the loops finish.
-* `LeafSpec` describes the fixed action at a selected combination. The functions describing
-  the output occur only in this specification, and do not select different programs.
+* `LeafSpec` describes the action performed for one combination of the five indices.
+  Its output function describes the result; the same program handles every combination.
 * The program restores all five source words and the head. Its time is polynomial when
   one polynomial bounds the fixed action for every selected combination.
 
@@ -45,12 +48,13 @@ variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
     (StackTape.separateWords [List.replicate positions tick, List.replicate states tick,
       List.replicate positions tick, List.replicate states tick, input] (StackTape.mapSome output))
 
-/-- This template visits the four following choices while preserving the selected time. -/
+/-- This template visits both positions and states while keeping the selected time fixed. -/
 def forRemainingChoices (tm : SingleTapeTM Γ) (tick : Γ)
     (action : Prog (TMQuery tm) Unit) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   forFollowingSelections tm tick action 4
 
-/-- This fixed template visits the five unary choices in their displayed order. -/
+/-- This template visits every combination of time, first position and state, and second position
+and state, in that order. -/
 def forFiveChoices (tm : SingleTapeTM Γ) (tick : Γ) (action : Prog (TMQuery tm) Unit) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   forBlocks tm tick [] (forFollowingSelections tm tick action 4)
@@ -99,7 +103,7 @@ cells and all other data, and returns to the selected cell of the fifth unary wo
                     input] (output ++ piece time position control otherPosition otherControl)⟩ ∧
         final.headPos = origin ∧ cost.steps ≤ elapsed + bound ⦄
 
-/-- This bounds one nested loop by its number of choices and its action's bound. -/
+/-- This bounds the nested loops in terms of their depth, word lengths, and action time. -/
 @[expose] def nestedMoves (size bound depth : Nat) : Nat :=
   selectionMoves size bound depth
 
@@ -123,12 +127,12 @@ cells and all other data, and returns to the selected cell of the fifth unary wo
 @[expose] noncomputable def iterationPolynomial (bound : Polynomial Nat) : Polynomial Nat :=
   Polynomial.X * (nestedPolynomial bound 4 + 2) + 2
 
-/-- Evaluating this polynomial gives the complete five-loop move bound. -/
+/-- Evaluating this polynomial gives the complete five-loop time bound. -/
 @[simp] theorem eval_iterationPolynomial (bound : Polynomial Nat) (size : Nat) :
     (iterationPolynomial bound).eval size = iterationMoves size (bound.eval size) := by
   simp [iterationPolynomial, iterationMoves]
 
-/-- This is the ordered output over the four head choices at one selected time. -/
+/-- This concatenates the action's output for every pair of positions and states at one time. -/
 @[expose] def rowWord (piece : Nat → Nat → Nat → Nat → Nat → List Γ)
     (time positions states : Nat) : List Γ :=
   (List.range positions).flatMap fun position =>

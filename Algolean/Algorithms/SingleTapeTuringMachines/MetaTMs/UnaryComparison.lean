@@ -14,7 +14,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Expanding
 # Comparing two unary words
 
 * `equalBlocks` tests whether the current unary word and a chosen earlier unary word have the
-  same length. The answer is stored in the finite control.
+  same length. Each word repeats one fixed symbol, and the answer is stored in the control state.
 * `compareBlocksOffset` also tests whether either number is larger by one, using a fixed offset.
 * Both words, every intervening word, and the head position are preserved. A temporary binary
   counter grows into blank cells farther left and is erased before the program returns.

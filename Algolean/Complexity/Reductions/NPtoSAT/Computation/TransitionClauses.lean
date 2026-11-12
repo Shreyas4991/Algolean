@@ -11,7 +11,8 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 /-!
 # Clauses for consecutive verifier configurations
 
-* `writeClauses` requires the scanned cell to contain the symbol written by the transition.
+* `writeClauses` requires the next row's cell at the current head position to contain the
+  symbol written by the transition.
 * `controlClauses` excludes next head positions and states that disagree with the transition.
 * `unchangedClauses` requires every cell away from the head to keep its previous symbol.
 * `stepClauses` joins these requirements. Its correctness theorem says that one recorded
@@ -152,7 +153,8 @@ open Problems.SAT
 
 variable {Γ : Type} [Fintype Γ]
 
-/-- These clauses require the scanned cell to contain the symbol written by the transition. -/
+/-- These clauses require the next row's cell at the current head position to contain the symbol
+written by the transition. -/
 @[expose] noncomputable def writeClauses (problem : BoundedVerification Γ) :
     CNF (Variable problem) :=
   (List.finRange problem.time).flatMap fun time =>

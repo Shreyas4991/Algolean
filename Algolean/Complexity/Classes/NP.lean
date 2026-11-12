@@ -21,18 +21,13 @@ public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 * `NPComplete` contains the NP-hard languages that also belong to NP.
 * `P_subset_NP` proves that every language in P belongs to NP.
 
-The definition of `NP` gives a verifier with the separator encoding
-`Alphabet.wordPair`. This file proves `P ⊆ NP` by constructing a Turing machine program that
-ignores the certificate: it erases the separator and suffix, restores the head to the first input
-cell, and runs the original decider with its tape symbols tagged by `Sum.inl`.
+The verifier reads the input and certificate with one separator between them, using
+`Alphabet.wordPair`. To prove `P ⊆ NP`, the constructed verifier erases the separator and
+certificate, returns to the first input cell, and runs the original decider. Preparation takes
+at most `2 * n + 4` head moves on a word of length `n`, including incorrectly separated words.
 
-The language classes require at least two ordinary symbols. The program constructions also work
-with an alphabet containing only one ordinary symbol, and the finite control remains generic.
-Preparing the first word costs at most `2 * n + 4` head moves on an encoded word of length `n`.
-The original polynomial is evaluated at that length, giving a polynomial bound for the complete
-verifier. The program also terminates
-on words with missing or repeated separators, so its polynomial-time witness covers every input
-over the extended alphabet.
+The classes require at least two ordinary symbols. The program constructions also work with
+one ordinary symbol.
 -/
 
 @[expose] public section
@@ -45,15 +40,10 @@ open scoped TMQuery
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 
 /--
-A language belongs to `NP` when a language in `P` checks encoded input-certificate pairs and a
-polynomial in the original input length bounds the certificate length. The pair encoding uses
-`Alphabet.Extended Symbol 1` and preserves the boundary with a dedicated separator, while the
-original language and certificates remain over `Symbol`.
-The alphabet must contain at least two distinct symbols so that a certificate can carry
-information through its symbols as well as its length.
-
-The verifier receives `(Alphabet.wordPair Symbol).encode (input, certificate)`. Its polynomial
-runtime is measured in that encoded word's length, which is the two word lengths plus one.
+A language belongs to `NP` when a polynomial-time verifier checks input-certificate pairs,
+with certificate length bounded by a polynomial in the input length. Both words use `Symbol`,
+which must have at least two distinct symbols. The encoding `Alphabet.wordPair` adds one
+separator. The verifier's time bound uses the combined length of both words plus that separator.
 -/
 def NP [_symbols : Nontrivial Symbol] : Set (Language Symbol) :=
   {L | ∃ (A : Language (Alphabet.Extended Symbol 1)) (q : Polynomial ℕ), A ∈ P ∧
@@ -80,11 +70,10 @@ private theorem firstWord_outputs {tm : SingleTapeTM Symbol} [DecidableEq Symbol
   exact Nat.add_le_add_left (mono (by lia)) _
 
 /--
-This value constructs a Turing machine program that runs `machine` on the ordinary word before
-the first separator and discards the remaining input. It first erases the separator and suffix,
-then runs the alphabet-lifted original program. A missing separator retains the whole word.
-The bound includes preparation and uses the monotonicity proof to bound the original
-computation by the encoded input length.
+This runs `machine` on the word before the first separator after erasing the separator and
+suffix. A missing separator retains the whole word. The original program's symbols are mapped
+into the extended alphabet. The bound includes preparation and uses the original time bound's
+monotonicity to account for the shorter retained word.
 -/
 @[simps! tm program timeBound]
 def TimeComputable.onFirstWord {f : List Symbol → List Symbol} (machine : TimeComputable f)

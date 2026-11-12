@@ -24,12 +24,15 @@ import Mathlib.Algebra.BigOperators.Ring.List
 /-!
 # Writing the initial tape requirements
 
-The initial clauses put the fixed verifier's head at the beginning of the original input.
-They record each original input symbol, its separator, the certificate choices, and the blank
-cells on either side. The program reads the input symbols directly from the preserved word.
+* `writeInitialClauses` writes clauses placing the verifier's head at the start of its input.
+  It fixes the original input symbols, the separator, and the blank cells on both sides, and
+  links each certificate cell to the corresponding certificate choice.
+* `writeInitialClauses_spec` states the exact appended formula and proves that the input,
+  bounds, and head position are restored.
+* `timeBound` bounds the head moves by a polynomial in the lengths of the tape words and output.
 
-The verifier and its initial state are fixed when constructing the program. Every position
-and bound is read from the unary words on the tape.
+The program reads input symbols from the preserved input and positions from the bound words.
+The verifier and its initial state are fixed when constructing the containing machine.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -681,7 +684,9 @@ private def certificateMoves (width size symbolSize : Nat) : Nat :=
   262144 * (width + 1) * (symbolSize + 1) * (size + 16) ^ 2
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
-/-- The existing literal writer has a quadratic bound when its source and output fit the size. -/
+/--
+The literal writer has a quadratic move bound when its input words and output fit the size bound.
+-/
 private theorem initial_literal_moves_le (width size symbol digits distance output : Nat)
     (hdigits : digits ≤ size) (hdistance : distance ≤ size + 11) (houtput : output ≤ size) :
     CertificateChoices.literalMoves width digits distance output symbol ≤
@@ -696,7 +701,9 @@ private theorem initial_literal_moves_le (width size symbol digits distance outp
       lia
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
-/-- This bounds one certificate implication together with reading its position from the input. -/
+/--
+This bounds writing one certificate implication, including reading its position from the input.
+-/
 private theorem initial_certificate_moves_le
     (width size symbol first digits index distance output : Nat)
     (hfirst : first ≤ size) (hdigits : digits ≤ size) (hindex : index ≤ size)
@@ -1275,7 +1282,7 @@ private theorem writeCells_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
       simpa only [piece, cellPiece_word] using hsize) label origin elapsed
   simpa only [action, piece, symbols, cellPiece_word] using hc
 
-/-- This fixed program writes the clauses describing the verifier's initial tape and head. -/
+/-- This template writes the clauses describing the verifier's initial tape and head. -/
 noncomputable def writeInitialClauses (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (zero one tick : Γ)
     (code : CodeSymbol → List Γ) (greater positive : tm.State) (record : Option Γ → tm.State) :
@@ -1284,7 +1291,7 @@ noncomputable def writeInitialClauses (tm : SingleTapeTM Γ) [DecidableEq tm.Sta
   InitialCells.writeCells tm tick greater
     (writeInitialCell (Finset.univ : Finset Γ).toList zero one tick code greater positive record)
 
-/-- This polynomial bounds the initial head writer and all initial tape-cell clauses. -/
+/-- This polynomial bounds writing the initial head clause and all initial tape-cell clauses. -/
 noncomputable def timeBound (width : Nat) : Polynomial Nat :=
   HeadWriting.timeBound width +
     Polynomial.C (1048576 * (width + 1) *
@@ -1292,8 +1299,8 @@ noncomputable def timeBound (width : Nat) : Polynomial Nat :=
         1)) * (Polynomial.X + 16) ^ 3
 
 /--
-The writer appends exactly the initial clauses. It preserves the original input and all bounds,
-returns to the first time cell, and finishes within the stated polynomial move bound.
+The writer appends the initial clauses, preserves the original input and all bounds, and
+returns to the first symbol of the time bound within the stated polynomial move bound.
 -/
 @[spec] theorem writeInitialClauses_spec
     (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (zero one : Γ) (hne : zero ≠ one)

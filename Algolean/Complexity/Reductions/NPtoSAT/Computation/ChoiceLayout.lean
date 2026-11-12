@@ -11,6 +11,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.MarkedUnaryWr
 /-!
 # Selected times, positions, and states on one tape
 
+The reduction stores a time, two positions, and two states as indices in five unary words.
+It selects an index by erasing one cell temporarily; the cells before it give that index.
+
 * `ActiveChoices` records the lengths before and after five selected cells in unary words.
 * `pairTape` describes those words, the original input, and the output. A blank marks each
   selected cell, and the head rests at the selected second-state cell.
@@ -34,15 +37,15 @@ variable {tm : SingleTapeTM Γ}
 
 /-- Each pair counts the unary cells before and after one temporarily erased cell. -/
 structure ActiveChoices where
-  /-- This pair locates the recorded time. -/
+  /-- This counts the cells before and after the selected time cell. -/
   time : Nat × Nat
-  /-- This pair locates the first head position. -/
+  /-- This counts the cells before and after the first selected position cell. -/
   firstPosition : Nat × Nat
-  /-- This pair locates the first state, with zero meaning halt. -/
+  /-- This locates the first selected state; index zero means halt. -/
   firstState : Nat × Nat
-  /-- This pair locates the second head position. -/
+  /-- This counts the cells before and after the second selected position cell. -/
   secondPosition : Nat × Nat
-  /-- This pair locates the second state, with zero meaning halt. -/
+  /-- This locates the second selected state; index zero means halt. -/
   secondState : Nat × Nat
 
 /-- This counts all unary cells before and after the five currently chosen cells. -/
@@ -51,7 +54,7 @@ structure ActiveChoices where
     choice.firstState.1 + choice.firstState.2 + choice.secondPosition.1 +
     choice.secondPosition.2 + choice.secondState.1 + choice.secondState.2
 
-/-- These are the eight preserved unary parts, from nearest to farthest left. -/
+/-- These are the parts of the first four unary words, listed from nearest to farthest left. -/
 @[expose] def ActiveChoices.leftWords (tick : Γ) (choice : ActiveChoices) : List (List Γ) :=
   [List.replicate choice.secondPosition.2 tick, List.replicate choice.secondPosition.1 tick,
     List.replicate choice.firstState.2 tick, List.replicate choice.firstState.1 tick,
@@ -73,7 +76,7 @@ and the head is at the blank marking the second state. The original input and ou
     (List.replicate choice.secondState.1 tick)
     (ActiveChoices.rightWords tick choice input) output counter
 
-/-- This states the active choices, preserved words, control state, and head position. -/
+/-- This specifies the five selected indices, tape contents, control state, and head position. -/
 @[expose] def AtPair (tick : Γ) (choice : ActiveChoices) (input output : List Γ)
     (label : Option tm.State) (origin : ℤ) (current : TMState tm) : Prop :=
   current.config = ⟨label, pairTape tick choice input output⟩ ∧ current.headPos = origin

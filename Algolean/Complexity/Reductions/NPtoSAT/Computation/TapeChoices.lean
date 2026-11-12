@@ -17,13 +17,13 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 
 * `writeChoices` reads two unary words. The first gives the number of recorded times, and
   the second gives the number of tape positions. It writes exactly-one clauses for each pair.
-* `writeTapeChoices` fixes the choices to all cell values, including blank and the preserved's
-  separating symbol. The clauses use the existing binary computation-variable names.
-* Both words, the original input, and earlier output are preserved. Each clause is ended,
-  while the formula is left open so further clauses can follow.
+* `writeTapeChoices` uses every possible cell value, including blank and the symbol separating
+  the verifier's input from its certificate. The variables use the existing binary names.
+* The writers preserve both bounds and all other words before the output. They append
+  complete clauses and omit the formula-ending symbol so that more clauses can follow.
 
 These are machine templates. The alphabet choices and symbol representations are fixed once.
-Every time and position is read from the tape by the same program on every preserved length.
+The same program reads every time and position from the tape, for every input length.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -51,7 +51,8 @@ private def symbolBits (symbol : Option (TapeSymbol Γ)) : List Bool :=
     (StackTape.separateWords (List.replicate positions tick :: preserved)
       (StackTape.mapSome output))
 
-/-- This is the encoded clause prefix for the given times, positions, and fixed cell choices. -/
+/-- This encodes the clauses choosing one cell value at each time and position. It omits the
+formula-ending symbol so that more clauses can follow. -/
 @[expose] def word (code : CodeSymbol → List Γ)
     (symbols : List (Option (TapeSymbol Γ))) (times positions : Nat) : List Γ :=
   (List.range times).flatMap fun time =>
@@ -606,9 +607,9 @@ private theorem loopTime_le (width : Nat) (symbols : List (Option (TapeSymbol Γ
       lia
 
 /--
-The program appends exactly the SAT clauses for the two unary bounds. It preserves both
-bounds, the preserved words and earlier output, and the starting head position. A polynomial bounds
-execution for every pair of bounds and every preserved and output word.
+The program appends exactly the symbol-choice clauses for the given times and positions.
+It preserves the bounds, the words before the output, and the earlier output, and returns
+the head to its starting position. One polynomial bounds every run.
 -/
 @[spec] theorem writeChoices_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)

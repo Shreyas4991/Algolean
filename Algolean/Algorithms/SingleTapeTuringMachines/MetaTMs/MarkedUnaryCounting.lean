@@ -11,8 +11,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.MarkedUnaryWr
 /-!
 # Counting an earlier unary word from a marked position
 
-* `countEarlierAtMark` adds an earlier unary word's length to the binary counter at the far
-  left. It preserves every source word, the output, and the marked head position.
+* `countEarlierAtMark` adds an earlier word's length to the binary counter at the far left.
+  The word repeats one fixed symbol. A temporarily erased cell records the starting head
+  position, which is restored along with every source word and the output.
 * `countEarlierAtMark_spec` proves the resulting counter value and a quadratic move bound.
 
 This is a machine template. The containing machine fixes its symbols and numbers of
@@ -85,7 +86,7 @@ def countEarlierAtMark (tm : SingleTapeTM Γ) (zero one tick : Γ) (before betwe
     hcost] using hp
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-/-- The counter visits and scans are bounded quadratically by the total displayed data length. -/
+/-- The counter visits and scans have a quadratic bound in the lengths of the words involved. -/
 theorem earlierCountMoves_le (start count : Nat) (before between : List (List Γ))
     (current : List Γ) :
     earlierCountMoves start count before between current ≤

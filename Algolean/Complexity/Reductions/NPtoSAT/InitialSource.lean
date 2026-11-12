@@ -9,11 +9,14 @@ module
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Initial
 
 /-!
-# Reading the initial tape from the original input
+# Identifying the verifier's initial tape symbols
 
-These lemmas identify the initial symbol at each recorded position. The two outer intervals
-are blank. Between them lie the original input, one separating symbol, and the certificate.
-The direct reduction uses the original input word to choose which initial clause to write.
+* `blank_left` and `blank_right` identify the blank cells on either side of the input and
+  certificate. Each side contains as many blank cells as the transition bound.
+* `input` and `separator` identify the original input symbols and the following separator.
+* `certificate` and `certificate_index_lt` identify the certificate positions after the separator.
+
+These facts let the reduction choose the initial clause for each simulated tape cell.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -27,12 +30,12 @@ open Cslib.Turing NPToSAT.Computation
 
 variable {Γ : Type}
 
-/-- Every recorded position before the input contains a blank. -/
+/-- Every simulated tape position before the input contains a blank. -/
 theorem blank_left (problem : BoundedVerification Γ) (position : Fin (width problem))
     (hleft : position.val < problem.time) : initialSource problem position = .inl none := by
   simp [initialSource, hleft]
 
-/-- Every recorded position in the right blank interval contains a blank. -/
+/-- Every simulated tape position in the right blank interval contains a blank. -/
 theorem blank_right (problem : BoundedVerification Γ) (position : Fin (width problem)) (rest : Nat)
     (hposition : position.val + rest + 1 = width problem) (hright : rest < problem.time) :
     initialSource problem position = .inl none := by
@@ -41,7 +44,9 @@ theorem blank_right (problem : BoundedVerification Γ) (position : Fin (width pr
   unfold initialSource
   split_ifs <;> first | rfl | (exfalso; lia)
 
-/-- Looking up a symbol in the original input determines the corresponding initial tape cell. -/
+/--
+A symbol in the original input determines the corresponding cell of the verifier's initial tape.
+-/
 theorem input (problem : BoundedVerification Γ) (position : Fin (width problem)) (symbol : Γ)
     (hleft : problem.time ≤ position.val)
     (hlookup : problem.input[position.val - problem.time]? = some symbol) :
@@ -57,7 +62,7 @@ theorem separator (problem : BoundedVerification Γ) (position : Fin (width prob
     initialSource problem position = .inl (some (.inr 0)) := by
   simp [initialSource, hposition]
 
-/-- The cells after the separator refer to their corresponding certificate positions. -/
+/-- The cells after the separator correspond to the certificate positions. -/
 theorem certificate (problem : BoundedVerification Γ) (position : Fin (width problem))
     (index : Fin problem.certificateLength)
     (hposition : position.val = problem.time + problem.input.length + 1 + index.val) :
@@ -71,7 +76,7 @@ theorem certificate (problem : BoundedVerification Γ) (position : Fin (width pr
   simp only
   lia
 
-/-- An interior position beyond the input and separator has a valid certificate index. -/
+/-- A position between the separator and the right blank interval has a valid certificate index. -/
 theorem certificate_index_lt (problem : BoundedVerification Γ) (position : Fin (width problem))
     (rest : Nat) (hposition : position.val + rest + 1 = width problem)
     (hright : problem.time ≤ rest)

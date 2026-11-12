@@ -14,15 +14,14 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Formula
 /-!
 # Writing the final acceptance clauses
 
-* `writeFinalClauses` visits the last recorded time and writes the existing acceptance clauses.
-  One clause requires a halted head somewhere. Two clauses at each position require the
-  accepting symbol under that head and blanks everywhere else.
-* `writeFinalClauses_spec` gives the exact appended SAT word and proves that every source word
-  and the head position are preserved.
-* `timeBound` is a cubic bound in the source and completed output lengths.
+* `writeFinalClauses` writes clauses describing acceptance at the final simulated time. The
+  verifier must have halted with the accepting symbol under its head and blanks everywhere else.
+* `writeFinalClauses_spec` states the exact appended formula and proves that the input, bounds,
+  and head position are preserved.
+* `timeBound` bounds the head moves by a cubic polynomial in the tape-word and output lengths.
 
-The program reads the time and width from unary words on the tape. The alphabet symbols and
-accepting symbol are fixed when constructing the containing machine.
+The program reads the time and position bounds from runs of identical symbols on the tape.
+The alphabet and accepting symbol are fixed when constructing the containing machine.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -261,7 +260,7 @@ private def writeLastParts (zero one tick : Γ) (code : CodeSymbol → List Γ) 
   finishFirstClause tm code
   writePart zero one tick code yes true
 
-/-- This template writes the final acceptance clauses and restores the input words and head. -/
+/-- This template writes the final acceptance clauses and restores the input, bounds, and head. -/
 def writeFinalClauses (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSymbol → List Γ)
     (yes : Γ) : Prog (TMQuery tm) Unit :=
   atLastTime tick (writeLastParts zero one tick code yes)
@@ -365,8 +364,8 @@ private theorem lastMoves_le (width size time : Nat) (htime : time ≤ size) :
   lia
 
 /--
-The writer appends exactly the existing acceptance clauses. It preserves the source words and
-head position, and its number of moves is bounded by the displayed cubic polynomial.
+The writer appends the acceptance clauses and restores the input, bounds, and head position.
+The displayed cubic polynomial bounds its number of head moves.
 -/
 @[spec] theorem writeFinalClauses_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)

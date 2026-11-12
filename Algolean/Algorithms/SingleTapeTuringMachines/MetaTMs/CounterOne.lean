@@ -12,7 +12,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Decrement
 # Testing whether a binary counter equals one
 
 * `testOne` reads a binary counter whose most significant digit comes first. It records whether
-  the value is one in the finite control, preserves the tape, and restores the head.
+  the value is one in the control state, preserves the tape, and restores the head.
 * Leading zeros are allowed, so the test also works after subtraction.
 
 This is a machine template. Its digit meaning one and its three distinct control states are

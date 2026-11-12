@@ -40,7 +40,7 @@ variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
   (parts.map List.length).sum + parts.length
 
 omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
-/-- No words occupy no cells. -/
+/-- An empty list of words occupies zero cells. -/
 @[simp, grind =] theorem regionSpan_nil : regionSpan ([] : List (List Symbol)) = 0 := rfl
 
 omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in

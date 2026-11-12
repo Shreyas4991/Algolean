@@ -34,8 +34,9 @@ abbrev control : SingleTapeTM Bool where
 
 /--
 This crosses a separating blank in both directions. It checks each intermediate tape and the
-restored tape, including words farther away that contain internal blanks. Empty region contents
-still have markers, so the program must stop at the correct neighboring region.
+restored tape, including words farther away that contain internal blanks. Each visited word
+starts with a fixed symbol, even when it contains no other symbols, so the program must find
+the correct neighboring word.
 -/
 private def checkNavigation : IO Unit := do
   let next := nextRegion control

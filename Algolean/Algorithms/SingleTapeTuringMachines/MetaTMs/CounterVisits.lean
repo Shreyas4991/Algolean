@@ -65,8 +65,8 @@ omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
     simp [List.foldl_append, List.reverse_append, ih, counterLeft]
 
 /--
-This machine template visits the counter beyond `count` intervening words and restores the
-head. Its action must keep the counter's right boundary fixed so the other words do not move.
+This template crosses `count` words to run an action on the earlier counter, then restores
+the head. The action must keep the blank after the counter fixed so the other words do not move.
 -/
 @[expose] def onCounter (tm : SingleTapeTM Γ) (action : Prog (TMQuery tm) Unit) :
     Nat → Prog (TMQuery tm) Unit

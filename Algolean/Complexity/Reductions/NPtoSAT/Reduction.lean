@@ -21,7 +21,8 @@ public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 The reduction fixes a verifier for the source language and writes a formula describing its
 accepting computations. One finite single-tape Query program performs this conversion on
 every input length. Its input is the original word, and its output is the encoded SAT formula.
-Choosing a verifier from the existence statement in NP membership uses classical choice.
+The construction uses classical choice to select a verifier whose existence follows from
+membership in NP.
 -/
 
 public section
@@ -35,8 +36,8 @@ section
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 
 /--
-This fixed polynomial-time program converts a word to a SAT instance with the same answer.
-The input, output, and reduction machine use the original finite alphabet.
+This constructs a polynomial-time reduction to SAT over the input alphabet. The output formula
+is satisfiable exactly when the input belongs to the original language.
 -/
 noncomputable def NP.satReduction {L : Language Γ} (h : L ∈ NP) :
     KarpReduction L SAT.languageOver :=
@@ -57,7 +58,9 @@ theorem NP.karpReducible_sat {L : Language Γ} (h : L ∈ NP) :
 
 end
 
-/-- This converts every input of an NP language to SAT in its original formula encoding. -/
+/--
+This constructs a polynomial-time reduction from an NP language to SAT in its original encoding.
+-/
 noncomputable def NP.satReductionToSAT {L : Language SAT.CodeSymbol} (h : L ∈ NP) :
     KarpReduction L SAT :=
   let ⟨verifier, hv⟩ := Classical.indefiniteDescription _

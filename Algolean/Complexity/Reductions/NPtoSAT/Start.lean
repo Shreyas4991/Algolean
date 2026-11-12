@@ -14,12 +14,12 @@ import Mathlib.Logic.Equiv.List
 /-!
 # Preparing the input and writing the choice clauses
 
-* `program` computes the fixed polynomial bounds, preserves the input, and writes the
-  certificate, head, and tape choice clauses.
-* `program_spec` states the exact resulting tape and a polynomial bound on the head moves.
+* `program` computes the fixed polynomial bounds, preserves the input, and writes clauses
+  choosing the certificate symbols, head positions and states, and tape symbols.
+* `program_spec` states the exact resulting tape and bounds the head moves by a polynomial.
 
-The verifier, polynomials, alphabet representation, and control states are fixed when the
-program is constructed. The tape initially contains only the input word.
+The tape initially contains only the input word. The verifier, polynomials, representation of
+formula symbols, and control states are fixed when constructing this template.
 -/
 
 
@@ -41,7 +41,7 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- Each formula symbol is written using the fixed SAT representation over the tape alphabet. -/
+/-- This represents each formula symbol as a word over the tape alphabet. -/
 @[expose] noncomputable def code : CodeSymbol → List Γ :=
   fun symbol => (finiteWordsOver CodeSymbol Γ).encode [symbol]
 
@@ -50,7 +50,7 @@ private noncomputable def bounds (states : Nat)
   let width := X + certificate + 2 * time + 1
   [time + 1, width, C (states + 2), width, C (states + 2)]
 
-/-- This is the encoded certificate, head, and tape choice prefix for the fixed verifier. -/
+/-- This encodes the certificate, head, and tape choice clauses without ending the formula. -/
 @[expose] noncomputable def choiceWord
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (input : List Γ)
@@ -70,14 +70,14 @@ private theorem choiceWord_length_le
     List.map_append, List.flatMap_append, List.length_append]
   lia
 
-/-- This polynomial bounds preparation and all three choice writers together. -/
+/-- This polynomial bounds preparation and writing the three groups of choice clauses. -/
 noncomputable def timeBound
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (tick separator : Γ) (width : Nat) : Polynomial Nat :=
   Preparation.timeBound tick separator certificate (bounds verifier.states certificate time) +
     (Choices.timeBound (Γ := Γ) width).comp (sizeBound verifier certificate time)
 
-/-- This program prepares the input and writes the choices for one fixed verifier. -/
+/-- This template prepares the input and writes the choice clauses for one fixed verifier. -/
 noncomputable def program (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (zero one tick separator : Γ)
@@ -88,8 +88,8 @@ noncomputable def program (tm : SingleTapeTM Γ) [DecidableEq tm.State]
   Choices.writeChoices tm zero one tick symbols different equal extra
 
 /--
-The program preserves the input and writes exactly the choice prefix. It finishes on the first
-unary time cell, after removing the certificate count, within the stated polynomial bound.
+The program preserves the input and writes the choice clauses. It removes the certificate
+bound and returns to the first symbol of the time bound within the stated polynomial move bound.
 -/
 @[spec] theorem program_spec
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))

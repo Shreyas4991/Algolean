@@ -17,15 +17,15 @@ import Mathlib.Logic.Equiv.List
 /-!
 # Computing the direct reduction to SAT
 
-* `computer` writes the fixed verifier's formula in the encoding over the input alphabet.
-* `formulaComputer` writes the same formula directly in SAT's original formula alphabet.
-* The stored correctness statement identifies the exact encoded SAT output and gives a
-  polynomial bound on head moves. The final tape contains only that word, with the head at
-  its first symbol.
+* `computer` reads an input and writes a SAT formula over the same alphabet. The formula is
+  satisfiable exactly when the fixed verifier accepts a certificate of the required length
+  within the time bound.
+* `formulaComputer` writes the same formula using SAT's original eight-symbol alphabet.
+* Each construction includes a proof of the exact output and a polynomial bound on head moves.
 
-The verifier, certificate bound, and time bound are fixed when constructing the program.
-Its finite transition cases are part of the program. It reads the original input and computes
-its bounds on the tape.
+The verifier and the certificate and time polynomials are fixed with the program. The program
+evaluates those bounds at the input length. Only the output remains on the final tape, starting
+at the original input position, where the head also finishes.
 -/
 
 
@@ -142,8 +142,8 @@ private theorem writeFormula_spec {tm : SingleTapeTM Γ} [DecidableEq tm.State]
       timeBound, size, Polynomial.eval_comp, List.append_assoc, Nat.add_assoc]
 
 /--
-This single-tape program writes the fixed verifier's SAT formula for every input length.
-The stored specification proves the exact output and a polynomial bound on head moves.
+This builds a single-tape program that writes the fixed verifier's SAT formula.
+It includes proofs of the exact output and a polynomial bound on head moves.
 -/
 private noncomputable def codedComputer (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (code : CodeSymbol → List Γ)
@@ -206,7 +206,9 @@ private theorem encode_eq_flatMap (verifier : SingleTapeTM.Description (TapeSymb
   simpa only [encode, encodingOver, Encoding.over, Encoding.comp] using
     encode_finiteWordsOver (Γ := Γ) (encoding.encode (formula verifier certificate time yes input))
 
-/-- This writes the verifier's formula using the SAT encoding over the input alphabet. -/
+/--
+This builds a polynomial-time program that writes the verifier's formula over the input alphabet.
+-/
 noncomputable def computer (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) :
     TMQuery.PolyTimeComputable (encode verifier certificate time yes) :=
@@ -214,7 +216,7 @@ noncomputable def computer (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     codedComputer verifier certificate time yes Start.code 8
       (by intro symbol; simp [Start.code, CodeSymbol, Extended]) (by decide)
 
-/-- This writes the verifier's formula directly in SAT's original eight-symbol alphabet. -/
+/-- This builds a polynomial-time program that writes the verifier's formula in SAT's encoding. -/
 noncomputable def formulaComputer
     (verifier : SingleTapeTM.Description (TapeSymbol CodeSymbol))
     (certificate time : Polynomial Nat) (yes : CodeSymbol) :

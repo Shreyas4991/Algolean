@@ -9,15 +9,16 @@ module
 public import Algolean.Complexity.Reductions.NPtoSAT.Formula
 
 /-!
-# A common size bound for the direct reduction
+# Bounding the lengths used by the direct reduction
 
-The verified clause writers use bounds on the lengths of their source words and accumulated
-output. `sizeBound` bounds the unary certificate and time words, both copies of the position
-and state words, the original input, and the complete encoded SAT formula.
+* `sizeBound` bounds the total lengths of the certificate and time bounds, both copies of the
+  position and state bounds, the original input, and the complete encoded SAT formula.
+* `source_size_le` proves this bound for the chosen encoding. `source_size_le_code` also covers
+  any representation using at most eight tape cells for each formula symbol.
 
-The extra constant covers the extra symbols before the input and output, together with the
-small constants in the writer bounds. The polynomial is fixed with the verifier and its
-certificate and time bounds.
+The clause writers use this bound for the words they read and the output they append.
+The polynomial is fixed with the verifier and its certificate and time bounds. Its extra
+constant accounts for the temporary symbols before the input and output and the writers' constants.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -31,7 +32,9 @@ open Cslib.Turing Problems Polynomial
 
 variable {Γ : Type} [Fintype Γ]
 
-/-- This polynomial bounds all source-word lengths and the final encoded formula together. -/
+/--
+This polynomial bounds the total lengths of the bound words, input, and final encoded formula.
+-/
 @[expose] noncomputable def sizeBound (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) : Polynomial Nat :=
   certificate + time + 2 * (X + certificate + 2 * time + 1) +
@@ -39,7 +42,7 @@ variable {Γ : Type} [Fintype Γ]
       NPToSAT.Computation.Size.fixedVerifierLengthBound (Γ := Γ)
         verifier.states certificate time + 128
 
-/-- The polynomial bounds the unary source words, original input, and complete encoded output. -/
+/-- The polynomial bounds the bound words, original input, and complete encoded output together. -/
 theorem source_size_le [Nontrivial Γ] (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) :
     let problem : BoundedVerification Γ :=
@@ -54,7 +57,9 @@ theorem source_size_le [Nontrivial Γ] (verifier : SingleTapeTM.Description (Tap
     eval_add, eval_mul, eval_X, eval_C, eval_ofNat, eval_one]
   lia
 
-/-- The same bound covers a formula when every written symbol uses at most eight cells. -/
+/--
+The same bound covers a representation using at most eight tape cells for each formula symbol.
+-/
 theorem source_size_le_code [Nontrivial Γ]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ)

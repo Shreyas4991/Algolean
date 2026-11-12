@@ -11,8 +11,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BlockOutput
 /-!
 # Visiting choices in several following unary words
 
-* `forFollowingSelections` visits every combination in a fixed number of following unary
-  words. It preserves the selected cell in each preceding word and restores all source words.
+* `forFollowingSelections` chooses one cell from each of a fixed number of following words.
+  It visits every combination of choices. Each word repeats one fixed symbol, and a temporarily
+  erased cell records the current choice. The program restores all words before returning.
 * Its specification composes one fixed action over those combinations in order. The source
   lengths and chosen indices occur only in the specification and are read from the tape.
 
@@ -39,7 +40,7 @@ def forFollowingSelections (tm : SingleTapeTM Γ) (tick : Γ)
   | depth + 1 => do [TMQuery tm]
     onFollowingWord tm (forBlocks tm tick [] (forFollowingSelections tm tick action depth))
 
-/-- This describes selected unary cells, followed by unary words whose loops have not started. -/
+/-- This describes the tape with one temporarily erased cell in each word already visited. -/
 @[expose] def selectionTape (tick : Γ) (earlier : List (Nat × Nat)) (current : Nat × Nat)
     (following : List Nat) (input output : List Γ) : BiTape Γ :=
   markedUnaryTape (earlier.flatMap fun pair =>
@@ -47,7 +48,7 @@ def forFollowingSelections (tm : SingleTapeTM Γ) (tick : Γ)
     (List.replicate current.2 tick :: following.map (fun count => List.replicate count tick) ++
       [input]) output
 
-/-- This describes the tape after selecting cells in all the following words. -/
+/-- This describes the tape after temporarily erasing one chosen cell in every following word. -/
 @[expose] def selectedTape (tick : Γ) (earlier : List (Nat × Nat)) (current : Nat × Nat) :
     List (Nat × Nat) → List Γ → List Γ → BiTape Γ
   | [], input, output => selectionTape tick earlier current [] input output
@@ -59,7 +60,7 @@ def forFollowingSelections (tm : SingleTapeTM Γ) (tick : Γ)
   | count :: rest => (List.range count).flatMap fun index =>
     selectionWord (fun indices => piece (index :: indices)) rest
 
-/-- This bounds repeated following-word loops by a common allowance for every unary length. -/
+/-- This bounds the nested loops using one upper bound on their word lengths and action costs. -/
 @[expose] def selectionMoves (size bound : Nat) : Nat → Nat
   | 0 => bound
   | depth + 1 => size * (selectionMoves size bound depth + 2) + 2 * size + 8

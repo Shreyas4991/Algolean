@@ -21,8 +21,8 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 * `compareCounterLeBlocks` records whether the counter is at most the unary count.
 * Leading zeros are allowed, so these tests also work after subtraction.
 
-This is a machine template. The containing machine fixes its digit symbols and three distinct
-control states once. The counter's digits and length are read from the tape.
+These are machine templates. The containing machine fixes the digit symbols and result states
+once. The counter's digits and length are read from the tape.
 -/
 
 public section
@@ -37,7 +37,7 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This records whether the counter is one, clears its digits, and stops at its right boundary. -/
+/-- This tests whether the counter is one, erases its digits, and stops on the blank after them. -/
 noncomputable def testOneAndClear (one : Γ)
     (different equal extra : tm.State) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   testOne tm one different equal extra
@@ -47,7 +47,7 @@ noncomputable def testOneAndClear (one : Γ)
     state ←ₜ different
   eraseRight tm
 
-/-- Testing and clearing a counter preserves its following tape and records the exact answer. -/
+/-- Testing and erasing a counter preserves the cells to its right and records the exact answer. -/
 @[spec] theorem testOneAndClear_spec (zero one : Γ) (hne : zero ≠ one)
     (different equal extra : tm.State) (hfirst : different ≠ equal)
     (hlast : different ≠ extra) (hother : equal ≠ extra)

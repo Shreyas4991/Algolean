@@ -12,8 +12,9 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.ReverseCopyin
 /-!
 # Writing a unary count in binary
 
-* `appendUnaryNumber` reads a unary word and appends its number in binary to a later output.
-  It uses the existing natural-number encoding and may add its existing word-length header.
+* `appendUnaryNumber` counts repetitions of a fixed word and appends the count in binary to
+  the output. It can first write the number of binary digits, allowing a decoder to distinguish
+  consecutive numbers.
 * The source word and intervening words are preserved. A temporary counter grows left into
   blank cells and is erased before the head returns to the source's first cell.
 
@@ -33,7 +34,7 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This is the existing binary number word, with an optional word-length header. -/
+/-- This is the existing binary encoding of a number, optionally preceded by its digit count. -/
 @[expose] def unaryNumberBits (header : Bool) (number : Nat) : List Bool :=
   if header then BooleanTapeEncoding.pair (encodingNatBool.encode number) []
   else encodingNatBool.encode number

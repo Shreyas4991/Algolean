@@ -17,7 +17,7 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Reduction
   over the same formula alphabet has a polynomial-time Karp reduction to SAT.
 
 The reduction is computed by one fixed single-tape Query program for each source language.
-Both parts use SAT's original formula encoding with binary variable names.
+The membership proof and the reduction use SAT's original encoding with binary variable names.
 -/
 
 public section

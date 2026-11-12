@@ -14,10 +14,10 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Output
 
 * `finish` writes the final acceptance clauses, ends the SAT formula, and erases the input
   and bounds. It leaves exactly the encoded formula, with its first symbol under the head.
-* `finish_spec` identifies the appended clauses and bounds the number of head moves.
+* `finish_spec` states the final tape and bounds the number of head moves.
 
-The accepting symbol and alphabet codes are fixed when constructing the containing machine.
-The time and tape-width bounds are read from the tape.
+The accepting symbol and the representation of formula symbols are fixed when constructing
+this template. The time and position bounds are read from the tape.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -35,20 +35,20 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This writes the acceptance clauses and leaves only the completed SAT word on the tape. -/
+/-- This writes the acceptance clauses and leaves only the completed SAT formula on the tape. -/
 def finish (tm : SingleTapeTM Γ)
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes : Γ) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
   FinalWriting.writeFinalClauses tm zero one tick code yes
   Output.finish tm code
 
-/-- This polynomial bounds the final clause writer and the erasure of all source words. -/
+/-- This polynomial bounds writing the acceptance clauses and erasing the input and bounds. -/
 noncomputable def timeBound (width : Nat) : Polynomial Nat :=
   FinalWriting.timeBound width + 5 * X + C (2 * width + 64)
 
 /--
 The program writes the acceptance clauses, ends the formula, and erases the input and bounds.
-Its final tape is clean, and the head points to the first output symbol.
+Only the formula remains on the tape, and the head points to its first symbol.
 -/
 @[spec] theorem finish_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)

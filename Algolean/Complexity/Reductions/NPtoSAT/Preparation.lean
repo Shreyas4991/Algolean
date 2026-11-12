@@ -12,15 +12,16 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionNavigat
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 
 /-!
-# Preparing polynomial bounds for a fixed verifier
+# Preparing polynomial bounds on the tape
 
-The program writes each bound as repeated copies of one symbol. The number of copies is a
-fixed polynomial of the original input length. It places these words before a preserved copy
-of the input, with a blank between neighboring words. A temporary symbol begins both the
-input and output, so neither word is empty. The final cleanup removes these symbols.
+* `prepare` writes each bound as a run of identical symbols before a preserved copy of the
+  input, with blanks separating the words. The run lengths are fixed polynomials of input length.
+* `layout` describes the resulting tape. The input and output each begin with a temporary symbol
+  so that neither word is empty. Later cleanup removes these symbols.
+* `prepare_spec` proves that the tape has this layout, and `timeBound` bounds the head moves.
 
-The polynomials and alphabet symbols are fixed when constructing the containing machine.
-The machine reads the input and its length from its tape.
+This is a machine template. Its polynomials and alphabet symbols are fixed when constructing
+the containing machine. It reads the input and determines its length from the tape.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -341,8 +342,8 @@ private theorem fieldParts_work (tick separator : Γ) (first : Polynomial Nat)
     ring
 
 /--
-This describes the unary bounds, a preserved input beginning with `tick`, and the output
-beginning with `tick`. A blank separates neighboring words, including an empty first bound.
+This describes the polynomial bounds followed by the preserved input and output, each
+beginning with `tick`. Blanks separate neighboring words, including an empty first bound.
 -/
 @[expose] def layout (tick : Γ) (first : Nat) (rest : List Nat)
     (input output : List Γ) : BiTape Γ :=
@@ -351,9 +352,9 @@ beginning with `tick`. A blank separates neighboring words, including an empty f
       (StackTape.mapSome (tick :: output)))
 
 /--
-This fixed template prepares unary polynomial bounds and preserves the input. The first
-polynomial and the remaining polynomial list determine the bound words in their tape order.
-All polynomials, symbols, and comparisons are fixed before the program runs.
+This template writes the polynomial bounds before a preserved copy of the input. The first
+polynomial and the remaining polynomial list determine their tape order. The containing machine
+fixes these polynomials and alphabet symbols independently of the input.
 -/
 noncomputable def prepare (tm : SingleTapeTM Γ) (symbols : List Γ) (tick separator : Γ)
     (first : Polynomial Nat) (rest : List (Polynomial Nat)) : Prog (TMQuery tm) Unit :=
@@ -368,8 +369,8 @@ noncomputable def timeBound (tick separator : Γ) (first : Polynomial Nat)
     (X + fieldsWork (fieldParts tick separator first rest) + C (rest.length + 10)) ^ 2
 
 /--
-Preparation writes the required unary bounds and one preserved copy of the input. It erases
-the old input, leaves an empty output region, and finishes on the first bound's first cell.
+Preparation writes the bound words and one preserved copy of the input, then erases the old
+input. The output contains only its temporary symbol, and the head starts the first bound word.
 -/
 @[spec] theorem prepare_spec (symbols : List Γ) (hcover : ∀ symbol, symbol ∈ symbols)
     (tick separator : Γ) (hne : tick ≠ separator) (first : Polynomial Nat)

@@ -13,15 +13,15 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CellMarking
 /-!
 # Visiting positions at one selected time
 
-* `forSelectedTimePositions` visits each cell in the first position word. It keeps the selected
-  time and temporarily selects the first cells in the other three words.
-* `PositionSpec` describes what the same action writes at each position. The other selected
-  position and both selected states are zero.
-* The program restores every source word and the selected time cell. A quadratic bound for
-  the action gives a cubic bound for the complete position loop.
+* `forSelectedTimePositions` visits every simulated tape position while keeping the same
+  simulated time. It sets the other position and both state selections to zero for each visit.
+* `PositionSpec` states what the fixed action writes at each visited position.
+* `forSelectedTimePositions_spec` proves that the tape words and selected time are restored.
+  A quadratic move bound for each action gives a cubic bound for the whole loop.
 
-These are machine templates. The containing machine fixes its symbols and action once.
-The selected time and all word lengths are read from the tape.
+The bounds are represented by runs of identical symbols; temporarily blanking one cell selects
+its position in a run. These templates read the selections and lengths from the tape.
+The containing machine fixes the symbols and action independently of its input.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -142,8 +142,8 @@ private theorem atOtherFirstChoices_spec (tick : Γ) (action : Prog (TMQuery tm)
     all_goals lia
 
 /--
-This states what one fixed action writes at a selected position. The other three selected
-numbers are zero, and the selected time and every source word are preserved.
+This states what the fixed action writes at one simulated tape position. The other position
+and both state selections are zero. The action preserves the selected time and every tape word.
 -/
 @[expose] def PositionSpec (tick : Γ) (time timeRest positions states : Nat) (input : List Γ)
     (piece : Nat → List Γ) (label : Option tm.State) (action : Prog (TMQuery tm) Unit)
@@ -159,16 +159,18 @@ numbers are zero, and the selected time and every source word are preserved.
     ⦃ fun _ cost final => AtPair tick choice input (output ++ piece position) label origin final ∧
         cost.steps ≤ elapsed + bound ⦄
 
-/-- This template visits each position, keeping the time and selecting zero in the other words. -/
+/--
+This template visits every position while keeping the time and setting the other selections to zero.
+-/
 def forSelectedTimePositions (tm : SingleTapeTM Γ) (tick : Γ)
     (action : Prog (TMQuery tm) Unit) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   onFollowingWord tm (forBlocks tm tick [] (atOtherFirstChoices tick action))
 
-/-- This bounds one position loop, including the visits that select the other three words. -/
+/-- This bounds the position loop, including the moves that select zero in the other three words. -/
 @[expose] def positionIterationMoves (size bound : Nat) : Nat :=
   size * (bound + 6 * size + 20) + 2 * size + 8
 
-/-- Visiting all positions restores the selected time cell and every source word. -/
+/-- Visiting all positions restores the selected time cell and every tape word. -/
 @[spec] theorem forSelectedTimePositions_spec (tick : Γ) (action : Prog (TMQuery tm) Unit)
     (time timeRest positions states : Nat) (hpositions : 0 < positions) (hstates : 0 < states)
     (input output : List Γ) (piece : Nat → List Γ) (label : Option tm.State) (size bound : Nat)

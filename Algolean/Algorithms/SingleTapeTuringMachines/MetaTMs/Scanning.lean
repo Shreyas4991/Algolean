@@ -250,12 +250,9 @@ theorem seekLeftBlank_correct (left : List Symbol) (bit : Symbol) (right : List 
     simp_all
 
 /--
-`seekLeftEnd tm` is a Turing machine program that moves left once, scans left to a blank, and then
-moves right once. For a contiguous block, it finishes on the first symbol even when it starts on the
-blank just after the block. If the block is empty, it returns to its starting cell after two moves.
-
-This is a machine template. The containing Turing machine fixes its parameters once when
-including it. The same finite program runs on every input length.
+This template finds the first symbol of a word by moving left to its preceding blank and
+then right once. It may start inside the word or on its ending blank. For an empty word,
+it returns to its starting cell after two moves. The containing machine fixes `tm` once.
 -/
 def seekLeftEnd (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   moveₜ .Left

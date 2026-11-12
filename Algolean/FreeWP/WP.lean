@@ -12,9 +12,10 @@ public import Std.WP
 /-!
 # Weakest preconditions for `FreeM` programs
 
-Logical effect handlers interpret `FreeM` into `Lean.Order.PredTrans`. Monotone handlers
-provide `Std.WP.WPMonad` instances and specifications for `vcgen`. Primitive operations can
-also be described by their preconditions and allowed results, without an executable interpreter.
+This file assigns logical conditions to the primitive operations of a `FreeM` program.
+The resulting `Lean.Order.PredTrans` interpretation provides the `Std.WP.WPMonad` instances
+used by `vcgen`. An operation can be specified by when it is allowed to run and which results
+it may return, without an executable interpreter.
 -/
 
 @[expose] public section

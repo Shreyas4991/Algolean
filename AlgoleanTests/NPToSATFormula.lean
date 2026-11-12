@@ -53,7 +53,10 @@ private def writeThenMove : SingleTapeTM.Description (TapeSymbol Bool) where
   initial := 0
   transition _ _ := (some (.inl true), some true, none)
 
-/-- The three recorded cells are blank, blank under the head, and false to its right. -/
+/--
+This row records three tape cells: a blank on the left, a blank under the head, and false
+on the right.
+-/
 private def beforeMove : Row writeThenMove 3 where
   state := some 0
   left := [none]

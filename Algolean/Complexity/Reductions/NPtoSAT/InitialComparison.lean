@@ -11,12 +11,13 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.HeadChoices
 /-!
 # Finding cells inside the initial input and certificate
 
-The initial tape has `t` blank cells before the input and `t` after the certificate. These
-comparisons test whether the selected position has at least `t` cells on either side. They
-read the bound from the remaining time word and preserve the whole tape.
+* `compare` tests whether a selected tape position lies beyond the left or right blank interval
+  in the verifier's initial tape. Each interval has length equal to the transition bound.
+* `compare_spec` proves that the answer is stored in the chosen control state while the tape
+  and head position are restored.
 
-The containing machine fixes which side to test and which states record the answer. The
-selected position and the bound are read from the tape on every run.
+The containing machine fixes which side to test and which states represent the answers.
+The selected position and transition bound are read from the tape.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -34,7 +35,10 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This tests whether the remaining time count is at most the selected position or its rest. -/
+/--
+This tests whether the transition bound is at most the number of cells before or after the
+selected position, according to the chosen side.
+-/
 noncomputable def compare (tm : SingleTapeTM Γ) [DecidableEq tm.State] (zero one tick : Γ)
     (greater atMost : tm.State) (rest : Bool) : Prog (TMQuery tm) Unit :=
   onPrefixAtMark tm (onCounter tm

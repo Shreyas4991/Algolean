@@ -14,12 +14,14 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CellMarking
 /-!
 # Writing the initial head clause
 
-The initial input begins at recorded position `t`, where `t` is the transition bound. The
-program reads that number from the unary time word and writes the clause placing the head
-there at time zero. The initial state is fixed when constructing the reduction program.
+* `writeHead` writes the clause placing the verifier's head at its initial input symbol and in
+  its initial state. It reads the transition bound from the tape to compute that cell's number.
+* `writeHead_spec` states the appended clause and proves that the input, bounds, and head position
+  are restored. A quadratic polynomial bounds the head moves.
 
-The bounds and input remain on the tape. The head returns to the first time cell, and the
-number of moves is bounded by a quadratic polynomial in the source and output lengths.
+The simulated tape includes as many blank cells before the input as the transition bound.
+This leaves room for every possible leftward move. The verifier's initial input cell therefore
+has that bound as its position number. Its initial state is fixed with the reduction program.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -44,7 +46,9 @@ private def ending (code : CodeSymbol → List Γ) (initialCode : Nat) : List Γ
   (encodingNatBool.encode initialCode).flatMap (fun bit => code (.inl bit)) ++
     code (.inr 2) ++ code (.inr 3) ++ code (.inr 4)
 
-/-- This is the initial head clause, with time zero and recorded position equal to the bound. -/
+/--
+This encodes the initial head clause at time zero, with the input beginning after the left blanks.
+-/
 @[expose] def word (code : CodeSymbol → List Γ) (initialCode time : Nat) : List Γ :=
   code (.inr 0) ++ code (.inl true) ++ code (.inl true) ++ code (.inl false) ++
     (unaryNumberBits true time).flatMap (fun bit => code (.inl bit)) ++
@@ -145,7 +149,7 @@ private theorem writeAtMark_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ
         BiTape.moveRight, BiTape.moveLeft, List.replicate_succ, List.append_assoc]
     all_goals lia
 
-/-- The writer appends the initial head clause and restores every source word and the head. -/
+/-- The writer appends the initial head clause and restores the input, bounds, and head position. -/
 @[spec] theorem writeHead_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (initialCode time positions states : Nat) (input output : List Γ) (size : Nat)

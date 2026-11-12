@@ -54,7 +54,7 @@ private def itemWord (code : CodeSymbol → List Γ) (bits : List Bool) :
   | some literal =>
     (literalPrefix (literal.rename (nameAt bits))).flatMap code
 
-/-- This counts the moves for writing one certificate literal from a binary counter. -/
+/-- This counts the steps for writing one certificate literal from a binary counter. -/
 @[expose] def literalMoves (width size distance output symbol : Nat) : Nat :=
   let start := 2 * (size + distance + output + 2 * width) + 12
   let header := lengthHeaderMoves width size distance (output + 2 * width)
@@ -283,8 +283,8 @@ private theorem items_word (code : CodeSymbol → List Γ) (bits : List Bool) (f
   simp [items, itemWord, formulaPrefix_rename, List.flatMap_map, List.flatMap_assoc]
 
 /--
-This is the encoded clause prefix written for the given symbol choices at every certificate
-position. It uses the existing exactly-one clauses and omits the final formula-ending symbol.
+This is the encoded formula requiring exactly one symbol at each certificate position.
+It omits the final formula-ending symbol so that more clauses can follow.
 -/
 def word (code : CodeSymbol → List Γ) (symbols : List Γ) (count : Nat) : List Γ :=
   (List.finRange count).flatMap fun position =>
@@ -336,8 +336,9 @@ private def workSize (width : Nat) (symbols : List Γ) (unit count input output 
   (unit + 1) * count + input + output + weight width (schema symbols) * (count + 1) ^ 2 + 4
 
 /--
-This template writes exactly-one clauses beyond a fixed number of preserved words. The bound
-and all words are read from the tape; the containing machine fixes the symbols and word count.
+This template reads a unary word and writes exactly-one clauses for that many certificate
+positions. It appends the clauses after the preserved words. The containing machine fixes
+the possible symbols and the number of preserved words.
 -/
 def writeChoicesAcross (tm : SingleTapeTM Γ) (zero one tick : Γ) (unitTail : List Γ)
     (code : CodeSymbol → List Γ) (symbols : List Γ) (preservedCount : Nat) :
@@ -352,7 +353,7 @@ def writeChoicesAcross (tm : SingleTapeTM Γ) (zero one tick : Γ) (unitTail : L
     (StackTape.separateWords preserved (StackTape.mapSome output))
 
 open Polynomial in
-/-- This fixed polynomial bounds the moves in terms of the input and earlier output lengths. -/
+/-- This fixed polynomial bounds the steps in terms of the input and earlier output lengths. -/
 noncomputable def timeBound (width unit : Nat) (symbols : List Γ) : Polynomial Nat :=
   let a := weight width (schema symbols)
   let b : Polynomial Nat := X + 1
@@ -431,8 +432,9 @@ private theorem forUnaryMoves_le (width : Nat) (symbols : List Γ) (unit count i
 
 /--
 The writer appends the encoded exactly-one clauses for every position in the unary bound.
-It preserves the bound, input, earlier output, and control state, erases its counter, and
-restores the head. The same fixed polynomial bounds every run of this program.
+It preserves the bound, input, earlier output, and control state, erases its temporary counter,
+and returns the head to its starting position. The same fixed polynomial bounds every run
+of this program.
 -/
 @[spec] theorem writeChoicesAcross_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (unitTail : List Γ)
@@ -503,8 +505,9 @@ theorem word_eq_certificateClauses (code : CodeSymbol → List Γ) (problem : Bo
   simpa only [CNF.rename, formulaPrefix, List.flatMap_map, List.flatMap_assoc] using hblock position
 
 /--
-This template writes certificate choices beyond a fixed number of preserved words. It reads
-all positions from its unary bound and fixes the alphabet enumeration with the program.
+This template writes exactly-one clauses for all alphabet symbols at each certificate
+position. The tape gives the number of positions; the containing machine fixes the alphabet
+enumeration and the number of words before the output.
 -/
 noncomputable def writeCertificateChoicesAcross (tm : SingleTapeTM Γ) (zero one tick : Γ)
     (unitTail : List Γ) (code : CodeSymbol → List Γ) (preservedCount : Nat) :
@@ -512,8 +515,9 @@ noncomputable def writeCertificateChoicesAcross (tm : SingleTapeTM Γ) (zero one
   writeChoicesAcross tm zero one tick unitTail code (Finset.univ : Finset Γ).toList preservedCount
 
 /--
-The program writes exactly the certificate clauses while preserving every displayed word and
-restoring the head. The bound includes the lengths and separating blanks of preserved words.
+The program writes exactly the certificate clauses, preserves the other words, and returns
+the head to its starting position. The time bound includes the lengths of the preserved
+words and the blanks separating them.
 -/
 @[spec] theorem writeCertificateChoicesAcross_spec (zero one : Γ) (hne : zero ≠ one)
     (tick : Γ) (unitTail : List Γ) (code : CodeSymbol → List Γ) (width : Nat)

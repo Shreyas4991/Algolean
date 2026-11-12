@@ -153,7 +153,7 @@ def step (row : Row verifier width) : Option (Row verifier width) :=
             simp only [hr, List.length_cons] at this ⊢
             lia }
 
-/-- A row accepts when it has halted with only the chosen symbol left on the recorded tape. -/
+/-- A row accepts when it has halted over the chosen symbol and every other cell is blank. -/
 def Accepting (row : Row verifier width) (yes : Γ) : Prop :=
   row.state = none ∧ row.symbol = some (.inl yes) ∧
     ∀ position : Fin width, position ≠ row.headIndex → row.cells[position.val] = none
@@ -417,8 +417,8 @@ namespace Run
 variable {problem : BoundedVerification Γ}
 
 /--
-The padding with blank cells lets every certificate's computation run through all the rows.
-Before the last row, neither end of the recorded interval can obstruct a head movement.
+The blank cells on both sides leave room for every allowed head movement. Repeating a halted
+row extends a computation to the required number of rows.
 -/
 private def ofCertificate (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :

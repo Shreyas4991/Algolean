@@ -10,12 +10,13 @@ public import Algolean.Complexity.Reductions.NPtoSAT.InitialSource
 public import Algolean.Complexity.Reductions.NPtoSAT.HeadWriting
 
 /-!
-# The encoded initial clauses
+# Encoding the initial clauses
 
-* `word` gives the clauses for one initial tape cell. A fixed symbol gives one positive
-  literal. A certificate cell gives one implication for each possible certificate symbol.
-* `word_eq_selected` identifies the same words using the time and position selected on the tape.
-* `initialClauses_word` joins the initial head clause and all initial tape-cell clauses in order.
+* `word` encodes the clauses for one cell of the verifier's initial tape. An input symbol,
+  separator, or blank is fixed directly. A certificate cell is linked to the corresponding
+  certificate choice by one implication for each possible symbol.
+* `word_eq_selected` identifies those clauses from the position selected on the tape.
+* `initialClauses_word` joins the initial head clause and the initial cell clauses in order.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -29,7 +30,7 @@ open NPToSAT.Computation NPToSAT.Computation.HeadChoices NPToSAT.Computation.Lit
 
 variable {Γ : Type} [Fintype Γ] [Encodable Γ]
 
-/-- This is the encoded clause list fixing one initial tape cell. -/
+/-- This encodes the clauses describing one cell of the verifier's initial tape. -/
 @[expose] noncomputable def word (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (position : Fin (NPToSAT.Computation.width problem)) : List Γ :=
   (formulaPrefix (CNF.rename
@@ -39,7 +40,7 @@ variable {Γ : Type} [Fintype Γ] [Encodable Γ]
         Clause.implies [.certificate index symbol] (.tape 0 position (some (.inl symbol))))
       Variable.name)).flatMap code
 
-/-- The selected time-zero tape cell gives exactly its existing literal or certificate clauses. -/
+/-- The selected position at time zero gives the stated fixed-symbol or certificate clauses. -/
 theorem word_eq_selected (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (position : Fin (NPToSAT.Computation.width problem)) (choice : ActiveChoices)
     (htime : choice.time.1 = 0) (hposition : choice.firstPosition.1 = position.val) :
@@ -57,7 +58,9 @@ theorem word_eq_selected (code : CodeSymbol → List Γ) (problem : BoundedVerif
       Literal.rename, tapeLiteralWord, tapeName, Variable.name, Naming.bits, htime, hposition,
       List.flatMap_append, List.flatMap_map, List.flatMap_assoc, List.append_assoc]
 
-/-- The encoded initial formula is the head clause followed by the cell clauses in tape order. -/
+/--
+The encoded initial formula is the head clause followed by the cell clauses in position order.
+-/
 theorem initialClauses_word (code : CodeSymbol → List Γ)
     (problem : BoundedVerification Γ) :
     (formulaPrefix ((initialClauses problem).rename Variable.name)).flatMap code =

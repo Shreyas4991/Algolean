@@ -144,7 +144,8 @@ inductive Kind where
   /-- This describes the head position and state at one time. -/
   | head
 
-/-- This gives the binary name obtained from the three words, ignoring time for certificates. -/
+/-- This builds a variable name from the binary time, position, and symbol or state words.
+Certificate names omit the time. -/
 @[expose] def bits (kind : Kind) (time position value : List Bool) : List Bool :=
   match kind with
   | .certificate => false :: BooleanTapeEncoding.pair position value

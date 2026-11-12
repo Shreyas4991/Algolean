@@ -14,13 +14,14 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TapeChoices
 /-!
 # Writing the certificate, head, and tape choices
 
-The program writes the clauses choosing one symbol at each certificate position, one head
-position and state at each time, and one symbol in every recorded tape cell. It reads all
-bounds from the prepared unary words and preserves the original input and earlier output.
-It removes the certificate bound after writing its clauses and returns to the first time cell.
+* `writeChoices` writes clauses that choose one symbol at each certificate position, one head
+  position and state at each time, and one symbol in each cell of the verifier's computation.
+* `writeChoices_spec` states the exact appended formula and bounds the head moves. The program
+  preserves the input and the remaining bounds, then returns to the first symbol of the time bound.
 
-This is a machine template. The containing machine fixes its alphabet representations and
-control states once. The data describing the computation occur only in the specification.
+The bounds are stored as runs of identical symbols on the tape. The program removes the
+certificate bound after using it. Its alphabet symbols and control states are fixed when
+constructing the containing machine.
 -/
 
 open Cslib.Turing.SingleTapeTM
@@ -39,7 +40,7 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This encodes the existing certificate, head, and tape choices without ending the formula. -/
+/-- This encodes the certificate, head, and tape choice clauses without ending the formula. -/
 @[expose] noncomputable def word (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     List Γ := (formulaPrefix ((choiceClauses problem).rename Variable.name)).flatMap code
 
@@ -75,15 +76,15 @@ private theorem eraseCertificate_spec (tick : Γ) (certificate times positions s
   all_goals
     simp_all [Preparation.layout, ChoiceIteration.layout, TMState.move, TMState.moveCost]
 
-/-- This polynomial includes all three choice writers and removal of the certificate bound. -/
+/-- This polynomial bounds writing the three groups of clauses and erasing the certificate bound. -/
 noncomputable def timeBound (width : Nat) : Polynomial Nat :=
   CertificateChoices.timeBound width 1 (Finset.univ : Finset Γ).toList +
     HeadChoices.timeBound width +
     TapeChoices.timeBound width (Finset.univ : Finset (Option (TapeSymbol Γ))).toList + X + 1
 
 /--
-This fixed template writes all choice clauses and removes the certificate bound. It preserves
-both copies of the position and state bounds, the time bound, and the original input.
+This template writes the certificate, head, and tape choice clauses. It erases the certificate
+bound and preserves the time, position, and state bounds and the original input.
 -/
 noncomputable def writeChoices (tm : SingleTapeTM Γ) [DecidableEq tm.State] (zero one tick : Γ)
     (code : CodeSymbol → List Γ) (different equal extra : tm.State) : Prog (TMQuery tm) Unit :=
@@ -94,8 +95,8 @@ noncomputable def writeChoices (tm : SingleTapeTM Γ) [DecidableEq tm.State] (ze
   TapeChoices.writeTapeChoices tm zero one tick code 4
 
 /--
-The program appends exactly the existing choice clauses. It preserves all remaining source
-words and finishes at the first time cell, within the stated polynomial bound on head moves.
+The program appends the stated choice clauses and preserves the input and remaining bounds.
+It returns to the first symbol of the time bound within the stated bound on head moves.
 -/
 @[spec] theorem writeChoices_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)

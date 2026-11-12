@@ -13,7 +13,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnarySubtract
 
 * `trimCounterBits` relates removal of leading zero digits to the existing natural-number code.
 * `normalizeCounter` erases the leading zero cells and stops at the first remaining digit.
-  The counter's value and right boundary stay unchanged.
+  The counter's value and the blank immediately after its digits stay unchanged.
 
 This is a machine template. The containing machine fixes the digit symbols once. The digits
 and the counter's length are read from the tape.
@@ -163,8 +163,8 @@ private theorem normalizeCounter_digits_spec (zero one : Γ) (hne : zero ≠ one
       all_goals simp_all [counterDigits, Ne.symm hne]
 
 /--
-Normalization leaves the canonical counter for the same value. It preserves the following
-words and control state, and makes at most one head move per original counter digit.
+Removing leading zeros leaves the existing binary encoding of the same number. It preserves
+the following words and control state, and makes at most one head move per original digit.
 -/
 @[spec] theorem normalizeCounter_spec (zero one : Γ) (hne : zero ≠ one)
     (bits : List Bool) (tail : StackTape Γ) (label : Option tm.State)

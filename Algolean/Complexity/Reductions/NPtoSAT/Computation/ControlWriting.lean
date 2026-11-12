@@ -12,10 +12,10 @@ public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TransitionClaus
 /-!
 # Writing requirements on the next head position and state
 
-* `writeForbiddenControlClause` excludes one combination of a current head, scanned symbol,
-  and next head. It writes the existing SAT clause with those three negative literals.
+* `writeForbiddenControlClause` writes a clause forbidding one current head position and
+  state, scanned symbol, and next head position and state from occurring together.
 * Its specification proves the exact output, preserves every selected index and the starting
-  head position, and bounds the number of head moves.
+  head position, and bounds the number of steps.
 
 The containing machine fixes the scanned symbol and output alphabet. The selected time,
 positions, and states are read from the tape when it runs.
@@ -37,7 +37,8 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-/-- This is the existing clause excluding the three selected head and cell values together. -/
+/-- This encodes the clause forbidding the selected current head, scanned symbol, and next head
+from occurring together. -/
 @[expose] def forbiddenWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
     (symbol : Option (TapeSymbol Γ)) : List Γ :=
   (formulaPrefix [Clause.forbid [headNameAtTime choice false false,

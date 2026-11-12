@@ -65,8 +65,9 @@ private def visitNext (tick : Γ) (action : Prog (TMQuery tm) Unit) :
   onFollowingWord tm (forBlocks tm tick [] action)
 
 /--
-This machine template writes a head literal at the two active choices. `second`
-selects which of the two choices to write; the actual indices are read from the tape.
+This template writes a literal describing a selected head position and state. `second`
+chooses between the first and second position and state words; their indices are read from
+the tape.
 -/
 def writeHeadLiteral (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSymbol → List Γ)
     (positive second : Bool) : Prog (TMQuery tm) Unit := do [TMQuery tm]
@@ -774,7 +775,7 @@ private theorem writeTime_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
       List.append_assoc]
     all_goals lia
 
-/-- This is the encoded head-choice clause prefix, with the times in increasing order. -/
+/-- This encodes the head-choice clauses in increasing time order, without ending the formula. -/
 def word (code : CodeSymbol → List Γ) (times positions states : Nat) : List Γ :=
   (List.range times).flatMap fun time => rowParts code time positions states
 
@@ -785,7 +786,7 @@ def word (code : CodeSymbol → List Γ) (times positions states : Nat) : List �
     current.headPos = origin
 
 /--
-This polynomial bounds the complete head-choice writer in the total source and output size.
+This polynomial bounds the head-choice writer in the total length of its tape words and output.
 It includes both the clause requiring a choice and the clauses excluding different choices.
 -/
 noncomputable def timeBound (width : Nat) : Polynomial Nat :=
