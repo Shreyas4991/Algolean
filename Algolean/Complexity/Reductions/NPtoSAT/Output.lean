@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
-public import Algolean.Problems.Encodings.SAT
+public import Algolean.Problems.SingleTapeTM.Encodings.SAT
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 

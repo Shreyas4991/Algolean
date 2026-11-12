@@ -132,5 +132,5 @@ are independent of the input and its length.
 Import a module through `Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs`. Declaration
 names remain in their existing namespaces, including `SingleTapeTuringMachines`, `Copying`,
 and `PolynomialWriter`. The SAT verifier is in the parent's `SAT` subfolder.
-The Boolean pair encoding is in `Problems/Encodings/Pairing.lean`.
+The Boolean pair encoding is in `Problems/SingleTapeTM/Encodings/Pairing.lean`.
 Its program composition API is in `Models/SingleTapeTM/Composition/Pairing.lean`.

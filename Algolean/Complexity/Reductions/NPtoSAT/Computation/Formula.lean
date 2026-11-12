@@ -9,7 +9,7 @@ module
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Initial
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TransitionClauses
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.VariableNames
-public import Algolean.Problems.Encodings.SAT
+public import Algolean.Problems.SingleTapeTM.Encodings.SAT
 public import Mathlib.Logic.Equiv.List
 
 /-!

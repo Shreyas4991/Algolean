@@ -8,7 +8,7 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public import Algolean.Complexity.Classes.NP
-public import Algolean.Problems.SAT.Verification
+public import Algolean.Problems.SingleTapeTM.SAT.Verification
 
 /-!
 # SAT belongs to NP

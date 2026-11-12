@@ -9,7 +9,7 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Augmented
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Gaps
-public import Algolean.Problems.Encodings.Certificates
+public import Algolean.Problems.SingleTapeTM.Encodings.Certificates
 
 /-!
 # Removing the extra symbols from a padded certificate

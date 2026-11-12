@@ -7,8 +7,8 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
-public import Algolean.Problems.Encodings.Pairing
-public import Algolean.Problems.Encodings.SAT
+public import Algolean.Problems.SingleTapeTM.Encodings.Pairing
+public import Algolean.Problems.SingleTapeTM.Encodings.SAT
 
 /-!
 # Binary names for the variables describing a computation
