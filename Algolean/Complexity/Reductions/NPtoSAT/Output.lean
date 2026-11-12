@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceIteration
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
 public import Algolean.Problems.Encodings.SAT
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.RegionWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Erasing
@@ -26,7 +26,7 @@ public section
 namespace Algolean.Algorithms.NPToSAT.Output
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Copying Problems.SAT
-open NPToTMSAT.ChoiceIteration
+open NPToSAT.Computation.ChoiceIteration
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
@@ -79,7 +79,7 @@ private theorem clearSource_spec (tick : Γ) (times positions states : Nat)
     (input output : List Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     let size := times + 2 * positions + 2 * states + input.length + 7
     ⦃ fun cost current => current.config =
-        ⟨label, NPToTMSAT.ChoiceIteration.layout tick times positions states
+        ⟨label, NPToSAT.Computation.ChoiceIteration.layout tick times positions states
           (tick :: input) (tick :: output)⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       clearSource tm
@@ -94,13 +94,13 @@ private theorem clearSource_spec (tick : Γ) (times positions states : Nat)
     (tick :: output) label (origin - 1) (initial.steps + 1)
   simp only [List.length_cons, List.length_nil] at he
   have hm :
-      (NPToTMSAT.ChoiceIteration.layout tick times positions states (tick :: input)
+      (NPToSAT.Computation.ChoiceIteration.layout tick times positions states (tick :: input)
         (tick :: output)).moveLeft =
       BiTape.segment StackTape.nil [] (StackTape.separateWords
         [List.replicate times tick, List.replicate positions tick, List.replicate states tick,
           List.replicate positions tick, List.replicate states tick, tick :: input]
         (StackTape.mapSome (tick :: output))) := by
-    simpa [NPToTMSAT.ChoiceIteration.layout] using
+    simpa [NPToSAT.Computation.ChoiceIteration.layout] using
       BiTape.segment_moveLeft_gap StackTape.nil (List.replicate times tick)
         (StackTape.separateWords
           [List.replicate positions tick, List.replicate states tick, List.replicate positions tick,
@@ -128,7 +128,7 @@ def finish (tm : SingleTapeTM Γ) (code : CodeSymbol → List Γ) : Prog (TMQuer
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     let size := times + 2 * positions + 2 * states + input.length + 7
     ⦃ fun cost current => current.config =
-        ⟨label, NPToTMSAT.ChoiceIteration.layout tick times positions states
+        ⟨label, NPToSAT.Computation.ChoiceIteration.layout tick times positions states
           (tick :: input) (tick :: output)⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       finish tm code
@@ -150,7 +150,7 @@ def finish (tm : SingleTapeTM Γ) (code : CodeSymbol → List Γ) : Prog (TMQuer
         List.replicate states tick, tick :: input] + (tick :: output).length +
           (code (.inr 5)).length) + 12)
   vcgen [finish, ha, hc]
-  all_goals simp_all [NPToTMSAT.ChoiceIteration.layout, regionSpan]
+  all_goals simp_all [NPToSAT.Computation.ChoiceIteration.layout, regionSpan]
   all_goals lia
 
 end Algolean.Algorithms.NPToSAT.Output

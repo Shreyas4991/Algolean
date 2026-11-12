@@ -25,7 +25,7 @@ open Cslib.Turing.SingleTapeTM
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.HeadChoices
+namespace Algolean.Algorithms.NPToSAT.Computation.HeadChoices
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines
 
@@ -101,4 +101,4 @@ omit [Inhabited Γ] [Fintype Γ] in
   simp [ActiveChoices.leftWords, ActiveChoices.rightWords, ActiveChoices.size, regionSpan]
   ring
 
-end Algolean.Algorithms.NPToTMSAT.HeadChoices
+end Algolean.Algorithms.NPToSAT.Computation.HeadChoices

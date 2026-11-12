@@ -6,35 +6,34 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.TMSAT.Compiler
+public import Algolean.Models.SingleTapeTM.BoundedVerificationCompiler
+public import Algolean.Models.SingleTapeTM.DescriptionEncoding
 
 /-!
-# Checking Turing machine satisfiability and its encoding
+# Checking bounded certificate verification
 
-* Stationary transitions still cost time, and a true bit accepts only after halting.
-* Certificate lengths and time bounds are independent, and a verifier can require a nonempty word.
-* Encodings preserve complete descriptions and reject invalid tables and malformed fields.
-* Size bounds apply to successfully decoded words with noncanonical machine descriptions.
-* Compiled query verifiers preserve acceptance and rejection on input-certificate words.
-* A chosen accepting symbol works over a three-symbol alphabet and over a one-symbol alphabet.
+* Every transition costs time, including transitions that leave the head in place.
+* Acceptance requires a halted machine and a tape containing only the chosen answer symbol.
+* Certificate lengths remain fixed when the time bound is increased.
+* Compiling a Query verifier preserves its answers over Boolean, three-symbol, and one-symbol
+  alphabets.
+* Finite descriptions survive encoding and reject invalid state references and table lengths.
 -/
 
 @[expose] public section
 
-namespace AlgoleanTests.TMSAT
+namespace AlgoleanTests.BoundedVerification
 
-open Algolean.Problems Algolean.Problems.TMSAT Computability Cslib.Turing Relation
+open Computability Cslib.Turing Relation
+open Cslib.Turing.SingleTapeTM.BoundedVerification
 open Algolean.Algorithms.Alphabet
 open Algolean.Algorithms
 
-local notation "TapeSymbol" => Algolean.Problems.TMSAT.TapeSymbol Bool
-local notation "Instance" => Algolean.Problems.TMSAT.Instance Bool
-local notation "satisfiable" => Algolean.Problems.TMSAT.satisfiable true
-local notation "accepting" => Algolean.Problems.TMSAT.accepting true
-local notation "AcceptsWithin" => Algolean.Problems.TMSAT.AcceptsWithin true
-local notation "encoding" => Algolean.Problems.TMSAT.encoding (Γ := Bool)
-local notation "language" => Algolean.Problems.TMSAT.language true
-local notation "payloadEncoding" => Algolean.Problems.TMSAT.payloadEncoding (Γ := Bool)
+local notation "TapeSymbol" => Cslib.Turing.SingleTapeTM.BoundedVerification.TapeSymbol Bool
+local notation "Verification" => SingleTapeTM.BoundedVerification Bool
+local notation "accepted" => Cslib.Turing.SingleTapeTM.BoundedVerification.accepted true
+local notation "accepting" => Cslib.Turing.SingleTapeTM.BoundedVerification.accepting true
+local notation "AcceptsWithin" => Cslib.Turing.SingleTapeTM.BoundedVerification.AcceptsWithin true
 
 /-- This source machine has one logical label and a table that writes false and halts. -/
 abbrev rejectingControl : SingleTapeTM TapeSymbol where
@@ -51,21 +50,21 @@ def identityVerifier : TMQuery.TimeComputable (id : List TapeSymbol → List Tap
     ⟨0, ⟨(), 0⟩, ⟨TMState.init rejectingControl input, 0⟩, rfl, rfl, le_rfl⟩)
 
 -- An unchanged input with a true first bit still has the separator and certificate on its tape.
-example : Instance.ofQueryVerifier identityVerifier [true] 2 ∉ satisfiable := by
-  rw [mem_satisfiable_ofQueryVerifier_iff]
+example : ofQueryVerifier identityVerifier [true] 2 ∉ accepted := by
+  rw [mem_accepted_ofQueryVerifier_iff]
   rintro ⟨certificate, hlength, houtput⟩
   have := congrArg List.length houtput
   simp [wordPair_encode, hlength] at this
 
 -- An accepting bit in the certificate cannot replace a rejecting bit at the output head.
-example : Instance.ofQueryVerifier identityVerifier [false] 1 ∉ satisfiable := by
-  rw [mem_satisfiable_ofQueryVerifier_iff]
+example : ofQueryVerifier identityVerifier [false] 1 ∉ accepted := by
+  rw [mem_accepted_ofQueryVerifier_iff]
   rintro ⟨certificate, _, hhead⟩
   simp [wordPair_encode] at hhead
 
 -- Empty input leaves the separator at the head, which is distinct from an accepting bit.
-example : encoding.encode (Instance.ofQueryVerifier identityVerifier [] 1) ∉ language := by
-  rw [encode_ofQueryVerifier_mem_language_iff]
+example : ofQueryVerifier identityVerifier [] 1 ∉ accepted := by
+  rw [mem_accepted_ofQueryVerifier_iff]
   rintro ⟨certificate, _, hhead⟩
   simp [wordPair_encode] at hhead
 
@@ -89,20 +88,20 @@ def readCertificate : SingleTapeTM.Description TapeSymbol where
     if state = 0 then (none, some true, some 1) else (symbol, none, none)
 
 -- A stationary write and halt takes one transition, rather than zero transitions.
-example : (⟨accept, [], 0, 1⟩ : Instance) ∈ satisfiable := by
+example : (⟨accept, [], 0, 1⟩ : Verification) ∈ accepted := by
   refine ⟨[], rfl, ?_⟩
   apply (acceptsWithin_one_iff true _ _).mpr
   exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl true))⟩, ⟨rfl, rfl⟩, rfl⟩
 
 example (input : List Bool) (certificateLength : ℕ) :
-    (⟨accept, input, certificateLength, 0⟩ : Instance) ∉ satisfiable := by simp
+    (⟨accept, input, certificateLength, 0⟩ : Verification) ∉ accepted := by simp
 
 -- Halting with a false bit rejects even when the machine meets its time bound.
 example (input : List Bool) (certificateLength : ℕ) :
-    (⟨reject, input, certificateLength, 1⟩ : Instance) ∉ satisfiable := by
+    (⟨reject, input, certificateLength, 1⟩ : Verification) ∉ accepted := by
   rintro ⟨certificate, _, h⟩
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
-  simp only [Algolean.Problems.TMSAT.accepting, Set.mem_ofPred_eq] at hfinal
+  simp only [Cslib.Turing.SingleTapeTM.BoundedVerification.accepting, Set.mem_ofPred_eq] at hfinal
   have hhead := congrArg (fun result => result.map (fun cfg => cfg.BiTape.head)) hstep
   rw [Option.map_some, congrArg BiTape.head hfinal.2] at hhead
   simp [SingleTapeTM.Description.machine, reject, SingleTapeTM.initCfg,
@@ -111,7 +110,7 @@ example (input : List Bool) (certificateLength : ℕ) :
 -- A running state with a true bit under the head is not an accepting configuration.
 example : (⟨some (0 : Fin 1), BiTape.mk₁ [.inl true]⟩ : accept.machine.Cfg) ∉
     accepting accept := by
-  simp [Algolean.Problems.TMSAT.accepting]
+  simp [Cslib.Turing.SingleTapeTM.BoundedVerification.accepting]
 
 /-- Halting over true still rejects when another symbol remains to the right. -/
 example : (⟨none, BiTape.mk₁ [.inl true, .inl false]⟩ : accept.machine.Cfg) ∉
@@ -130,7 +129,7 @@ example : (⟨none, (BiTape.mk₁ [.inl false, .inl true]).moveRight⟩ : accept
   cases hleft
 
 -- Erasing the separator leaves a clean answer one cell to the right of the original head.
-example : (⟨readCertificate, [], 1, 2⟩ : Instance) ∈ satisfiable := by
+example : (⟨readCertificate, [], 1, 2⟩ : Verification) ∈ accepted := by
   let tape : BiTape TapeSymbol := ((BiTape.mk₁ [.inr 0, .inl true]).write none).moveRight
   let middle : readCertificate.machine.Cfg := ⟨some (1 : Fin 2), tape⟩
   let final : readCertificate.machine.Cfg := ⟨none, tape⟩
@@ -145,18 +144,18 @@ theorem readCertificate_not_accept_one (word : List TapeSymbol) :
     ¬AcceptsWithin readCertificate word 1 := by
   intro h
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
-  simp only [Algolean.Problems.TMSAT.accepting, Set.mem_ofPred_eq] at hfinal
+  simp only [Cslib.Turing.SingleTapeTM.BoundedVerification.accepting, Set.mem_ofPred_eq] at hfinal
   have hstate := congrArg (fun result => result.map (fun cfg => cfg.state)) hstep
   rw [Option.map_some, hfinal.1] at hstate
   simp [SingleTapeTM.Description.machine, readCertificate, SingleTapeTM.initCfg] at hstate
 
-example : (⟨readCertificate, [], 1, 1⟩ : Instance) ∉ satisfiable := by
+example : (⟨readCertificate, [], 1, 1⟩ : Verification) ∉ accepted := by
   rintro ⟨certificate, _, h⟩
   exact readCertificate_not_accept_one _ h
 
 -- Increasing the time bound cannot introduce a certificate of a different length.
-example : (⟨readCertificate, [], 0, 2⟩ : Instance) ∉ satisfiable := by
-  rw [mem_satisfiable_zero_length, acceptsWithin_iff_exists]
+example : (⟨readCertificate, [], 0, 2⟩ : Verification) ∉ accepted := by
+  rw [mem_accepted_zero_length, acceptsWithin_iff_exists]
   rintro ⟨final, hfinal, steps, hle, hrun⟩
   have hcases : steps = 0 ∨ steps = 1 ∨ steps = 2 := by lia
   rcases hcases with h | h | h
@@ -198,17 +197,6 @@ example : (SingleTapeTM.Description.transitionEncoding (Symbol := TapeSymbol) 0)
     simp [SingleTapeTM.Description.transitionEncoding, Encoding.pair, Encoding.comp, this]
   decide +kernel
 
--- Unary fields reject false bits.
-example : unaryEncoding.decode [true, false] = none := by decide
-
--- The language has exactly the same answers as the structured instances on encoded inputs.
-example (problem : Instance) : encoding.encode problem ∈ language ↔ problem ∈ satisfiable := by
-  simp
-
--- A missing outer separator prevents decoding and therefore prevents language membership.
-example : (encoding.decode [] : Option Instance) = none := rfl
-
-example : [] ∉ language := not_mem_encodedLanguage_of_decode_eq_none (satisfiable) (encoding) rfl
 
 /-- This three-state verifier writes a true bit and halts in one transition. -/
 def threeStateAccept : SingleTapeTM.Description TapeSymbol where
@@ -237,46 +225,6 @@ theorem noncanonicalMachineCode_decodes :
   simp only [Encoding.decode_encode]
   rfl
 
-/-- This payload combines the noncanonical machine description with a two-bit input. -/
-def noncanonicalPayload : List PayloadSymbol :=
-  ((encodingList SingleTapeTM.Description.CodeSymbol).pair
-    SingleTapeTM.Description.wordEncoding).encode (noncanonicalMachineCode, [false, true])
-
-/-- This complete instance uses a one-bit certificate and a time bound of two transitions. -/
-def noncanonicalWord : List CodeSymbol :=
-  ((encodingList PayloadSymbol).pair boundsEncoding).encode (noncanonicalPayload, (1, 2))
-
-/-- All four instance fields survive decoding when the machine header is noncanonical. -/
-theorem noncanonicalWord_decodes : encoding.decode noncanonicalWord =
-    some ⟨threeStateAccept, [false, true], 1, 2⟩ := by
-  rw [Algolean.Problems.TMSAT.encoding, Encoding.decode_ofEquiv_eq_some_iff]
-  apply (Encoding.decode_pair_eq_some_iff _ _).mpr
-  refine ⟨noncanonicalPayload, boundsEncoding.encode (1, 2), rfl, ?_, by simp⟩
-  apply (Encoding.decode_pair_eq_some_iff _ _).mpr
-  exact ⟨noncanonicalMachineCode, SingleTapeTM.Description.wordEncoding.encode [false, true],
-    rfl, noncanonicalMachineCode_decodes, by simp⟩
-
-/-- Changing alphabets still accepts this shorter description of the same machine and instance. -/
-example : (encoding.over (Γ := Bool)).decode
-    ((finiteWordsOver CodeSymbol Bool).encode noncanonicalWord) =
-      some ⟨threeStateAccept, [false, true], 1, 2⟩ := by
-  rw [Encoding.decode_over_encode_word]
-  exact noncanonicalWord_decodes
-
--- This word is shorter than the encoder's chosen representation of the same instance.
-example : noncanonicalWord.length + 1 =
-    (encoding.encode ⟨threeStateAccept, [false, true], 1, 2⟩).length := by
-  simp [noncanonicalWord, noncanonicalPayload, noncanonicalMachineCode,
-    Algolean.Problems.TMSAT.encoding, Algolean.Problems.TMSAT.payloadEncoding,
-    Algolean.Problems.TMSAT.Instance.equiv, boundsEncoding, threeStateAccept, encodingList,
-    SingleTapeTM.Description.encoding, SingleTapeTM.Description.equiv,
-    SingleTapeTM.Description.rowBits, Encoding.ofEquiv, Encoding.sigma, Encoding.pair,
-    Encoding.comp, words, Encoding.ofEncodable, encodingNatBool, encodeNat, encodeNum, encodePosNum,
-    show (2 : Num) = .pos (.bit0 .one) from rfl]
-
--- The decoder-side bound applies to the shorter word, including both independent unary fields.
-example : 2 + 1 + 2 + 3 ≤ noncanonicalWord.length :=
-  input_length_add_bounds_le_length_of_decode noncanonicalWord_decodes
 
 /-- This finite description writes a chosen symbol and halts after one stationary transition. -/
 def writesAndHalts {Γ : Type} (yes : Γ) :
@@ -291,21 +239,21 @@ in one transition. This includes alphabets with just one symbol.
 -/
 theorem accepts_chosen_symbol {Γ : Type} [Fintype Γ]
     (yes : Γ) :
-    (⟨writesAndHalts yes, [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance Γ) ∈
-      Algolean.Problems.TMSAT.satisfiable yes := by
+    (⟨writesAndHalts yes, [], 0, 1⟩ : SingleTapeTM.BoundedVerification Γ) ∈
+      Cslib.Turing.SingleTapeTM.BoundedVerification.accepted yes := by
   refine ⟨[], rfl, ?_⟩
   apply (acceptsWithin_one_iff yes _ _).mpr
   exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl yes))⟩, ⟨rfl, rfl⟩, rfl⟩
 
 /-- A three-symbol instance accepts when its chosen accepting symbol is two. -/
 theorem ternary_accepts :
-    (⟨writesAndHalts (2 : Fin 3), [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance (Fin 3)) ∈
-      Algolean.Problems.TMSAT.satisfiable 2 := accepts_chosen_symbol _
+    (⟨writesAndHalts (2 : Fin 3), [], 0, 1⟩ : SingleTapeTM.BoundedVerification (Fin 3)) ∈
+      Cslib.Turing.SingleTapeTM.BoundedVerification.accepted 2 := accepts_chosen_symbol _
 
 /-- The same three-symbol instance rejects when the chosen accepting symbol is one. -/
 theorem ternary_rejects_other_symbol :
-    (⟨writesAndHalts (2 : Fin 3), [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance (Fin 3)) ∉
-      Algolean.Problems.TMSAT.satisfiable 1 := by
+    (⟨writesAndHalts (2 : Fin 3), [], 0, 1⟩ : SingleTapeTM.BoundedVerification (Fin 3)) ∉
+      Cslib.Turing.SingleTapeTM.BoundedVerification.accepted 1 := by
   rintro ⟨certificate, _, h⟩
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff (1 : Fin 3) _ _).mp h
   have hhead := congrArg (fun result => result.map (fun cfg => cfg.BiTape.head)) hstep
@@ -313,41 +261,30 @@ theorem ternary_rejects_other_symbol :
   simp [SingleTapeTM.Description.machine, writesAndHalts, SingleTapeTM.initCfg,
     BiTape.optionMove, BiTape.write, BiTape.mk₁] at hhead
 
-/-- Complete instances over a three-symbol alphabet survive encoding and decoding. -/
-theorem ternary_encoding_roundtrip (problem : Algolean.Problems.TMSAT.Instance (Fin 3)) :
-    Algolean.Problems.TMSAT.encoding.decode (Algolean.Problems.TMSAT.encoding.encode problem) =
-      some problem := by simp
 
 /-- A one-symbol input alphabet is permitted without assuming a second ordinary symbol. -/
 theorem unary_accepts :
-    (⟨writesAndHalts (), [], 0, 1⟩ : Algolean.Problems.TMSAT.Instance Unit) ∈
-      Algolean.Problems.TMSAT.satisfiable () := accepts_chosen_symbol _
+    (⟨writesAndHalts (), [], 0, 1⟩ : SingleTapeTM.BoundedVerification Unit) ∈
+      Cslib.Turing.SingleTapeTM.BoundedVerification.accepted () := accepts_chosen_symbol _
 
 /-- Compilation rejects an unchanged pair even when its first symbol is the accepting symbol. -/
 theorem ternary_compiled_query :
-    Instance.ofQueryVerifier
+    ofQueryVerifier
       (TMQuery.TimeComputable.id (Symbol := Extended (Fin 3) 1)) [2] 2 ∉
-      Algolean.Problems.TMSAT.satisfiable (2 : Fin 3) := by
-  rw [mem_satisfiable_ofQueryVerifier_iff]
+      Cslib.Turing.SingleTapeTM.BoundedVerification.accepted (2 : Fin 3) := by
+  rw [mem_accepted_ofQueryVerifier_iff]
   rintro ⟨certificate, hlength, houtput⟩
   have := congrArg List.length houtput
   simp [wordPair_encode, hlength] at this
 
-/-- Encoding preserves rejection of an unchanged input-certificate pair over one symbol. -/
-theorem unary_compiled_encoding :
-    Algolean.Problems.TMSAT.encoding.encode (Instance.ofQueryVerifier
-      (TMQuery.TimeComputable.id (Symbol := Extended Unit 1)) [()] 1) ∉
-      Algolean.Problems.TMSAT.language () := by
-  rw [encode_ofQueryVerifier_mem_language_iff]
+
+/-- Compilation rejects an unchanged input-certificate pair over a one-symbol alphabet. -/
+theorem unary_compiled_query :
+    ofQueryVerifier (TMQuery.TimeComputable.id (Symbol := Extended Unit 1)) [()] 1 ∉
+      Cslib.Turing.SingleTapeTM.BoundedVerification.accepted () := by
+  rw [mem_accepted_ofQueryVerifier_iff]
   rintro ⟨certificate, hlength, houtput⟩
   have := congrArg List.length houtput
   simp [wordPair_encode, hlength] at this
 
-/-- Successfully decoded bounds apply to three-symbol inputs as well as Boolean inputs. -/
-theorem ternary_decoded_size {word : List CodeSymbol}
-    {problem : Algolean.Problems.TMSAT.Instance (Fin 3)}
-    (h : Algolean.Problems.TMSAT.encoding.decode word = some problem) :
-    problem.input.length + problem.certificateLength + problem.time + 3 ≤ word.length :=
-  input_length_add_bounds_le_length_of_decode h
-
-end AlgoleanTests.TMSAT
+end AlgoleanTests.BoundedVerification

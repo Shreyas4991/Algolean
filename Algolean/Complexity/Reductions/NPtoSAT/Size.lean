@@ -36,20 +36,22 @@ variable {Γ : Type} [Fintype Γ]
     (certificate time : Polynomial Nat) : Polynomial Nat :=
   certificate + time + 2 * (X + certificate + 2 * time + 1) +
     2 * C (verifier.states + 2) + X +
-      NPToTMSAT.Size.fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time + 128
+      NPToSAT.Computation.Size.fixedVerifierLengthBound (Γ := Γ)
+        verifier.states certificate time + 128
 
 /-- The polynomial bounds the unary source words, original input, and complete encoded output. -/
 theorem source_size_le [Nontrivial Γ] (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) :
     let problem : BoundedVerification Γ :=
       ⟨verifier, input, certificate.eval input.length, time.eval input.length⟩
-    problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
+    problem.certificateLength + problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (encode verifier certificate time yes input).length + 128 ≤
           (sizeBound verifier certificate time).eval input.length := by
   have hlength := encode_length_le verifier certificate time yes input
   dsimp only
-  simp only [sizeBound, NPToTMSAT.width, eval_add, eval_mul, eval_X, eval_C, eval_ofNat, eval_one]
+  simp only [sizeBound, NPToSAT.Computation.width,
+    eval_add, eval_mul, eval_X, eval_C, eval_ofNat, eval_one]
   lia
 
 /-- The same bound covers a formula when every written symbol uses at most eight cells. -/
@@ -60,7 +62,7 @@ theorem source_size_le_code [Nontrivial Γ]
     (hwidth : ∀ symbol, (code symbol).length = width) (hsmall : width ≤ 8) :
     let problem : BoundedVerification Γ :=
       ⟨verifier, input, certificate.eval input.length, time.eval input.length⟩
-    problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
+    problem.certificateLength + problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         ((SAT.encoding.encode (formula verifier certificate time yes input)).flatMap code).length +
           128 ≤ (sizeBound verifier certificate time).eval input.length := by

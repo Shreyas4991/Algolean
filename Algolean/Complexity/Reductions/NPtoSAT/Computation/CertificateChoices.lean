@@ -8,8 +8,8 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.ReverseCopying
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryIteration
-public import Algolean.Complexity.Reductions.NPToTMSAT.VariableNames
-public import Algolean.Complexity.Reductions.NPToTMSAT.Variables
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.VariableNames
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 import Mathlib.Tactic.GCongr
 import Mathlib.Tactic.ComputeDegree
 
@@ -29,7 +29,7 @@ open Cslib.Turing.SingleTapeTM
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.CertificateChoices
+namespace Algolean.Algorithms.NPToSAT.Computation.CertificateChoices
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Computability Problems Problems.SAT
 open scoped TMQuery TMQuery.Spec Std.WP
@@ -575,4 +575,4 @@ def writeCertificateLiteralFromCounter (tm : SingleTapeTM Γ) (zero one : Γ)
     writeLiteral_spec (tm := tm) zero one hne code width hwidth literal
       (encodingNatBool.encode position.val).reverse preserved output label origin elapsed
 
-end Algolean.Algorithms.NPToTMSAT.CertificateChoices
+end Algolean.Algorithms.NPToSAT.Computation.CertificateChoices

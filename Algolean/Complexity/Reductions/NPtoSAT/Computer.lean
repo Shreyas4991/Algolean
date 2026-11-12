@@ -39,7 +39,7 @@ public section
 namespace Algolean.Algorithms.NPToSAT
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT Polynomial
-open NPToTMSAT Alphabet Computability
+open NPToSAT.Computation Alphabet Computability
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
@@ -109,19 +109,19 @@ private theorem writeFormula_spec {tm : SingleTapeTM Γ} [DecidableEq tm.State]
   have hsize := source_size_le_code verifier certificate time yes input code width hwidth hsmall
   rw [hword] at hsize
   simp only [List.length_append] at hsize
-  have hi : problem.time + 2 * NPToTMSAT.width problem +
+  have hi : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + (one :: input).length +
         ((one :: first) ++ second).length + 64 ≤ size := by
     simp only [List.length_cons, List.length_append]
     dsimp only [problem, size] at *
     lia
-  have ht : problem.time + 2 * NPToTMSAT.width problem +
+  have ht : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + (one :: input).length +
         (((one :: first) ++ second) ++ third).length + 32 ≤ size := by
     simp only [List.length_cons, List.length_append]
     dsimp only [problem, size] at *
     lia
-  have hf : problem.time + 2 * NPToTMSAT.width problem +
+  have hf : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (first ++ second ++ third ++ fourth).length + 64 ≤ size := by
     simp only [List.length_append]

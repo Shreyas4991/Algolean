@@ -29,7 +29,7 @@ open Cslib.Turing.SingleTapeTM
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.ChoiceIteration
+namespace Algolean.Algorithms.NPToSAT.Computation.ChoiceIteration
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines
 open scoped TMQuery TMQuery.Spec Std.WP
@@ -305,4 +305,4 @@ def afterFirstTime (tm : SingleTapeTM Γ) (tick : Γ) (action : Prog (TMQuery tm
   all_goals lia
 
 
-end Algolean.Algorithms.NPToTMSAT.ChoiceIteration
+end Algolean.Algorithms.NPToSAT.Computation.ChoiceIteration

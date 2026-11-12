@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceLayout
-public import Algolean.Complexity.Reductions.NPToTMSAT.VariableNames
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceLayout
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.VariableNames
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnarySuccessorWriting
 
 /-!
@@ -31,7 +31,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.LiteralWriting
+namespace Algolean.Algorithms.NPToSAT.Computation.LiteralWriting
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT HeadChoices
 open Computability
@@ -374,4 +374,4 @@ def writeTapeLiteral (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSym
       List.append_assoc]
     all_goals lia
 
-end Algolean.Algorithms.NPToTMSAT.LiteralWriting
+end Algolean.Algorithms.NPToSAT.Computation.LiteralWriting

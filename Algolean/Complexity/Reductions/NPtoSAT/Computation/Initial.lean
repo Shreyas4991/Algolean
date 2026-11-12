@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Variables
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 
 /-!
 # Clauses for the initial input and certificate
@@ -25,7 +25,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Problems.SAT Alphabet
 
@@ -195,4 +195,4 @@ theorem initialClauses_bounds (problem : BoundedVerification Γ) :
       · simp only [List.forall_mem_map, Clause.length_implies, List.length_cons, List.length_nil]
         simp
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation

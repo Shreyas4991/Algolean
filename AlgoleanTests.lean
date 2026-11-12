@@ -1,5 +1,6 @@
 module  -- shake: keep-all --deprecated_module: ignore
 
+public import AlgoleanTests.BoundedVerification
 public import AlgoleanTests.CircuitExamples
 public import AlgoleanTests.DeutschJozsaExamples
 public import AlgoleanTests.FreeMonadWP
@@ -20,7 +21,6 @@ public import AlgoleanTests.NPToSATCertificateChoices
 public import AlgoleanTests.NPToSATFormula
 public import AlgoleanTests.NPToSATOutput
 public import AlgoleanTests.NPToSATVariableNames
-public import AlgoleanTests.NPToTMSAT
 public import AlgoleanTests.NaivePatternSearchExamples
 public import AlgoleanTests.Problems
 public import AlgoleanTests.ProgExamples
@@ -39,5 +39,6 @@ public import AlgoleanTests.SingleTapeTMSolves
 public import AlgoleanTests.SingleTapeTMVerification
 public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.SymbolCopying
-public import AlgoleanTests.TMSAT
+public import AlgoleanTests.Tape
+public import AlgoleanTests.VerifierNormalization
 public import AlgoleanTests.WordRAMExamples

@@ -8,7 +8,7 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.WordCopying
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.WordCopying
-public import AlgoleanTests.NPToTMSAT
+public import AlgoleanTests.Tape
 
 /-!
 # Copying symbols across other tape words
@@ -24,7 +24,7 @@ namespace AlgoleanTests.SymbolCopying
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
 open Algolean.Algorithms.SingleTapeTuringMachines
-open AlgoleanTests.NPToTMSAT (tapeView)
+open AlgoleanTests.Tape (tapeView)
 
 /-- This fixed machine has one control state and three tape symbols. -/
 abbrev control : SingleTapeTM (Fin 3) where

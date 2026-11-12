@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Variables
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 
 /-!
 # Clauses for consecutive verifier configurations
@@ -25,7 +25,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Cslib.Turing
 
@@ -140,9 +140,9 @@ private theorem step_iff (first second : Row verifier width) :
 
 end Row
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Problems.SAT
 
@@ -358,4 +358,4 @@ theorem stepClauses_iff (problem : BoundedVerification Γ)
         exact hposition (Fin.ext h.symm)
       simpa only [hcells, List.getElem_set_ne hne] using ha
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation

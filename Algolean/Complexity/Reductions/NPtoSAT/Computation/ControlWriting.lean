@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.LiteralWriting
-public import Algolean.Complexity.Reductions.NPToTMSAT.TransitionClauses
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.LiteralWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TransitionClauses
 
 /-!
 # Writing requirements on the next head position and state
@@ -26,7 +26,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.ControlWriting
+namespace Algolean.Algorithms.NPToSAT.Computation.ControlWriting
 
 open Computability Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT
 open HeadChoices LiteralWriting
@@ -115,4 +115,4 @@ def writeForbiddenControlClause (tm : SingleTapeTM Γ) (zero one tick : Γ)
     tapeLiteralTime, List.append_assoc]
   all_goals lia
 
-end Algolean.Algorithms.NPToTMSAT.ControlWriting
+end Algolean.Algorithms.NPToSAT.Computation.ControlWriting

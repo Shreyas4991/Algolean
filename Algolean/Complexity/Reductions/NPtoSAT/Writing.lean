@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.TransitionWriting
-public import Algolean.Complexity.Reductions.NPToTMSAT.ControlWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TransitionWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ControlWriting
 public import Algolean.Complexity.Reductions.NPtoSAT.Formula
 
 /-!
@@ -34,8 +34,8 @@ public section
 namespace Algolean.Algorithms.NPToSAT.Writing
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Computability Problems Problems.SAT
-open NPToTMSAT NPToTMSAT.HeadChoices NPToTMSAT.LiteralWriting
-open NPToTMSAT.TransitionWriting NPToTMSAT.ControlWriting
+open NPToSAT.Computation NPToSAT.Computation.HeadChoices NPToSAT.Computation.LiteralWriting
+open NPToSAT.Computation.TransitionWriting NPToSAT.Computation.ControlWriting
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
@@ -623,7 +623,7 @@ private theorem piece_eq (verifier : SingleTapeTM.Description (TapeSymbol Γ))
 omit [Inhabited Γ] [DecidableEq Γ] in
 private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     scannedWord problem.verifier code (verifierStates problem.verifier) symbols
-      problem.time (NPToTMSAT.width problem) (problem.verifier.states + 2) =
+      problem.time (NPToSAT.Computation.width problem) (problem.verifier.states + 2) =
       (formulaPrefix ((writeClauses problem).rename Variable.name)).flatMap code := by
   classical
   have hfirst (count : Nat) (hcount : 0 < count) (text : List Γ) :
@@ -631,7 +631,7 @@ private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
     obtain ⟨count, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (by lia : count ≠ 0)
     rw [List.range_succ_eq_map]
     simp
-  have hw : 0 < NPToTMSAT.width problem := by dsimp [NPToTMSAT.width]; lia
+  have hw : 0 < NPToSAT.Computation.width problem := by dsimp [NPToSAT.Computation.width]; lia
   have hindices (count : Nat) : (List.finRange count).map Fin.val = List.range count := by
     ext index
     simp
@@ -642,7 +642,7 @@ private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
       tapeUpdateWord code (indexChoice time position (Encodable.encode control) 0 0) false symbol
         (instruction problem.verifier control symbol).1 :=
     statesWord_eq problem.verifier code _ control symbol rfl
-  have hclause (time : Fin problem.time) (position : Fin (NPToTMSAT.width problem))
+  have hclause (time : Fin problem.time) (position : Fin (NPToSAT.Computation.width problem))
       (control : Option (Fin (problem.verifier.states + 1)))
       (symbol : Option (TapeSymbol Γ)) :
       (certificateEncoding.encode
@@ -655,7 +655,7 @@ private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
     simp [tapeUpdateWord, formulaPrefix, Clause.rename, Clause.implies, Clause.forbid,
       Literal.rename, Variable.name, headName, tapeName, indexChoice, Naming.bits]
   simp only [scannedWord, ChoiceIteration.word, piece_eq,
-    hfirst (problem.verifier.states + 2) (by lia), hfirst (NPToTMSAT.width problem) hw]
+    hfirst (problem.verifier.states + 2) (by lia), hfirst (NPToSAT.Computation.width problem) hw]
   rw [← stateChoices_codes problem]
   simp_rw [← hindices, List.flatMap_map]
   simp only [symbolsWord, hstate, writeClauses, CNF.rename, controlChoices, formulaPrefix,
@@ -672,19 +672,19 @@ The polynomial's coefficients are fixed independently of the input and its lengt
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no : tm.State) (hstates : yes ≠ no) (problem : BoundedVerification Γ)
     (hverifier : problem.verifier = verifier) (input output : List Γ) (size : Nat)
-    (hsize : problem.time + 2 * NPToTMSAT.width problem +
+    (hsize : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (output ++ (formulaPrefix ((writeClauses problem).rename Variable.name)).flatMap
           code).length +
           32 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config = ⟨label,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) input output⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       writeScannedClauses tm verifier zero one tick code yes no
     ⦃ fun _ cost final => final.config = ⟨some yes,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) input
             (output ++ (formulaPrefix ((writeClauses problem).rename
               Variable.name)).flatMap code)⟩ ∧
@@ -692,7 +692,8 @@ The polynomial's coefficients are fixed independently of the input and its lengt
           width).eval size ⦄ := by
   subst verifier
   have hs := writeAll_spec (tm := tm) problem.verifier zero one hne tick code width hwidth
-    yes no hstates (verifierStates problem.verifier) symbols problem.time (NPToTMSAT.width problem)
+    yes no hstates (verifierStates problem.verifier) symbols problem.time
+    (NPToSAT.Computation.width problem)
     (problem.verifier.states + 2) input output size
     (by simpa only [scannedWord_eq] using hsize) label origin elapsed
   vcgen [writeScannedClauses, hs]
@@ -1212,7 +1213,7 @@ private theorem moved_iff_offset {width : Nat} (first second : Fin width) (movem
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem controlBodyWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (time : Fin problem.time) (first second :
-      Fin (NPToTMSAT.width problem) × Option (Fin (problem.verifier.states + 1)))
+      Fin (NPToSAT.Computation.width problem) × Option (Fin (problem.verifier.states + 1)))
     (symbol : Option (TapeSymbol Γ)) :
     controlBodyWord problem.verifier code
       (indexChoice time.val first.1.val (Encodable.encode first.2)
@@ -1226,7 +1227,7 @@ private theorem controlBodyWord_eq (code : CodeSymbol → List Γ) (problem : Bo
 
 omit [Inhabited Γ] [DecidableEq Γ] in
 private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
-    controlWord problem.verifier code problem.time (NPToTMSAT.width problem)
+    controlWord problem.verifier code problem.time (NPToSAT.Computation.width problem)
       (problem.verifier.states + 2) =
       (formulaPrefix ((NPToSAT.controlClauses problem).rename Variable.name)).flatMap code := by
   classical
@@ -1244,7 +1245,7 @@ private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
         (first, second) symbol :=
     controlSymbolWord_eq problem.verifier code _ (first, second) symbol rfl rfl
   have hclause (time : Fin problem.time) (first second :
-      Fin (NPToTMSAT.width problem) × Option (Fin (problem.verifier.states + 1)))
+      Fin (NPToSAT.Computation.width problem) × Option (Fin (problem.verifier.states + 1)))
       (symbol : Option (TapeSymbol Γ)) :
       (certificateEncoding.encode
         ((Clause.forbid [Variable.head time.castSucc first,
@@ -1295,22 +1296,22 @@ for the verifier and alphabet.
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
     (problem : BoundedVerification Γ) (hverifier : problem.verifier = verifier)
     (input output : List Γ) (size : Nat)
-    (hsize : problem.time + 2 * NPToTMSAT.width problem +
+    (hsize : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (output ++ (formulaPrefix ((NPToSAT.controlClauses problem).rename Variable.name)).flatMap
           code).length + 32 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
-    ⦃ fun cost current => AtInput tick (problem.time + 1) (NPToTMSAT.width problem)
+    ⦃ fun cost current => AtInput tick (problem.time + 1) (NPToSAT.Computation.width problem)
         (problem.verifier.states + 2) input output label origin current ∧ cost.steps ≤ elapsed ⦄
       writeControlClauses tm verifier zero one tick code yes no extra
-    ⦃ fun _ cost final => AtInput tick (problem.time + 1) (NPToTMSAT.width problem)
+    ⦃ fun _ cost final => AtInput tick (problem.time + 1) (NPToSAT.Computation.width problem)
         (problem.verifier.states + 2) input
           (output ++ (formulaPrefix ((NPToSAT.controlClauses problem).rename Variable.name)).flatMap
             code) (some yes) origin final ∧
         cost.steps ≤ elapsed + (controlTimeBound verifier width).eval size ⦄ := by
   subst verifier
   have hs := writeControlWords_spec (tm := tm) problem.verifier zero one hne tick code width hwidth
-    yes no extra hfirst hlast hother problem.time (NPToTMSAT.width problem)
+    yes no extra hfirst hlast hother problem.time (NPToSAT.Computation.width problem)
     (problem.verifier.states + 2) input output size
     (by simpa only [controlWord_eq] using hsize) label origin elapsed
   vcgen [hs]
@@ -1349,39 +1350,42 @@ The displayed polynomial bounds every head move made by the program.
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
     (problem : BoundedVerification Γ) (hverifier : problem.verifier = verifier)
     (input output : List Γ) (size : Nat)
-    (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
+    (hsize : problem.time + 2 * NPToSAT.Computation.width problem +
+      2 * (problem.verifier.states + 2) +
       input.length + (output ++
         (formulaPrefix ((NPToSAT.stepClauses problem).rename Variable.name)).flatMap code).length +
           32 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
-    ⦃ fun cost current => AtInput tick (problem.time + 1) (NPToTMSAT.width problem)
+    ⦃ fun cost current => AtInput tick (problem.time + 1) (NPToSAT.Computation.width problem)
         (problem.verifier.states + 2) input output label origin current ∧ cost.steps ≤ elapsed ⦄
       writeTransitions tm verifier zero one tick code yes no extra
-    ⦃ fun _ cost final => AtInput tick (problem.time + 1) (NPToTMSAT.width problem)
+    ⦃ fun _ cost final => AtInput tick (problem.time + 1) (NPToSAT.Computation.width problem)
         (problem.verifier.states + 2) input (output ++
           (formulaPrefix ((NPToSAT.stepClauses problem).rename Variable.name)).flatMap code)
           (some yes) origin final ∧
         cost.steps ≤ elapsed + (transitionTimeBound verifier width).eval size ⦄ := by
-  let first := (formulaPrefix ((NPToTMSAT.writeClauses problem).rename Variable.name)).flatMap code
+  let first :=
+    (formulaPrefix ((NPToSAT.Computation.writeClauses problem).rename Variable.name)).flatMap code
   let second := (formulaPrefix ((NPToSAT.controlClauses problem).rename Variable.name)).flatMap code
   let third :=
-    (formulaPrefix ((NPToTMSAT.unchangedClauses problem).rename Variable.name)).flatMap code
+    (formulaPrefix
+      ((NPToSAT.Computation.unchangedClauses problem).rename Variable.name)).flatMap code
   have heq : (formulaPrefix ((NPToSAT.stepClauses problem).rename Variable.name)).flatMap code =
       first ++ second ++ third := by
     simp [NPToSAT.stepClauses, CNF.rename, first, second, third, List.flatMap_append,
       List.append_assoc]
-  have hs₁ : problem.time + 2 * NPToTMSAT.width problem +
+  have hs₁ : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length + (output ++ first).length + 32 ≤ size := by
     rw [heq] at hsize
     simp only [List.length_append] at hsize ⊢
     lia
-  have hs₂ : problem.time + 2 * NPToTMSAT.width problem +
+  have hs₂ : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (output ++ first ++ second).length + 32 ≤ size := by
     rw [heq] at hsize
     simp only [List.length_append] at hsize ⊢
     lia
-  have hs₃ : problem.time + 2 * NPToTMSAT.width problem +
+  have hs₃ : problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (output ++ first ++ second ++ third).length + 32 ≤ size := by
     simpa only [heq, List.append_assoc] using hsize
@@ -1391,12 +1395,13 @@ The displayed polynomial bounds every head move made by the program.
     yes no extra hfirst hlast hother problem hverifier input (output ++ first) size hs₂
     (some yes) origin (elapsed + (scannedTimeBound verifier width).eval size)
   have hu := TransitionWriting.writeUnchangedClauses_spec (tm := tm) zero one hne tick code
-    width hwidth symbols yes no extra hfirst hlast hother problem.time (NPToTMSAT.width problem)
+    width hwidth symbols yes no extra hfirst hlast hother problem.time
+    (NPToSAT.Computation.width problem)
     (problem.verifier.states + 2) input (output ++ first ++ second) size
     (by simpa only [symbols, TransitionWriting.unchangedWord_eq, third] using hs₃)
     (some yes) origin (elapsed + (scannedTimeBound verifier width).eval size +
       (controlTimeBound verifier width).eval size)
-  have hword : unchangedWord code symbols problem.time (NPToTMSAT.width problem)
+  have hword : unchangedWord code symbols problem.time (NPToSAT.Computation.width problem)
       (problem.verifier.states + 2) = third := by
     simpa only [symbols, third] using TransitionWriting.unchangedWord_eq code problem
   have ht := TransitionWriting.unchangedTime_le width size (symbols (Γ := Γ)).length

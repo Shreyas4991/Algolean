@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import AlgoleanTests.NPToTMSAT
+public import AlgoleanTests.Tape
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Regions
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Regions
 
@@ -24,7 +24,7 @@ namespace AlgoleanTests.MetaTMNavigation
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
 open Algolean.Algorithms.SingleTapeTuringMachines
-open AlgoleanTests.NPToTMSAT (tapeView)
+open AlgoleanTests.Tape (tapeView)
 
 /-- This machine has two Boolean control states. Its Query instructions determine the execution. -/
 abbrev control : SingleTapeTM Bool where

@@ -9,9 +9,9 @@ module
 public import Algolean.Complexity.Reductions.NPtoSAT.PositionIteration
 public import Algolean.Complexity.Reductions.NPtoSAT.InitialComparison
 public import Algolean.Complexity.Reductions.NPtoSAT.InitialSource
-public import Algolean.Complexity.Reductions.NPToTMSAT.LiteralWriting
-public import Algolean.Complexity.Reductions.NPToTMSAT.CertificateChoices
-public import Algolean.Complexity.Reductions.NPToTMSAT.Initial
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.LiteralWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.CertificateChoices
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Initial
 public import Algolean.Complexity.Reductions.NPtoSAT.InitialCells
 public import Algolean.Complexity.Reductions.NPtoSAT.InitialWords
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.MarkedUnaryCounting
@@ -40,7 +40,8 @@ public section
 namespace Algolean.Algorithms.NPToSAT.InitialWriting
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT Computability
-open NPToTMSAT NPToTMSAT.HeadChoices NPToTMSAT.LiteralWriting PositionIteration
+open NPToSAT.Computation NPToSAT.Computation.HeadChoices NPToSAT.Computation.LiteralWriting
+open PositionIteration
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
@@ -890,7 +891,7 @@ private theorem writeReadSymbol_spec (symbols : List Γ)
 
 
 private def sourceWord (code : CodeSymbol → List Γ) (symbols : List Γ)
-    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToSAT.Computation.width problem))
     (choice : ActiveChoices) : List Γ :=
   match initialSource problem position with
   | .inl symbol => cellWord code choice symbol
@@ -919,10 +920,10 @@ private theorem finishRead_spec (symbols : List Γ) (hcover : ∀ symbol, symbol
     (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToSAT.Computation.width problem))
     (choice : ActiveChoices) (hindex : choice.firstPosition.1 = position.val)
     (htime : choice.time.2 = problem.time)
-    (hrest : position.val + 1 + choice.firstPosition.2 = NPToTMSAT.width problem)
+    (hrest : position.val + 1 + choice.firstPosition.2 = NPToSAT.Computation.width problem)
     (hleft : problem.time ≤ position.val) (hright : problem.time ≤ choice.firstPosition.2)
     (bits : List Bool)
     (hvalue : binaryValue bits.reverse = position.val - problem.time - problem.input.length)
@@ -1019,10 +1020,10 @@ private theorem writeInterior_spec (symbols : List Γ) (hcover : ∀ symbol, sym
     (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToSAT.Computation.width problem))
     (choice : ActiveChoices) (hindex : choice.firstPosition.1 = position.val)
     (htime : choice.time.2 = problem.time)
-    (hrest : position.val + 1 + choice.firstPosition.2 = NPToTMSAT.width problem)
+    (hrest : position.val + 1 + choice.firstPosition.2 = NPToSAT.Computation.width problem)
     (hleft : problem.time ≤ position.val) (hright : problem.time ≤ choice.firstPosition.2)
     (output : List Γ) (size : Nat)
     (hsize : choice.size + (tick :: problem.input).length +
@@ -1083,10 +1084,10 @@ private theorem writeInitialCell_spec (symbols : List Γ) (hcover : ∀ symbol, 
     (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToSAT.Computation.width problem))
     (choice : ActiveChoices) (hindex : choice.firstPosition.1 = position.val)
     (htime : choice.time.2 = problem.time)
-    (hrest : position.val + 1 + choice.firstPosition.2 = NPToTMSAT.width problem)
+    (hrest : position.val + 1 + choice.firstPosition.2 = NPToSAT.Computation.width problem)
     (output : List Γ) (size : Nat)
     (hsize : choice.size + (tick :: problem.input).length +
       (output ++ sourceWord code symbols problem position choice).length + 32 ≤ size)
@@ -1154,7 +1155,7 @@ private theorem writeInitialCell_spec (symbols : List Γ) (hcover : ∀ symbol, 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem initial_cells_moves_le (width size : Nat) (weights : List Nat) :
     PositionIteration.positionIterationMoves size
-      (2 * NPToTMSAT.HeadChoices.comparisonTime size + 640 * (size + 16) ^ 2 +
+      (2 * NPToSAT.Computation.HeadChoices.comparisonTime size + 640 * (size + 16) ^ 2 +
         1024 * (2 * size + 16) ^ 2 + 6 * size + 40 + 5 * markedNumberBudget width size +
           (weights.map fun weight =>
             262144 * (width + 1) * weight * (size + 16) ^ 2).sum) + 2 ≤
@@ -1162,7 +1163,7 @@ private theorem initial_cells_moves_le (width size : Nat) (weights : List Nat) :
   simp only [List.sum_map_mul_right]
   rw [List.sum_map_mul_left weights (fun weight => weight) (262144 * (width + 1))]
   simp only [List.map_id']
-  dsimp [PositionIteration.positionIterationMoves, NPToTMSAT.HeadChoices.comparisonTime,
+  dsimp [PositionIteration.positionIterationMoves, NPToSAT.Computation.HeadChoices.comparisonTime,
     markedNumberBudget]
   ring_nf
   lia
@@ -1182,7 +1183,7 @@ private theorem cellIterationMoves_le (width size : Nat) (symbols : List Γ) :
 
 omit [Inhabited Γ] [DecidableEq Γ] in
 private theorem sourceWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
-    (position : Fin (NPToTMSAT.width problem)) (choice : ActiveChoices)
+    (position : Fin (NPToSAT.Computation.width problem)) (choice : ActiveChoices)
     (htime : choice.time.1 = 0) (hposition : choice.firstPosition.1 = position.val) :
     sourceWord code (Finset.univ : Finset Γ).toList problem position choice =
       InitialSource.word code problem position := by
@@ -1195,14 +1196,17 @@ private theorem sourceWord_eq (code : CodeSymbol → List Γ) (problem : Bounded
 
 private noncomputable def cellPiece (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (index : Nat) : List Γ :=
-  if h : index < NPToTMSAT.width problem then InitialSource.word code problem ⟨index, h⟩ else []
+  if h : index < NPToSAT.Computation.width problem then
+    InitialSource.word code problem ⟨index, h⟩
+  else []
 
 omit [Inhabited Γ] [DecidableEq Γ] in
 private theorem cellPiece_word (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
-    (List.range (NPToTMSAT.width problem)).flatMap (cellPiece code problem) =
-      (List.finRange (NPToTMSAT.width problem)).flatMap (InitialSource.word code problem) := by
-  have hi : (List.finRange (NPToTMSAT.width problem)).map Fin.val =
-      List.range (NPToTMSAT.width problem) := by
+    (List.range (NPToSAT.Computation.width problem)).flatMap (cellPiece code problem) =
+      (List.finRange (NPToSAT.Computation.width problem)).flatMap
+        (InitialSource.word code problem) := by
+  have hi : (List.finRange (NPToSAT.Computation.width problem)).map Fin.val =
+      List.range (NPToSAT.Computation.width problem) := by
     ext index
     simp
   rw [← hi, List.flatMap_map]
@@ -1215,38 +1219,39 @@ private theorem writeCells_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
     (problem : BoundedVerification Γ) (output : List Γ) (size : Nat)
-    (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
+    (hsize : problem.time + 2 * NPToSAT.Computation.width problem +
+      2 * (problem.verifier.states + 2) +
       (tick :: problem.input).length + (output ++
-        (List.finRange (NPToTMSAT.width problem)).flatMap
+        (List.finRange (NPToSAT.Computation.width problem)).flatMap
           (InitialSource.word code problem)).length + 32 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config = ⟨label,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) (tick :: problem.input) output⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       InitialCells.writeCells tm tick greater
         (writeInitialCell (Finset.univ : Finset Γ).toList zero one tick code
           greater positive record)
     ⦃ fun _ cost final => final.config = ⟨some greater,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) (tick :: problem.input) (output ++
-            (List.finRange (NPToTMSAT.width problem)).flatMap
+            (List.finRange (NPToSAT.Computation.width problem)).flatMap
               (InitialSource.word code problem))⟩ ∧
         final.headPos = origin ∧ cost.steps ≤ elapsed + positionIterationMoves size
           (cellMoves width size (Finset.univ : Finset Γ).toList) ⦄ := by
   let symbols := (Finset.univ : Finset Γ).toList
   let action := writeInitialCell (tm := tm) symbols zero one tick code greater positive record
   let piece := cellPiece code problem
-  have hp : 0 < NPToTMSAT.width problem := by simp only [NPToTMSAT.width]; lia
+  have hp : 0 < NPToSAT.Computation.width problem := by simp only [NPToSAT.Computation.width]; lia
   have hs : 0 < problem.verifier.states + 2 := by lia
-  have hleaf : PositionSpec tick 0 problem.time (NPToTMSAT.width problem)
+  have hleaf : PositionSpec tick 0 problem.time (NPToSAT.Computation.width problem)
       (problem.verifier.states + 2) (tick :: problem.input) piece (some greater) action size
       (cellMoves width size symbols) := by
     intro index rest hindex out hcap positionHead steps
-    have hbound : index < NPToTMSAT.width problem := by lia
-    let position : Fin (NPToTMSAT.width problem) := ⟨index, hbound⟩
+    have hbound : index < NPToSAT.Computation.width problem := by lia
+    let position : Fin (NPToSAT.Computation.width problem) := ⟨index, hbound⟩
     let choice : ActiveChoices := ⟨(0, problem.time), (index, rest),
-      (0, problem.verifier.states + 2 - 1), (0, NPToTMSAT.width problem - 1),
+      (0, problem.verifier.states + 2 - 1), (0, NPToSAT.Computation.width problem - 1),
       (0, problem.verifier.states + 2 - 1)⟩
     have hw : sourceWord code symbols problem position choice = piece index := by
       dsimp only [symbols]
@@ -1265,7 +1270,7 @@ private theorem writeCells_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     rw [hw] at ha
     simpa only [action, choice] using ha
   have hc := InitialCells.writeCells_spec (tm := tm) tick greater action problem.time
-    (NPToTMSAT.width problem) (problem.verifier.states + 2) hp hs (tick :: problem.input)
+    (NPToSAT.Computation.width problem) (problem.verifier.states + 2) hp hs (tick :: problem.input)
     output piece size (cellMoves width size symbols) hleaf (by
       simpa only [piece, cellPiece_word] using hsize) label origin elapsed
   simpa only [action, piece, symbols, cellPiece_word] using hc
@@ -1298,39 +1303,44 @@ returns to the first time cell, and finishes within the stated polynomial move b
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
     (problem : BoundedVerification Γ) (hverifier : problem.verifier = verifier)
     (output : List Γ) (size : Nat)
-    (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
+    (hsize : problem.time + 2 * NPToSAT.Computation.width problem +
+      2 * (problem.verifier.states + 2) +
       (tick :: problem.input).length + (output ++
         (formulaPrefix ((initialClauses problem).rename Variable.name)).flatMap code).length +
           64 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config = ⟨label,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) (tick :: problem.input) output⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       writeInitialClauses tm verifier zero one tick code greater positive record
     ⦃ fun _ cost final => final.config = ⟨some greater,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) (tick :: problem.input) (output ++
             (formulaPrefix ((initialClauses problem).rename Variable.name)).flatMap code)⟩ ∧
         final.headPos = origin ∧
         cost.steps ≤ elapsed + (timeBound (Γ := Γ) width).eval size ⦄ := by
   subst verifier
   let head := HeadWriting.word code (Encodable.encode (some problem.verifier.initial)) problem.time
-  let cells := (List.finRange (NPToTMSAT.width problem)).flatMap (InitialSource.word code problem)
+  let cells :=
+    (List.finRange (NPToSAT.Computation.width problem)).flatMap (InitialSource.word code problem)
   have hw : (formulaPrefix ((initialClauses problem).rename Variable.name)).flatMap code =
       head ++ cells := InitialSource.initialClauses_word code problem
-  have hhcap : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
+  have hhcap : problem.time + 2 * NPToSAT.Computation.width problem +
+    2 * (problem.verifier.states + 2) +
       (tick :: problem.input).length + (output ++ head).length + 32 ≤ size := by
     rw [hw] at hsize
     simp only [List.length_append] at hsize ⊢
     lia
-  have hccap : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
+  have hccap : problem.time + 2 * NPToSAT.Computation.width problem +
+    2 * (problem.verifier.states + 2) +
       (tick :: problem.input).length + ((output ++ head) ++ cells).length + 32 ≤ size := by
     rw [hw] at hsize
     simp only [List.length_append] at hsize ⊢
     lia
   have hh := HeadWriting.writeHead_spec (tm := tm) zero one hne tick code width hwidth
-    (Encodable.encode (some problem.verifier.initial)) problem.time (NPToTMSAT.width problem)
+    (Encodable.encode (some problem.verifier.initial)) problem.time
+    (NPToSAT.Computation.width problem)
     (problem.verifier.states + 2) (tick :: problem.input) output size hhcap label origin elapsed
   have hc := writeCells_spec (tm := tm) zero one hne tick code width hwidth greater positive
     hstates record hrecord problem (output ++ head) size hccap label origin

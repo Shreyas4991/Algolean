@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Variables
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 public import Algolean.Problems.Encodings.Pairing
 public import Algolean.Problems.Encodings.SAT
 
@@ -28,7 +28,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.Variable
+namespace Algolean.Algorithms.NPToSAT.Computation.Variable
 
 open Computability Problems
 
@@ -82,9 +82,9 @@ theorem name_injective : Function.Injective (name (problem := problem)) := by
   simp [name, BooleanTapeEncoding.length_pair]
   lia
 
-end Algolean.Algorithms.NPToTMSAT.Variable
+end Algolean.Algorithms.NPToSAT.Computation.Variable
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Computability Problems
 
@@ -129,9 +129,9 @@ theorem controlCode_injective (problem : BoundedVerification Γ) :
   simp only [Prod.mk.injEq] at h
   exact Prod.ext (Fin.ext h.1) (Encodable.encode_injective h.2)
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation
 
-namespace Algolean.Algorithms.NPToTMSAT.Naming
+namespace Algolean.Algorithms.NPToSAT.Computation.Naming
 
 open Cslib.Turing Computability Problems
 
@@ -160,9 +160,10 @@ omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 /-- The head name formed from these fields is the existing bounded-computation variable name. -/
 theorem bits_head_eq_name [Encodable Γ] (problem : BoundedVerification Γ)
     (time : Fin (problem.time + 1))
-    (control : Fin (NPToTMSAT.width problem) × Option (Fin (problem.verifier.states + 1))) :
+    (control : Fin (NPToSAT.Computation.width problem) ×
+      Option (Fin (problem.verifier.states + 1))) :
     bits .head (encodingNatBool.encode time.val) (encodingNatBool.encode control.1.val)
       (encodingNatBool.encode (Encodable.encode control.2)) =
         Variable.name (.head time control) := rfl
 
-end Algolean.Algorithms.NPToTMSAT.Naming
+end Algolean.Algorithms.NPToSAT.Computation.Naming

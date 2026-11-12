@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.HeadChoices
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.HeadChoices
 
 /-!
 # Finding cells inside the initial input and certificate
@@ -26,7 +26,7 @@ public section
 namespace Algolean.Algorithms.NPToSAT.InitialComparison
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT
-open NPToTMSAT.HeadChoices
+open NPToSAT.Computation.HeadChoices
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true

@@ -7,7 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPtoSAT.PositionIteration
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceIteration
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
 
 /-!
 # Writing the initial tape cells in order
@@ -26,7 +26,7 @@ public section
 namespace Algolean.Algorithms.NPToSAT.InitialCells
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines
-open NPToTMSAT NPToTMSAT.HeadChoices PositionIteration
+open NPToSAT.Computation NPToSAT.Computation.HeadChoices PositionIteration
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true

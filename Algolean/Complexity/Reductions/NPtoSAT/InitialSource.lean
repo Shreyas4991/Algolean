@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Initial
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Initial
 
 /-!
 # Reading the initial tape from the original input
@@ -23,7 +23,7 @@ public section
 
 namespace Algolean.Algorithms.NPToSAT.InitialSource
 
-open Cslib.Turing NPToTMSAT
+open Cslib.Turing NPToSAT.Computation
 
 variable {Γ : Type}
 

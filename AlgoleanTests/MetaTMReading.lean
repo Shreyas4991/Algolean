@@ -23,7 +23,7 @@ namespace AlgoleanTests.MetaTMReading
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
 open Algolean.Algorithms.SingleTapeTuringMachines
-open AlgoleanTests.NPToTMSAT (tapeView)
+open AlgoleanTests.Tape (tapeView)
 
 /--
 This runs each fixed comparison on every Boolean word of length at most four. It includes

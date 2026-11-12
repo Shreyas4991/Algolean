@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Formula
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Formula
 import Mathlib.Tactic.GCongr
 
 /-!
@@ -24,7 +24,7 @@ public section
 
 attribute [local instance 100] Fintype.toEncodable
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Computability Problems Problems.SAT
 
@@ -199,4 +199,4 @@ theorem fixedVerifier_length_le [Nontrivial Γ]
 
 end Size
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation

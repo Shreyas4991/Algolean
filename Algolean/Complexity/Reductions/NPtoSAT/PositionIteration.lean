@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceLayout
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceLayout
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.FollowingSelections
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CellMarking
 
@@ -30,7 +30,7 @@ public section
 
 namespace Algolean.Algorithms.NPToSAT.PositionIteration
 
-open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines NPToTMSAT.HeadChoices
+open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines NPToSAT.Computation.HeadChoices
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true

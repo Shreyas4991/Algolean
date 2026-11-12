@@ -6,7 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Instances
+public import Algolean.Complexity.Classes.NP.Verification
+public import AlgoleanTests.Tape
 public meta import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CertificatePadding
 
 /-!
@@ -19,18 +20,13 @@ placed separators. The comparison examples check that matching only a prefix doe
 
 @[expose] public section
 
-namespace AlgoleanTests.NPToTMSAT
+namespace AlgoleanTests.VerifierNormalization
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
 open Algolean.Algorithms.SingleTapeTuringMachines
+open AlgoleanTests.Tape (tapeView)
 
-/-- This records every stored tape cell using lists with decidable equality. -/
-def tapeView {Symbol : Type} [Encodable Symbol] (contents : BiTape Symbol) :
-    Option Nat × List (Option Nat) × List (Option Nat) :=
-  (contents.head.map Encodable.encode, contents.left.toList.map (Option.map Encodable.encode),
-    contents.right.toList.map (Option.map Encodable.encode))
-
-/-- This machine supplies one state for the certificate preprocessing program. -/
+/-- This machine has one state for the certificate preprocessing program. -/
 abbrev control : SingleTapeTM (Alphabet.Extended Bool 1) where
   State := Unit
   q₀ := ()
@@ -107,4 +103,4 @@ example (word certificate : List Bool) (bound : Nat)
     (hlen : word.length = 2 * bound + 1) : certificate.length ≤ bound :=
   Problems.CertificatePadding.length_le_bound_of_decode false true hdecode hlen
 
-end AlgoleanTests.NPToTMSAT
+end AlgoleanTests.VerifierNormalization

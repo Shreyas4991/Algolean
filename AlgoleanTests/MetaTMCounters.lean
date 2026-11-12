@@ -27,7 +27,7 @@ namespace AlgoleanTests.MetaTMCounters
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
 open Algolean.Algorithms.SingleTapeTuringMachines
-open AlgoleanTests.NPToTMSAT (tapeView)
+open AlgoleanTests.Tape (tapeView)
 
 /--
 This runs subtraction on short positive counters. It checks that the digits still occupy the

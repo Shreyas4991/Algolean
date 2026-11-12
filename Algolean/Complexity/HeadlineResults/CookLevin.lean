@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.NP
+public import Algolean.Complexity.Classes.NP
 public import Algolean.Complexity.Membership.NP.SAT
 public import Algolean.Complexity.Reductions.NPtoSAT.Reduction
 

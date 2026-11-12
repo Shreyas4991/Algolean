@@ -8,7 +8,7 @@ module
 
 public import Algolean.Complexity.Reductions.NPtoSAT.Output
 public meta import Algolean.Complexity.Reductions.NPtoSAT.Output
-public import AlgoleanTests.NPToTMSAT
+public import AlgoleanTests.Tape
 
 /-!
 # Running the direct reduction's output cleanup
@@ -26,7 +26,7 @@ namespace AlgoleanTests.NPToSATOutput
 
 open Algolean Algolean.Algorithms Cslib Cslib.Turing TMQuery
 open Algolean.Algorithms.NPToSAT
-open AlgoleanTests.NPToTMSAT (tapeView)
+open AlgoleanTests.Tape (tapeView)
 
 /-- This fixed machine has one control state and three tape symbols. -/
 abbrev control : SingleTapeTM (Fin 3) where
@@ -42,7 +42,7 @@ def checkCleanup : IO Unit := do
   for (times, positions, states) in [(0, 0, 0), (1, 1, 1), (2, 3, 2), (0, 2, 0)] do
     for input in [[], [1], [0, 1, 2]] do
       for output in [[], [2], [1, 0, 2]] do
-        let original := NPToTMSAT.ChoiceIteration.layout tick times positions states
+        let original := NPToSAT.Computation.ChoiceIteration.layout tick times positions states
           (tick :: input) (tick :: output)
         let initial : TMState control := { config := ⟨some (), original⟩, headPos := -5 }
         let size := times + 2 * positions + 2 * states + input.length + 7

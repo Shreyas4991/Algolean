@@ -6,10 +6,10 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.LiteralWriting
-public import Algolean.Complexity.Reductions.NPToTMSAT.HeadChoices
-public import Algolean.Complexity.Reductions.NPToTMSAT.TransitionClauses
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceIteration
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.LiteralWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.HeadChoices
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TransitionClauses
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CellMarking
 
 /-!
@@ -32,7 +32,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.TransitionWriting
+namespace Algolean.Algorithms.NPToSAT.Computation.TransitionWriting
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT
 open HeadChoices LiteralWriting
@@ -432,7 +432,7 @@ omit [Inhabited Γ] [DecidableEq Γ] in
 /-- The cell-preservation writer uses exactly the existing finite-computation clauses. -/
 theorem unchangedWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     unchangedWord code (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
-      problem.time (NPToTMSAT.width problem) (problem.verifier.states + 2) =
+      problem.time (NPToSAT.Computation.width problem) (problem.verifier.states + 2) =
         (formulaPrefix ((unchangedClauses problem).rename Variable.name)).flatMap code := by
   have hfirst (text : List Γ) :
       (List.range (problem.verifier.states + 2)).flatMap
@@ -450,7 +450,7 @@ theorem unchangedWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerif
     funext value
     cases h : predicate value <;> simp [h]
   have hclause (time : Fin problem.time)
-      (position otherPosition : Fin (NPToTMSAT.width problem))
+      (position otherPosition : Fin (NPToSAT.Computation.width problem))
       (control : Option (Fin (problem.verifier.states + 1)))
       (symbol : Option (TapeSymbol Γ)) :
       (certificateEncoding.encode
@@ -481,4 +481,4 @@ theorem unchangedWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerif
   funext otherPosition
   by_cases h : position.val = otherPosition.val <;> simp [h, eq_comm]
 
-end Algolean.Algorithms.NPToTMSAT.TransitionWriting
+end Algolean.Algorithms.NPToSAT.Computation.TransitionWriting

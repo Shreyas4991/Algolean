@@ -10,10 +10,10 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BlockOutput
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CellMarking
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.MarkedUnaryWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryComparison
-public import Algolean.Complexity.Reductions.NPToTMSAT.LiteralWriting
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceIteration
-public import Algolean.Complexity.Reductions.NPToTMSAT.VariableNames
-public import Algolean.Complexity.Reductions.NPToTMSAT.Variables
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.LiteralWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.VariableNames
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 
 /-!
 # Writing the head and state choices
@@ -36,7 +36,7 @@ open Cslib.Turing.SingleTapeTM
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.HeadChoices
+namespace Algolean.Algorithms.NPToSAT.Computation.HeadChoices
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT
 open scoped TMQuery TMQuery.Spec Std.WP
@@ -950,15 +950,15 @@ omit [Inhabited Γ] [Fintype Γ] in
 /-- The writer's word is exactly the existing head-choice clauses with their existing names. -/
 theorem word_eq_headClauses [Encodable Γ] (code : CodeSymbol → List Γ)
     (problem : BoundedVerification Γ) :
-    word code (problem.time + 1) (NPToTMSAT.width problem) (problem.verifier.states + 2) =
+    word code (problem.time + 1) (NPToSAT.Computation.width problem) (problem.verifier.states + 2) =
       (formulaPrefix ((headClauses problem).rename Variable.name)).flatMap code := by
-  let controlCode := fun control : Fin (NPToTMSAT.width problem) ×
+  let controlCode := fun control : Fin (NPToSAT.Computation.width problem) ×
       Option (Fin (problem.verifier.states + 1)) => (control.1.val, Encodable.encode control.2)
-  have hchoices : numericChoices (NPToTMSAT.width problem) (problem.verifier.states + 2) =
+  have hchoices : numericChoices (NPToSAT.Computation.width problem) (problem.verifier.states + 2) =
       (controlChoices problem).map controlCode := (controlChoices_codes problem).symm
   have hmap (time : Fin (problem.time + 1)) :
       (CNF.exactlyOne ((controlChoices problem).map (Variable.head time))).rename Variable.name =
-        rowFormula time.val (NPToTMSAT.width problem) (problem.verifier.states + 2) := by
+        rowFormula time.val (NPToSAT.Computation.width problem) (problem.verifier.states + 2) := by
     rw [← CNF.rename_exactlyOne (Variable.head time) (by intro first second h; cases h; rfl)]
     rw [rowFormula, hchoices,
       ← CNF.rename_exactlyOne controlCode (controlCode_injective problem)]
@@ -971,7 +971,7 @@ theorem word_eq_headClauses [Encodable Γ] (code : CodeSymbol → List Γ)
       Naming.bits_head_eq_name]
   have hformula : (headClauses problem).rename Variable.name =
       (List.finRange (problem.time + 1)).flatMap (fun time =>
-        rowFormula time.val (NPToTMSAT.width problem) (problem.verifier.states + 2)) := by
+        rowFormula time.val (NPToSAT.Computation.width problem) (problem.verifier.states + 2)) := by
     simp only [headClauses, CNF.rename, List.map_flatMap]
     congr 1
     funext time
@@ -981,7 +981,7 @@ theorem word_eq_headClauses [Encodable Γ] (code : CodeSymbol → List Γ)
   rw [hformula]
   simp only [word, rowParts_eq_formula]
   have hrange := congrArg (List.flatMap (fun time =>
-    (formulaPrefix (rowFormula time (NPToTMSAT.width problem)
+    (formulaPrefix (rowFormula time (NPToSAT.Computation.width problem)
       (problem.verifier.states + 2))).flatMap code)) htimes
   simpa only [List.flatMap_map, Function.comp_def, formulaPrefix, List.flatMap_assoc] using
     hrange.symm
@@ -998,7 +998,7 @@ theorem writeHeadClauses_spec [Encodable Γ]
     (problem : BoundedVerification Γ) (input output : List Γ) (size : Nat)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     let times := problem.time + 1
-    let positions := NPToTMSAT.width problem
+    let positions := NPToSAT.Computation.width problem
     let states := problem.verifier.states + 2
     let written := (formulaPrefix ((headClauses problem).rename Variable.name)).flatMap code
     times + 2 * positions + 2 * states + input.length + (output ++ written).length + 32 ≤ size →
@@ -1011,8 +1011,8 @@ theorem writeHeadClauses_spec [Encodable Γ]
   intro hsize
   simpa only [word_eq_headClauses] using writeHeadChoices_spec (tm := tm) zero one hne tick
     code width hwidth different equal extra hfirst hlast hother (problem.time + 1)
-    (NPToTMSAT.width problem) (problem.verifier.states + 2) input output size
+    (NPToSAT.Computation.width problem) (problem.verifier.states + 2) input output size
     (by simpa only [word_eq_headClauses] using hsize) label origin elapsed
 
 
-end Algolean.Algorithms.NPToTMSAT.HeadChoices
+end Algolean.Algorithms.NPToSAT.Computation.HeadChoices

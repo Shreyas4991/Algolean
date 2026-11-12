@@ -111,8 +111,8 @@ unary time cell, after removing the certificate count, within the stated polynom
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       program tm verifier certificate time zero one tick separator different equal extra code
     ⦃ fun _ cost final => final.config = ⟨some different,
-        NPToTMSAT.ChoiceIteration.layout tick (problem.time + 1)
-          (NPToTMSAT.width problem) (verifier.states + 2) (tick :: input)
+        NPToSAT.Computation.ChoiceIteration.layout tick (problem.time + 1)
+          (NPToSAT.Computation.width problem) (verifier.states + 2) (tick :: input)
           (tick :: choiceWord verifier certificate time input code)⟩ ∧
         final.headPos = origin + input.length + 1 + problem.certificateLength + 1 ∧
         cost.steps ≤ elapsed + (timeBound verifier certificate time tick separator width).eval
@@ -125,12 +125,12 @@ unary time cell, after removing the certificate count, within the stated polynom
       (bounds verifier.states certificate time)).eval input.length
   have hsize := source_size_le_code verifier certificate time yes input code width hwidth hsmall
   have hprefix := choiceWord_length_le verifier certificate time yes input code
-  have hcap : problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
+  have hcap : problem.certificateLength + problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
       ([] ++ Choices.word code problem).length + 64 ≤
         (sizeBound verifier certificate time).eval input.length := by
     simpa only [List.nil_append, choiceWord, problem] using (by lia :
-      problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
+      problem.certificateLength + problem.time + 2 * NPToSAT.Computation.width problem +
         2 * (problem.verifier.states + 2) + input.length +
         (choiceWord verifier certificate time input code).length + 64 ≤
           (sizeBound verifier certificate time).eval input.length)
@@ -144,7 +144,7 @@ unary time cell, after removing the certificate count, within the stated polynom
   dsimp only
   vcgen [program, hp, hc]
   all_goals
-    simp_all [bounds, problem, choiceWord, clock, timeBound, NPToTMSAT.width,
+    simp_all [bounds, problem, choiceWord, clock, timeBound, NPToSAT.Computation.width,
       Polynomial.eval_comp, Nat.add_assoc]
 
 end Algolean.Algorithms.NPToSAT.Start

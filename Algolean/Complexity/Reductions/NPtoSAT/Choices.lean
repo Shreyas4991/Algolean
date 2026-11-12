@@ -7,9 +7,9 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPtoSAT.Preparation
-public import Algolean.Complexity.Reductions.NPToTMSAT.CertificateChoices
-public import Algolean.Complexity.Reductions.NPToTMSAT.HeadChoices
-public import Algolean.Complexity.Reductions.NPToTMSAT.TapeChoices
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.CertificateChoices
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.HeadChoices
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TapeChoices
 
 /-!
 # Writing the certificate, head, and tape choices
@@ -31,7 +31,7 @@ public section
 namespace Algolean.Algorithms.NPToSAT.Choices
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT
-open NPToTMSAT Polynomial
+open NPToSAT.Computation Polynomial
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
@@ -102,23 +102,23 @@ words and finishes at the first time cell, within the stated polynomial bound on
     (different equal extra : tm.State) (hfirst : different ≠ equal)
     (hlast : different ≠ extra) (hother : equal ≠ extra)
     (problem : BoundedVerification Γ) (input output : List Γ) (size : Nat)
-    (hsize : problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
+    (hsize : problem.certificateLength + problem.time + 2 * NPToSAT.Computation.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (output ++ word code problem).length + 64 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config = ⟨label,
         Preparation.layout tick problem.certificateLength
-          [problem.time + 1, NPToTMSAT.width problem, problem.verifier.states + 2,
-            NPToTMSAT.width problem, problem.verifier.states + 2] input output⟩ ∧
+          [problem.time + 1, NPToSAT.Computation.width problem, problem.verifier.states + 2,
+            NPToSAT.Computation.width problem, problem.verifier.states + 2] input output⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       writeChoices tm zero one tick code different equal extra
     ⦃ fun _ cost final => final.config = ⟨some different,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) (tick :: input) (tick :: (output ++ word code problem))⟩ ∧
         final.headPos = origin + problem.certificateLength + 1 ∧
         cost.steps ≤ elapsed + (timeBound (Γ := Γ) width).eval size ⦄ := by
   let times := problem.time + 1
-  let positions := NPToTMSAT.width problem
+  let positions := NPToSAT.Computation.width problem
   let states := problem.verifier.states + 2
   let cert := (formulaPrefix ((certificateClauses problem).rename Variable.name)).flatMap code
   let head := (formulaPrefix ((headClauses problem).rename Variable.name)).flatMap code

@@ -7,9 +7,9 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPtoSAT.PositionIteration
-public import Algolean.Complexity.Reductions.NPToTMSAT.LiteralWriting
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceIteration
-public import Algolean.Complexity.Reductions.NPToTMSAT.Formula
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.LiteralWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Formula
 
 /-!
 # Writing the final acceptance clauses
@@ -33,7 +33,8 @@ public section
 namespace Algolean.Algorithms.NPToSAT.FinalWriting
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT
-open NPToTMSAT NPToTMSAT.HeadChoices NPToTMSAT.LiteralWriting PositionIteration
+open NPToSAT.Computation NPToSAT.Computation.HeadChoices NPToSAT.Computation.LiteralWriting
+open PositionIteration
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
@@ -338,10 +339,10 @@ private theorem writeWords_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem word_eq_finalClauses (code : CodeSymbol → List Γ)
     (problem : BoundedVerification Γ) (yes : Γ) :
-    word code yes problem.time (NPToTMSAT.width problem) =
+    word code yes problem.time (NPToSAT.Computation.width problem) =
       (formulaPrefix ((Formula.finalClauses problem yes).rename Variable.name)).flatMap code := by
-  have hindices : (List.finRange (NPToTMSAT.width problem)).map Fin.val =
-      List.range (NPToTMSAT.width problem) := by
+  have hindices : (List.finRange (NPToSAT.Computation.width problem)).map Fin.val =
+      List.range (NPToSAT.Computation.width problem) := by
     ext index
     simp
   simp only [word, ← hindices, List.flatMap_map]
@@ -370,25 +371,27 @@ head position, and its number of moves is bounded by the displayed cubic polynom
 @[spec] theorem writeFinalClauses_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (problem : BoundedVerification Γ) (yes : Γ) (input output : List Γ) (size : Nat)
-    (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
+    (hsize : problem.time + 2 * NPToSAT.Computation.width problem +
+      2 * (problem.verifier.states + 2) +
       input.length + (output ++
         (formulaPrefix ((Formula.finalClauses problem yes).rename Variable.name)).flatMap
           code).length +
           32 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config = ⟨label,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) input output⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
       writeFinalClauses tm zero one tick code yes
     ⦃ fun _ cost final => final.config = ⟨label,
-        ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
+        ChoiceIteration.layout tick (problem.time + 1) (NPToSAT.Computation.width problem)
           (problem.verifier.states + 2) input (output ++
             (formulaPrefix ((Formula.finalClauses problem yes).rename Variable.name)).flatMap
               code)⟩ ∧
         final.headPos = origin ∧ cost.steps ≤ elapsed + (timeBound width).eval size ⦄ := by
   have hs := writeWords_spec (tm := tm) zero one hne tick code width hwidth yes problem.time
-    (NPToTMSAT.width problem) (problem.verifier.states + 2) (by dsimp [NPToTMSAT.width]; lia)
+    (NPToSAT.Computation.width problem) (problem.verifier.states + 2)
+    (by dsimp [NPToSAT.Computation.width]; lia)
     (by lia) input output size (by simpa only [word_eq_finalClauses] using hsize) label
       origin elapsed
   have ht := lastMoves_le width size problem.time (by lia)

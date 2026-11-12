@@ -6,9 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Initial
-public import Algolean.Complexity.Reductions.NPToTMSAT.TransitionClauses
-public import Algolean.Complexity.Reductions.NPToTMSAT.VariableNames
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Initial
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.TransitionClauses
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.VariableNames
 public import Algolean.Problems.Encodings.SAT
 public import Mathlib.Logic.Equiv.List
 
@@ -27,7 +27,7 @@ public section
 
 attribute [local instance 100] Fintype.toEncodable
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Computability Problems Problems.SAT
 
@@ -82,7 +82,7 @@ theorem indexedFormula_satisfiable_iff (problem : BoundedVerification Γ) (yes :
       simpa only [indexedFormula, CNF.satisfiedBy_append] using hformula
     obtain ⟨certificate, rows, rfl⟩ :=
       (choiceClauses_iff_exists_rows problem assignment).mp hparts.1
-    let computation : Computation problem := {
+    let computation : Run problem := {
       certificate := certificate
       rows := rows
       initial := (initialClauses_iff problem certificate rows).mp hparts.2.1
@@ -114,9 +114,9 @@ The numbering of the alphabet is fixed once for all inputs and certificates.
     CNF SAT.Variable :=
   (indexedFormula problem yes).rename Variable.name
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Computability Problems Problems.SAT Formula
 
@@ -129,4 +129,4 @@ theorem formula_satisfiable_iff (problem : BoundedVerification Γ) (yes : Γ) :
   exact (CNF.rename_mem_satisfiable_iff _ _ Variable.name_injective).trans
     (indexedFormula_satisfiable_iff problem yes)
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation

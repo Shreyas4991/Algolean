@@ -19,7 +19,7 @@ public import Mathlib.Basic.Finite.Sum
   recorded cells fails rather than wrapping around or discarding a cell.
 * The initial row contains the input, its separator, and a certificate of the required length.
   There are `t` blank cells on each side, where `t` is the time bound.
-* A `Computation` has `t + 1` rows. It ends in an accepting row exactly when its certificate
+* A `Run` has `t + 1` rows. It ends in an accepting row exactly when its certificate
   makes the original machine accept within `t` transitions.
 
 The leftmost recorded position is `-t`; the rightmost is `input.length + certificateLength + t`.
@@ -33,7 +33,7 @@ open BoundedVerification
 
 @[expose] public section
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Cslib.Turing Relation Alphabet
 
@@ -402,7 +402,7 @@ This describes the verifier's computation on one certificate of the required len
 exactly `time + 1` rows, starting with the prescribed input. Each following row performs one
 transition, or repeats an already halted row. The rows all record the same fixed tape interval.
 -/
-structure Computation (problem : BoundedVerification Γ) where
+structure Run (problem : BoundedVerification Γ) where
   /-- The certificate contains exactly the specified number of symbols. -/
   certificate : List.Vector Γ problem.certificateLength
   /-- A row records the configuration at each time from zero through the time bound. -/
@@ -412,7 +412,7 @@ structure Computation (problem : BoundedVerification Γ) where
   /-- Consecutive rows obey the transition table, repeating a row after the machine halts. -/
   next : ∀ i : Fin problem.time, (rows i.castSucc).step = some (rows i.succ)
 
-namespace Computation
+namespace Run
 
 variable {problem : BoundedVerification Γ}
 
@@ -422,7 +422,7 @@ Before the last row, neither end of the recorded interval can obstruct a head mo
 -/
 private def ofCertificate (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :
-    Computation problem where
+    Run problem where
   certificate := certificate
   rows i := Row.advance^[i.val] (initialRow problem certificate)
   initial := rfl
@@ -434,10 +434,10 @@ private def ofCertificate (problem : BoundedVerification Γ)
 The computation accepts when its last row has halted with exactly the one-symbol acceptance
 word on the tape, with the head on that symbol.
 -/
-def Accepting (computation : Computation problem) (yes : Γ) : Prop :=
+def Accepting (computation : Run problem) (yes : Γ) : Prop :=
   (computation.rows (Fin.last problem.time)).Accepting yes
 
-private theorem row_toCfg (computation : Computation problem) (i : Fin (problem.time + 1)) :
+private theorem row_toCfg (computation : Run problem) (i : Fin (problem.time + 1)) :
     (computation.rows i).toCfg = (nextCfg problem.verifier)^[i.val]
       (problem.verifier.machine.initCfg
         ((wordPair Γ).encode (problem.input, computation.certificate.val))) := by
@@ -454,13 +454,13 @@ private theorem row_toCfg (computation : Computation problem) (i : Fin (problem.
 The description accepts exactly when the original CSLib machine accepts its chosen certificate
 within the specified time bound. Repeated halted rows do not count as extra machine transitions.
 -/
-theorem accepting_iff (computation : Computation problem) (yes : Γ) :
+theorem accepting_iff (computation : Run problem) (yes : Γ) :
     computation.Accepting yes ↔ AcceptsWithin yes problem.verifier
       ((wordPair Γ).encode (problem.input, computation.certificate.val)) problem.time := by
   rw [Accepting, ← Row.toCfg_mem_accepting, computation.row_toCfg]
   exact iterate_nextCfg_accepting yes problem.verifier _ problem.time
 
-end Computation
+end Run
 
 /--
 The verifier accepts a certificate within its bounds exactly when it has an accepting
@@ -468,13 +468,13 @@ computation described by these finitely many rows and cells. The certificate has
 length.
 -/
 theorem mem_accepted_iff_exists_computation (problem : BoundedVerification Γ) (yes : Γ) :
-    problem ∈ accepted yes ↔ ∃ computation : Computation problem, computation.Accepting yes := by
+    problem ∈ accepted yes ↔ ∃ computation : Run problem, computation.Accepting yes := by
   constructor
   · rintro ⟨certificate, hlength, haccept⟩
-    let computation := Computation.ofCertificate problem ⟨certificate, hlength⟩
+    let computation := Run.ofCertificate problem ⟨certificate, hlength⟩
     exact ⟨computation, (computation.accepting_iff yes).mpr haccept⟩
   · rintro ⟨computation, haccept⟩
     exact ⟨computation.certificate.val, computation.certificate.property,
       (computation.accepting_iff yes).mp haccept⟩
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation

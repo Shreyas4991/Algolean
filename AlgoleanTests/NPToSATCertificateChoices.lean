@@ -6,9 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.CertificateChoices
-public import AlgoleanTests.NPToTMSAT
-public meta import Algolean.Complexity.Reductions.NPToTMSAT.CertificateChoices
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.CertificateChoices
+public import AlgoleanTests.Tape
+public meta import Algolean.Complexity.Reductions.NPtoSAT.Computation.CertificateChoices
 
 /-!
 # Running the certificate-choice clause writer
@@ -27,8 +27,8 @@ public section
 namespace AlgoleanTests.NPToSATCertificateChoices
 
 open Algolean.Algorithms Algolean.Problems Algolean.Problems.SAT
-open Algolean.Algorithms.NPToTMSAT
-open AlgoleanTests.NPToTMSAT (tapeView)
+open Algolean.Algorithms.NPToSAT.Computation
+open AlgoleanTests.Tape (tapeView)
 open Cslib Cslib.Turing TMQuery
 
 /-- This fixed machine has two control states; its Query program chooses every action. -/

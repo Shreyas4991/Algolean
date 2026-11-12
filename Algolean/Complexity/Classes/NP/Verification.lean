@@ -8,11 +8,12 @@ module
 
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CertificatePadding
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Comparison
-public import Algolean.Complexity.PolytimeBasicClasses
+public import Algolean.Complexity.Classes.NP
 public import Algolean.Problems.Certificates
+public import Algolean.Models.SingleTapeTM.BoundedVerificationCompiler
 
 /-!
-# Preparing NP verifiers for TMSAT
+# Fixed verifiers for languages in NP
 
 * `NP.exists_single_symbol_verifier` gives a polynomial-time verifier that leaves one answer
   symbol on an otherwise blank tape.
@@ -21,6 +22,8 @@ public import Algolean.Problems.Certificates
   lengths and one-symbol answers.
 * `NP.fixed_length_certificates` replaces certificates of bounded length with certificates of
   exactly `2 * q(n) + 1` symbols. Decoding removes the added symbols before verification.
+* `NP.exists_bounded_verifier` compiles the fixed verifier and gives polynomial certificate
+  and transition bounds that depend only on the original input length.
 
 The input and certificate alphabet is `Γ`. As in the definition of NP, a separate symbol marks
 where the input ends and the certificate begins on the verifier's tape. Certificate padding
@@ -35,7 +38,7 @@ the original verifier accepts the empty word.
 
 namespace Algolean.Algorithms
 
-open Alphabet Polynomial
+open Cslib.Turing Alphabet Polynomial SingleTapeTM.BoundedVerification
 
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 
@@ -126,5 +129,30 @@ theorem NP.exists_exact_length_verifier {L : Language Γ} (h : L ∈ NP) (yes : 
   rw [hcorrect input]
   simp only [eval_add, eval_mul, eval_ofNat, eval_one]
   exact exists_congr fun word => and_congr_right fun _ => (hword input word).symm
+
+/--
+Every NP language has a fixed verifier and polynomial certificate and time bounds. Membership
+means that the verifier accepts some certificate of exactly that length within the time bound.
+-/
+theorem NP.exists_bounded_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
+    ∃ (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (certificate time : Polynomial ℕ),
+      ∀ input, input ∈ L ↔
+        (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
+          SingleTapeTM.BoundedVerification Γ) ∈ accepted yes := by
+  classical
+  obtain ⟨f, certificate, ⟨computer⟩, _, hcorrect⟩ := NP.exists_exact_length_verifier h yes
+  let := computer.symbolDecidableEq
+  let := computer.stateDecidableEq
+  let C := TMQuery.Compiler.transitionFactor computer.program
+  let time := Polynomial.C C * computer.poly.comp (X + certificate + 1) + Polynomial.C C
+  refine ⟨TMQuery.Compiler.compile computer.program, certificate, time, fun input => ?_⟩
+  have heq : (⟨TMQuery.Compiler.compile computer.program, input, certificate.eval input.length,
+      time.eval input.length⟩ : SingleTapeTM.BoundedVerification Γ) =
+      ofQueryVerifier computer.polynomialBound input (certificate.eval input.length) := by
+    simp [ofQueryVerifier, TMQuery.PolyTimeComputable.polynomialBound, time, C]
+    constructor <;> rfl
+  rw [heq, mem_accepted_ofQueryVerifier_iff]
+  exact hcorrect input
+
 
 end Algolean.Algorithms

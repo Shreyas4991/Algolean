@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Formula
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Formula
 public import Mathlib.Tactic.FinCases
 
 /-!
@@ -25,7 +25,7 @@ open Cslib.Turing.SingleTapeTM
 namespace AlgoleanTests.NPToSATFormula
 
 open Algolean.Problems.SAT Cslib.Turing.SingleTapeTM.BoundedVerification
-open Algolean.Algorithms.NPToTMSAT Cslib.Turing
+open Algolean.Algorithms.NPToSAT.Computation Cslib.Turing
 
 /-- Listing the same variable twice still permits choosing it as the one true variable. -/
 example : CNF.eval (CNF.exactlyOne ([0, 0, 1] : List Nat)) (fun name => name == 0) = true := by
@@ -84,7 +84,7 @@ private def writeAndHalt : SingleTapeTM.Description (TapeSymbol Bool) where
 private def earlyHaltProblem : BoundedVerification Bool := ⟨writeAndHalt, [], 0, 3⟩
 
 /-- The first transition accepts, and the next two rows repeat that same halted configuration. -/
-private def earlyHaltComputation : Computation earlyHaltProblem where
+private def earlyHaltComputation : Run earlyHaltProblem where
   certificate := ⟨[], rfl⟩
   rows i :=
     let first := initialRow earlyHaltProblem ⟨[], rfl⟩
@@ -96,14 +96,14 @@ private def earlyHaltComputation : Computation earlyHaltProblem where
 example : earlyHaltProblem ∈ accepted true := by
   rw [mem_accepted_iff_exists_computation]
   refine ⟨earlyHaltComputation, ?_⟩
-  rw [Computation.Accepting, ← Row.toCfg_mem_accepting]
+  rw [Run.Accepting, ← Row.toCfg_mem_accepting]
   exact ⟨rfl, rfl⟩
 
 /-- The complete CNF formula remains satisfiable when acceptance happens before the time bound. -/
 example : formula earlyHaltProblem true ∈ CNF.satisfiable := by
   rw [formula_satisfiable_iff, mem_accepted_iff_exists_computation]
   refine ⟨earlyHaltComputation, ?_⟩
-  rw [Computation.Accepting, ← Row.toCfg_mem_accepting]
+  rw [Run.Accepting, ← Row.toCfg_mem_accepting]
   exact ⟨rfl, rfl⟩
 
 /-- The complete formula is unsatisfiable when there is no time for the first transition. -/
@@ -148,7 +148,7 @@ example : formula (⟨unaryAccept, [], 0, 1⟩ : BoundedVerification Unit) () �
   exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl ()))⟩, ⟨rfl, rfl⟩, rfl⟩
 
 /-- Even an immediately accepting verifier has no accepting description with zero transitions. -/
-example : ¬∃ computation : Computation (⟨writeAndHalt, [], 0, 0⟩ : BoundedVerification Bool),
+example : ¬∃ computation : Run (⟨writeAndHalt, [], 0, 0⟩ : BoundedVerification Bool),
     computation.Accepting true := by
   rw [← mem_accepted_iff_exists_computation]
   simp

@@ -9,8 +9,8 @@ module
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.BlockCounting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.MarkedUnaryWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.ReverseCopying
-public import Algolean.Complexity.Reductions.NPToTMSAT.VariableNames
-public import Algolean.Complexity.Reductions.NPToTMSAT.Variables
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.VariableNames
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Variables
 
 /-!
 # Writing the symbol choices for every recorded tape cell
@@ -31,7 +31,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT.TapeChoices
+namespace Algolean.Algorithms.NPToSAT.Computation.TapeChoices
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Computability Problems Problems.SAT
 open scoped TMQuery TMQuery.Spec Std.WP
@@ -667,12 +667,12 @@ omit [Inhabited Γ] in
 /-- The writer's output is precisely the existing tape-symbol clauses, with their existing names. -/
 theorem word_eq_tapeClauses (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     word code (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
-        (problem.time + 1) (NPToTMSAT.width problem) =
+        (problem.time + 1) (NPToSAT.Computation.width problem) =
       (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code := by
   let symbols := (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
   have hindices (n : Nat) : List.range n = (List.finRange n).map Fin.val := by
     ext i; simp
-  have hmap (time : Fin (problem.time + 1)) (position : Fin (NPToTMSAT.width problem)) :
+  have hmap (time : Fin (problem.time + 1)) (position : Fin (NPToSAT.Computation.width problem)) :
       (CNF.exactlyOne (symbols.map (Variable.tape time position))).rename Variable.name =
         (CNF.exactlyOne symbols).rename (fun symbol =>
           Naming.bits .tape (encodingNatBool.encode time.val)
@@ -688,7 +688,7 @@ theorem word_eq_tapeClauses (code : CodeSymbol → List Γ) (problem : BoundedVe
     cases literal <;> simp [Literal.rename, Naming.bits, symbolBits, Variable.name]
   have hformula : (tapeClauses problem).rename Variable.name =
       (List.finRange (problem.time + 1)).flatMap fun time =>
-        (List.finRange (NPToTMSAT.width problem)).flatMap fun position =>
+        (List.finRange (NPToSAT.Computation.width problem)).flatMap fun position =>
           (CNF.exactlyOne symbols).rename (fun symbol =>
             Naming.bits .tape (encodingNatBool.encode time.val)
               (encodingNatBool.encode position.val)
@@ -710,14 +710,15 @@ The bounds occur only in the specification. The running program reads them from 
 @[spec] theorem writeTapeChoices_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (problem : BoundedVerification Γ) (preserved : List (List Γ)) (output : List Γ) (size : Nat)
-    (hsize : problem.time + 1 + NPToTMSAT.width problem + regionSpan preserved +
+    (hsize : problem.time + 1 + NPToSAT.Computation.width problem + regionSpan preserved +
       (output ++ (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code).length ≤
         size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
-    ⦃ fun cost current => AtInput tick (problem.time + 1) (NPToTMSAT.width problem)
+    ⦃ fun cost current => AtInput tick (problem.time + 1) (NPToSAT.Computation.width problem)
         preserved output label origin current ∧ cost.steps ≤ elapsed ⦄
       writeTapeChoices tm zero one tick code preserved.length
-    ⦃ fun _ cost final => AtInput tick (problem.time + 1) (NPToTMSAT.width problem) preserved
+    ⦃ fun _ cost final => AtInput tick (problem.time + 1)
+    (NPToSAT.Computation.width problem) preserved
         (output ++ (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code)
         label origin final ∧ cost.steps ≤ elapsed +
           (timeBound width
@@ -725,7 +726,7 @@ The bounds occur only in the specification. The running program reads them from 
   simpa only [writeTapeChoices, word_eq_tapeClauses] using
     writeChoices_spec (tm := tm) zero one hne tick code width hwidth
       (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
-      (problem.time + 1) (NPToTMSAT.width problem) preserved output size
+      (problem.time + 1) (NPToSAT.Computation.width problem) preserved output size
       (by simpa only [word_eq_tapeClauses] using hsize) label origin elapsed
 
-end Algolean.Algorithms.NPToTMSAT.TapeChoices
+end Algolean.Algorithms.NPToSAT.Computation.TapeChoices

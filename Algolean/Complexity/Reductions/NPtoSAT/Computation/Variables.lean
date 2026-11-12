@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Computation
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Basic
 public import Algolean.Problems.SAT.Constraints
 
 /-!
@@ -30,7 +30,7 @@ open BoundedVerification
 
 public section
 
-namespace Algolean.Algorithms.NPToTMSAT
+namespace Algolean.Algorithms.NPToSAT.Computation
 
 open Problems.SAT
 
@@ -271,4 +271,4 @@ theorem choiceClauses_bounds (problem : BoundedVerification Γ) :
       fun time _ => hclause _ (hhead time),
       fun time _ position _ => hclause _ (htape time position)⟩
 
-end Algolean.Algorithms.NPToTMSAT
+end Algolean.Algorithms.NPToSAT.Computation

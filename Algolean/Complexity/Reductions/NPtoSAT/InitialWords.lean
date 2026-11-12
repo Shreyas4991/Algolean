@@ -25,13 +25,13 @@ public section
 namespace Algolean.Algorithms.NPToSAT.InitialSource
 
 open Cslib Cslib.Turing Problems Problems.SAT Computability SingleTapeTuringMachines
-open NPToTMSAT NPToTMSAT.HeadChoices NPToTMSAT.LiteralWriting
+open NPToSAT.Computation NPToSAT.Computation.HeadChoices NPToSAT.Computation.LiteralWriting
 
 variable {Γ : Type} [Fintype Γ] [Encodable Γ]
 
 /-- This is the encoded clause list fixing one initial tape cell. -/
 @[expose] noncomputable def word (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
-    (position : Fin (NPToTMSAT.width problem)) : List Γ :=
+    (position : Fin (NPToSAT.Computation.width problem)) : List Γ :=
   (formulaPrefix (CNF.rename
     (show CNF (Variable problem) from match initialSource problem position with
     | .inl symbol => [[.pos (.tape 0 position symbol)]]
@@ -41,7 +41,7 @@ variable {Γ : Type} [Fintype Γ] [Encodable Γ]
 
 /-- The selected time-zero tape cell gives exactly its existing literal or certificate clauses. -/
 theorem word_eq_selected (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
-    (position : Fin (NPToTMSAT.width problem)) (choice : ActiveChoices)
+    (position : Fin (NPToSAT.Computation.width problem)) (choice : ActiveChoices)
     (htime : choice.time.1 = 0) (hposition : choice.firstPosition.1 = position.val) :
     word code problem position =
       match initialSource problem position with
@@ -62,7 +62,7 @@ theorem initialClauses_word (code : CodeSymbol → List Γ)
     (problem : BoundedVerification Γ) :
     (formulaPrefix ((initialClauses problem).rename Variable.name)).flatMap code =
       HeadWriting.word code (Encodable.encode (some problem.verifier.initial)) problem.time ++
-        (List.finRange (NPToTMSAT.width problem)).flatMap (word code problem) := by
+        (List.finRange (NPToSAT.Computation.width problem)).flatMap (word code problem) := by
   simp only [initialClauses_eq, CNF.rename, List.map_append, formulaPrefix_append,
     List.flatMap_append]
   congr 1

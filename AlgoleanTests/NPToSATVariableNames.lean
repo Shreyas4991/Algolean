@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.VariableNames
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.VariableNames
 
 /-!
 # Checking the boundaries in computation variable names
@@ -23,7 +23,7 @@ public section
 namespace AlgoleanTests.NPToSATVariableNames
 
 open Algolean.Problems Cslib.Turing.SingleTapeTM.BoundedVerification
-open Algolean.Algorithms.NPToTMSAT Computability
+open Algolean.Algorithms.NPToSAT.Computation Computability
 
 /-- This instance has four certificate symbols, two times, and a verifier with two states. -/
 private abbrev exampleInstance : BoundedVerification (Fin 4) where

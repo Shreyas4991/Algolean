@@ -6,9 +6,9 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Normalization
-public import Algolean.Complexity.Reductions.NPToTMSAT.Formula
-public import Algolean.Complexity.Reductions.NPToTMSAT.Size
+public import Algolean.Complexity.Classes.NP.Verification
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Formula
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Size
 import Mathlib.Data.List.Perm.Basic
 
 /-!
@@ -44,13 +44,13 @@ These clauses exclude forbidden next heads. The next head is chosen before the s
 so the machine can write all fixed symbol cases during one visit to a pair of head choices.
 -/
 @[expose] noncomputable def controlClauses (problem : BoundedVerification Γ) :
-    SAT.CNF (NPToTMSAT.Variable problem) :=
+    SAT.CNF (NPToSAT.Computation.Variable problem) :=
   (List.finRange problem.time).flatMap fun time =>
-    (NPToTMSAT.controlChoices problem).flatMap fun first =>
-      (NPToTMSAT.controlChoices problem).flatMap fun second =>
+    (NPToSAT.Computation.controlChoices problem).flatMap fun first =>
+      (NPToSAT.Computation.controlChoices problem).flatMap fun second =>
         (Finset.univ : Finset (Option (TapeSymbol Γ))).toList.flatMap fun symbol =>
-          if NPToTMSAT.controlAllowed problem first symbol second then
-          ([] : SAT.CNF (NPToTMSAT.Variable problem)) else
+          if NPToSAT.Computation.controlAllowed problem first symbol second then
+          ([] : SAT.CNF (NPToSAT.Computation.Variable problem)) else
             [SAT.Clause.forbid [.head time.castSucc first, .tape time.castSucc first.1 symbol,
               .head time.succ second]]
 
@@ -65,16 +65,16 @@ private theorem flatMap_comm_perm {α β γ : Type*} (first : List α) (second :
     exact (ih.append_left _).trans (List.flatMap_append_perm second (part a) _)
 
 private theorem controlClauses_perm (problem : BoundedVerification Γ) :
-    (controlClauses problem).Perm (NPToTMSAT.controlClauses problem) := by
+    (controlClauses problem).Perm (NPToSAT.Computation.controlClauses problem) := by
   classical
   apply List.Perm.flatMap_left (List.finRange problem.time)
   intro time _
-  apply List.Perm.flatMap_left (NPToTMSAT.controlChoices problem)
+  apply List.Perm.flatMap_left (NPToSAT.Computation.controlChoices problem)
   intro first _
-  refine (flatMap_comm_perm (NPToTMSAT.controlChoices problem)
+  refine (flatMap_comm_perm (NPToSAT.Computation.controlChoices problem)
     (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
-    (fun second symbol => if NPToTMSAT.controlAllowed problem first symbol second then
-          ([] : SAT.CNF (NPToTMSAT.Variable problem)) else
+    (fun second symbol => if NPToSAT.Computation.controlAllowed problem first symbol second then
+          ([] : SAT.CNF (NPToSAT.Computation.Variable problem)) else
       [SAT.Clause.forbid [.head time.castSucc first, .tape time.castSucc first.1 symbol,
         .head time.succ second]])).trans ?_
   apply List.Perm.flatMap_left (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
@@ -84,16 +84,16 @@ private theorem controlClauses_perm (problem : BoundedVerification Γ) :
   simp only [List.filterMap_eq_flatMap_toList]
   congr 1
   funext second
-  by_cases h : NPToTMSAT.controlAllowed problem first symbol second <;> simp [h]
+  by_cases h : NPToSAT.Computation.controlAllowed problem first symbol second <;> simp [h]
 
 /--
 These clauses require successive recorded configurations to follow the fixed verifier's
 transition rule. They describe the written symbol, the next head, and the unchanged cells.
 -/
 @[expose] noncomputable def stepClauses (problem : BoundedVerification Γ) :
-    SAT.CNF (NPToTMSAT.Variable problem) :=
-  NPToTMSAT.writeClauses problem ++ controlClauses problem ++
-    NPToTMSAT.unchangedClauses problem
+    SAT.CNF (NPToSAT.Computation.Variable problem) :=
+  NPToSAT.Computation.writeClauses problem ++ controlClauses problem ++
+    NPToSAT.Computation.unchangedClauses problem
 
 /--
 This joins the certificate, head, tape, initial, transition, and acceptance clauses in the
@@ -101,18 +101,21 @@ order written by the direct reduction machine.
 -/
 @[expose] noncomputable def indexedFormula [DecidableEq Γ]
     (problem : BoundedVerification Γ) (yes : Γ) :
-    SAT.CNF (NPToTMSAT.Variable problem) :=
-  NPToTMSAT.choiceClauses problem ++ NPToTMSAT.initialClauses problem ++
-    stepClauses problem ++ NPToTMSAT.Formula.finalClauses problem yes
+    SAT.CNF (NPToSAT.Computation.Variable problem) :=
+  NPToSAT.Computation.choiceClauses problem ++ NPToSAT.Computation.initialClauses problem ++
+    stepClauses problem ++ NPToSAT.Computation.Formula.finalClauses problem yes
 
 private theorem indexedFormula_perm [DecidableEq Γ] (problem : BoundedVerification Γ) (yes : Γ) :
-    (indexedFormula problem yes).Perm (NPToTMSAT.Formula.indexedFormula problem yes) := by
+    (indexedFormula problem yes).Perm (NPToSAT.Computation.Formula.indexedFormula problem yes) := by
   classical
   have h := (controlClauses_perm problem).append_right
-    (NPToTMSAT.unchangedClauses problem ++ NPToTMSAT.Formula.finalClauses problem yes)
-  simpa [indexedFormula, stepClauses, NPToTMSAT.Formula.indexedFormula, NPToTMSAT.stepClauses,
-    List.append_assoc] using ((h.append_left (NPToTMSAT.writeClauses problem)).append_left
-      (NPToTMSAT.initialClauses problem)).append_left (NPToTMSAT.choiceClauses problem)
+    (NPToSAT.Computation.unchangedClauses problem ++
+      NPToSAT.Computation.Formula.finalClauses problem yes)
+  simpa [indexedFormula, stepClauses,
+    NPToSAT.Computation.Formula.indexedFormula, NPToSAT.Computation.stepClauses,
+    List.append_assoc] using ((h.append_left (NPToSAT.Computation.writeClauses problem)).append_left
+      (NPToSAT.Computation.initialClauses problem)).append_left
+        (NPToSAT.Computation.choiceClauses problem)
 
 open Classical in
 /-- This describes the accepting computations of the fixed verifier on one input word. -/
@@ -122,21 +125,21 @@ open Classical in
     (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
       BoundedVerification Γ)
       yes).rename
-      NPToTMSAT.Variable.name
+      NPToSAT.Computation.Variable.name
 
 private theorem formula_perm (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) :
-    (formula verifier certificate time yes input).Perm (NPToTMSAT.formula
+    (formula verifier certificate time yes input).Perm (NPToSAT.Computation.formula
       (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
         BoundedVerification Γ)
         yes) := by
   classical
-  simpa only [formula, NPToTMSAT.formula, SAT.CNF.rename] using
+  simpa only [formula, NPToSAT.Computation.formula, SAT.CNF.rename] using
     (indexedFormula_perm
       (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
         BoundedVerification Γ)
         yes).map
-        (fun clause => clause.rename NPToTMSAT.Variable.name)
+        (fun clause => clause.rename NPToSAT.Computation.Variable.name)
 
 private theorem satisfiable_iff_of_perm {α : Type*} {first second : SAT.CNF α}
     (h : first.Perm second) : first ∈ SAT.CNF.satisfiable ↔ second ∈ SAT.CNF.satisfiable := by
@@ -173,18 +176,19 @@ theorem encode_mem_languageOver [Nontrivial Γ]
         accepted yes := by
   rw [encode, SAT.encode_mem_languageOver]
   exact (satisfiable_iff_of_perm (formula_perm verifier certificate time yes input)).trans
-    (NPToTMSAT.formula_satisfiable_iff _ yes)
+    (NPToSAT.Computation.formula_satisfiable_iff _ yes)
 
 /-- The length of the encoded formula is bounded by a polynomial in the input length. -/
 theorem encode_length_le [Nontrivial Γ]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) :
     (encode verifier certificate time yes input).length ≤
-      (NPToTMSAT.Size.fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time).eval
+      (NPToSAT.Computation.Size.fixedVerifierLengthBound (Γ := Γ)
+        verifier.states certificate time).eval
         input.length := by
   have hlength := encoding_length_eq_of_perm (formula_perm verifier certificate time yes input)
   simpa only [encode, SAT.length_encodingOver, hlength] using
-    NPToTMSAT.Size.fixedVerifier_length_le verifier certificate time yes input
+    NPToSAT.Computation.Size.fixedVerifier_length_le verifier certificate time yes input
 
 end Algolean.Algorithms.NPToSAT
 
@@ -207,7 +211,7 @@ theorem NP.exists_sat_formulas {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
         bound.eval input.length := by
   obtain ⟨verifier, certificate, time, hcorrect⟩ := NP.exists_bounded_verifier h yes
   exact ⟨verifier, certificate, time,
-    NPToTMSAT.Size.fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time,
+    NPToSAT.Computation.Size.fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time,
     fun input => (hcorrect input).trans (NPToSAT.encode_mem_languageOver _ _ _ _ input).symm,
     NPToSAT.encode_length_le verifier certificate time yes⟩
 

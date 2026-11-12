@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.LiteralWriting
-public import Algolean.Complexity.Reductions.NPToTMSAT.ChoiceIteration
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.LiteralWriting
+public import Algolean.Complexity.Reductions.NPtoSAT.Computation.ChoiceIteration
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.UnaryWriting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.CellMarking
 
@@ -29,7 +29,7 @@ public section
 namespace Algolean.Algorithms.NPToSAT.HeadWriting
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Problems Problems.SAT Computability
-open NPToTMSAT Polynomial
+open NPToSAT.Computation Polynomial
 open scoped TMQuery TMQuery.Spec Std.WP
 
 set_option experimental.vcgen true
