@@ -388,7 +388,8 @@ abbrev execute (fuel : Nat) (p : Prog (WordRAM w k) α) (s : RAMState w k) :
     (addr src : Register k) :
     execute (fuel + 1) (FreeM.lift (.store addr src)) s =
       some (⟨(), ⟨1, {s.Registers addr}⟩⟩,
-        ⟨{s with Memory := Function.update s.Memory (s.Registers addr) (s.Registers src)}, fuel⟩) := by
+        ⟨{s with Memory := Function.update s.Memory (s.Registers addr) (s.Registers src)},
+          fuel⟩) := by
   simp [step]
 
 @[simp, grind =] theorem execute_binop_succ (fuel : Nat) (s : RAMState w k)

@@ -41,3 +41,4 @@ public import AlgoleanTests.SingleTapeTuringMachines
 public import AlgoleanTests.SymbolCopying
 public import AlgoleanTests.Tape
 public import AlgoleanTests.VerifierNormalization
+public import AlgoleanTests.WordRAM
