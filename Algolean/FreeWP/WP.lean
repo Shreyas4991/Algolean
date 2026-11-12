@@ -13,8 +13,8 @@ public import Std.WP
 # Weakest preconditions for `FreeM` programs
 
 Logical effect handlers interpret `FreeM` into `Lean.Order.PredTrans`. Monotone handlers
-provide `Std.WP.WPMonad` instances and specifications for `vcgen`. Relational operation
-contracts can supply handlers independently of an executable interpretation.
+provide `Std.WP.WPMonad` instances and specifications for `vcgen`. Primitive operations can
+also be described by their preconditions and allowed results, without an executable interpreter.
 -/
 
 @[expose] public section
@@ -147,6 +147,10 @@ instance instWPMonadFreeM [HasHandler F Pred EPred] : WPMonad (FreeM F) Pred EPr
     change (wpH _ x).apply _ E ⊑ (wpH _ (x >>= f)).apply Q E
     rw [wpH_bind]
     exact PartialOrder.rel_refl
+
+/-- A program that immediately returns a value requires exactly its postcondition at that value. -/
+@[simp] theorem wp_pure [HasHandler F Pred EPred] (a : α) (Q : α → Pred) (E : EPred) :
+    wp (pure a : FreeM F α) Q E = Q a := rfl
 
 /-- The WP of a primitive query is the transformer selected by its logical handler. -/
 @[simp] theorem wp_lift [HasHandler F Pred EPred] (op : F α) (Q : α → Pred) (E : EPred) :

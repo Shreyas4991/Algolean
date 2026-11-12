@@ -119,6 +119,13 @@ private theorem incrementBits_encodePosNum (p : PosNum) :
   cases (n : Num) <;> simp [Computability.encodeNum, Num.succ, Num.succ',
     incrementBits_encodePosNum, Computability.encodePosNum]
 
+/-- Reading the ordinary binary encoding as a positional number recovers its value. -/
+@[simp] theorem binaryValue_encodingNatBool (n : Nat) :
+    binaryValue (Computability.encodingNatBool.encode n) = n := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [← incrementBits_encodingNatBool, binaryValue_incrementBits, ih]
+
 /--
 Adding one preserves the input length or increases it by one. The incremented word therefore has at
 most `bits.length + 1` symbols.

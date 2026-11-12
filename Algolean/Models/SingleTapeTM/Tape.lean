@@ -24,6 +24,11 @@ correctness proofs of machines that copy, write, and encode words; they do not e
 
 namespace Cslib.Turing.StackTape
 
+/-- Restoring a blank first cell reconstructs any tape stack whose first cell is blank. -/
+@[simp, grind =] theorem cons_none_tail {Symbol : Type} (stack : StackTape Symbol)
+    (h : stack.head = none) : cons none stack.tail = stack := by
+  simpa only [h] using cons_head_tail stack
+
 /-- This stores a finite list of tape cells, treating every later cell as blank. -/
 def ofList {Symbol : Type} (cells : List (Option Symbol)) : StackTape Symbol :=
   cells.foldr cons nil
@@ -101,7 +106,8 @@ namespace StackTape
   | symbol :: word, tail => cons (some symbol) (prepend word tail)
 
 /-- Prepending concatenated words is the same as prepending them in sequence. -/
-theorem prepend_append {Symbol : Type} (first second : List Symbol) (tail : StackTape Symbol) :
+@[grind =] theorem prepend_append {Symbol : Type} (first second : List Symbol)
+    (tail : StackTape Symbol) :
     prepend (first ++ second) tail = prepend first (prepend second tail) := by
   induction first <;> simp_all
 
@@ -119,6 +125,14 @@ theorem prepend_append {Symbol : Type} (first second : List Symbol) (tail : Stac
 @[simp] def separateWords {Symbol : Type} : List (List Symbol) → StackTape Symbol → StackTape Symbol
   | [], tail => tail
   | word :: rest, tail => prepend word (cons none (separateWords rest tail))
+
+/-- Joining two lists of separated words places the second list after the first. -/
+@[simp, grind =] theorem separateWords_append {Symbol : Type} (first second : List (List Symbol))
+    (tail : StackTape Symbol) :
+    separateWords (first ++ second) tail = separateWords first (separateWords second tail) := by
+  induction first with
+  | nil => rfl
+  | cons word first ih => simp only [List.cons_append, separateWords, ih]
 
 end StackTape
 
@@ -165,6 +179,13 @@ variable {Symbol : Type}
     (segment (StackTape.cons (some symbol) left) word tail).moveLeft =
       segment left (symbol :: word) tail := by
   cases word <;> simp [segment, moveLeft]
+
+/-- Moving left from a stored list crosses its first symbol and preserves the remaining cells. -/
+@[simp, grind =] theorem segment_moveLeft_mapSome (left : List Symbol) (symbol : Symbol)
+    (word : List Symbol) (tail : StackTape Symbol) :
+    (segment (StackTape.mapSome (symbol :: left)) word tail).moveLeft =
+      segment (StackTape.mapSome left) (symbol :: word) tail :=
+  segment_moveLeft (StackTape.mapSome left) symbol word tail
 
 /-- Crossing a word puts its symbols in reverse order to the left of the head. -/
 theorem segment_moveRight_iterate (left : StackTape Symbol) (crossed suffix : List Symbol)

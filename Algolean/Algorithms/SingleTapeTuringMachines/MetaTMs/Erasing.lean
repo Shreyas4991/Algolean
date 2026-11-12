@@ -118,6 +118,20 @@ def eraseRight (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQuer
       BiTape.segment, BiTape.write, BiTape.moveRight, add_assoc]
     all_goals lia
 
+/-- Erasing a word preserves any earlier cost bound and adds its length in head moves. -/
+@[spec] theorem eraseRight_segment_le_spec (left tail : StackTape Symbol) (word : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left word tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      eraseRight tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.blanks word.length left) [] tail⟩ ∧
+        final.headPos = origin + word.length ∧ cost.steps ≤ elapsed + word.length ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [eraseRight_segment_spec (tm := tm) left tail word label origin initial.steps]
+  all_goals simp_all
+
 /-- Erasing the first word preserves the following region and counts every head move. -/
 @[spec] theorem eraseRight_spec (word : List Symbol) (tail : StackTape Symbol)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :

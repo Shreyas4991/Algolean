@@ -13,16 +13,17 @@ public import Algolean.Models.SingleTapeTM.Tape
 /-!
 # Moving across a contiguous block
 
-This file defines Turing machine programs that move the head without changing any tape symbols.
-`seekRightSymbol` moves right until it reaches a specified symbol. `seekRightBlank` moves right
-until it reaches a blank, and `seekLeftBlank` does the same to the left. Both stop immediately
-if their starting cell is blank. `seekLeftEnd` first moves
-left, scans to the blank before the block, and then moves right onto its first symbol. It can
-therefore return from the blank immediately after a block as well as from inside it.
+* `seekRightSymbol` moves right to a chosen symbol.
+* `seekRightBlank` and `seekLeftBlank` move to the next blank in the chosen direction.
+  They stop immediately if the starting cell is blank.
+* `seekLeftEnd` returns to the first symbol of the current word. It can start inside the word
+  or on the blank immediately after it.
+* `onPrefixAtMark` runs a fixed program on the word immediately before the current blank and
+  returns to that blank. The program preserves the word and may change neighboring contents.
 
-The correctness theorems state the final head position and exact number of head moves for each
-program. They apply with the tape and cell histories left by an earlier computation.
-The two `Component` values store the rightward scan and return-to-start program with these proofs.
+These are machine templates. Their parameters are fixed when constructing the containing
+machine, independently of the input and its length. The specifications describe the tape,
+final head position, and number of head moves after earlier computation.
 -/
 
 @[expose] public section
@@ -124,6 +125,20 @@ def seekRightBlank (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TM
     all_goals simp_all [TMState.move, TMState.moveCost, List.reverse_cons,
       StackTape.prepend_append, add_assoc]
     all_goals lia
+
+/-- Scanning right preserves the tape and increases an upper time bound by the word's length. -/
+theorem seekRightBlank_le_spec (left tail : StackTape Symbol) (right : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left right tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      seekRightBlank tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.prepend right.reverse left) [] tail⟩ ∧
+        final.headPos = origin + right.length ∧ cost.steps ≤ elapsed + right.length ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [seekRightBlank_segment_spec left tail right label origin initial.steps]
+  all_goals simp_all
 
 /-- The rightward scan preserves the word and uses one move per remaining symbol. -/
 @[spec] theorem seekRightBlank_spec (left right : List Symbol) (label : Option tm.State)
@@ -270,6 +285,21 @@ def seekLeftEnd (tm : SingleTapeTM Symbol) : Prog (TMQuery tm) Unit := do [TMQue
       List.append_assoc, sub_eq_add_neg, add_assoc]
     all_goals lia
 
+/-- Returning to the word's beginning preserves the tape and increases the upper time bound. -/
+theorem seekLeftEnd_le_spec (base tail : StackTape Symbol) (left right : List Symbol)
+    (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, BiTape.segment (StackTape.prepend left (StackTape.cons none base)) right tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      seekLeftEnd tm
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.cons none base) (left.reverse ++ right) tail⟩ ∧
+        final.headPos = origin - left.length ∧ cost.steps ≤ elapsed + left.length + 2 ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [seekLeftEnd_segment_spec base tail left right label origin initial.steps]
+  all_goals simp_all
+
 /-- Returning to the first symbol preserves the word and counts both end moves. -/
 @[spec] theorem seekLeftEnd_spec (left right : List Symbol) (label : Option tm.State)
     (origin : ℤ) (elapsed : Nat) :
@@ -322,5 +352,47 @@ def seekLeftEndComponent :
         final.headPos = s.headPos - p.1.length ∧ cost.steps = p.1.length + 2) where
   program := seekLeftEnd tm
   correct p s hs := seekLeftEnd_correct p.1 p.2 s hs
+
+/--
+This machine template runs a fixed program on the word before the current blank and returns
+to that blank. The containing machine fixes the program before execution.
+-/
+def onPrefixAtMark (tm : SingleTapeTM Symbol) (action : Prog (TMQuery tm) Unit) :
+    Prog (TMQuery tm) Unit := do [TMQuery tm]
+  seekLeftEnd tm
+  action
+  seekRightBlank tm
+
+/--
+Running a program on the prefix before a blank adds only the outward and return head moves.
+The program may change the tape on either side of the prefix. The cell immediately before the
+prefix must initially be blank, and the prefix itself must stay unchanged.
+-/
+@[spec] theorem onPrefixAtMark_spec (action : Prog (TMQuery tm) Unit)
+    (left resultLeft : StackTape Symbol) (hleft : left.head = none)
+    (crossed : List Symbol)
+    (tail resultTail : StackTape Symbol) (label result : Option tm.State) (bound : Nat)
+    (haction : ∀ (position : ℤ) (steps : Nat),
+      ⦃ fun cost current => current.config = ⟨label, BiTape.segment left crossed tail⟩ ∧
+          current.headPos = position ∧ cost.steps ≤ steps ⦄
+        action
+      ⦃ fun _ cost final => final.config = ⟨result,
+          BiTape.segment resultLeft crossed resultTail⟩ ∧
+          final.headPos = position ∧ cost.steps ≤ steps + bound ⦄)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, BiTape.segment (StackTape.prepend crossed.reverse left) [] tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      onPrefixAtMark tm action
+    ⦃ fun _ cost final => final.config =
+        ⟨result, BiTape.segment (StackTape.prepend crossed.reverse resultLeft) [] resultTail⟩ ∧
+        final.headPos = origin ∧ cost.steps ≤ elapsed + 2 * crossed.length + 2 + bound ⦄ := by
+  vcgen [onPrefixAtMark,
+    seekLeftEnd_le_spec (tm := tm) left.tail tail crossed.reverse [] label origin elapsed,
+    haction (origin - crossed.length) (elapsed + crossed.length + 2),
+    seekRightBlank_le_spec (tm := tm) resultLeft resultTail crossed result
+      (origin - crossed.length) (elapsed + crossed.length + 2 + bound)]
+  all_goals simp_all
+  all_goals lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines

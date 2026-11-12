@@ -19,6 +19,8 @@ public import Algolean.Models.SingleTapeTM.Tape
 * `checkPrefix` compares a chosen word with the cells beginning under the head and records the
   answer in the control state. It preserves the tape and restores the head position. A blank
   before the comparison ends gives a negative answer.
+* `checkWord` compares the whole word with a chosen word, including its ending blank. It
+  records the answer and restores the tape and head position.
 * `findPreviousWord` searches left in steps of the chosen word's length, testing each position.
   It stops at the start of a match, preserves the tape, and enters the chosen result state.
   A matching word must occur at one of the tested positions.
@@ -74,6 +76,38 @@ def moveCells (tm : SingleTapeTM Γ) (direction : Dir) : Nat → Prog (TMQuery t
     all_goals cases direction
     all_goals simp_all [TMState.move, TMState.moveCost,
       Function.iterate_succ_apply, add_assoc]
+    all_goals lia
+
+/-- Moving right across a word preserves all its cells and counts every crossed cell. -/
+@[spec] theorem moveCells_right_segment_spec (left tail : StackTape Γ)
+    (crossed rest : List Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left (crossed ++ rest) tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      moveCells tm .Right crossed.length
+    ⦃ fun _ cost final => final.config =
+        ⟨label, BiTape.segment (StackTape.prepend crossed.reverse left) rest tail⟩ ∧
+        final.headPos = origin + crossed.length ∧ cost.steps ≤ elapsed + crossed.length ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [moveCells_spec .Right crossed.length (BiTape.segment left (crossed ++ rest) tail)
+    label origin initial.steps]
+  all_goals simp_all [BiTape.segment_moveRight_iterate]
+
+/-- Moving left across a word restores it before the head and counts every crossed cell. -/
+@[spec] theorem moveCells_left_segment_spec (left tail : StackTape Γ)
+    (crossed rest : List Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config =
+        ⟨label, BiTape.segment (StackTape.prepend crossed.reverse left) rest tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      moveCells tm .Left crossed.length
+    ⦃ fun _ cost final => final.config = ⟨label, BiTape.segment left (crossed ++ rest) tail⟩ ∧
+        final.headPos = origin - crossed.length ∧ cost.steps ≤ elapsed + crossed.length ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [moveCells_spec .Left crossed.length
+    (BiTape.segment (StackTape.prepend crossed.reverse left) rest tail) label origin initial.steps]
+  all_goals
+    simp_all [BiTape.segment_moveLeft_iterate]
     all_goals lia
 
 /-- The fixed moves preserve the tape symbols and control state and have exactly the stated cost. -/
@@ -287,5 +321,52 @@ theorem findPreviousWord_correct (found searching : tm.State) (hne : found ≠ s
   all_goals
     cases hcfg : s.config
     simp_all
+
+/--
+This template tests whether the whole word under the head equals a fixed word. It preserves
+all tape cells and restores the head. The containing machine fixes the expected word and
+both answer states independently of every input.
+-/
+def checkWord (tm : SingleTapeTM Γ) (yes no : tm.State) (expected : List Γ) :
+    Prog (TMQuery tm) Unit := do [TMQuery tm]
+  checkPrefix tm yes no expected
+  ifₜ state =ₜ some yes then
+    moveCells tm .Right expected.length
+    ifₜ tape =ₜ none then
+      state ←ₜ yes
+    else
+      state ←ₜ no
+    moveCells tm .Left expected.length
+  else
+    pure ()
+
+/-- The exact-word test records equality and adds at most four moves per expected symbol. -/
+@[spec] theorem checkWord_spec (yes no : tm.State) (hne : yes ≠ no)
+    (expected word : List Γ) (left tail : StackTape Γ) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label, BiTape.segment left word tail⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      checkWord tm yes no expected
+    ⦃ fun _ cost final => final.config =
+        ⟨some (if expected = word then yes else no), BiTape.segment left word tail⟩ ∧
+        final.headPos = origin ∧ cost.steps ≤ elapsed + 4 * expected.length ⦄ := by
+  by_cases hp : expected <+: word
+  · obtain ⟨rest, rfl⟩ := hp
+    have hm (result : Option tm.State) := moveCells_left_segment_spec (tm := tm)
+      left tail expected rest result (origin + expected.length)
+      (elapsed + 3 * expected.length)
+    vcgen [checkWord,
+      checkPrefix_spec (tm := tm) yes no expected (expected ++ rest) left tail label origin elapsed,
+      moveCells_right_segment_spec (tm := tm) left tail expected rest (some yes) origin
+        (elapsed + 2 * expected.length), hm]
+    all_goals
+      cases rest
+      all_goals simp_all [BiTape.segment]
+      all_goals lia
+  · have hn : expected ≠ word := by intro h; subst word; exact hp (by simp)
+    vcgen [checkWord,
+      checkPrefix_spec (tm := tm) yes no expected word left tail label origin elapsed]
+    all_goals simp_all [Ne.symm hne]
+    all_goals lia
 
 end Algolean.Algorithms.SingleTapeTuringMachines

@@ -39,6 +39,30 @@ variable {tm : SingleTapeTM Symbol} [DecidableEq tm.State]
 @[expose] def regionSpan (parts : List (List Symbol)) : Nat :=
   (parts.map List.length).sum + parts.length
 
+omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
+/-- No words occupy no cells. -/
+@[simp, grind =] theorem regionSpan_nil : regionSpan ([] : List (List Symbol)) = 0 := rfl
+
+omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
+/-- Adding one word counts its symbols and its separating blank. -/
+@[simp, grind =] theorem regionSpan_cons (word : List Symbol) (parts : List (List Symbol)) :
+    regionSpan (word :: parts) = word.length + 1 + regionSpan parts := by
+  simp [regionSpan]
+  lia
+
+omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
+/-- Concatenating two lists of words adds their occupied lengths. -/
+@[simp, grind =] theorem regionSpan_append (first second : List (List Symbol)) :
+    regionSpan (first ++ second) = regionSpan first + regionSpan second := by
+  simp [regionSpan, List.map_append, List.sum_append]
+  lia
+
+omit [Inhabited Symbol] [Fintype Symbol] [DecidableEq Symbol] in
+/-- Reversing the order of the words does not change their occupied length. -/
+@[simp, grind =] theorem regionSpan_reverse (parts : List (List Symbol)) :
+    regionSpan parts.reverse = regionSpan parts := by
+  simp [regionSpan, List.map_reverse, List.sum_reverse]
+
 /--
 This machine template appends `word` beyond `count` intervening regions and returns to the
 starting blank. All cells beyond the final output region must initially be blank.
@@ -89,6 +113,23 @@ def appendAcross (tm : SingleTapeTM Symbol) (word : List Symbol) : Nat → Prog 
     all_goals
       simp_all [regionSpan, TMState.move, TMState.moveCost]
       all_goals lia
+/-- Appending preserves the crossed words and increases an upper bound by the exact move count. -/
+theorem appendAcross_le_spec (word : List Symbol) (parts : List (List Symbol))
+    (output : List Symbol) (left : StackTape Symbol) (label : Option tm.State)
+    (origin : ℤ) (elapsed : Nat) :
+    ⦃ fun cost current => current.config = ⟨label,
+        segment left [] (StackTape.separateWords parts (StackTape.mapSome output))⟩ ∧
+        current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
+      appendAcross tm word parts.length
+    ⦃ fun _ cost final => final.config = ⟨label,
+        segment left [] (StackTape.separateWords parts (StackTape.mapSome (output ++ word)))⟩ ∧
+        final.headPos = origin ∧
+        cost.steps ≤ elapsed + 2 * (regionSpan parts + output.length + word.length) + 8 ⦄ := by
+  apply Std.WP.Triple.intro
+  rintro initial current ⟨hcfg, hpos, hcost⟩
+  vcgen [appendAcross_spec word parts output left label origin initial.steps]
+  all_goals simp_all
+
 /--
 This machine template appends a fixed word to the output beyond the source and `count` more
 regions. It preserves the source and returns to its first cell. That cell is the following
