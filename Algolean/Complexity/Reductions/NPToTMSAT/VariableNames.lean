@@ -23,13 +23,16 @@ The fields use binary numbers. Joining them only adds length headers and copies 
 it does not combine the numbers by arithmetic pairing.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.Variable
 
-open Computability Problems Problems.TMSAT
+open Computability Problems
 
-variable {Γ : Type} [Encodable Γ] {problem : Instance Γ}
+variable {Γ : Type} [Encodable Γ] {problem : BoundedVerification Γ}
 
 /--
 This names a variable by its kind and its separately encoded indices. Each length header
@@ -83,12 +86,12 @@ end Algolean.Algorithms.NPToTMSAT.Variable
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Computability Problems Problems.TMSAT
+open Computability Problems
 
 variable {Γ : Type}
 
 /-- The state list uses zero for halt, followed by the running states in increasing order. -/
-@[simp] theorem stateChoices_codes (problem : Instance Γ) :
+@[simp] theorem stateChoices_codes (problem : BoundedVerification Γ) :
     (stateChoices problem).map Encodable.encode = List.range (problem.verifier.states + 2) := by
   let count := problem.verifier.states + 1
   have hindices : (List.finRange count).map Fin.val = List.range count := by
@@ -104,7 +107,7 @@ variable {Γ : Type}
     _ = _ := by simpa [count, Nat.add_assoc] using (@List.range_succ_eq_map count).symm
 
 /-- The ordered controls enumerate every position and every state code, with position first. -/
-theorem controlChoices_codes (problem : Instance Γ) :
+theorem controlChoices_codes (problem : BoundedVerification Γ) :
     (controlChoices problem).map (fun control => (control.1.val, Encodable.encode control.2)) =
       (List.range (width problem)).flatMap fun position =>
         (List.range (problem.verifier.states + 2)).map (fun state => (position, state)) := by
@@ -118,7 +121,7 @@ theorem controlChoices_codes (problem : Instance Γ) :
     congrArg (List.map (fun state => (position.val, state))) (stateChoices_codes problem)
 
 /-- The position and state codes distinguish all controls of the bounded computation. -/
-theorem controlCode_injective (problem : Instance Γ) :
+theorem controlCode_injective (problem : BoundedVerification Γ) :
     Function.Injective
       (fun control : Fin (width problem) × Option (Fin (problem.verifier.states + 1)) =>
       (control.1.val, Encodable.encode control.2)) := by
@@ -155,7 +158,7 @@ deriving DecidableEq
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 /-- The head name formed from these fields is the existing bounded-computation variable name. -/
-theorem bits_head_eq_name [Encodable Γ] (problem : TMSAT.Instance Γ)
+theorem bits_head_eq_name [Encodable Γ] (problem : BoundedVerification Γ)
     (time : Fin (problem.time + 1))
     (control : Fin (NPToTMSAT.width problem) × Option (Fin (problem.verifier.states + 1))) :
     bits .head (encodingNatBool.encode time.val) (encodingNatBool.encode control.1.val)

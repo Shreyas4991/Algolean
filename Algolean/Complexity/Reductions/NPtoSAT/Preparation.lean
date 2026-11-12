@@ -23,6 +23,8 @@ The polynomials and alphabet symbols are fixed when constructing the containing 
 The machine reads the input and its length from its tape.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.Preparation

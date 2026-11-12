@@ -32,6 +32,8 @@ These are machine templates. Alphabet symbols, output representations, and finit
 states are fixed once, independently of the bounds and indices stored on the tape.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.HeadChoices
@@ -947,7 +949,7 @@ private theorem rowParts_eq_formula (code : CodeSymbol → List Γ) (time positi
 omit [Inhabited Γ] [Fintype Γ] in
 /-- The writer's word is exactly the existing head-choice clauses with their existing names. -/
 theorem word_eq_headClauses [Encodable Γ] (code : CodeSymbol → List Γ)
-    (problem : TMSAT.Instance Γ) :
+    (problem : BoundedVerification Γ) :
     word code (problem.time + 1) (NPToTMSAT.width problem) (problem.verifier.states + 2) =
       (formulaPrefix ((headClauses problem).rename Variable.name)).flatMap code := by
   let controlCode := fun control : Fin (NPToTMSAT.width problem) ×
@@ -985,15 +987,15 @@ theorem word_eq_headClauses [Encodable Γ] (code : CodeSymbol → List Γ)
     hrange.symm
 
 /--
-The fixed program writes exactly the existing head-choice clauses of the given instance.
-The instance appears only in this statement; the program reads every bound from the tape.
+The fixed program writes the head-choice clauses for the specified bounded computation.
+The bounds occur only in this statement; the program reads them from the tape.
 -/
 theorem writeHeadClauses_spec [Encodable Γ]
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (different equal extra : tm.State) (hfirst : different ≠ equal)
     (hlast : different ≠ extra) (hother : equal ≠ extra)
-    (problem : TMSAT.Instance Γ) (input output : List Γ) (size : Nat)
+    (problem : BoundedVerification Γ) (input output : List Γ) (size : Nat)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     let times := problem.time + 1
     let positions := NPToTMSAT.width problem

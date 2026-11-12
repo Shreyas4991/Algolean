@@ -20,11 +20,14 @@ small constants in the writer bounds. The polynomial is fixed with the verifier 
 certificate and time bounds.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT
 
-open Cslib.Turing Problems Problems.TMSAT Polynomial
+open Cslib.Turing Problems Polynomial
 
 variable {Γ : Type} [Fintype Γ]
 
@@ -38,7 +41,7 @@ variable {Γ : Type} [Fintype Γ]
 /-- The polynomial bounds the unary source words, original input, and complete encoded output. -/
 theorem source_size_le [Nontrivial Γ] (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) :
-    let problem : Instance Γ :=
+    let problem : BoundedVerification Γ :=
       ⟨verifier, input, certificate.eval input.length, time.eval input.length⟩
     problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
       2 * (problem.verifier.states + 2) + input.length +
@@ -47,6 +50,28 @@ theorem source_size_le [Nontrivial Γ] (verifier : SingleTapeTM.Description (Tap
   have hlength := encode_length_le verifier certificate time yes input
   dsimp only
   simp only [sizeBound, NPToTMSAT.width, eval_add, eval_mul, eval_X, eval_C, eval_ofNat, eval_one]
+  lia
+
+/-- The same bound covers a formula when every written symbol uses at most eight cells. -/
+theorem source_size_le_code [Nontrivial Γ]
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ)
+    (code : SAT.CodeSymbol → List Γ) (width : Nat)
+    (hwidth : ∀ symbol, (code symbol).length = width) (hsmall : width ≤ 8) :
+    let problem : BoundedVerification Γ :=
+      ⟨verifier, input, certificate.eval input.length, time.eval input.length⟩
+    problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
+      2 * (problem.verifier.states + 2) + input.length +
+        ((SAT.encoding.encode (formula verifier certificate time yes input)).flatMap code).length +
+          128 ≤ (sizeBound verifier certificate time).eval input.length := by
+  have hs := source_size_le verifier certificate time yes input
+  have hl : ((SAT.encoding.encode (formula verifier certificate time yes input)).flatMap
+      code).length ≤ (encode verifier certificate time yes input).length := by
+    rw [encode, SAT.length_encodingOver, List.length_flatMap]
+    simpa using (List.sum_le_sum (l := SAT.encoding.encode
+      (formula verifier certificate time yes input)) (g := fun _ => 8)
+        (fun symbol _ => (hwidth symbol).le.trans hsmall))
+  dsimp only at *
   lia
 
 

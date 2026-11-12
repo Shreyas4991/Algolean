@@ -25,6 +25,9 @@ The program reads the time and width from unary words on the tape. The alphabet 
 accepting symbol are fixed when constructing the containing machine.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.FinalWriting
@@ -39,12 +42,12 @@ variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
 private def pairWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (positive : Bool) (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (positive : Bool) (symbol : Option (TapeSymbol Γ)) : List Γ :=
   headLiteralWord code choice positive false false ++
     tapeLiteralWord code choice true false false symbol ++ code (.inr 3) ++ code (.inr 4)
 
 private def writePair (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (positive : Bool) (symbol : Option (TMSAT.TapeSymbol Γ)) : Prog (TMQuery tm) Unit :=
+    (positive : Bool) (symbol : Option (TapeSymbol Γ)) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
   writeHeadLiteralAtTime tm zero one tick code positive false false
   writeTapeLiteral tm zero one tick code true false false symbol
@@ -52,7 +55,7 @@ private def writePair (zero one tick : Γ) (code : CodeSymbol → List Γ)
 
 private theorem writePair_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (positive : Bool) (symbol : Option (TMSAT.TapeSymbol Γ)) (choice : ActiveChoices)
+    (positive : Bool) (symbol : Option (TapeSymbol Γ)) (choice : ActiveChoices)
     (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ pairWord code choice positive symbol).length + 32 ≤ size)
@@ -334,7 +337,7 @@ private theorem writeWords_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem word_eq_finalClauses (code : CodeSymbol → List Γ)
-    (problem : TMSAT.Instance Γ) (yes : Γ) :
+    (problem : BoundedVerification Γ) (yes : Γ) :
     word code yes problem.time (NPToTMSAT.width problem) =
       (formulaPrefix ((Formula.finalClauses problem yes).rename Variable.name)).flatMap code := by
   have hindices : (List.finRange (NPToTMSAT.width problem)).map Fin.val =
@@ -366,7 +369,7 @@ head position, and its number of moves is bounded by the displayed cubic polynom
 -/
 @[spec] theorem writeFinalClauses_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (problem : TMSAT.Instance Γ) (yes : Γ) (input output : List Γ) (size : Nat)
+    (problem : BoundedVerification Γ) (yes : Γ) (input output : List Γ) (size : Nat)
     (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
       input.length + (output ++
         (formulaPrefix ((Formula.finalClauses problem yes).rename Variable.name)).flatMap

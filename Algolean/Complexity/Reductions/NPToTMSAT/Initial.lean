@@ -20,11 +20,14 @@ also put the head over the start of the input and set the verifier's initial sta
 certificate symbols are chosen by the Boolean assignment, one symbol for each certificate cell.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Problems.SAT Problems.TMSAT Alphabet
+open Problems.SAT Alphabet
 
 variable {Γ : Type}
 
@@ -33,7 +36,7 @@ This identifies what belongs in one cell of the initial tape. It returns either 
 symbol for that cell or the index of the certificate symbol stored there. Cell zero in this
 finite list is tape position `-t`, so the input starts at cell `t`.
 -/
-@[expose] def initialSource (problem : Instance Γ) (position : Fin (width problem)) :
+@[expose] def initialSource (problem : BoundedVerification Γ) (position : Fin (width problem)) :
     Option (TapeSymbol Γ) ⊕ Fin problem.certificateLength :=
   if hleft : position.val < problem.time then .inl none
   else if hinput : position.val < problem.time + problem.input.length then
@@ -44,7 +47,7 @@ finite list is tape position `-t`, so the input starts at cell `t`.
     .inr ⟨position.val - (problem.time + problem.input.length + 1), by lia⟩
   else .inl none
 
-private theorem initialSource_cell (problem : Instance Γ)
+private theorem initialSource_cell (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) (position : Fin (width problem)) :
     (initialRow problem certificate).cells[position.val]'(by simp) =
       match initialSource problem position with
@@ -79,7 +82,7 @@ one separating symbol between them and blanks elsewhere. They also set the initi
 state. A Boolean variable chooses each certificate symbol; an implication puts that same
 symbol in the corresponding tape cell.
 -/
-noncomputable def initialClauses (problem : Instance Γ) : CNF (Variable problem) :=
+noncomputable def initialClauses (problem : BoundedVerification Γ) : CNF (Variable problem) :=
   [[.pos (.head 0 (⟨problem.time, by dsimp [width]; lia⟩, some problem.verifier.initial))]] ++
     (List.finRange (width problem)).flatMap fun position =>
       match initialSource problem position with
@@ -89,7 +92,7 @@ noncomputable def initialClauses (problem : Instance Γ) : CNF (Variable problem
 
 omit [DecidableEq Γ] in
 /-- The initial formula consists of its head requirement followed by the cell requirements. -/
-theorem initialClauses_eq (problem : Instance Γ) :
+theorem initialClauses_eq (problem : BoundedVerification Γ) :
     initialClauses problem =
       [[.pos (.head 0 (⟨problem.time, by dsimp [width]; lia⟩,
         some problem.verifier.initial))]] ++
@@ -102,7 +105,7 @@ theorem initialClauses_eq (problem : Instance Γ) :
   rfl
 
 omit [DecidableEq Γ] in
-private theorem initialClauses_satisfied (problem : Instance Γ)
+private theorem initialClauses_satisfied (problem : BoundedVerification Γ)
     (assignment : Variable problem → Bool) :
     (initialClauses problem).SatisfiedBy assignment ↔
       assignment (.head 0 (⟨problem.time, by dsimp [width]; lia⟩,
@@ -126,7 +129,7 @@ private theorem initialClauses_satisfied (problem : Instance Γ)
 For the assignment describing a certificate and sequence of rows, these clauses hold exactly
 when the first row is the verifier's actual initial tape and state for that certificate.
 -/
-theorem initialClauses_iff (problem : Instance Γ)
+theorem initialClauses_iff (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength)
     (rows : Fin (problem.time + 1) → Row problem.verifier (width problem)) :
     (initialClauses problem).SatisfiedBy (rowAssignment certificate rows) ↔
@@ -165,7 +168,7 @@ The initial-tape clauses number at most one plus the tape width times the alphab
 one. Every such clause contains at most two literals: a fixed symbol, or an implication from
 a certificate choice to its tape cell.
 -/
-theorem initialClauses_bounds (problem : Instance Γ) :
+theorem initialClauses_bounds (problem : BoundedVerification Γ) :
     (initialClauses problem).length ≤ 1 + width problem * (Fintype.card Γ + 1) ∧
       ∀ clause ∈ initialClauses problem, clause.length ≤ 2 := by
   constructor

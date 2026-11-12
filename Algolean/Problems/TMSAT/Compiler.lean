@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Models.SingleTapeTM.Compiler
+public import Algolean.Models.SingleTapeTM.BoundedVerificationCompiler
 public import Algolean.Problems.Encodings.TMSAT
 
 /-!
@@ -37,15 +37,8 @@ This instance uses the compiled query verifier and its proved transition bound. 
 length stays fixed, and the time bound uses the length of the full input-certificate word.
 -/
 noncomputable def Instance.ofQueryVerifier (computer : TMQuery.TimeComputable f)
-    (input : List Γ) (certificateLength : ℕ) : Instance Γ := by
-  letI := computer.symbolDecidableEq
-  letI := computer.stateDecidableEq
-  let C := TMQuery.Compiler.transitionFactor computer.program
-  exact {
-    verifier := TMQuery.Compiler.compile computer.program
-    input := input
-    certificateLength := certificateLength
-    time := C * computer.timeBound (input.length + certificateLength + 1) + C }
+    (input : List Γ) (certificateLength : ℕ) : Instance Γ :=
+  SingleTapeTM.BoundedVerification.ofQueryVerifier computer input certificateLength
 
 /--
 Compiling the query verifier preserves exactly which certificates make its output equal the
@@ -57,22 +50,9 @@ theorem mem_satisfiable_ofQueryVerifier_iff (yes : Γ)
     (input : List Γ) (certificateLength : ℕ) :
     Instance.ofQueryVerifier computer input certificateLength ∈ satisfiable yes ↔
       ∃ certificate : List Γ, certificate.length = certificateLength ∧
-        f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
-  let := computer.symbolDecidableEq
-  let := computer.stateDecidableEq
-  have hcertificate (certificate : List Γ) (hlen : certificate.length = certificateLength) :
-      AcceptsWithin yes (Instance.ofQueryVerifier computer input certificateLength).verifier
-          ((wordPair Γ).encode (input, certificate))
-          (Instance.ofQueryVerifier computer input certificateLength).time ↔
-        f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
-    apply acceptsWithin_iff_of_outputsWithinTime
-    have hlength : ((wordPair Γ).encode (input, certificate)).length =
-        input.length + certificateLength + 1 := by simp [hlen, Nat.add_assoc]
-    simpa only [Instance.ofQueryVerifier, hlength] using
-      TMQuery.Compiler.time_bound computer.program
-        (computer.outputsFunInTime ((wordPair Γ).encode (input, certificate)))
-  change (∃ certificate : List Γ, certificate.length = certificateLength ∧ _) ↔ _
-  exact exists_congr fun certificate => and_congr_right fun hlen => hcertificate certificate hlen
+        f ((wordPair Γ).encode (input, certificate)) = [.inl yes] :=
+  SingleTapeTM.BoundedVerification.mem_accepted_ofQueryVerifier_iff
+    yes computer input certificateLength
 
 /--
 Encoding the compiled instance gives a word in the TMSAT language exactly when a certificate

@@ -21,6 +21,8 @@ The data here describe tape configurations. The containing machine reads every c
 its tape; these descriptions do not choose a different program for different inputs.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.HeadChoices

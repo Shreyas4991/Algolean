@@ -6,8 +6,8 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Reductions.NPToTMSAT.Verifier
-public import Algolean.Problems.TMSAT.Compiler
+public import Algolean.Complexity.Reductions.NPToTMSAT.Normalization
+public import Algolean.Problems.Encodings.TMSAT
 
 /-!
 # Turning an NP verifier into TMSAT instances
@@ -33,6 +33,9 @@ open Cslib.Turing Polynomial Alphabet Problems.TMSAT
 
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
 
+private noncomputable local instance : Encodable Γ :=
+  Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
+
 /--
 Every NP language has one fixed Turing machine description and polynomial certificate and time
 bounds that give equivalent TMSAT instances. Both bounds depend only on the original input length.
@@ -45,21 +48,8 @@ theorem NP.exists_tmsat_instances {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
     ∃ (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (m t : Polynomial ℕ),
       ∀ input, input ∈ L ↔
         (⟨verifier, input, m.eval input.length, t.eval input.length⟩ : Instance Γ) ∈
-          satisfiable yes := by
-  classical
-  obtain ⟨f, m, ⟨computer⟩, _, hcorrect⟩ := NP.exists_exact_length_verifier h yes
-  let := computer.symbolDecidableEq
-  let := computer.stateDecidableEq
-  let C := TMQuery.Compiler.transitionFactor computer.program
-  let time := Polynomial.C C * computer.poly.comp (X + m + 1) + Polynomial.C C
-  refine ⟨TMQuery.Compiler.compile computer.program, m, time, fun input => ?_⟩
-  have heq : (⟨TMQuery.Compiler.compile computer.program, input, m.eval input.length,
-      time.eval input.length⟩ : Instance Γ) =
-      Instance.ofQueryVerifier computer.polynomialBound input (m.eval input.length) := by
-    simp [Instance.ofQueryVerifier, TMQuery.PolyTimeComputable.polynomialBound, time, C]
-    constructor <;> rfl
-  rw [heq, mem_satisfiable_ofQueryVerifier_iff]
-  exact hcorrect input
+          satisfiable yes :=
+  NP.exists_bounded_verifier h yes
 
 /--
 The equivalent TMSAT instances can be encoded over the original alphabet with polynomially
@@ -75,7 +65,6 @@ theorem NP.exists_tmsat_instances_with_size {L : Language Γ} (h : L ∈ NP) (ye
       ∀ input, (encodingOver.encode (⟨verifier, input, m.eval input.length, t.eval input.length⟩ :
         Instance Γ)).length ≤ p.eval input.length := by
   classical
-  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
   obtain ⟨verifier, m, t, hcorrect⟩ := NP.exists_tmsat_instances h yes
   obtain ⟨factor, hfactor⟩ :=
     SingleTapeTM.Description.exists_wordEncoding_length_bound (Symbol := Γ)

@@ -105,7 +105,7 @@ grows.
 -/
 def TimeComputable.comp {f g : List Symbol → List Symbol}
     (first : TimeComputable f) (second : TimeComputable g) (mono : Monotone second.timeBound) :
-    TimeComputable (g ∘ f) := by
+    TimeComputable (g ∘ f) :=
   letI := first.symbolDecidableEq
   letI := first.stateDecidableEq
   letI := second.stateDecidableEq
@@ -114,7 +114,7 @@ def TimeComputable.comp {f g : List Symbol → List Symbol}
   let joined := SingleTapeTM.compComputer first.tm second.tm
   let left : first.tm.State → joined.State := Sum.inl
   let right : second.tm.State → joined.State := Sum.inr
-  exact {
+  {
     tm := joined
     program := do [TMQuery joined]
       first.program.reduceProg (relabelReduction left)
@@ -178,10 +178,10 @@ symbol `fallback` instead. The initial test and this stationary write add no hea
 -/
 def TimeComputable.onNonempty {f : List Symbol → List Symbol} (computer : TimeComputable f)
     (fallback : Symbol) :
-    TimeComputable (fun input => if input.isEmpty then [fallback] else f input) := by
+    TimeComputable (fun input => if input.isEmpty then [fallback] else f input) :=
   letI := computer.symbolDecidableEq
   letI := computer.stateDecidableEq
-  exact {
+  {
     tm := computer.tm
     program := do [TMQuery computer.tm]
       ifₜ tape =ₜ none then

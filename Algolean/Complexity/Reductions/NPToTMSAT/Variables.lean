@@ -25,16 +25,19 @@ rows or computations. In particular, the number of choices does not grow exponen
 the tape width.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Problems.SAT Problems.TMSAT
+open Problems.SAT
 
 variable {Γ : Type}
 
 /-- These Boolean variables describe a single symbol choice or a head position and state. -/
-inductive Variable (problem : Instance Γ) where
+inductive Variable (problem : BoundedVerification Γ) where
   /-- This chooses the symbol at one position in the certificate. -/
   | certificate (position : Fin problem.certificateLength) (symbol : Γ)
   /-- This cell has the specified symbol at the given time. -/
@@ -46,47 +49,49 @@ inductive Variable (problem : Instance Γ) where
 deriving DecidableEq
 
 /-- These are all possible states, including the halted state. -/
-@[expose] def stateChoices (problem : Instance Γ) :
+@[expose] def stateChoices (problem : BoundedVerification Γ) :
     List (Option (Fin (problem.verifier.states + 1))) :=
   none :: (List.finRange (problem.verifier.states + 1)).map some
 
 /-- These are all possible combinations of head position and machine state. -/
-@[expose] def controlChoices (problem : Instance Γ) :
+@[expose] def controlChoices (problem : BoundedVerification Γ) :
     List (Fin (width problem) × Option (Fin (problem.verifier.states + 1))) :=
   (List.finRange (width problem)).flatMap fun position =>
     (stateChoices problem).map fun state => (position, state)
 
 /-- Every state, including the halted state, occurs among the choices. -/
-@[simp] private theorem mem_stateChoices (problem : Instance Γ)
+@[simp] private theorem mem_stateChoices (problem : BoundedVerification Γ)
     (state : Option (Fin (problem.verifier.states + 1))) : state ∈ stateChoices problem := by
   cases state <;> simp [stateChoices]
 
 /-- Every possible head position and state occurs among the choices. -/
-@[simp] theorem mem_controlChoices (problem : Instance Γ)
+@[simp] theorem mem_controlChoices (problem : BoundedVerification Γ)
     (control : Fin (width problem) × Option (Fin (problem.verifier.states + 1))) :
     control ∈ controlChoices problem := by simp [controlChoices]
 
 /-- There is one head-position choice for each state, including halt, at every tape position. -/
-@[simp] theorem length_controlChoices (problem : Instance Γ) :
+@[simp] theorem length_controlChoices (problem : BoundedVerification Γ) :
     (controlChoices problem).length = width problem * (problem.verifier.states + 2) := by
   simp [controlChoices, stateChoices, List.length_flatMap, Nat.mul_comm]
 
-variable [Fintype Γ] [DecidableEq Γ] {problem : Instance Γ}
+variable [Fintype Γ] [DecidableEq Γ] {problem : BoundedVerification Γ}
 
 /-- These clauses choose exactly one alphabet symbol at each position in the certificate. -/
-@[expose] noncomputable def certificateClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def certificateClauses (problem : BoundedVerification Γ) :
+    CNF (Variable problem) :=
   (List.finRange problem.certificateLength).flatMap fun position =>
     CNF.exactlyOne ((Finset.univ : Finset Γ).toList.map (Variable.certificate position))
 
 /-- These clauses choose exactly one symbol in every recorded tape cell at every time. -/
-@[expose] noncomputable def tapeClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def tapeClauses (problem : BoundedVerification Γ) :
+    CNF (Variable problem) :=
   (List.finRange (problem.time + 1)).flatMap fun time =>
     (List.finRange (width problem)).flatMap fun position =>
       CNF.exactlyOne ((Finset.univ : Finset (Option (TapeSymbol Γ))).toList.map
         (Variable.tape time position))
 
 /-- These clauses choose one head position and state at every recorded time. -/
-@[expose] def headClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] def headClauses (problem : BoundedVerification Γ) : CNF (Variable problem) :=
   (List.finRange (problem.time + 1)).flatMap fun time =>
     CNF.exactlyOne ((controlChoices problem).map (Variable.head time))
 
@@ -94,7 +99,8 @@ variable [Fintype Γ] [DecidableEq Γ] {problem : Instance Γ}
 These clauses require one head position and state per row, and exactly one symbol per cell.
 The existing SAT construction for exactly one choice is used for each of these requirements.
 -/
-@[expose] noncomputable def choiceClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def choiceClauses (problem : BoundedVerification Γ) :
+    CNF (Variable problem) :=
   certificateClauses problem ++
   (headClauses problem ++ tapeClauses problem)
 
@@ -106,7 +112,8 @@ The existing SAT construction for exactly one choice is used for each of these r
   | .tape time position symbol => decide ((rows time).cells[position.val]'(by simp) = symbol)
   | .head time control => decide (((rows time).headIndex, (rows time).state) = control)
 
-private theorem choices_iff (problem : Instance Γ) (assignment : Variable problem → Bool) :
+private theorem choices_iff
+    (problem : BoundedVerification Γ) (assignment : Variable problem → Bool) :
     (choiceClauses problem).SatisfiedBy assignment ↔
       (∀ position, ∃! symbol, assignment (.certificate position symbol) = true) ∧
       ((∀ time, ∃! control, assignment (.head time control) = true) ∧
@@ -167,7 +174,7 @@ theorem choiceClauses_rowAssignment
 An assignment satisfies the choice clauses exactly when it records a sequence of rows. This
 recovers symbols and head positions from Boolean choices without enumerating possible rows.
 -/
-theorem choiceClauses_iff_exists_rows (problem : Instance Γ)
+theorem choiceClauses_iff_exists_rows (problem : BoundedVerification Γ)
     (assignment : Variable problem → Bool) :
     (choiceClauses problem).SatisfiedBy assignment ↔
       ∃ certificate rows, assignment = rowAssignment certificate rows := by
@@ -204,7 +211,7 @@ The number of choice clauses is quadratic in the largest list of possible choice
 one such list per certificate symbol, per row's head and state, and per tape cell at each time.
 The second bound counts the literals in a single clause.
 -/
-theorem choiceClauses_bounds (problem : Instance Γ) :
+theorem choiceClauses_bounds (problem : BoundedVerification Γ) :
     let choices := Fintype.card Γ + 2 + width problem * (problem.verifier.states + 2)
     (choiceClauses problem).length ≤
       (problem.certificateLength + (problem.time + 1) * (width problem + 1)) *

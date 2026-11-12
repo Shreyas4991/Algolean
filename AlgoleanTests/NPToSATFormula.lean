@@ -18,11 +18,13 @@ with that symbol under the head after a movement.
 The complete CNF construction is also checked against these acceptance conventions.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 @[expose] public section
 
 namespace AlgoleanTests.NPToSATFormula
 
-open Algolean.Problems.SAT Algolean.Problems.TMSAT
+open Algolean.Problems.SAT Cslib.Turing.SingleTapeTM.BoundedVerification
 open Algolean.Algorithms.NPToTMSAT Cslib.Turing
 
 /-- Listing the same variable twice still permits choosing it as the one true variable. -/
@@ -79,7 +81,7 @@ private def writeAndHalt : SingleTapeTM.Description (TapeSymbol Bool) where
   transition _ _ := (some (.inl true), none, none)
 
 /-- This instance allows three transitions even though its verifier halts after the first. -/
-private def earlyHaltProblem : Instance Bool := ⟨writeAndHalt, [], 0, 3⟩
+private def earlyHaltProblem : BoundedVerification Bool := ⟨writeAndHalt, [], 0, 3⟩
 
 /-- The first transition accepts, and the next two rows repeat that same halted configuration. -/
 private def earlyHaltComputation : Computation earlyHaltProblem where
@@ -92,25 +94,25 @@ private def earlyHaltComputation : Computation earlyHaltProblem where
 
 /-- The description with repeated halted rows proves acceptance within the original bound. -/
 example : earlyHaltProblem ∈ satisfiable true := by
-  rw [mem_satisfiable_iff_exists_computation]
+  rw [mem_accepted_iff_exists_computation]
   refine ⟨earlyHaltComputation, ?_⟩
   rw [Computation.Accepting, ← Row.toCfg_mem_accepting]
   exact ⟨rfl, rfl⟩
 
 /-- The complete CNF formula remains satisfiable when acceptance happens before the time bound. -/
 example : formula earlyHaltProblem true ∈ CNF.satisfiable := by
-  rw [formula_satisfiable_iff, mem_satisfiable_iff_exists_computation]
+  rw [formula_satisfiable_iff, mem_accepted_iff_exists_computation]
   refine ⟨earlyHaltComputation, ?_⟩
   rw [Computation.Accepting, ← Row.toCfg_mem_accepting]
   exact ⟨rfl, rfl⟩
 
 /-- The complete formula is unsatisfiable when there is no time for the first transition. -/
-example : formula (⟨writeAndHalt, [], 0, 0⟩ : Instance Bool) true ∉ CNF.satisfiable := by
+example : formula (⟨writeAndHalt, [], 0, 0⟩ : BoundedVerification Bool) true ∉ CNF.satisfiable := by
   rw [formula_satisfiable_iff]
   simp
 
 /-- The final clauses reject a halted accepting head when a separator remains on the tape. -/
-example : formula (⟨writeAndHalt, [true], 0, 1⟩ : Instance Bool) true ∉ CNF.satisfiable := by
+example : formula (⟨writeAndHalt, [true], 0, 1⟩ : BoundedVerification Bool) true ∉ CNF.satisfiable := by
   rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
   intro h
   obtain ⟨final, hfinal, hstep⟩ := (acceptsWithin_one_iff true _ _).mp h
@@ -121,7 +123,7 @@ example : formula (⟨writeAndHalt, [true], 0, 1⟩ : Instance Bool) true ∉ CN
     BiTape.write, StackTape.mapSome, StackTape.head] at hright
 
 /-- Writing true does not make the formula satisfiable when the head then halts over false. -/
-example : formula (⟨writeThenMove, [false, false], 0, 1⟩ : Instance Bool) true ∉
+example : formula (⟨writeThenMove, [false, false], 0, 1⟩ : BoundedVerification Bool) true ∉
     CNF.satisfiable := by
   rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
   intro h
@@ -139,15 +141,15 @@ private def unaryAccept : SingleTapeTM.Description (TapeSymbol Unit) where
   transition _ _ := (some (.inl ()), none, none)
 
 /-- A verifier over a one-symbol alphabet still gives a satisfiable formula when it accepts. -/
-example : formula (⟨unaryAccept, [], 0, 1⟩ : Instance Unit) () ∈ CNF.satisfiable := by
+example : formula (⟨unaryAccept, [], 0, 1⟩ : BoundedVerification Unit) () ∈ CNF.satisfiable := by
   rw [formula_satisfiable_iff, mem_satisfiable_zero_length]
   apply (acceptsWithin_one_iff () _ _).mpr
   exact ⟨⟨none, (BiTape.mk₁ _).write (some (.inl ()))⟩, ⟨rfl, rfl⟩, rfl⟩
 
 /-- Even an immediately accepting verifier has no accepting description with zero transitions. -/
-example : ¬∃ computation : Computation (⟨writeAndHalt, [], 0, 0⟩ : Instance Bool),
+example : ¬∃ computation : Computation (⟨writeAndHalt, [], 0, 0⟩ : BoundedVerification Bool),
     computation.Accepting true := by
-  rw [← mem_satisfiable_iff_exists_computation]
+  rw [← mem_accepted_iff_exists_computation]
   simp
 
 end AlgoleanTests.NPToSATFormula

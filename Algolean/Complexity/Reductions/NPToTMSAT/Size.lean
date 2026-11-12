@@ -17,11 +17,16 @@ polynomial certificate and time bounds, the encoded formula has polynomial lengt
 original input length. The alphabet and verifier contribute fixed constants.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
+
+attribute [local instance 100] Fintype.toEncodable
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Computability Problems Problems.SAT Problems.TMSAT
+open Computability Problems Problems.SAT
 
 variable {Γ : Type}
 
@@ -32,7 +37,7 @@ private noncomputable def alphabetCodeBound [Fintype Γ] [Encodable Γ] : Nat :=
     ((Finset.univ : Finset (Option (TapeSymbol Γ))).sup
       fun symbol => (Encodable.encode symbol).size)
 
-private theorem variableName_length_le [Fintype Γ] [Encodable Γ] {problem : Instance Γ}
+private theorem variableName_length_le [Fintype Γ] [Encodable Γ] {problem : BoundedVerification Γ}
     (entry : Variable problem) :
     (Variable.name entry).length ≤ 2 * (problem.certificateLength + problem.time +
       width problem + problem.verifier.states + alphabetCodeBound (Γ := Γ) + 2) := by
@@ -97,7 +102,7 @@ section Indexed
 
 variable [Fintype Γ] [DecidableEq Γ]
 
-private theorem indexedFormula_bounds (problem : Instance Γ) (yes : Γ) :
+private theorem indexedFormula_bounds (problem : BoundedVerification Γ) (yes : Γ) :
     let literals := Fintype.card Γ + 2 + width problem * (problem.verifier.states + 2) +
       width problem + 3
     (indexedFormula problem yes).length ≤ clauseCountExpression (Fintype.card Γ)
@@ -122,7 +127,8 @@ private theorem indexedFormula_bounds (problem : Instance Γ) (yes : Γ) :
       fun clause h => (hsl clause h).trans (by lia),
       fun clause h => (hfl clause h).trans (by lia)⟩
 
-private theorem indexedFormula_encoded_length [Encodable Γ] (problem : Instance Γ) (yes : Γ) :
+private theorem indexedFormula_encoded_length [Encodable Γ]
+    (problem : BoundedVerification Γ) (yes : Γ) :
     (SAT.encoding.encode ((indexedFormula problem yes).rename Variable.name)).length ≤
       lengthExpression (Fintype.card Γ) (alphabetCodeBound (Γ := Γ))
         problem.certificateLength problem.time (width problem) problem.verifier.states := by
@@ -160,10 +166,8 @@ This polynomial bounds the encoded formula for a fixed verifier. The certificate
 bounds are evaluated at the original input length, and the verifier's state count is constant.
 -/
 noncomputable def fixedVerifierLengthBound (states : Nat) (certificate time : Polynomial Nat) :
-    Polynomial Nat := by
-  classical
-  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
-  exact 8 * lengthExpression (Polynomial.C (Fintype.card Γ))
+    Polynomial Nat :=
+  8 * lengthExpression (Polynomial.C (Fintype.card Γ))
     (Polynomial.C (alphabetCodeBound (Γ := Γ))) certificate time
     (Polynomial.X + certificate + 2 * time + 1) (Polynomial.C states)
 
@@ -172,13 +176,14 @@ theorem fixedVerifier_length_le [Nontrivial Γ]
     (verifier : Cslib.Turing.SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) :
     ((SAT.encodingOver (Γ := Γ)).encode (formula
-      (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ : Instance Γ)
+      (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
+        BoundedVerification Γ)
       yes)).length ≤
         (fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time).eval input.length := by
   classical
-  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
   have h := indexedFormula_encoded_length
-    (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ : Instance Γ) yes
+    (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
+      BoundedVerification Γ) yes
   rw [SAT.length_encodingOver]
   have heval :
       (fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time).eval input.length =

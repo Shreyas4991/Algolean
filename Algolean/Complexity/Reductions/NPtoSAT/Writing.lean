@@ -26,6 +26,9 @@ positions, and state numbers are read from unary words on the tape.
 
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.Writing
@@ -183,26 +186,26 @@ private theorem whenPart_spec (yes no : tm.State) (hne : yes ≠ no) (tick : Γ)
     all_goals simp_all [AtPair, Ne.symm hne]
     all_goals lia
 
-private def stateWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def stateWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TapeSymbol Γ)) :
       List Γ :=
   if choice.firstState.1 = Encodable.encode control then
     tapeUpdateWord code choice false symbol (instruction verifier control symbol).1 else []
 
-private def writeState (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def writeState (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no : tm.State)
-    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TapeSymbol Γ)) :
     Prog (TMQuery tm) Unit :=
   whenPart yes no tick .firstState (Encodable.encode control)
     (writeTapeUpdateClause tm zero one tick code false symbol (instruction verifier control
       symbol).1)
 
-private theorem writeState_spec (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem writeState_spec (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no : tm.State) (hstates : yes ≠ no) (choice : ActiveChoices)
-    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TMSAT.TapeSymbol Γ))
+    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TapeSymbol Γ))
     (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ stateWord verifier code choice control symbol).length + 32 ≤ size)
@@ -228,15 +231,15 @@ private theorem writeState_spec (verifier : SingleTapeTM.Description (TMSAT.Tape
   vcgen [writeState, hs]
   all_goals grind [AtPair, Part.value, stateWord]
 
-private def statesWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def statesWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (symbol : Option (TapeSymbol Γ)) : List Γ :=
   states.flatMap fun control => stateWord verifier code choice control symbol
 
-private def writeStates (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def writeStates (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no : tm.State)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (symbol : Option (TapeSymbol Γ)) :
     List (Option (Fin (verifier.states + 1))) → Prog (TMQuery tm) Unit
   | [] => pure ()
   | control :: rest => do [TMQuery tm]
@@ -248,12 +251,12 @@ private def statesMoves (width size : Nat) {count : Nat}
   (states.map fun control => checkMoves (Encodable.encode control) size + tapeUpdateTime
     width size).sum
 
-private theorem writeStates_spec (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem writeStates_spec (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no : tm.State) (hstates : yes ≠ no) (choice : ActiveChoices)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbol : Option (TMSAT.TapeSymbol Γ)) (input output : List Γ) (size : Nat)
+    (symbol : Option (TapeSymbol Γ)) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ statesWord verifier code choice states symbol).length + 32 ≤ size)
     (origin : ℤ) (elapsed : Nat) :
@@ -285,27 +288,27 @@ private theorem writeStates_spec (verifier : SingleTapeTM.Description (TMSAT.Tap
     all_goals simp_all [statesWord, statesMoves, checkMoves, List.append_assoc]
     all_goals lia
 
-private def symbolsWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def symbolsWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) : List Γ :=
   symbols.flatMap fun symbol => statesWord verifier code choice states symbol
 
-private def writeSymbols (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def writeSymbols (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no : tm.State)
     (states : List (Option (Fin (verifier.states + 1)))) :
-    List (Option (TMSAT.TapeSymbol Γ)) → Prog (TMQuery tm) Unit
+    List (Option (TapeSymbol Γ)) → Prog (TMQuery tm) Unit
   | [] => pure ()
   | symbol :: rest => do [TMQuery tm]
     writeStates verifier zero one tick code yes no symbol states
     writeSymbols verifier zero one tick code yes no states rest
 
-private theorem writeSymbols_spec (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem writeSymbols_spec (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no : tm.State) (hstates : yes ≠ no) (choice : ActiveChoices)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (input output : List Γ) (size : Nat)
+    (symbols : List (Option (TapeSymbol Γ))) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ symbolsWord verifier code choice states symbols).length + 32 ≤ size)
     (origin : ℤ) (elapsed : Nat) :
@@ -336,17 +339,17 @@ private theorem writeSymbols_spec (verifier : SingleTapeTM.Description (TMSAT.Ta
     all_goals simp_all [symbolsWord, List.append_assoc, Nat.succ_mul]
     all_goals lia
 
-private def leafWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def leafWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) : List Γ :=
   if choice.secondState.1 = 0 ∧ choice.secondPosition.1 = 0 then
     symbolsWord verifier code choice states symbols else []
 
-private def writeLeaf (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def writeLeaf (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no : tm.State)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) : Prog (TMQuery tm) Unit :=
+    (symbols : List (Option (TapeSymbol Γ))) : Prog (TMQuery tm) Unit :=
   whenPart yes no tick .secondState 0
     (whenPart yes no tick .secondPosition 0
       (writeSymbols verifier zero one tick code yes no states symbols))
@@ -355,12 +358,12 @@ private def leafMoves (width size : Nat) {count : Nat}
     (states : List (Option (Fin count))) (symbols : Nat) : Nat :=
   2 * checkMoves 0 size + symbols * statesMoves width size states
 
-private theorem writeLeaf_spec (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem writeLeaf_spec (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no : tm.State) (hstates : yes ≠ no) (choice : ActiveChoices)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (input output : List Γ) (size : Nat)
+    (symbols : List (Option (TapeSymbol Γ))) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ leafWord verifier code choice states symbols).length + 32 ≤ size)
     (origin : ℤ) (elapsed : Nat) :
@@ -398,23 +401,23 @@ private theorem writeLeaf_spec (verifier : SingleTapeTM.Description (TMSAT.TapeS
 private def indexChoice (time position control otherPosition otherControl : Nat) : ActiveChoices :=
   ⟨(time, 0), (position, 0), (control, 0), (otherPosition, 0), (otherControl, 0)⟩
 
-private def piece (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def piece (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (symbols : List (Option (TapeSymbol Γ)))
     (time position control otherPosition otherControl : Nat) : List Γ :=
   leafWord verifier code (indexChoice time position control otherPosition otherControl)
     states symbols
 
-private def scannedWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def scannedWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions controls : Nat) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) (times positions controls : Nat) : List Γ :=
   ChoiceIteration.word (piece verifier code states symbols) times positions controls
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-private theorem leafWord_indices (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem leafWord_indices (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) :
+    (symbols : List (Option (TapeSymbol Γ))) :
     leafWord verifier code choice states symbols = piece verifier code states symbols
       choice.time.1 choice.firstPosition.1 choice.firstState.1 choice.secondPosition.1
         choice.secondState.1 := rfl
@@ -460,19 +463,19 @@ private theorem forTransitions_spec (tick : Γ) (action : Prog (TMQuery tm) Unit
   vcgen [forTransitions, hmark]
   all_goals simp_all [ChoiceIteration.layout, List.replicate_succ, Nat.add_assoc]
 
-private noncomputable def writeAll (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private noncomputable def writeAll (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no : tm.State)
     (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+    (symbols : List (Option (TapeSymbol Γ))) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   state ←ₜ yes
   forTransitions tick (writeLeaf verifier zero one tick code yes no states symbols)
 
-private theorem writeAll_spec (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem writeAll_spec (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no : tm.State) (hstates : yes ≠ no)
     (cases : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (symbols : List (Option (TapeSymbol Γ)))
     (times positions controls : Nat) (input output : List Γ) (size : Nat)
     (hsize : times + 2 * positions + 2 * controls + input.length +
       (output ++ scannedWord verifier code cases symbols times positions controls).length +
@@ -513,19 +516,19 @@ private theorem writeAll_spec (verifier : SingleTapeTM.Description (TMSAT.TapeSy
   vcgen [writeAll, hr]
   all_goals simp_all [scannedWord, leaf, bound]
 
-private def verifierStates (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) :
+private def verifierStates (verifier : SingleTapeTM.Description (TapeSymbol Γ)) :
     List (Option (Fin (verifier.states + 1))) :=
-  stateChoices (⟨verifier, [], 0, 0⟩ : TMSAT.Instance Γ)
+  stateChoices (⟨verifier, [], 0, 0⟩ : BoundedVerification Γ)
 
-private noncomputable def symbols : List (Option (TMSAT.TapeSymbol Γ)) :=
-  (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+private noncomputable def symbols : List (Option (TapeSymbol Γ)) :=
+  (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
 
 /--
 This fixed program writes the clauses for symbols written by one verifier. It contains the
 verifier's finite transition cases. It reads only the input word and unary bounds from its tape.
 -/
 private noncomputable def writeScannedClauses (tm : SingleTapeTM Γ)
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no : tm.State) :
     Prog (TMQuery tm) Unit :=
   writeAll verifier zero one tick code yes no (verifierStates verifier) symbols
@@ -540,9 +543,9 @@ private theorem filterFlatMap {α β : Type} (values : List α) (predicate : α 
   cases h : predicate value <;> simp [h]
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-private theorem statesWord_eq (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem statesWord_eq (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TMSAT.TapeSymbol Γ))
+    (control : Option (Fin (verifier.states + 1))) (symbol : Option (TapeSymbol Γ))
     (hchoice : choice.firstState.1 = Encodable.encode control) :
     statesWord verifier code choice (verifierStates verifier) symbol =
       tapeUpdateWord code choice false symbol (instruction verifier control symbol).1 := by
@@ -589,7 +592,7 @@ This polynomial bounds the fixed verifier's scanned-cell clauses. Its coefficien
 only on that verifier, the alphabet, and the fixed width of the written SAT symbols.
 -/
 private noncomputable def scannedTimeBound
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (width : Nat) : Polynomial Nat :=
   ChoiceIteration.iterationPolynomial
     (2 * (4 * Polynomial.X + 64) +
@@ -597,16 +600,16 @@ private noncomputable def scannedTimeBound
 
 omit [Inhabited Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem eval_scannedTimeBound
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (width size : Nat) :
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width size : Nat) :
     (scannedTimeBound verifier width).eval size =
       ChoiceIteration.iterationMoves size
         (leafMoves width size (verifierStates verifier) (symbols (Γ := Γ)).length) + 2 := by
   simp [scannedTimeBound, eval_statesPolynomial, leafMoves, checkMoves]
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-private theorem piece_eq (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private theorem piece_eq (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (states : List (Option (Fin (verifier.states + 1))))
-    (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (symbols : List (Option (TapeSymbol Γ)))
     (time position control otherPosition otherControl : Nat) :
     piece verifier code states symbols time position control otherPosition otherControl =
       if otherControl = 0 then
@@ -618,7 +621,7 @@ private theorem piece_eq (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol 
     simp [piece, leafWord, indexChoice, hp, hc]
 
 omit [Inhabited Γ] [DecidableEq Γ] in
-private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     scannedWord problem.verifier code (verifierStates problem.verifier) symbols
       problem.time (NPToTMSAT.width problem) (problem.verifier.states + 2) =
       (formulaPrefix ((writeClauses problem).rename Variable.name)).flatMap code := by
@@ -633,7 +636,7 @@ private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.
     ext index
     simp
   have hstate (time position : Nat) (control : Option (Fin (problem.verifier.states + 1)))
-      (symbol : Option (TMSAT.TapeSymbol Γ)) :
+      (symbol : Option (TapeSymbol Γ)) :
       statesWord problem.verifier code (indexChoice time position (Encodable.encode control) 0 0)
         (verifierStates problem.verifier) symbol =
       tapeUpdateWord code (indexChoice time position (Encodable.encode control) 0 0) false symbol
@@ -641,7 +644,7 @@ private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.
     statesWord_eq problem.verifier code _ control symbol rfl
   have hclause (time : Fin problem.time) (position : Fin (NPToTMSAT.width problem))
       (control : Option (Fin (problem.verifier.states + 1)))
-      (symbol : Option (TMSAT.TapeSymbol Γ)) :
+      (symbol : Option (TapeSymbol Γ)) :
       (certificateEncoding.encode
         ((Clause.implies [Variable.head time.castSucc (position, control),
           Variable.tape time.castSucc position symbol]
@@ -664,10 +667,10 @@ It preserves every bound and the original input and returns its head to the firs
 The polynomial's coefficients are fixed independently of the input and its length.
 -/
 @[spec] private theorem writeScannedClauses_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (yes no : tm.State) (hstates : yes ≠ no) (problem : TMSAT.Instance Γ)
+    (yes no : tm.State) (hstates : yes ≠ no) (problem : BoundedVerification Γ)
     (hverifier : problem.verifier = verifier) (input output : List Γ) (size : Nat)
     (hsize : problem.time + 2 * NPToTMSAT.width problem +
       2 * (problem.verifier.states + 2) + input.length +
@@ -739,12 +742,12 @@ private def movementOffset : Option Bool → Nat
   | some true => 2
 
 private def movementWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (movement : Option Bool) (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (movement : Option Bool) (symbol : Option (TapeSymbol Γ)) : List Γ :=
   if choice.firstPosition.1 + movementOffset movement = choice.secondPosition.1 + 1 then []
   else forbiddenWord code choice symbol
 
 private noncomputable def writeMovement (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (yes no extra : tm.State) (movement : Option Bool) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (yes no extra : tm.State) (movement : Option Bool) (symbol : Option (TapeSymbol Γ)) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   comparePositionsOffset tm zero one tick yes no extra (movementOffset movement)
   ifₜ state =ₜ some yes then
@@ -756,7 +759,7 @@ private noncomputable def writeMovement (zero one tick : Γ) (code : CodeSymbol 
 private theorem writeMovement_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
-    (choice : ActiveChoices) (movement : Option Bool) (symbol : Option (TMSAT.TapeSymbol Γ))
+    (choice : ActiveChoices) (movement : Option Bool) (symbol : Option (TapeSymbol Γ))
     (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ movementWord code choice movement symbol).length + 32 ≤ size)
@@ -784,20 +787,20 @@ private theorem writeMovement_spec (zero one : Γ) (hne : zero ≠ one) (tick : 
     vcgen [writeMovement, hc, hw]
     all_goals simp_all [AtPair, movementWord]
 
-private abbrev Controls (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) :=
+private abbrev Controls (verifier : SingleTapeTM.Description (TapeSymbol Γ)) :=
   Option (Fin (verifier.states + 1)) × Option (Fin (verifier.states + 1))
 
-private def controlBodyWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def controlBodyWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices) (controls : Controls verifier)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (symbol : Option (TapeSymbol Γ)) : List Γ :=
   if controls.2 = (instruction verifier controls.1 symbol).2.2 then
     movementWord code choice (instruction verifier controls.1 symbol).2.1 symbol
   else forbiddenWord code choice symbol
 
 private noncomputable def writeControlBody
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no extra : tm.State)
-    (controls : Controls verifier) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (controls : Controls verifier) (symbol : Option (TapeSymbol Γ)) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   if controls.2 = (instruction verifier controls.1 symbol).2.2 then
     writeMovement zero one tick code yes no extra
@@ -805,19 +808,19 @@ private noncomputable def writeControlBody
   else
     writeForbiddenControlClause tm zero one tick code symbol
 
-private def controlBodyMoves (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def controlBodyMoves (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (width size : Nat) (controls : Controls verifier)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : Nat :=
+    (symbol : Option (TapeSymbol Γ)) : Nat :=
   comparisonOffsetTime size (movementOffset (instruction verifier controls.1 symbol).2.1) +
     forbiddenTime width size
 
 private theorem writeControlBody_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
     (choice : ActiveChoices) (controls : Controls verifier)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) (input output : List Γ) (size : Nat)
+    (symbol : Option (TapeSymbol Γ)) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ controlBodyWord verifier code choice controls symbol).length + 32 ≤ size)
     (origin : ℤ) (elapsed : Nat) :
@@ -843,36 +846,36 @@ private theorem writeControlBody_spec
     all_goals simp_all [controlBodyWord, controlBodyMoves, AtPair]
     all_goals lia
 
-private def controlCaseWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def controlCaseWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices) (controls : Controls verifier)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (symbol : Option (TapeSymbol Γ)) : List Γ :=
   if choice.firstState.1 = Encodable.encode controls.1 then
     if choice.secondState.1 = Encodable.encode controls.2 then
       controlBodyWord verifier code choice controls symbol else []
   else []
 
 private noncomputable def writeControlCase
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no extra : tm.State)
-    (controls : Controls verifier) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (controls : Controls verifier) (symbol : Option (TapeSymbol Γ)) :
     Prog (TMQuery tm) Unit :=
   whenPart yes no tick .firstState (Encodable.encode controls.1)
     (whenPart yes no tick .secondState (Encodable.encode controls.2)
       (writeControlBody verifier zero one tick code yes no extra controls symbol))
 
-private def controlCaseMoves (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private def controlCaseMoves (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (width size : Nat) (controls : Controls verifier)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : Nat :=
+    (symbol : Option (TapeSymbol Γ)) : Nat :=
   checkMoves (Encodable.encode controls.1) size + checkMoves (Encodable.encode controls.2) size +
     controlBodyMoves verifier width size controls symbol
 
 private theorem writeControlCase_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
     (choice : ActiveChoices) (controls : Controls verifier)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) (input output : List Γ) (size : Nat)
+    (symbol : Option (TapeSymbol Γ)) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ controlCaseWord verifier code choice controls symbol).length + 32 ≤ size)
     (origin : ℤ) (elapsed : Nat) :
@@ -910,35 +913,35 @@ private theorem writeControlCase_spec
   all_goals simp_all [Part.value, controlCaseWord, controlCaseMoves, checkMoves]
   all_goals lia
 
-private def controlPairs (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) :
+private def controlPairs (verifier : SingleTapeTM.Description (TapeSymbol Γ)) :
     List (Controls verifier) :=
   (verifierStates verifier).product (verifierStates verifier)
 
-private def controlSymbolWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
-    (code : CodeSymbol → List Γ) (choice : ActiveChoices) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+private def controlSymbolWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (code : CodeSymbol → List Γ) (choice : ActiveChoices) (symbol : Option (TapeSymbol Γ)) :
     List Γ :=
   (controlPairs verifier).flatMap fun controls =>
     controlCaseWord verifier code choice controls symbol
 
 private noncomputable def writeControlSymbol
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no extra : tm.State)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : Prog (TMQuery tm) Unit :=
+    (symbol : Option (TapeSymbol Γ)) : Prog (TMQuery tm) Unit :=
   runCases (fun controls =>
     writeControlCase verifier zero one tick code yes no extra controls symbol)
     (controlPairs verifier)
 
-private def controlSymbolMoves (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
-    (width size : Nat) (symbol : Option (TMSAT.TapeSymbol Γ)) : Nat :=
+private def controlSymbolMoves (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (width size : Nat) (symbol : Option (TapeSymbol Γ)) : Nat :=
   ((controlPairs verifier).map fun controls =>
     controlCaseMoves verifier width size controls symbol).sum
 
 private theorem writeControlSymbol_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
-    (choice : ActiveChoices) (symbol : Option (TMSAT.TapeSymbol Γ))
+    (choice : ActiveChoices) (symbol : Option (TapeSymbol Γ))
     (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ controlSymbolWord verifier code choice symbol).length + 32 ≤ size)
@@ -964,24 +967,24 @@ private theorem writeControlSymbol_spec
   vcgen [writeControlSymbol, hs]
   all_goals simp_all [controlSymbolWord, controlSymbolMoves, AtPair]
 
-private noncomputable def controlLeafWord (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+private noncomputable def controlLeafWord (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices) : List Γ :=
   (symbols (Γ := Γ)).flatMap fun symbol => controlSymbolWord verifier code choice symbol
 
 private noncomputable def writeControlLeaf
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no extra : tm.State) :
     Prog (TMQuery tm) Unit :=
   runCases (fun symbol =>
     writeControlSymbol verifier zero one tick code yes no extra symbol) symbols
 
 private noncomputable def controlLeafMoves
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (width size : Nat) : Nat :=
   (symbols.map fun symbol => controlSymbolMoves verifier width size symbol).sum
 
 private theorem writeControlLeaf_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
@@ -1010,19 +1013,19 @@ private theorem writeControlLeaf_spec
   all_goals simp_all [controlLeafWord, controlLeafMoves, AtPair]
 
 private noncomputable def controlPiece
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (time position control otherPosition otherControl : Nat) :
     List Γ :=
   controlLeafWord verifier code (indexChoice time position control otherPosition otherControl)
 
 private noncomputable def controlWord
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (times positions controls : Nat) : List Γ :=
   ChoiceIteration.word (controlPiece verifier code) times positions controls
 
 omit [Inhabited Γ] [DecidableEq Γ] in
 private theorem controlLeafWord_indices
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices) :
     controlLeafWord verifier code choice = controlPiece verifier code choice.time.1
       choice.firstPosition.1 choice.firstState.1 choice.secondPosition.1 choice.secondState.1 := rfl
@@ -1033,14 +1036,14 @@ Its finite transition cases are part of the program. Both selected positions are
 unary words, and the program preserves those words and the original input.
 -/
 private noncomputable def writeControlClauses (tm : SingleTapeTM Γ) [DecidableEq tm.State]
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no extra : tm.State) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   state ←ₜ yes
   forTransitions tick (writeControlLeaf verifier zero one tick code yes no extra)
 
 private theorem writeControlWords_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
@@ -1083,8 +1086,8 @@ private theorem writeControlWords_spec
   all_goals simp_all [controlWord, leaf, bound]
 
 private noncomputable def controlCasePolynomial
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
-    (width : Nat) (controls : Controls verifier) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (width : Nat) (controls : Controls verifier) (symbol : Option (TapeSymbol Γ)) :
     Polynomial Nat :=
   Polynomial.C (4 * Encodable.encode controls.1 + 4 * Encodable.encode controls.2 + 128) +
     8 * Polynomial.X + Polynomial.C 4096 *
@@ -1094,8 +1097,8 @@ private noncomputable def controlCasePolynomial
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem eval_controlCasePolynomial
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
-    (width size : Nat) (controls : Controls verifier) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (width size : Nat) (controls : Controls verifier) (symbol : Option (TapeSymbol Γ)) :
     (controlCasePolynomial verifier width controls symbol).eval size =
       controlCaseMoves verifier width size controls symbol := by
   simp only [controlCasePolynomial, Polynomial.eval_add, Polynomial.eval_mul, Polynomial.eval_C,
@@ -1105,39 +1108,39 @@ private theorem eval_controlCasePolynomial
   ring
 
 private noncomputable def controlSymbolPolynomial
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
-    (width : Nat) (symbol : Option (TMSAT.TapeSymbol Γ)) : Polynomial Nat :=
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (width : Nat) (symbol : Option (TapeSymbol Γ)) : Polynomial Nat :=
   ((controlPairs verifier).map fun controls =>
     controlCasePolynomial verifier width controls symbol).sum
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem eval_controlSymbolPolynomial
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
-    (width size : Nat) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
+    (width size : Nat) (symbol : Option (TapeSymbol Γ)) :
     (controlSymbolPolynomial verifier width symbol).eval size =
       controlSymbolMoves verifier width size symbol := by
   simp [controlSymbolPolynomial, controlSymbolMoves, Polynomial.eval_listSum,
     eval_controlCasePolynomial, Function.comp_def]
 
 private noncomputable def controlLeafPolynomial
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
   (symbols.map fun symbol => controlSymbolPolynomial verifier width symbol).sum
 
 omit [Inhabited Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem eval_controlLeafPolynomial
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (width size : Nat) :
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width size : Nat) :
     (controlLeafPolynomial verifier width).eval size = controlLeafMoves verifier width size := by
   simp [controlLeafPolynomial, controlLeafMoves, Polynomial.eval_listSum,
     eval_controlSymbolPolynomial, Function.comp_def]
 
 /-- This polynomial bounds writing the next-head requirements for the fixed verifier. -/
 private noncomputable def controlTimeBound
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
   ChoiceIteration.iterationPolynomial (controlLeafPolynomial verifier width) + 2
 
 omit [Inhabited Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem eval_controlTimeBound
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (width size : Nat) :
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width size : Nat) :
     (controlTimeBound verifier width).eval size =
       ChoiceIteration.iterationMoves size (controlLeafMoves verifier width size) + 2 := by
   simp [controlTimeBound, eval_controlLeafPolynomial]
@@ -1160,13 +1163,13 @@ private theorem selectedCodes {α β : Type} [Encodable α] (cases : List α)
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem verifierStates_mem
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (control : Option (Fin (verifier.states + 1))) : control ∈ verifierStates verifier := by
   cases control <;> simp [verifierStates, stateChoices]
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ] in
 private theorem verifierStates_nodup
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) :
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) :
     (verifierStates verifier).Nodup := by
   simp only [verifierStates, stateChoices, List.nodup_cons]
   refine ⟨by simp, (List.nodup_finRange _).map ?_⟩
@@ -1175,9 +1178,9 @@ private theorem verifierStates_nodup
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem controlSymbolWord_eq
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (code : CodeSymbol → List Γ) (choice : ActiveChoices) (controls : Controls verifier)
-    (symbol : Option (TMSAT.TapeSymbol Γ))
+    (symbol : Option (TapeSymbol Γ))
     (hfirst : choice.firstState.1 = Encodable.encode controls.1)
     (hsecond : choice.secondState.1 = Encodable.encode controls.2) :
     controlSymbolWord verifier code choice symbol =
@@ -1207,10 +1210,10 @@ private theorem moved_iff_offset {width : Nat} (first second : Fin width) (movem
     cases direction <;> simp only [Moved, movementOffset, Nat.add_zero] <;> lia
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-private theorem controlBodyWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ)
+private theorem controlBodyWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (time : Fin problem.time) (first second :
       Fin (NPToTMSAT.width problem) × Option (Fin (problem.verifier.states + 1)))
-    (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (symbol : Option (TapeSymbol Γ)) :
     controlBodyWord problem.verifier code
       (indexChoice time.val first.1.val (Encodable.encode first.2)
         second.1.val (Encodable.encode second.2)) (first.2, second.2) symbol =
@@ -1222,7 +1225,7 @@ private theorem controlBodyWord_eq (code : CodeSymbol → List Γ) (problem : TM
   split_ifs <;> simp_all
 
 omit [Inhabited Γ] [DecidableEq Γ] in
-private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     controlWord problem.verifier code problem.time (NPToTMSAT.width problem)
       (problem.verifier.states + 2) =
       (formulaPrefix ((NPToSAT.controlClauses problem).rename Variable.name)).flatMap code := by
@@ -1232,7 +1235,7 @@ private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.
     simp
   have hselected (time position otherPosition : Nat)
       (first second : Option (Fin (problem.verifier.states + 1)))
-      (symbol : Option (TMSAT.TapeSymbol Γ)) :
+      (symbol : Option (TapeSymbol Γ)) :
       controlSymbolWord problem.verifier code
         (indexChoice time position (Encodable.encode first) otherPosition (Encodable.encode second))
         symbol =
@@ -1242,7 +1245,7 @@ private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.
     controlSymbolWord_eq problem.verifier code _ (first, second) symbol rfl rfl
   have hclause (time : Fin problem.time) (first second :
       Fin (NPToTMSAT.width problem) × Option (Fin (problem.verifier.states + 1)))
-      (symbol : Option (TMSAT.TapeSymbol Γ)) :
+      (symbol : Option (TapeSymbol Γ)) :
       (certificateEncoding.encode
         ((Clause.forbid [Variable.head time.castSucc first,
           Variable.tape time.castSucc first.1 symbol,
@@ -1286,11 +1289,11 @@ It preserves the unary bounds, original input, and head position. The time polyn
 for the verifier and alphabet.
 -/
 @[spec] private theorem writeControlClauses_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
-    (problem : TMSAT.Instance Γ) (hverifier : problem.verifier = verifier)
+    (problem : BoundedVerification Γ) (hverifier : problem.verifier = verifier)
     (input output : List Γ) (size : Nat)
     (hsize : problem.time + 2 * NPToTMSAT.width problem +
       2 * (problem.verifier.states + 2) + input.length +
@@ -1316,7 +1319,7 @@ for the verifier and alphabet.
 
 /-- This polynomial bounds all transition requirements written for the fixed verifier. -/
 noncomputable def transitionTimeBound
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (width : Nat) : Polynomial Nat :=
   scannedTimeBound verifier width + controlTimeBound verifier width +
     Polynomial.C (4194304 * ((symbols (Γ := Γ)).length + 1) * (width + 1)) * (Polynomial.X + 16) ^ 7
 
@@ -1327,7 +1330,7 @@ The verifier's finite transition cases are fixed with the program. The input wor
 are read from the tape and preserved.
 -/
 noncomputable def writeTransitions (tm : SingleTapeTM Γ) [DecidableEq tm.State]
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes no extra : tm.State) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   writeScannedClauses tm verifier zero one tick code yes no
@@ -1340,11 +1343,11 @@ configurations. It preserves the original input, all bounds, and its starting he
 The displayed polynomial bounds every head move made by the program.
 -/
 @[spec] theorem writeTransitions_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ))
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (yes no extra : tm.State) (hfirst : yes ≠ no) (hlast : yes ≠ extra) (hother : no ≠ extra)
-    (problem : TMSAT.Instance Γ) (hverifier : problem.verifier = verifier)
+    (problem : BoundedVerification Γ) (hverifier : problem.verifier = verifier)
     (input output : List Γ) (size : Nat)
     (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
       input.length + (output ++

@@ -20,8 +20,11 @@ bounds from the prepared unary words and preserves the original input and earlie
 It removes the certificate bound after writing its clauses and returns to the first time cell.
 
 This is a machine template. The containing machine fixes its alphabet representations and
-control states once. The instance describing the clauses occurs only in its specification.
+control states once. The data describing the computation occur only in the specification.
 -/
+
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
 
 public section
 
@@ -37,11 +40,11 @@ variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
 /-- This encodes the existing certificate, head, and tape choices without ending the formula. -/
-@[expose] noncomputable def word (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+@[expose] noncomputable def word (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     List Γ := (formulaPrefix ((choiceClauses problem).rename Variable.name)).flatMap code
 
 omit [Inhabited Γ] in
-private theorem word_eq_parts (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+private theorem word_eq_parts (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     word code problem =
       (formulaPrefix ((certificateClauses problem).rename Variable.name)).flatMap code ++
       (formulaPrefix ((headClauses problem).rename Variable.name)).flatMap code ++
@@ -76,7 +79,7 @@ private theorem eraseCertificate_spec (tick : Γ) (certificate times positions s
 noncomputable def timeBound (width : Nat) : Polynomial Nat :=
   CertificateChoices.timeBound width 1 (Finset.univ : Finset Γ).toList +
     HeadChoices.timeBound width +
-    TapeChoices.timeBound width (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList + X + 1
+    TapeChoices.timeBound width (Finset.univ : Finset (Option (TapeSymbol Γ))).toList + X + 1
 
 /--
 This fixed template writes all choice clauses and removes the certificate bound. It preserves
@@ -98,7 +101,7 @@ words and finishes at the first time cell, within the stated polynomial bound on
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (different equal extra : tm.State) (hfirst : different ≠ equal)
     (hlast : different ≠ extra) (hother : equal ≠ extra)
-    (problem : TMSAT.Instance Γ) (input output : List Γ) (size : Nat)
+    (problem : BoundedVerification Γ) (input output : List Γ) (size : Nat)
     (hsize : problem.certificateLength + problem.time + 2 * NPToTMSAT.width problem +
       2 * (problem.verifier.states + 2) + input.length +
         (output ++ word code problem).length + 64 ≤ size)

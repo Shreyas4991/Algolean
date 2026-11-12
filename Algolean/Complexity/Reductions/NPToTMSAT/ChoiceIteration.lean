@@ -25,6 +25,8 @@ These are machine templates. The containing machine fixes the alphabet symbols a
 once, independently of the unary bounds and all selected indices.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.ChoiceIteration

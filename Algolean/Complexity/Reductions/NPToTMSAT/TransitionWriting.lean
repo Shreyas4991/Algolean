@@ -27,6 +27,9 @@ fixed alphabet. It chooses between them by reading the verifier description. The
 bounds are read from the tape, rather than chosen when constructing the program.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.TransitionWriting
@@ -42,14 +45,14 @@ variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
 /-- This is the existing encoded implication for the old and next symbols of a selected cell. -/
 @[expose] def tapeUpdateWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (second : Bool) (oldSymbol newSymbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (second : Bool) (oldSymbol newSymbol : Option (TapeSymbol Γ)) : List Γ :=
   (formulaPrefix [Clause.implies
     [headName choice false, tapeName choice false second oldSymbol]
     (tapeName choice true second newSymbol)]).flatMap code
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem tapeUpdateWord_eq (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (second : Bool) (oldSymbol newSymbol : Option (TMSAT.TapeSymbol Γ)) :
+    (second : Bool) (oldSymbol newSymbol : Option (TapeSymbol Γ)) :
     tapeUpdateWord code choice second oldSymbol newSymbol =
       literalWord code choice false false ++
       tapeLiteralWord code choice false false second oldSymbol ++
@@ -66,7 +69,7 @@ containing machine. The time, position, and state indices are read from the tape
 -/
 def writeTapeUpdateClause (tm : SingleTapeTM Γ) (zero one tick : Γ)
     (code : CodeSymbol → List Γ) (second : Bool)
-    (oldSymbol newSymbol : Option (TMSAT.TapeSymbol Γ)) : Prog (TMQuery tm) Unit :=
+    (oldSymbol newSymbol : Option (TapeSymbol Γ)) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
   writeHeadLiteral tm zero one tick code false false
   writeTapeLiteral tm zero one tick code false false second oldSymbol
@@ -80,7 +83,7 @@ def writeTapeUpdateClause (tm : SingleTapeTM Γ) (zero one tick : Γ)
 /-- Writing a cell-update requirement appends exactly the existing SAT clause. -/
 @[spec] theorem writeTapeUpdateClause_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (choice : ActiveChoices) (second : Bool) (oldSymbol newSymbol : Option (TMSAT.TapeSymbol Γ))
+    (choice : ActiveChoices) (second : Bool) (oldSymbol newSymbol : Option (TapeSymbol Γ))
     (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ tapeUpdateWord code choice second oldSymbol newSymbol).length + 32 ≤ size)
@@ -124,19 +127,19 @@ def writeTapeUpdateClause (tm : SingleTapeTM Γ) (zero one tick : Γ)
   all_goals lia
 
 private def writeUnchangedSymbols (zero one tick : Γ) (code : CodeSymbol → List Γ) :
-    List (Option (TMSAT.TapeSymbol Γ)) → Prog (TMQuery tm) Unit
+    List (Option (TapeSymbol Γ)) → Prog (TMQuery tm) Unit
   | [] => pure ()
   | symbol :: rest => do [TMQuery tm]
     writeTapeUpdateClause tm zero one tick code true symbol symbol
     writeUnchangedSymbols zero one tick code rest
 
 private def unchangedSymbolsWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) : List Γ :=
   symbols.flatMap fun symbol => tapeUpdateWord code choice true symbol symbol
 
 private theorem writeUnchangedSymbols_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (choice : ActiveChoices) (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (choice : ActiveChoices) (symbols : List (Option (TapeSymbol Γ)))
     (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ unchangedSymbolsWord code choice symbols).length + 32 ≤ size)
@@ -209,7 +212,7 @@ private theorem previousBlank_iff (tick : Γ) (choice : ActiveChoices) (input ou
   cases h : choice.secondState.1 <;> simp [List.replicate_succ]
 
 private noncomputable def writeOtherCell (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (different equal extra : tm.State) :
+    (symbols : List (Option (TapeSymbol Γ))) (different equal extra : tm.State) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   comparePositions tm zero one tick different equal extra
   ifₜ state =ₜ some different then
@@ -219,13 +222,13 @@ private noncomputable def writeOtherCell (zero one tick : Γ) (code : CodeSymbol
   state ←ₜ different
 
 private def otherCellWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) : List Γ :=
   if choice.firstPosition.1 = choice.secondPosition.1 then []
   else unchangedSymbolsWord code choice symbols
 
 private theorem writeOtherCell_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (different equal extra : tm.State)
+    (symbols : List (Option (TapeSymbol Γ))) (different equal extra : tm.State)
     (hfirst : different ≠ equal) (hlast : different ≠ extra) (hother : equal ≠ extra)
     (choice : ActiveChoices) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
@@ -256,17 +259,17 @@ private theorem writeOtherCell_spec (zero one : Γ) (hne : zero ≠ one) (tick :
     all_goals simp_all [otherCellWord, AtPair]
 
 private noncomputable def writeUnchangedLeaf (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (different equal extra : tm.State) :
+    (symbols : List (Option (TapeSymbol Γ))) (different equal extra : tm.State) :
     Prog (TMQuery tm) Unit :=
   whenPreviousBlank (writeOtherCell zero one tick code symbols different equal extra)
 
 private def unchangedLeafWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) : List Γ :=
   if choice.secondState.1 = 0 then otherCellWord code choice symbols else []
 
 private theorem writeUnchangedLeaf_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (different equal extra : tm.State)
+    (symbols : List (Option (TapeSymbol Γ))) (different equal extra : tm.State)
     (hfirst : different ≠ equal) (hlast : different ≠ extra) (hother : equal ≠ extra)
     (choice : ActiveChoices) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
@@ -298,18 +301,18 @@ private def indexChoice (time position control otherPosition otherControl : Nat)
   ⟨(time, 0), (position, 0), (control, 0), (otherPosition, 0), (otherControl, 0)⟩
 
 private def unchangedPiece (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (symbols : List (Option (TapeSymbol Γ)))
     (time position control otherPosition otherControl : Nat) : List Γ :=
   unchangedLeafWord code (indexChoice time position control otherPosition otherControl) symbols
 
 /-- This lists the cell-preservation clauses in increasing time, head, state, and cell order. -/
 def unchangedWord (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions states : Nat) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) (times positions states : Nat) : List Γ :=
   ChoiceIteration.word (unchangedPiece code symbols) times positions states
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem unchangedLeafWord_indices (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) :
+    (symbols : List (Option (TapeSymbol Γ))) :
     unchangedLeafWord code choice symbols = unchangedPiece code symbols choice.time.1
       choice.firstPosition.1 choice.firstState.1 choice.secondPosition.1 choice.secondState.1 := rfl
 
@@ -320,7 +323,7 @@ that a word of `t + 1` ticks gives exactly `t` transitions, and that tick is res
 -/
 noncomputable def writeUnchangedClauses (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (zero one tick : Γ)
-    (code : CodeSymbol → List Γ) (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (code : CodeSymbol → List Γ) (symbols : List (Option (TapeSymbol Γ)))
     (different equal extra : tm.State) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   state ←ₜ different
   markFirst tick (ChoiceIteration.afterFirstTime tm tick
@@ -358,7 +361,7 @@ theorem unchangedTime_le (width size symbols : Nat) :
 /-- The cell-preservation writer appends its ordered clauses and restores all source words. -/
 @[spec] theorem writeUnchangedClauses_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (different equal extra : tm.State)
+    (symbols : List (Option (TapeSymbol Γ))) (different equal extra : tm.State)
     (hfirst : different ≠ equal) (hlast : different ≠ extra) (hother : equal ≠ extra)
     (times positions states : Nat) (input output : List Γ) (size : Nat)
     (hsize : times + 2 * positions + 2 * states + input.length +
@@ -417,7 +420,7 @@ theorem unchangedTime_le (width size symbols : Nat) :
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem unchangedPiece_eq (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+    (symbols : List (Option (TapeSymbol Γ)))
     (time position control otherPosition otherControl : Nat) :
     unchangedPiece code symbols time position control otherPosition otherControl =
       if otherControl = 0 then
@@ -427,8 +430,8 @@ private theorem unchangedPiece_eq (code : CodeSymbol → List Γ)
 
 omit [Inhabited Γ] [DecidableEq Γ] in
 /-- The cell-preservation writer uses exactly the existing finite-computation clauses. -/
-theorem unchangedWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
-    unchangedWord code (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+theorem unchangedWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
+    unchangedWord code (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
       problem.time (NPToTMSAT.width problem) (problem.verifier.states + 2) =
         (formulaPrefix ((unchangedClauses problem).rename Variable.name)).flatMap code := by
   have hfirst (text : List Γ) :
@@ -449,7 +452,7 @@ theorem unchangedWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.Instan
   have hclause (time : Fin problem.time)
       (position otherPosition : Fin (NPToTMSAT.width problem))
       (control : Option (Fin (problem.verifier.states + 1)))
-      (symbol : Option (TMSAT.TapeSymbol Γ)) :
+      (symbol : Option (TapeSymbol Γ)) :
       (certificateEncoding.encode
         ((Clause.implies [Variable.head time.castSucc (position, control),
           Variable.tape time.castSucc otherPosition symbol]

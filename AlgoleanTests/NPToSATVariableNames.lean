@@ -16,14 +16,16 @@ They include two certificate variables whose fields would have identical concate
 without the length header. Decoding the encoded pair recovers the separate fields.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace AlgoleanTests.NPToSATVariableNames
 
-open Algolean.Problems Algolean.Problems.TMSAT Algolean.Algorithms.NPToTMSAT Computability
+open Algolean.Problems Cslib.Turing.SingleTapeTM.BoundedVerification Algolean.Algorithms.NPToTMSAT Computability
 
 /-- This instance has four certificate symbols, two times, and a verifier with two states. -/
-private abbrev exampleInstance : Instance (Fin 4) where
+private abbrev exampleInstance : BoundedVerification (Fin 4) where
   verifier := {
     states := 1
     initial := 0

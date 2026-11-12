@@ -12,7 +12,7 @@ public import Algolean.Complexity.Reductions.NPtoSAT.InitialSource
 public import Algolean.Complexity.Reductions.NPToTMSAT.LiteralWriting
 public import Algolean.Complexity.Reductions.NPToTMSAT.CertificateChoices
 public import Algolean.Complexity.Reductions.NPToTMSAT.Initial
-public import Algolean.Complexity.Reductions.NPtoSAT.CellIteration
+public import Algolean.Complexity.Reductions.NPtoSAT.InitialCells
 public import Algolean.Complexity.Reductions.NPtoSAT.InitialWords
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.MarkedUnaryCounting
 public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.IndexedReading
@@ -31,6 +31,9 @@ cells on either side. The program reads the input symbols directly from the pres
 The verifier and its initial state are fixed when constructing the program. Every position
 and bound is read from the unary words on the tape.
 -/
+
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
 
 public section
 
@@ -441,7 +444,7 @@ private theorem clearIndex_spec (zero one tick : Γ) (choice : ActiveChoices)
 
 variable [Encodable Γ]
 
-private def certificateWord (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ)
+private def certificateWord (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (index : Fin problem.certificateLength) (symbol : Γ) : List Γ :=
   (literalPrefix (.neg (Variable.name (.certificate index symbol)))).flatMap code
 
@@ -455,7 +458,7 @@ private def certificateLiteral (zero one : Γ) (code : CodeSymbol → List Γ)
 
 private theorem canonicalCertificate_spec (zero one : Γ) (hne : zero ≠ one)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (problem : TMSAT.Instance Γ) (position : Fin problem.certificateLength) (symbol : Γ)
+    (problem : BoundedVerification Γ) (position : Fin problem.certificateLength) (symbol : Γ)
     (parts : List (List Γ)) (hparts : parts.length = 11) (output : List Γ)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config = ⟨label, BiTape.segment StackTape.nil
@@ -481,7 +484,7 @@ private theorem canonicalCertificate_spec (zero one : Γ) (hne : zero ≠ one)
 private theorem certificateLiteral_spec (zero one : Γ) (hne : zero ≠ one)
     (code : CodeSymbol → List Γ) (codeWidth : Nat)
     (hcode : ∀ symbol, (code symbol).length = codeWidth)
-    (problem : TMSAT.Instance Γ) (position : Fin problem.certificateLength) (symbol : Γ)
+    (problem : BoundedVerification Γ) (position : Fin problem.certificateLength) (symbol : Γ)
     (bits : List Bool) (hvalue : binaryValue bits.reverse = position.val + 1)
     (parts : List (List Γ)) (hparts : parts.length = 11) (output : List Γ)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
@@ -532,17 +535,17 @@ private theorem certificateLiteral_spec (zero one : Γ) (hne : zero ≠ one)
 
 
 private def cellWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (symbol : Option (TapeSymbol Γ)) : List Γ :=
   tapeLiteralWord code choice true false false symbol ++ code (.inr 3) ++ code (.inr 4)
 
 private def writeCell (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : Prog (TMQuery tm) Unit := do [TMQuery tm]
+    (symbol : Option (TapeSymbol Γ)) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   writeTapeLiteral tm zero one tick code true false false symbol
   appendAcross tm (code (.inr 3) ++ code (.inr 4)) 2
 
 private theorem writeCell_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (choice : ActiveChoices) (symbol : Option (TMSAT.TapeSymbol Γ)) (input output : List Γ)
+    (choice : ActiveChoices) (symbol : Option (TapeSymbol Γ)) (input output : List Γ)
     (size : Nat) (hsize : choice.size + input.length +
       (output ++ cellWord code choice symbol).length + 32 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
@@ -599,7 +602,7 @@ private def writeCertificate (zero one : Γ) (code : CodeSymbol → List Γ)
 
 private theorem writeCertificate_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (problem : TMSAT.Instance Γ) (index : Fin problem.certificateLength) (symbol : Γ)
+    (problem : BoundedVerification Γ) (index : Fin problem.certificateLength) (symbol : Γ)
     (choice : ActiveChoices) (bits : List Bool) (hvalue : binaryValue bits.reverse = index.val + 1)
     (input output : List Γ) (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     let distance := choice.size + input.length + 11
@@ -659,7 +662,7 @@ private theorem remainingBits_value (choice : ActiveChoices) (input : List Γ) :
     lia
   · rw [Nat.min_eq_right (by lia)]
 
-private def implicationWord (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ)
+private def implicationWord (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (index : Fin problem.certificateLength) (choice : ActiveChoices) (symbol : Γ) : List Γ :=
   certificateWord code problem index symbol ++ cellWord code choice (some (.inl symbol))
 
@@ -718,7 +721,7 @@ private theorem writeCertificateCase_spec (symbols : List Γ)
     (hcover : ∀ symbol, symbol ∈ symbols) (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive) (record : Option Γ → tm.State)
-    (problem : TMSAT.Instance Γ) (index : Fin problem.certificateLength)
+    (problem : BoundedVerification Γ) (index : Fin problem.certificateLength)
     (choice : ActiveChoices) (input output : List Γ) (symbol : Γ)
     (hindex : choice.firstPosition.1 = choice.time.2 + input.length + 1 + index.val)
     (size : Nat) (hsize : choice.size + (tick :: input).length +
@@ -807,7 +810,7 @@ private theorem writeCertificates_spec (symbols : List Γ)
     (hcover : ∀ symbol, symbol ∈ symbols) (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive) (record : Option Γ → tm.State)
-    (problem : TMSAT.Instance Γ) (index : Fin problem.certificateLength)
+    (problem : BoundedVerification Γ) (index : Fin problem.certificateLength)
     (choice : ActiveChoices) (input : List Γ)
     (hindex : choice.firstPosition.1 = choice.time.2 + input.length + 1 + index.val)
     (remaining : List Γ) (size : Nat) (output : List Γ)
@@ -887,7 +890,7 @@ private theorem writeReadSymbol_spec (symbols : List Γ)
 
 
 private def sourceWord (code : CodeSymbol → List Γ) (symbols : List Γ)
-    (problem : TMSAT.Instance Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
     (choice : ActiveChoices) : List Γ :=
   match initialSource problem position with
   | .inl symbol => cellWord code choice symbol
@@ -916,7 +919,7 @@ private theorem finishRead_spec (symbols : List Γ) (hcover : ∀ symbol, symbol
     (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : TMSAT.Instance Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
     (choice : ActiveChoices) (hindex : choice.firstPosition.1 = position.val)
     (htime : choice.time.2 = problem.time)
     (hrest : position.val + 1 + choice.firstPosition.2 = NPToTMSAT.width problem)
@@ -1016,7 +1019,7 @@ private theorem writeInterior_spec (symbols : List Γ) (hcover : ∀ symbol, sym
     (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : TMSAT.Instance Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
     (choice : ActiveChoices) (hindex : choice.firstPosition.1 = position.val)
     (htime : choice.time.2 = problem.time)
     (hrest : position.val + 1 + choice.firstPosition.2 = NPToTMSAT.width problem)
@@ -1080,7 +1083,7 @@ private theorem writeInitialCell_spec (symbols : List Γ) (hcover : ∀ symbol, 
     (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : TMSAT.Instance Γ) (position : Fin (NPToTMSAT.width problem))
+    (problem : BoundedVerification Γ) (position : Fin (NPToTMSAT.width problem))
     (choice : ActiveChoices) (hindex : choice.firstPosition.1 = position.val)
     (htime : choice.time.2 = problem.time)
     (hrest : position.val + 1 + choice.firstPosition.2 = NPToTMSAT.width problem)
@@ -1178,7 +1181,7 @@ private theorem cellIterationMoves_le (width size : Nat) (symbols : List Γ) :
   lia
 
 omit [Inhabited Γ] [DecidableEq Γ] in
-private theorem sourceWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ)
+private theorem sourceWord_eq (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (position : Fin (NPToTMSAT.width problem)) (choice : ActiveChoices)
     (htime : choice.time.1 = 0) (hposition : choice.firstPosition.1 = position.val) :
     sourceWord code (Finset.univ : Finset Γ).toList problem position choice =
@@ -1190,12 +1193,12 @@ private theorem sourceWord_eq (code : CodeSymbol → List Γ) (problem : TMSAT.I
   funext symbol
   simp only [implicationWord, certificateWord, cellWord, List.append_assoc]
 
-private noncomputable def cellPiece (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ)
+private noncomputable def cellPiece (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (index : Nat) : List Γ :=
   if h : index < NPToTMSAT.width problem then InitialSource.word code problem ⟨index, h⟩ else []
 
 omit [Inhabited Γ] [DecidableEq Γ] in
-private theorem cellPiece_word (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+private theorem cellPiece_word (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     (List.range (NPToTMSAT.width problem)).flatMap (cellPiece code problem) =
       (List.finRange (NPToTMSAT.width problem)).flatMap (InitialSource.word code problem) := by
   have hi : (List.finRange (NPToTMSAT.width problem)).map Fin.val =
@@ -1211,7 +1214,7 @@ private theorem writeCells_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : TMSAT.Instance Γ) (output : List Γ) (size : Nat)
+    (problem : BoundedVerification Γ) (output : List Γ) (size : Nat)
     (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
       (tick :: problem.input).length + (output ++
         (List.finRange (NPToTMSAT.width problem)).flatMap
@@ -1221,7 +1224,7 @@ private theorem writeCells_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
         ChoiceIteration.layout tick (problem.time + 1) (NPToTMSAT.width problem)
           (problem.verifier.states + 2) (tick :: problem.input) output⟩ ∧
         current.headPos = origin ∧ cost.steps ≤ elapsed ⦄
-      CellIteration.writeCells tm tick greater
+      InitialCells.writeCells tm tick greater
         (writeInitialCell (Finset.univ : Finset Γ).toList zero one tick code
           greater positive record)
     ⦃ fun _ cost final => final.config = ⟨some greater,
@@ -1261,7 +1264,7 @@ private theorem writeCells_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
       out size hd (some greater) positionHead steps
     rw [hw] at ha
     simpa only [action, choice] using ha
-  have hc := CellIteration.writeCells_spec (tm := tm) tick greater action problem.time
+  have hc := InitialCells.writeCells_spec (tm := tm) tick greater action problem.time
     (NPToTMSAT.width problem) (problem.verifier.states + 2) hp hs (tick :: problem.input)
     output piece size (cellMoves width size symbols) hleaf (by
       simpa only [piece, cellPiece_word] using hsize) label origin elapsed
@@ -1269,11 +1272,11 @@ private theorem writeCells_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
 
 /-- This fixed program writes the clauses describing the verifier's initial tape and head. -/
 noncomputable def writeInitialClauses (tm : SingleTapeTM Γ) [DecidableEq tm.State]
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (zero one tick : Γ)
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (zero one tick : Γ)
     (code : CodeSymbol → List Γ) (greater positive : tm.State) (record : Option Γ → tm.State) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   HeadWriting.writeHead tm zero one tick code (Encodable.encode (some verifier.initial))
-  CellIteration.writeCells tm tick greater
+  InitialCells.writeCells tm tick greater
     (writeInitialCell (Finset.univ : Finset Γ).toList zero one tick code greater positive record)
 
 /-- This polynomial bounds the initial head writer and all initial tape-cell clauses. -/
@@ -1288,12 +1291,12 @@ The writer appends exactly the initial clauses. It preserves the original input 
 returns to the first time cell, and finishes within the stated polynomial move bound.
 -/
 @[spec] theorem writeInitialClauses_spec
-    (verifier : SingleTapeTM.Description (TMSAT.TapeSymbol Γ)) (zero one : Γ) (hne : zero ≠ one)
+    (verifier : SingleTapeTM.Description (TapeSymbol Γ)) (zero one : Γ) (hne : zero ≠ one)
     (tick : Γ) (code : CodeSymbol → List Γ) (width : Nat)
     (hwidth : ∀ symbol, (code symbol).length = width)
     (greater positive : tm.State) (hstates : greater ≠ positive)
     (record : Option Γ → tm.State) (hrecord : Function.Injective record)
-    (problem : TMSAT.Instance Γ) (hverifier : problem.verifier = verifier)
+    (problem : BoundedVerification Γ) (hverifier : problem.verifier = verifier)
     (output : List Γ) (size : Nat)
     (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
       (tick :: problem.input).length + (output ++

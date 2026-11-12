@@ -26,6 +26,9 @@ finite program reads these counts on every run. The alphabet symbol and the choi
 position word, and time offset are fixed when the containing machine includes this template.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.LiteralWriting
@@ -306,14 +309,14 @@ variable [Encodable Γ]
 
 /-- This is the existing name of the selected tape variable, possibly at the following time. -/
 @[expose] def tapeName (choice : ActiveChoices) (successor second : Bool)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : SAT.Variable :=
+    (symbol : Option (TapeSymbol Γ)) : SAT.Variable :=
   Naming.bits .tape (encodingNatBool.encode (choice.time.1 + successor.toNat))
     (encodingNatBool.encode (if second then choice.secondPosition.1 else choice.firstPosition.1))
     (encodingNatBool.encode (Encodable.encode symbol))
 
 /-- This is the signed tape variable in the existing SAT representation. -/
 @[expose] def tapeLiteralWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (positive successor second : Bool) (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (positive successor second : Bool) (symbol : Option (TapeSymbol Γ)) : List Γ :=
   code (if positive then .inr 0 else .inr 1) ++
     (tapeName choice successor second symbol).flatMap (fun bit => code (.inl bit)) ++ code (.inr 2)
 
@@ -323,7 +326,7 @@ and the tape symbol are fixed with the containing machine; the time and position
 the tape. It preserves the selected counts and returns to their second-state blank.
 -/
 def writeTapeLiteral (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (positive successor second : Bool) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (positive successor second : Bool) (symbol : Option (TapeSymbol Γ)) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   writePrefix zero one tick code positive false successor second
   appendAcross tm ((encodingNatBool.encode (Encodable.encode symbol)).flatMap
@@ -336,7 +339,7 @@ def writeTapeLiteral (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSym
 @[spec] theorem writeTapeLiteral_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (choice : ActiveChoices) (positive successor second : Bool)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) (input output : List Γ) (size : Nat)
+    (symbol : Option (TapeSymbol Γ)) (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ tapeLiteralWord code choice positive successor second symbol).length + 32 ≤ size)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :

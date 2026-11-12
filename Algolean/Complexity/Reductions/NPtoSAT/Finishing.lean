@@ -20,6 +20,8 @@ The accepting symbol and alphabet codes are fixed when constructing the containi
 The time and tape-width bounds are read from the tape.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.Finishing
@@ -50,7 +52,7 @@ Its final tape is clean, and the head points to the first output symbol.
 -/
 @[spec] theorem finish_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (problem : TMSAT.Instance Γ) (yes : Γ) (input output : List Γ) (size : Nat)
+    (problem : BoundedVerification Γ) (yes : Γ) (input output : List Γ) (size : Nat)
     (hsize : problem.time + 2 * NPToTMSAT.width problem + 2 * (problem.verifier.states + 2) +
       input.length + (output ++
         (formulaPrefix ((Formula.finalClauses problem yes).rename Variable.name)).flatMap

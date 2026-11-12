@@ -18,6 +18,8 @@ public import Algolean.Complexity.Reductions.NPtoSAT.HeadWriting
 * `initialClauses_word` joins the initial head clause and all initial tape-cell clauses in order.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.InitialSource
@@ -28,7 +30,7 @@ open NPToTMSAT NPToTMSAT.HeadChoices NPToTMSAT.LiteralWriting
 variable {Γ : Type} [Fintype Γ] [Encodable Γ]
 
 /-- This is the encoded clause list fixing one initial tape cell. -/
-@[expose] noncomputable def word (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ)
+@[expose] noncomputable def word (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (position : Fin (NPToTMSAT.width problem)) : List Γ :=
   (formulaPrefix (CNF.rename
     (show CNF (Variable problem) from match initialSource problem position with
@@ -38,7 +40,7 @@ variable {Γ : Type} [Fintype Γ] [Encodable Γ]
       Variable.name)).flatMap code
 
 /-- The selected time-zero tape cell gives exactly its existing literal or certificate clauses. -/
-theorem word_eq_selected (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ)
+theorem word_eq_selected (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ)
     (position : Fin (NPToTMSAT.width problem)) (choice : ActiveChoices)
     (htime : choice.time.1 = 0) (hposition : choice.firstPosition.1 = position.val) :
     word code problem position =
@@ -57,7 +59,7 @@ theorem word_eq_selected (code : CodeSymbol → List Γ) (problem : TMSAT.Instan
 
 /-- The encoded initial formula is the head clause followed by the cell clauses in tape order. -/
 theorem initialClauses_word (code : CodeSymbol → List Γ)
-    (problem : TMSAT.Instance Γ) :
+    (problem : BoundedVerification Γ) :
     (formulaPrefix ((initialClauses problem).rename Variable.name)).flatMap code =
       HeadWriting.word code (Encodable.encode (some problem.verifier.initial)) problem.time ++
         (List.finRange (NPToTMSAT.width problem)).flatMap (word code problem) := by

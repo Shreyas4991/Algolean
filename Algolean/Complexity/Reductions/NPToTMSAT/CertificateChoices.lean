@@ -25,6 +25,8 @@ These are machine templates. The containing machine fixes the alphabet symbols, 
 representations, and the number of preserved words. Every source position is read from the tape.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.CertificateChoices
@@ -471,7 +473,7 @@ restores the head. The same fixed polynomial bounds every run of this program.
 
 omit [Inhabited Γ] in
 /-- The generated word is exactly the existing certificate clauses in SAT's encoding. -/
-theorem word_eq_certificateClauses (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
+theorem word_eq_certificateClauses (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
     word code (Finset.univ : Finset Γ).toList problem.certificateLength =
       (formulaPrefix ((certificateClauses problem).rename Variable.name)).flatMap code := by
   have hmap (position : Fin problem.certificateLength) :
@@ -515,7 +517,7 @@ restoring the head. The bound includes the lengths and separating blanks of pres
 -/
 @[spec] theorem writeCertificateChoicesAcross_spec (zero one : Γ) (hne : zero ≠ one)
     (tick : Γ) (unitTail : List Γ) (code : CodeSymbol → List Γ) (width : Nat)
-    (hwidth : ∀ symbol, (code symbol).length = width) (problem : TMSAT.Instance Γ)
+    (hwidth : ∀ symbol, (code symbol).length = width) (problem : BoundedVerification Γ)
     (preserved : List (List Γ)) (inputSize : Nat)
     (hpreserved : regionSpan preserved ≤ inputSize + 1) (output : List Γ)
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
@@ -548,7 +550,8 @@ def writeCertificateLiteralFromCounter (tm : SingleTapeTM Γ) (zero one : Γ)
 /-- Writing a certificate literal uses its existing variable name and preserves the counter. -/
 @[spec] theorem writeCertificateLiteralFromCounter_spec (zero one : Γ) (hne : zero ≠ one)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (problem : TMSAT.Instance Γ) (position : Fin problem.certificateLength) (literal : Literal Γ)
+    (problem : BoundedVerification Γ) (position : Fin problem.certificateLength)
+    (literal : Literal Γ)
     (preserved : List (List Γ)) (output : List Γ) (label : Option tm.State)
     (origin : ℤ) (elapsed : Nat) :
     let name := fun symbol => Variable.name (Variable.certificate position symbol)

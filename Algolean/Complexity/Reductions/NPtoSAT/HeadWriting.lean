@@ -22,6 +22,8 @@ The bounds and input remain on the tape. The head returns to the first time cell
 number of moves is bounded by a quadratic polynomial in the source and output lengths.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.HeadWriting

@@ -19,9 +19,11 @@ The action and control state are fixed when constructing the containing machine.
 state count, original input, and selected positions are read from the tape.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
-namespace Algolean.Algorithms.NPToSAT.CellIteration
+namespace Algolean.Algorithms.NPToSAT.InitialCells
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines
 open NPToTMSAT NPToTMSAT.HeadChoices PositionIteration
@@ -73,4 +75,4 @@ def writeCells (tm : SingleTapeTM Γ) (tick : Γ) (label : tm.State)
   vcgen [writeCells, hm]
   all_goals simp_all [ChoiceIteration.layout, parts, List.replicate_succ]
 
-end Algolean.Algorithms.NPToSAT.CellIteration
+end Algolean.Algorithms.NPToSAT.InitialCells

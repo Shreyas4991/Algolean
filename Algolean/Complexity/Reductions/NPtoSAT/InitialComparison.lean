@@ -19,6 +19,8 @@ The containing machine fixes which side to test and which states record the answ
 selected position and the bound are read from the tape on every run.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.InitialComparison

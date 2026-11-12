@@ -6,7 +6,7 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Problems.TMSAT.Basic
+public import Algolean.Models.SingleTapeTM.BoundedVerification
 public import Algolean.Models.SingleTapeTM.Tape
 public import Mathlib.Data.Fintype.Vector
 public import Mathlib.Basic.Finite.Sum
@@ -18,7 +18,7 @@ public import Mathlib.Basic.Finite.Sum
 * `Row.step` performs one transition and leaves a halted row unchanged. A move beyond the
   recorded cells fails rather than wrapping around or discarding a cell.
 * The initial row contains the input, its separator, and a certificate of the required length.
-  There are `t` blank cells on each side, where `t` is the instance's time bound.
+  There are `t` blank cells on each side, where `t` is the time bound.
 * A `Computation` has `t + 1` rows. It ends in an accepting row exactly when its certificate
   makes the original machine accept within `t` transitions.
 
@@ -28,11 +28,14 @@ row fills out the description after an early halt; it does not add transitions t
 machine's execution. These are descriptions of computations, not new Turing machine programs.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 @[expose] public section
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Cslib.Turing Problems.TMSAT Relation Alphabet
+open Cslib.Turing Relation Alphabet
 
 variable {Γ : Type}
 
@@ -323,7 +326,7 @@ private theorem step_toCfg {verifier : SingleTapeTM.Description (TapeSymbol Γ)}
           BiTape.optionMove, BiTape.move, BiTape.moveLeft, BiTape.moveRight, BiTape.write]
 
 /-- This is the number of cells needed for the initial word and `time` blank cells on each side. -/
-def width (problem : Instance Γ) : Nat :=
+def width (problem : BoundedVerification Γ) : Nat :=
   problem.input.length + problem.certificateLength + 2 * problem.time + 1
 
 /--
@@ -331,7 +334,7 @@ This starts the verifier on the input, separator, and certificate. There are `ti
 to the left of the initial head and `time` blank cells after the certificate. The head starts
 at recorded position `time`, which represents position zero of the original tape.
 -/
-def initialRow (problem : Instance Γ)
+def initialRow (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :
     Row problem.verifier (width problem) := by
   let word := (wordPair Γ).encode (problem.input, certificate.val)
@@ -348,7 +351,7 @@ def initialRow (problem : Instance Γ)
     hlength, width]
   lia
 
-private theorem initialRow_toCfg (problem : Instance Γ)
+private theorem initialRow_toCfg (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :
     (initialRow problem certificate).toCfg =
       problem.verifier.machine.initCfg ((wordPair Γ).encode (problem.input, certificate.val)) := by
@@ -363,7 +366,7 @@ private theorem initialRow_toCfg (problem : Instance Γ)
 
 omit [Fintype Γ] in
 /-- The initial row lists the input and certificate between the two regions of blank cells. -/
-theorem cells_initialRow (problem : Instance Γ)
+theorem cells_initialRow (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :
     (initialRow problem certificate).cells =
       List.replicate problem.time none ++
@@ -373,7 +376,7 @@ theorem cells_initialRow (problem : Instance Γ)
     simp [initialRow, Row.cells, Alphabet.wordPair_encode, hinput, List.append_assoc]
 
 omit [Fintype Γ] in
-private theorem step_iterate_initial (problem : Instance Γ)
+private theorem step_iterate_initial (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) (n : Nat) (hn : n < problem.time) :
     let row := Row.advance^[n] (initialRow problem certificate)
     row.step = some (Row.advance row) := by
@@ -399,8 +402,8 @@ This describes the verifier's computation on one certificate of the required len
 exactly `time + 1` rows, starting with the prescribed input. Each following row performs one
 transition, or repeats an already halted row. The rows all record the same fixed tape interval.
 -/
-structure Computation (problem : Instance Γ) where
-  /-- The certificate contains exactly the number of symbols required by the instance. -/
+structure Computation (problem : BoundedVerification Γ) where
+  /-- The certificate contains exactly the specified number of symbols. -/
   certificate : List.Vector Γ problem.certificateLength
   /-- A row records the configuration at each time from zero through the time bound. -/
   rows : Fin (problem.time + 1) → Row problem.verifier (width problem)
@@ -411,13 +414,13 @@ structure Computation (problem : Instance Γ) where
 
 namespace Computation
 
-variable {problem : Instance Γ}
+variable {problem : BoundedVerification Γ}
 
 /--
 The padding with blank cells lets every certificate's computation run through all the rows.
 Before the last row, neither end of the recorded interval can obstruct a head movement.
 -/
-private def ofCertificate (problem : Instance Γ)
+private def ofCertificate (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :
     Computation problem where
   certificate := certificate
@@ -449,7 +452,7 @@ private theorem row_toCfg (computation : Computation problem) (i : Fin (problem.
 
 /--
 The description accepts exactly when the original CSLib machine accepts its chosen certificate
-within the instance's time bound. Repeated halted rows do not count as extra machine transitions.
+within the specified time bound. Repeated halted rows do not count as extra machine transitions.
 -/
 theorem accepting_iff (computation : Computation problem) (yes : Γ) :
     computation.Accepting yes ↔ AcceptsWithin yes problem.verifier
@@ -460,11 +463,12 @@ theorem accepting_iff (computation : Computation problem) (yes : Γ) :
 end Computation
 
 /--
-A TMSAT instance is satisfiable exactly when it has an accepting computation described by these
-finitely many rows and cells. The certificate retains exactly the length required by TMSAT.
+The verifier accepts a certificate within its bounds exactly when it has an accepting
+computation described by these finitely many rows and cells. The certificate has the specified
+length.
 -/
-theorem mem_satisfiable_iff_exists_computation (problem : Instance Γ) (yes : Γ) :
-    problem ∈ satisfiable yes ↔ ∃ computation : Computation problem, computation.Accepting yes := by
+theorem mem_accepted_iff_exists_computation (problem : BoundedVerification Γ) (yes : Γ) :
+    problem ∈ accepted yes ↔ ∃ computation : Computation problem, computation.Accepting yes := by
   constructor
   · rintro ⟨certificate, hlength, haccept⟩
     let computation := Computation.ofCertificate problem ⟨certificate, hlength⟩

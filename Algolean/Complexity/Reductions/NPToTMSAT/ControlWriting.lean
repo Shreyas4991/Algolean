@@ -21,6 +21,9 @@ The containing machine fixes the scanned symbol and output alphabet. The selecte
 positions, and states are read from the tape when it runs.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.ControlWriting
@@ -36,13 +39,13 @@ variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
 /-- This is the existing clause excluding the three selected head and cell values together. -/
 @[expose] def forbiddenWord (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) : List Γ :=
+    (symbol : Option (TapeSymbol Γ)) : List Γ :=
   (formulaPrefix [Clause.forbid [headNameAtTime choice false false,
     tapeName choice false false symbol, headNameAtTime choice true true]]).flatMap code
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem forbiddenWord_eq (code : CodeSymbol → List Γ) (choice : ActiveChoices)
-    (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (symbol : Option (TapeSymbol Γ)) :
     forbiddenWord code choice symbol = headLiteralWord code choice false false false ++
       tapeLiteralWord code choice false false false symbol ++
         headLiteralWord code choice false true true ++ code (.inr 3) ++ code (.inr 4) := by
@@ -56,7 +59,7 @@ from holding together. The containing machine fixes the symbol and output repres
 the time, positions, and states are read from their selected unary words.
 -/
 def writeForbiddenControlClause (tm : SingleTapeTM Γ) (zero one tick : Γ)
-    (code : CodeSymbol → List Γ) (symbol : Option (TMSAT.TapeSymbol Γ)) :
+    (code : CodeSymbol → List Γ) (symbol : Option (TapeSymbol Γ)) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   writeHeadLiteralAtTime tm zero one tick code false false false
   writeTapeLiteral tm zero one tick code false false false symbol
@@ -69,7 +72,7 @@ def writeForbiddenControlClause (tm : SingleTapeTM Γ) (zero one tick : Γ)
 /-- The writer appends exactly the existing SAT clause and preserves every selected word. -/
 @[spec] theorem writeForbiddenControlClause_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (choice : ActiveChoices) (symbol : Option (TMSAT.TapeSymbol Γ))
+    (choice : ActiveChoices) (symbol : Option (TapeSymbol Γ))
     (input output : List Γ) (size : Nat)
     (hsize : choice.size + input.length +
       (output ++ forbiddenWord code choice symbol).length + 32 ≤ size)

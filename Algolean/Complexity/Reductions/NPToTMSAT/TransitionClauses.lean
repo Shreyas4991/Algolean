@@ -20,11 +20,14 @@ public import Algolean.Complexity.Reductions.NPToTMSAT.Variables
 After the verifier halts, later configurations keep the same state, head position, and tape.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Cslib.Turing Problems.TMSAT
+open Cslib.Turing
 
 variable {Γ : Type}
 
@@ -52,14 +55,14 @@ instance instDecidableMoved {width : Nat} (first : Fin width)
     Decidable (Moved first movement second) := by unfold Moved; split <;> infer_instance
 
 /-- This checks the next state and head position selected by one table entry. -/
-@[expose] def controlAllowed (problem : Instance Γ)
+@[expose] def controlAllowed (problem : BoundedVerification Γ)
     (first : Fin (width problem) × Option (Fin (problem.verifier.states + 1)))
     (symbol : Option (TapeSymbol Γ))
     (second : Fin (width problem) × Option (Fin (problem.verifier.states + 1))) : Prop :=
   let action := instruction problem.verifier first.2 symbol
   second.2 = action.2.2 ∧ Moved first.1 action.2.1 second.1
 
-instance instDecidableControlAllowed (problem : Instance Γ)
+instance instDecidableControlAllowed (problem : BoundedVerification Γ)
     (first : Fin (width problem) × Option (Fin (problem.verifier.states + 1)))
     (symbol : Option (TapeSymbol Γ))
     (second : Fin (width problem) × Option (Fin (problem.verifier.states + 1))) :
@@ -141,12 +144,13 @@ end Algolean.Algorithms.NPToTMSAT
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Problems.SAT Problems.TMSAT
+open Problems.SAT
 
 variable {Γ : Type} [Fintype Γ]
 
 /-- These clauses require the scanned cell to contain the symbol written by the transition. -/
-@[expose] noncomputable def writeClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def writeClauses (problem : BoundedVerification Γ) :
+    CNF (Variable problem) :=
   (List.finRange problem.time).flatMap fun time =>
     (controlChoices problem).flatMap fun control =>
       (Finset.univ : Finset (Option (TapeSymbol Γ))).toList.map fun symbol =>
@@ -154,7 +158,8 @@ variable {Γ : Type} [Fintype Γ]
           (.tape time.succ control.1 (instruction problem.verifier control.2 symbol).1)
 
 /-- These clauses exclude each next head position and state forbidden by the transition. -/
-@[expose] noncomputable def controlClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def controlClauses (problem : BoundedVerification Γ) :
+    CNF (Variable problem) :=
   (List.finRange problem.time).flatMap fun time =>
     (controlChoices problem).flatMap fun first =>
       (Finset.univ : Finset (Option (TapeSymbol Γ))).toList.flatMap fun symbol =>
@@ -164,7 +169,8 @@ variable {Γ : Type} [Fintype Γ]
               .head time.succ second]
 
 /-- These clauses require every cell away from the head to keep its previous symbol. -/
-@[expose] noncomputable def unchangedClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def unchangedClauses (problem : BoundedVerification Γ) :
+    CNF (Variable problem) :=
   (List.finRange problem.time).flatMap fun time =>
     (controlChoices problem).flatMap fun control =>
       ((List.finRange (width problem)).filter fun position => position ≠ control.1).flatMap
@@ -177,10 +183,11 @@ These clauses require the row at time `r + 1` to follow from the row at time `r`
 the verifier's transition table. They check the symbol written, the next head and state, and
 the preservation of every other tape cell.
 -/
-@[expose] noncomputable def stepClauses (problem : Instance Γ) : CNF (Variable problem) :=
+@[expose] noncomputable def stepClauses (problem : BoundedVerification Γ) :
+    CNF (Variable problem) :=
   writeClauses problem ++ controlClauses problem ++ unchangedClauses problem
 
-private theorem writeClauses_satisfied (problem : Instance Γ)
+private theorem writeClauses_satisfied (problem : BoundedVerification Γ)
     (assignment : Variable problem → Bool) :
     (writeClauses problem).SatisfiedBy assignment ↔
       ∀ (time : Fin problem.time) control symbol,
@@ -192,7 +199,7 @@ private theorem writeClauses_satisfied (problem : Instance Γ)
   simp only [CNF.satisfiedBy_iff_forall_clause, List.forall_mem_map]
   simp [and_imp]
 
-private theorem controlClauses_satisfied (problem : Instance Γ)
+private theorem controlClauses_satisfied (problem : BoundedVerification Γ)
     (assignment : Variable problem → Bool) :
     (controlClauses problem).SatisfiedBy assignment ↔
       ∀ (time : Fin problem.time) first symbol second,
@@ -206,7 +213,7 @@ private theorem controlClauses_satisfied (problem : Instance Γ)
     Finset.mem_univ, decide_eq_true_eq, Clause.forbid_satisfiedBy, List.forall_mem_cons]
   grind
 
-private theorem unchangedClauses_satisfied (problem : Instance Γ)
+private theorem unchangedClauses_satisfied (problem : BoundedVerification Γ)
     (assignment : Variable problem → Bool) :
     (unchangedClauses problem).SatisfiedBy assignment ↔
       ∀ (time : Fin problem.time) control position, position ≠ control.1 → ∀ symbol,
@@ -222,7 +229,7 @@ There are polynomially many transition clauses in the time, tape width, and numb
 The three summands count written-cell requirements, restrictions on the next head and state,
 and requirements that other cells keep their symbols. Each clause has at most three literals.
 -/
-theorem stepClauses_bounds (problem : Instance Γ) :
+theorem stepClauses_bounds (problem : BoundedVerification Γ) :
     let heads := width problem * (problem.verifier.states + 2)
     let symbols := Fintype.card Γ + 2
     (stepClauses problem).length ≤ problem.time * heads * symbols *
@@ -293,7 +300,7 @@ variable [DecidableEq Γ]
 On the assignment describing a sequence of rows, these clauses hold exactly when each row
 follows its predecessor by one verifier transition, with halted rows repeated unchanged.
 -/
-theorem stepClauses_iff (problem : Instance Γ)
+theorem stepClauses_iff (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength)
     (rows : Fin (problem.time + 1) → Row problem.verifier (width problem)) :
     (stepClauses problem).SatisfiedBy (rowAssignment certificate rows) ↔

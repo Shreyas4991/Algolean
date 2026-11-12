@@ -19,6 +19,8 @@ input. It then removes the temporary symbol before the output. The final tape co
 SAT word, with the head at its first symbol, as required by CSLib's computation convention.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.Output

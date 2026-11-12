@@ -24,6 +24,8 @@ These are machine templates. The containing machine fixes its symbols and action
 The selected time and all word lengths are read from the tape.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace Algolean.Algorithms.NPToSAT.PositionIteration

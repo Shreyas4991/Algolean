@@ -18,6 +18,8 @@ formula's ending word. They check the final head and move bound and include empt
 bounds, empty input and output, and inputs containing the extra first symbol.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 @[expose] public section
 
 namespace AlgoleanTests.NPToSATOutput

@@ -10,6 +10,7 @@ public import Algolean.Complexity.Reductions.NPToTMSAT.Initial
 public import Algolean.Complexity.Reductions.NPToTMSAT.TransitionClauses
 public import Algolean.Complexity.Reductions.NPToTMSAT.VariableNames
 public import Algolean.Problems.Encodings.SAT
+public import Mathlib.Logic.Equiv.List
 
 /-!
 # A SAT formula for a bounded verifier computation
@@ -19,11 +20,16 @@ Their satisfying assignments correspond exactly to accepting computations with t
 certificate and time bounds. Variable names use the existing binary SAT representation.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
+
+attribute [local instance 100] Fintype.toEncodable
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Computability Problems Problems.SAT Problems.TMSAT
+open Computability Problems Problems.SAT
 
 variable {Γ : Type}
 
@@ -34,7 +40,7 @@ section Indexed
 variable [Fintype Γ] [DecidableEq Γ]
 
 /-- These clauses require a halted head over the accepting symbol and blanks everywhere else. -/
-@[expose] def finalClauses (problem : Instance Γ) (yes : Γ) : CNF (Variable problem) :=
+@[expose] def finalClauses (problem : BoundedVerification Γ) (yes : Γ) : CNF (Variable problem) :=
   Clause.atLeastOne ((List.finRange (width problem)).map fun position =>
     Variable.head (Fin.last problem.time) (position, none)) ::
   (List.finRange (width problem)).flatMap fun position =>
@@ -44,7 +50,7 @@ variable [Fintype Γ] [DecidableEq Γ]
        .tape (Fin.last problem.time) position none]]
 
 omit [Fintype Γ] in
-private theorem finalClauses_iff (problem : Instance Γ) (yes : Γ)
+private theorem finalClauses_iff (problem : BoundedVerification Γ) (yes : Γ)
     (certificate : List.Vector Γ problem.certificateLength)
     (rows : Fin (problem.time + 1) → Row problem.verifier (width problem)) :
     (finalClauses problem yes).SatisfiedBy (rowAssignment certificate rows) ↔
@@ -55,15 +61,18 @@ private theorem finalClauses_iff (problem : Instance Γ) (yes : Γ)
   grind [Row.cells_headIndex]
 
 /-- This joins the clauses for the certificate, initial tape, transitions, and final acceptance. -/
-@[expose] noncomputable def indexedFormula (problem : Instance Γ) (yes : Γ) :
+@[expose] noncomputable def indexedFormula (problem : BoundedVerification Γ) (yes : Γ) :
     CNF (Variable problem) :=
   choiceClauses problem ++ (initialClauses problem ++
     (stepClauses problem ++ finalClauses problem yes))
 
-/-- The clauses describe an accepting computation exactly when the TMSAT instance is satisfiable. -/
-theorem indexedFormula_satisfiable_iff (problem : Instance Γ) (yes : Γ) :
-    indexedFormula problem yes ∈ CNF.satisfiable ↔ problem ∈ satisfiable yes := by
-  rw [mem_satisfiable_iff_exists_computation]
+/--
+The clauses describe an accepting computation exactly when the verifier accepts a certificate
+within its bounds.
+-/
+theorem indexedFormula_satisfiable_iff (problem : BoundedVerification Γ) (yes : Γ) :
+    indexedFormula problem yes ∈ CNF.satisfiable ↔ problem ∈ accepted yes := by
+  rw [mem_accepted_iff_exists_computation]
   constructor
   · rintro ⟨assignment, hformula⟩
     have hparts : (choiceClauses problem).SatisfiedBy assignment ∧
@@ -95,30 +104,28 @@ open Formula
 
 variable [Fintype Γ]
 
+open Classical in
 /--
 This constructs a CNF formula whose satisfying assignments describe an accepting computation
-of the given TMSAT instance. It uses binary names with separate fields for each variable's indices.
-The numbering of the alphabet is fixed once and does not depend on the instance or on the
-accepting certificate.
+of the given bounded verification. Its binary variable names record their indices separately.
+The numbering of the alphabet is fixed once for all inputs and certificates.
 -/
-@[expose] noncomputable def formula (problem : Instance Γ) (yes : Γ) : CNF SAT.Variable := by
-  classical
-  letI : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
-  exact (indexedFormula problem yes).rename Variable.name
+@[expose] noncomputable def formula (problem : BoundedVerification Γ) (yes : Γ) :
+    CNF SAT.Variable :=
+  (indexedFormula problem yes).rename Variable.name
 
 end Algolean.Algorithms.NPToTMSAT
 
 namespace Algolean.Algorithms.NPToTMSAT
 
-open Computability Problems Problems.SAT Problems.TMSAT Formula
+open Computability Problems Problems.SAT Formula
 
 variable {Γ : Type} [Fintype Γ]
 
-/-- The constructed formula is satisfiable exactly when the machine instance is satisfiable. -/
-theorem formula_satisfiable_iff (problem : Instance Γ) (yes : Γ) :
-    formula problem yes ∈ CNF.satisfiable ↔ problem ∈ satisfiable yes := by
+/-- The formula is satisfiable exactly when the verifier accepts a certificate within its bounds. -/
+theorem formula_satisfiable_iff (problem : BoundedVerification Γ) (yes : Γ) :
+    formula problem yes ∈ CNF.satisfiable ↔ problem ∈ accepted yes := by
   classical
-  let : Encodable Γ := Encodable.ofEquiv (Fin (Fintype.card Γ)) (Fintype.equivFin Γ)
   exact (CNF.rename_mem_satisfiable_iff _ _ Variable.name_injective).trans
     (indexedFormula_satisfiable_iff problem yes)
 

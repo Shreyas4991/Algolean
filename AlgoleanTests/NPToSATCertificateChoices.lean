@@ -20,6 +20,8 @@ The checks use both the SAT symbol alphabet and a Boolean tape with eight cells 
 Every run checks the whole tape, preserved input, control state, and restored head position.
 -/
 
+open Cslib.Turing.SingleTapeTM
+
 public section
 
 namespace AlgoleanTests.NPToSATCertificateChoices
@@ -35,7 +37,7 @@ private abbrev control (Γ : Type) [Inhabited Γ] [Fintype Γ] : SingleTapeTM Γ
   q₀ := false
   tr _ symbol := (⟨symbol, none⟩, none)
 
-private abbrev sample (Γ : Type) (count : Nat) : TMSAT.Instance Γ where
+private abbrev sample (Γ : Type) (count : Nat) : BoundedVerification Γ where
   verifier := { states := 0, initial := 0, transition _ symbol := (symbol, none, none) }
   input := []
   certificateLength := count

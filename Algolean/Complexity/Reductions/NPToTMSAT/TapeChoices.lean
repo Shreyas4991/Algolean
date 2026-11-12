@@ -26,6 +26,9 @@ These are machine templates. The alphabet choices and symbol representations are
 Every time and position is read from the tape by the same program on every preserved length.
 -/
 
+open Cslib.Turing.SingleTapeTM
+open BoundedVerification
+
 public section
 
 namespace Algolean.Algorithms.NPToTMSAT.TapeChoices
@@ -38,7 +41,7 @@ set_option experimental.vcgen true
 variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
-private def symbolBits (symbol : Option (TMSAT.TapeSymbol Γ)) : List Bool :=
+private def symbolBits (symbol : Option (TapeSymbol Γ)) : List Bool :=
   encodingNatBool.encode (Encodable.encode symbol)
 
 /-- These are the two unary words, preserved words, and earlier output on the same tape. -/
@@ -50,7 +53,7 @@ private def symbolBits (symbol : Option (TMSAT.TapeSymbol Γ)) : List Bool :=
 
 /-- This is the encoded clause prefix for the given times, positions, and fixed cell choices. -/
 @[expose] def word (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions : Nat) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) (times positions : Nat) : List Γ :=
   (List.range times).flatMap fun time =>
     (List.range positions).flatMap fun position =>
       (formulaPrefix ((CNF.exactlyOne symbols).rename fun symbol =>
@@ -186,19 +189,19 @@ private theorem positionMoves_le (tick : Γ) (width time timeRest position posit
   dsimp [positionMoves]
   lia
 
-private def sign : Literal (Option (TMSAT.TapeSymbol Γ)) → CodeSymbol
+private def sign : Literal (Option (TapeSymbol Γ)) → CodeSymbol
   | .pos _ => .inr 0
   | .neg _ => .inr 1
 
 private def itemWord (code : CodeSymbol → List Γ) (time position : Nat) :
-    Option (Literal (Option (TMSAT.TapeSymbol Γ))) → List Γ
+    Option (Literal (Option (TapeSymbol Γ))) → List Γ
   | none => code (.inr 3) ++ code (.inr 4)
   | some literal => code (sign literal) ++
       (Naming.bits .tape (encodingNatBool.encode time) (encodingNatBool.encode position)
         (symbolBits literal.name)).flatMap (fun bit => code (.inl bit)) ++ code (.inr 2)
 
 private def writeLiteral (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (preservedCount : Nat) (literal : Literal (Option (TMSAT.TapeSymbol Γ))) :
+    (preservedCount : Nat) (literal : Literal (Option (TapeSymbol Γ))) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   appendAcross tm (code (sign literal) ++ code (.inl true) ++ code (.inl false))
     (preservedCount + 1)
@@ -209,7 +212,7 @@ private def writeLiteral (zero one tick : Γ) (code : CodeSymbol → List Γ)
 
 private def literalMoves (tick : Γ) (code : CodeSymbol → List Γ) (width : Nat)
     (time timeRest position positionRest : Nat) (preserved : List (List Γ)) (output : List Γ)
-    (literal : Literal (Option (TMSAT.TapeSymbol Γ))) : Nat :=
+    (literal : Literal (Option (TapeSymbol Γ))) : Nat :=
   let front := code (sign literal) ++ code (.inl true) ++ code (.inl false)
   let first := output ++ front
   let second := first ++ (unaryNumberBits true time).flatMap (fun bit => code (.inl bit))
@@ -223,7 +226,7 @@ private def literalMoves (tick : Γ) (code : CodeSymbol → List Γ) (width : Na
 private theorem writeLiteral_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
     (time timeRest position positionRest : Nat) (preserved : List (List Γ)) (output : List Γ)
-    (literal : Literal (Option (TMSAT.TapeSymbol Γ)))
+    (literal : Literal (Option (TapeSymbol Γ)))
     (label : Option tm.State) (origin : ℤ) (elapsed : Nat) :
     ⦃ fun cost current => current.config =
         ⟨label, marked tick time timeRest position positionRest preserved output⟩ ∧
@@ -270,7 +273,7 @@ private def itemBudget (width size : Nat) : Nat := 4096 * (width + 1) * (size + 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem literalMoves_le (tick : Γ) (code : CodeSymbol → List Γ) (width : Nat)
     (time timeRest position positionRest : Nat) (preserved : List (List Γ)) (output : List Γ)
-    (literal : Literal (Option (TMSAT.TapeSymbol Γ))) (size : Nat)
+    (literal : Literal (Option (TapeSymbol Γ))) (size : Nat)
     (hsize : time + timeRest + position + positionRest + regionSpan preserved +
       (output ++ itemWord code time position (some literal)).length ≤ size) :
     literalMoves tick code width time timeRest position positionRest preserved output literal ≤
@@ -314,7 +317,7 @@ private theorem literalMoves_le (tick : Γ) (code : CodeSymbol → List Γ) (wid
 
 private def writeItems (zero one tick : Γ) (code : CodeSymbol → List Γ)
     (preservedCount : Nat) :
-    List (Option (Literal (Option (TMSAT.TapeSymbol Γ)))) → Prog (TMQuery tm) Unit
+    List (Option (Literal (Option (TapeSymbol Γ)))) → Prog (TMQuery tm) Unit
   | [] => pure ()
   | none :: rest => do [TMQuery tm]
     appendAcross tm (code (.inr 3) ++ code (.inr 4)) (preservedCount + 1)
@@ -325,7 +328,7 @@ private def writeItems (zero one tick : Γ) (code : CodeSymbol → List Γ)
 
 private theorem writeItems_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (items : List (Option (Literal (Option (TMSAT.TapeSymbol Γ)))))
+    (items : List (Option (Literal (Option (TapeSymbol Γ)))))
     (time timeRest position positionRest : Nat) (preserved : List (List Γ))
     (output : List Γ) (size : Nat)
     (hsize : time + timeRest + position + positionRest + regionSpan preserved +
@@ -383,21 +386,21 @@ private theorem writeItems_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
         all_goals ring_nf at *
         all_goals lia
 
-private def items (formula : CNF (Option (TMSAT.TapeSymbol Γ))) :
-    List (Option (Literal (Option (TMSAT.TapeSymbol Γ)))) :=
+private def items (formula : CNF (Option (TapeSymbol Γ))) :
+    List (Option (Literal (Option (TapeSymbol Γ)))) :=
   formula.flatMap fun clause => clause.map some ++ [none]
 
 omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
 private theorem items_word (code : CodeSymbol → List Γ) (time position : Nat)
-    (formula : CNF (Option (TMSAT.TapeSymbol Γ))) :
+    (formula : CNF (Option (TapeSymbol Γ))) :
     (items formula).flatMap (itemWord code time position) =
       (formulaPrefix (formula.rename fun symbol =>
         Naming.bits .tape (encodingNatBool.encode time) (encodingNatBool.encode position)
           (symbolBits symbol))).flatMap code := by
-  let name : Option (TMSAT.TapeSymbol Γ) → SAT.Variable := fun symbol =>
+  let name : Option (TapeSymbol Γ) → SAT.Variable := fun symbol =>
     Naming.bits .tape (encodingNatBool.encode time)
     (encodingNatBool.encode position) (symbolBits symbol)
-  have hc (clause : Clause (Option (TMSAT.TapeSymbol Γ))) :
+  have hc (clause : Clause (Option (TapeSymbol Γ))) :
       (clause.map some ++ [none]).flatMap (itemWord code time position) =
         (certificateEncoding.encode (clause.rename name) ++
           [(.inr 4 : CodeSymbol)]).flatMap code := by
@@ -415,41 +418,41 @@ private theorem items_word (code : CodeSymbol → List Γ) (time position : Nat)
       congrArg₂ (· ++ ·) (hc clause) ih
 
 private def rowWord (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time positions : Nat) : List Γ :=
+    (symbols : List (Option (TapeSymbol Γ))) (time positions : Nat) : List Γ :=
   (List.range positions).flatMap fun position =>
     (items (CNF.exactlyOne symbols)).flatMap (itemWord code time position)
 
 omit [Inhabited Γ] [Fintype Γ] in
 private theorem rowWord_succ (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time positions : Nat) :
+    (symbols : List (Option (TapeSymbol Γ))) (time positions : Nat) :
     rowWord code symbols time (positions + 1) = rowWord code symbols time positions ++
       (items (CNF.exactlyOne symbols)).flatMap (itemWord code time positions) := by
   simp [rowWord, List.range_succ]
 
 omit [Inhabited Γ] [Fintype Γ] in
 private theorem rowWord_length_mono (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time : Nat) {first second : Nat}
+    (symbols : List (Option (TapeSymbol Γ))) (time : Nat) {first second : Nat}
     (h : first ≤ second) :
     (rowWord code symbols time first).length ≤ (rowWord code symbols time second).length :=
   ((List.range_sublist.mpr h).flatMap _).length_le
 
 omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_eq_rows (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions : Nat) :
+    (symbols : List (Option (TapeSymbol Γ))) (times positions : Nat) :
     word code symbols times positions =
       (List.range times).flatMap fun time => rowWord code symbols time positions := by
   simp [word, rowWord, items_word, symbolBits]
 
 omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_succ (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions : Nat) :
+    (symbols : List (Option (TapeSymbol Γ))) (times positions : Nat) :
     word code symbols (times + 1) positions = word code symbols times positions ++
       rowWord code symbols times positions := by
   simp [word_eq_rows, List.range_succ]
 
 omit [Inhabited Γ] [Fintype Γ] in
 private theorem word_length_mono (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (positions : Nat) {first second : Nat}
+    (symbols : List (Option (TapeSymbol Γ))) (positions : Nat) {first second : Nat}
     (h : first ≤ second) :
     (word code symbols first positions).length ≤ (word code symbols second positions).length := by
   simp only [word_eq_rows]
@@ -457,7 +460,7 @@ private theorem word_length_mono (code : CodeSymbol → List Γ)
 
 private theorem positions_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time timeRest positions : Nat)
+    (symbols : List (Option (TapeSymbol Γ))) (time timeRest positions : Nat)
     (preserved : List (List Γ)) (output : List Γ) (size : Nat)
     (hsize : time + timeRest + positions + regionSpan preserved +
       (output ++ rowWord code symbols time positions).length ≤ size)
@@ -523,7 +526,7 @@ private def outerMarked (tick : Γ) (time timeRest positions : Nat)
 
 private theorem visitPositions_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (time timeRest positions : Nat)
+    (symbols : List (Option (TapeSymbol Γ))) (time timeRest positions : Nat)
     (preserved : List (List Γ)) (output : List Γ) (size : Nat)
     (hsize : time + timeRest + positions + regionSpan preserved +
       (output ++ rowWord code symbols time positions).length ≤ size)
@@ -568,7 +571,7 @@ specified by its two unary words. It reads both indices from the tape and restor
 unary words, their separating blanks, and the starting head position.
 -/
 def writeChoices (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSymbol → List Γ)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (preservedCount : Nat := 1) :
+    (symbols : List (Option (TapeSymbol Γ))) (preservedCount : Nat := 1) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   forBlocks tm tick []
     (visitPositions tick (writeItems zero one tick code preservedCount
@@ -581,13 +584,13 @@ def writeChoices (tm : SingleTapeTM Γ) (zero one tick : Γ) (code : CodeSymbol 
   current.config = ⟨label, layout tick times positions preserved output⟩ ∧ current.headPos = origin
 
 /-- This polynomial bounds execution in terms of source length and the total output length. -/
-noncomputable def timeBound (width : Nat) (symbols : List (Option (TMSAT.TapeSymbol Γ))) :
+noncomputable def timeBound (width : Nat) (symbols : List (Option (TapeSymbol Γ))) :
     Polynomial Nat :=
   Polynomial.C ((items (CNF.exactlyOne symbols)).length * 4096 * (width + 1) + 16) *
     (Polynomial.X + 8) ^ 4
 
 omit [Inhabited Γ] [Fintype Γ] [Encodable Γ] in
-private theorem loopTime_le (width : Nat) (symbols : List (Option (TMSAT.TapeSymbol Γ)))
+private theorem loopTime_le (width : Nat) (symbols : List (Option (TapeSymbol Γ)))
     (times positions size : Nat) (ht : times ≤ size) (hp : positions ≤ size) :
     times * (2 * times + 10 +
       positions * ((items (CNF.exactlyOne symbols)).length * itemBudget width size + 2)) + 2 ≤
@@ -609,7 +612,7 @@ execution for every pair of bounds and every preserved and output word.
 -/
 @[spec] theorem writeChoices_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (symbols : List (Option (TMSAT.TapeSymbol Γ))) (times positions : Nat)
+    (symbols : List (Option (TapeSymbol Γ))) (times positions : Nat)
     (preserved : List (List Γ)) (output : List Γ) (size : Nat)
     (hsize : times + positions + regionSpan preserved +
       (output ++ word code symbols times positions).length ≤ size)
@@ -657,16 +660,16 @@ execution for every pair of bounds and every preserved and output word.
 noncomputable def writeTapeChoices (tm : SingleTapeTM Γ) (zero one tick : Γ)
     (code : CodeSymbol → List Γ) (preservedCount : Nat := 1) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
-  writeChoices tm zero one tick code (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+  writeChoices tm zero one tick code (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
     preservedCount
 
 omit [Inhabited Γ] in
 /-- The writer's output is precisely the existing tape-symbol clauses, with their existing names. -/
-theorem word_eq_tapeClauses (code : CodeSymbol → List Γ) (problem : TMSAT.Instance Γ) :
-    word code (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+theorem word_eq_tapeClauses (code : CodeSymbol → List Γ) (problem : BoundedVerification Γ) :
+    word code (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
         (problem.time + 1) (NPToTMSAT.width problem) =
       (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code := by
-  let symbols := (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+  let symbols := (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
   have hindices (n : Nat) : List.range n = (List.finRange n).map Fin.val := by
     ext i; simp
   have hmap (time : Fin (problem.time + 1)) (position : Fin (NPToTMSAT.width problem)) :
@@ -701,12 +704,12 @@ theorem word_eq_tapeClauses (code : CodeSymbol → List Γ) (problem : TMSAT.Ins
     CNF.rename, symbolBits]
 
 /--
-The program writes exactly the tape-symbol clauses of the given instance. The instance occurs
-only in the specification. The running program reads its two bounds from the tape.
+The program writes the tape-symbol clauses for the specified bounded computation.
+The bounds occur only in the specification. The running program reads them from the tape.
 -/
 @[spec] theorem writeTapeChoices_spec (zero one : Γ) (hne : zero ≠ one) (tick : Γ)
     (code : CodeSymbol → List Γ) (width : Nat) (hwidth : ∀ symbol, (code symbol).length = width)
-    (problem : TMSAT.Instance Γ) (preserved : List (List Γ)) (output : List Γ) (size : Nat)
+    (problem : BoundedVerification Γ) (preserved : List (List Γ)) (output : List Γ) (size : Nat)
     (hsize : problem.time + 1 + NPToTMSAT.width problem + regionSpan preserved +
       (output ++ (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code).length ≤
         size)
@@ -718,10 +721,10 @@ only in the specification. The running program reads its two bounds from the tap
         (output ++ (formulaPrefix ((tapeClauses problem).rename Variable.name)).flatMap code)
         label origin final ∧ cost.steps ≤ elapsed +
           (timeBound width
-            (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList).eval size ⦄ := by
+            (Finset.univ : Finset (Option (TapeSymbol Γ))).toList).eval size ⦄ := by
   simpa only [writeTapeChoices, word_eq_tapeClauses] using
     writeChoices_spec (tm := tm) zero one hne tick code width hwidth
-      (Finset.univ : Finset (Option (TMSAT.TapeSymbol Γ))).toList
+      (Finset.univ : Finset (Option (TapeSymbol Γ))).toList
       (problem.time + 1) (NPToTMSAT.width problem) preserved output size
       (by simpa only [word_eq_tapeClauses] using hsize) label origin elapsed
 

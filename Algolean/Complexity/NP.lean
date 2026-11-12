@@ -10,11 +10,16 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Augmented
 public import Algolean.Complexity.PolytimeBasicClasses
 public import Algolean.Models.SingleTapeTM.Alphabet.Lift
 public import Algolean.Models.SingleTapeTM.Composition.MachineComposition
+public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 
 /-!
-# Polynomial verification of encoded input-certificate pairs
+# NP verification, hardness, and completeness
 
-The definition of `NP` in `PolytimeBasicClasses` supplies a verifier with the separator encoding
+* `NPHard` contains languages to which every language in NP has a polynomial-time Karp reduction.
+* `NPComplete` contains the NP-hard languages that also belong to NP.
+* `P_subset_NP` proves that every language in P belongs to NP.
+
+The definition of `NP` in `PolytimeBasicClasses` gives a verifier with the separator encoding
 `Alphabet.wordPair`. This file proves `P ⊆ NP` by constructing a Turing machine program that
 ignores the certificate: it erases the separator and suffix, restores the head to the first input
 cell, and runs the original decider with its tape symbols tagged by `Sum.inl`.
@@ -53,23 +58,23 @@ private theorem firstWord_outputs {tm : SingleTapeTM Symbol} [DecidableEq Symbol
     (tm := tm.extendAlphabet (markers := 1))).outputsWithinTime_seq
       (h.extendAlphabet (markers := 1))).mono
   have hl := Alphabet.lengths_firstWord_afterMarker_le input
-  exact Nat.add_le_add_left (mono (by omega)) _
+  exact Nat.add_le_add_left (mono (by lia)) _
 
 /--
 This value constructs a Turing machine program that runs `machine` on the ordinary word before
 the first separator and discards the remaining input. It first erases the separator and suffix,
 then runs the alphabet-lifted original program. A missing separator retains the whole word.
-The bound includes preparation and uses the supplied monotonicity proof to bound the original
+The bound includes preparation and uses the monotonicity proof to bound the original
 computation by the encoded input length.
 -/
 @[simps! tm program timeBound]
 def TimeComputable.onFirstWord {f : List Symbol → List Symbol} (machine : TimeComputable f)
     (mono : Monotone machine.timeBound) :
     TimeComputable (fun input : List (Alphabet.Extended Symbol 1) =>
-      (f (Alphabet.firstWord input)).map Sum.inl) := by
+      (f (Alphabet.firstWord input)).map Sum.inl) :=
   letI := machine.symbolDecidableEq
   letI := machine.stateDecidableEq
-  exact {
+  {
     tm := machine.tm.extendAlphabet (markers := 1)
     program := do [TMQuery (machine.tm.extendAlphabet (markers := 1))]
       SingleTapeTuringMachines.firstWord (machine.tm.extendAlphabet (markers := 1))
@@ -126,5 +131,22 @@ theorem NP.ofP {L : Language Symbol} (h : L ∈ P) : L ∈ NP := by
 
 /-- Every language in `P` belongs to `NP`. -/
 theorem P_subset_NP : (P : Set (Language Symbol)) ⊆ NP := fun _ h => NP.ofP h
+
+/-- Every language in NP has a polynomial-time Karp reduction to a language in this set. -/
+def NPHard : Set (Language Symbol) :=
+  {target | ∀ source : Language Symbol, source ∈ NP → KarpReducible source target}
+
+/-- These are the NP-hard languages that belong to NP. -/
+def NPComplete : Set (Language Symbol) := NP ∩ NPHard
+
+/-- NP-hardness means that every language in NP reduces to the given language. -/
+@[simp, grind =] theorem mem_NPHard {target : Language Symbol} :
+    target ∈ NPHard ↔
+      ∀ source : Language Symbol, source ∈ NP → KarpReducible source target := Iff.rfl
+
+/-- NP-completeness consists of membership in NP and NP-hardness. -/
+@[simp, grind =] theorem mem_NPComplete {target : Language Symbol} :
+    target ∈ NPComplete ↔ target ∈ NP ∧ target ∈ NPHard := Iff.rfl
+
 
 end Algolean.Algorithms
