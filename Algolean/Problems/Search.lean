@@ -21,7 +21,9 @@ namespace Algolean.Search
 
 /-- An array and the value to find in it. -/
 structure Input (α : Type u) where
+  /-- The array to search. -/
   data : Array α
+  /-- The value to find. -/
   key : α
 
 /-- A matching index with no earlier occurrence. -/

@@ -7,7 +7,6 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Algorithms.WordRAM.LinearSearch.Complexity
-public import Algolean.Models.WordRAM.Verification
 
 /-!
 # Strict WordRAM linear-search tests
@@ -21,7 +20,7 @@ space, and interpreter fuel boundaries. Setup also composes through the shared V
 namespace AlgoleanTests.WordRAMLinearSearch
 
 open Algolean Algolean.Algorithms Algolean.Algorithms.WordRAM
-open LinearSearch Cslib Std.WP
+open LinearSearch Cslib
 open scoped WordRAM.Spec
 
 def observe (fuel : Nat) (s : RAMState w 5) :
@@ -65,20 +64,12 @@ example : (execute 21 (linearSearch 8) (linearSearchState #[7, 5, 5] 5 key)).map
     (fun r => (r.1.tell.auxiliarySpace (sizedInputRegion #[7, 5, 5]),
       r.1.tell.totalSpace (sizedInputRegion #[7, 5, 5]))) = some (0, 4) := by decide
 
-set_option experimental.vcgen true
-
+-- The verified fuel budget guarantees a successful run for every representing initial state.
 example (input : Search.Input (Word w)) (s : RAMState w 5)
-    (h : RepresentsSizedSearchInput input key s) (initial : RAMCost w) (fuel : Nat) :
-    ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 6⟩ ⦄ (setup w)
-      ⦃ fun _ cost final => cost = initial + ⟨6, {0}⟩ ∧
-        final.machine.Registers last = BitVec.ofNat w input.data.size ∧
-        final.machine.Registers index = 1 ∧ final.machine.Registers one = 1 ∧
-        final.machine.Flags .eq = false ∧
-        final.machine.Flags .ult = decide (0 < input.data.size) ∧ final.fuel = fuel;
-        fun _ => False ⦄ := by
-  have hh : s.Memory (BitVec.ofNat w 0) = BitVec.ofNat w input.data.size := h.header
-  have hn : (BitVec.ofNat w input.data.size).toNat = input.data.size := Nat.mod_eq_of_lt h.fits
-  vcgen [setup]
-  all_goals simp_all [CmpOp.eval, add_assoc]
+    (h : RepresentsSizedSearchInput input key s) :
+    ∃ result final, execute (7 * input.data.size + 9) (linearSearch w) s = some (result, final) ∧
+      SolvesInput input s.Memory final.machine := by
+  simpa only [Nat.add_zero] using
+    WordRAM.Spec.execute (linearSearch_correct input s h 0) ⟨rfl, rfl⟩
 
 end AlgoleanTests.WordRAMLinearSearch

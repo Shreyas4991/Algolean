@@ -46,10 +46,7 @@ theorem linearSearchState_represents (input : Array (Word w)) (target : Word w)
     change i < input.size at hi
     have hiw : i + 1 < 2 ^ w := by lia
     have ha : (BitVec.ofNat w (i + 1)).toNat = i + 1 := Nat.mod_eq_of_lt hiw
-    have hz : BitVec.ofNat w (i + 1) ≠ 0 := by
-      intro h
-      have := congrArg BitVec.toNat h
-      simp [ha] at this
+    have hz : BitVec.ofNat w (i + 1) ≠ 0 := by grind
     simp only [linearSearchState, sizedArrayMemory, hz, ↓reduceIte, ha, Nat.add_sub_cancel,
       Array.getElem?_eq_getElem hi, Option.getD_some]
   · simp [linearSearchState]
@@ -65,6 +62,11 @@ def RepresentsSearchOutput (index : Register k) (output : Option Nat) (s : RAMSt
 /-- All input cells, including the size header and any unread payload cells. -/
 def sizedInputRegion (input : Array (Word w)) : Finset (Word w) :=
   (Finset.range (input.size + 1)).image (BitVec.ofNat w)
+
+/-- The size header always belongs to the input region. -/
+@[simp, grind .] theorem zero_mem_sizedInputRegion (input : Array (Word w)) :
+    BitVec.ofNat w 0 ∈ sizedInputRegion input :=
+  Finset.mem_image.mpr ⟨0, Finset.mem_range.mpr (Nat.succ_pos _), rfl⟩
 
 theorem sizedInputRegion_card (input : Array (Word w)) (hfits : input.size < 2 ^ w) :
     (sizedInputRegion input).card = input.size + 1 := by

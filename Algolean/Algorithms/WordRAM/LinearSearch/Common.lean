@@ -12,9 +12,9 @@ public import Algolean.Models.WordRAM.Verification
 /-!
 # Linear-search invariants and execution
 
-The cursor names the first unexamined element. The induction excludes the preceding prefix;
+The cursor names the first unexamined element. The loop invariant excludes the preceding prefix;
 each unsuccessful iteration advances the cursor or reaches the inclusive last address.
-Costs are accumulated along this same terminating execution, independently of interpreter fuel.
+VCGen tracks exact costs and a sufficient fuel budget through the existing WordRAM handlers.
 -/
 
 @[expose] public section
@@ -63,17 +63,6 @@ theorem setup_spec (input : Search.Input (Word w)) (s : RAMState w 5)
   vcgen [setup]
   all_goals simp_all [t, CmpOp.eval, add_assoc]
 
-/-- Extract the successful initialized state through the shared handler's soundness bridge. -/
-theorem setup_run (input : Search.Input (Word w)) (s : RAMState w 5)
-    (h : RepresentsSizedSearchInput input key s) :
-    ∃ t, Completes (setup w) s ⟨6, {0}⟩ t ∧ Cursor input 0 t ∧
-      t.Flags .eq = false ∧ t.Flags .ult = decide (0 < input.data.size) ∧ t.Memory = s.Memory := by
-  obtain ⟨cost, final, hc, ht, hcursor, heq, hult, hm, _⟩ :=
-    WordRAM.Spec.completes (setup_spec input s h 0 0) ⟨rfl, rfl⟩
-  simp only [zero_add] at ht
-  subst cost
-  exact ⟨final.machine, hc, hcursor, heq, hult, hm⟩
-
 private def hitState (s : RAMState w 5) : RAMState w 5 :=
   ((s.writeRegister value (s.Memory (s.Registers index))).writeFlag .eq true).writeFlag .ult false
 
@@ -84,87 +73,68 @@ private def advanceState (s : RAMState w 5) : RAMState w 5 :=
 private def exhaustedState (s : RAMState w 5) : RAMState w 5 :=
   ((s.writeRegister value (s.Memory (s.Registers index))).writeFlag .eq false).writeFlag .ult false
 
-private theorem probe_hit_spec (s : RAMState w 5) (initial : RAMCost w) (fuel : Nat)
-    (found : s.Memory (s.Registers index) = s.Registers key) :
-    ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 4⟩ ⦄ (body w)
-      ⦃ fun _ cost final => cost = initial + ⟨3, {s.Registers index}⟩ ∧
-        final = ⟨hitState s, fuel⟩; fun _ => False ⦄ := by
-  repeat' (vcgen [body, Prog.ifThenElse, test] <;>
-    simp_all only [hitState, index, value, ↓binderNameHint.eq_1, Fin.isValue,
-      ifThenElse_test, step,
-      FreeM.wp_bind, FreeM.wp_lift, WordRAM.Spec.costHandler_apply,
-      FuelExecMonad.execute_lift_succ, CmpOp.eval, RAMState.writeRegister_registers,
-      ↓reduceIte, Fin.reduceEq, decide_true, FuelExecMonad.execute_pure,
-      RAMCost.mk_add, Finset.empty_union, Option.pure_def, Option.bind_eq_bind,
-      Option.bind_some, RAMCost.zero_time, add_zero, RAMCost.zero_addresses, add_assoc,
-      Nat.reduceAdd, Finset.union_empty, true_and, lt_add_iff_pos_left, add_pos_iff,
-      Nat.ofNat_pos, or_true, Nat.add_one_sub_one, and_true,
-      RAMState.writeFlag_flags])
+private theorem probe_spec (s : RAMState w 5) (initial : RAMCost w) (fuel : Nat)
+    (post : Unit → RAMCost w → ExecutionState w 5 → Prop)
+    (hit : s.Memory (s.Registers index) = s.Registers key →
+      post () (initial + ⟨3, {s.Registers index}⟩) ⟨hitState s, fuel + 2⟩)
+    (advance : s.Memory (s.Registers index) ≠ s.Registers key →
+      (s.Registers index).toNat < (s.Registers last).toNat →
+      post () (initial + ⟨4, {s.Registers index}⟩) ⟨advanceState s, fuel⟩)
+    (exhausted : s.Memory (s.Registers index) ≠ s.Registers key →
+      ¬(s.Registers index).toNat < (s.Registers last).toNat →
+      post () (initial + ⟨4, {s.Registers index}⟩) ⟨exhaustedState s, fuel⟩) :
+    Triple (body w) (fun cost current => cost = initial ∧ current = ⟨s, fuel + 6⟩)
+      post (fun _ => False) := by
+  by_cases found : s.Memory (s.Registers index) = s.Registers key
+  all_goals by_cases more : (s.Registers index).toNat < (s.Registers last).toNat
+  all_goals repeat' (vcgen [body, Prog.ifThenElse, test] <;>
+    simp_all only [hitState, advanceState, exhaustedState, index, value, one,
+      ↓binderNameHint.eq_1, Fin.isValue, ifThenElse_test, step, FreeM.wp_bind, FreeM.wp_lift,
+      WordRAM.Spec.costHandler_apply, FuelExecMonad.execute_lift_succ, CmpOp.eval,
+      BinOp.eval, RAMState.writeRegister_registers, RAMState.writeFlag_flags,
+      RAMState.writeFlag_registers, ↓reduceIte, Fin.reduceEq, decide_true, decide_false,
+      FuelExecMonad.execute_pure, RAMCost.mk_add, Finset.empty_union, Option.pure_def,
+      Option.bind_eq_bind, Option.bind_some, RAMCost.zero_time, add_zero,
+      RAMCost.zero_addresses, add_assoc, Nat.reduceAdd, Finset.union_empty, true_and,
+      lt_add_iff_pos_left, add_pos_iff, Nat.ofNat_pos, or_true, Nat.add_one_sub_one,
+      and_true, Bool.false_eq_true])
+  all_goals grind only
 
-private theorem probe_advance_spec (s : RAMState w 5) (initial : RAMCost w) (fuel : Nat)
-    (miss : s.Memory (s.Registers index) ≠ s.Registers key)
-    (more : (s.Registers index).toNat < (s.Registers last).toNat) :
-    ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 6⟩ ⦄ (body w)
-      ⦃ fun _ cost final => cost = initial + ⟨4, {s.Registers index}⟩ ∧
-        final = ⟨advanceState s, fuel⟩; fun _ => False ⦄ := by
-  repeat' (vcgen [body, Prog.ifThenElse, test] <;>
-    simp_all only [advanceState, index, value, one, BinOp.eval, ↓binderNameHint.eq_1, Fin.isValue,
-      ifThenElse_test, step,
-      FreeM.wp_bind, FreeM.wp_lift, WordRAM.Spec.costHandler_apply,
-      FuelExecMonad.execute_lift_succ, CmpOp.eval, RAMState.writeRegister_registers,
-      ↓reduceIte, Fin.reduceEq, decide_true, decide_false, FuelExecMonad.execute_pure,
-      RAMCost.mk_add, Finset.empty_union, Option.pure_def, Option.bind_eq_bind,
-      Option.bind_some, RAMCost.zero_time, add_zero, RAMCost.zero_addresses, add_assoc,
-      Nat.reduceAdd, Finset.union_empty, true_and, lt_add_iff_pos_left, add_pos_iff,
-      Nat.ofNat_pos, or_true, Nat.add_one_sub_one, and_true,
-      RAMState.writeFlag_flags, RAMState.writeFlag_registers,
-      Bool.false_eq_true])
-
-private theorem probe_exhausted_spec (s : RAMState w 5) (initial : RAMCost w) (fuel : Nat)
-    (miss : s.Memory (s.Registers index) ≠ s.Registers key)
-    (lastCell : ¬(s.Registers index).toNat < (s.Registers last).toNat) :
-    ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 6⟩ ⦄ (body w)
-      ⦃ fun _ cost final => cost = initial + ⟨4, {s.Registers index}⟩ ∧
-        final = ⟨exhaustedState s, fuel⟩; fun _ => False ⦄ := by
-  have noMore : decide ((s.Registers index).toNat < (s.Registers last).toNat) = false := by
-    simp only [decide_eq_false_iff_not]
-    exact lastCell
-  repeat' (vcgen [body, Prog.ifThenElse, test] <;>
-    simp_all only [exhaustedState, index, value, not_lt, ↓binderNameHint.eq_1, Fin.isValue,
-      ifThenElse_test, step,
-      FreeM.wp_bind, FreeM.wp_lift, WordRAM.Spec.costHandler_apply,
-      FuelExecMonad.execute_lift_succ, CmpOp.eval, RAMState.writeRegister_registers,
-      ↓reduceIte, Fin.reduceEq, decide_false, FuelExecMonad.execute_pure,
-      RAMCost.mk_add, Finset.empty_union, Option.pure_def, Option.bind_eq_bind,
-      Option.bind_some, RAMCost.zero_time, add_zero, RAMCost.zero_addresses, add_assoc,
-      Nat.reduceAdd, Finset.union_empty, true_and, lt_add_iff_pos_left, add_pos_iff,
-      Nat.ofNat_pos, or_true, Nat.add_one_sub_one, and_true,
-      RAMState.writeFlag_flags, RAMState.writeFlag_registers,
-      Bool.false_eq_true])
-
-/-- Finishing costs one primitive operation, preserves memory, and decodes the result. -/
-theorem finish_run (input : Search.Input (Word w)) (output : Option Nat) (s : RAMState w 5)
+/-- Finish decodes the answer, preserves memory, and costs one operation and two fuel units. -/
+private theorem finish_at_spec (input : Search.Input (Word w)) (output : Option Nat)
+    (s : RAMState w 5)
     (hfits : input.data.size < 2 ^ w) (ho : output ∈ Search.linearSearch input)
-    (hr : AtResult output s) (hone : s.Registers one = 1) :
-    ∃ t, Completes (finish w) s ⟨1, ∅⟩ t ∧ RepresentsSearchOutput index output t ∧
-      t.Memory = s.Memory := by
-  cases output with
-  | none =>
-    have hflag : s.Flags .eq = false := hr
-    exact ⟨s, ⟨2, by simp [finish, Prog.ifThenElse, flag, hflag]⟩,
-      by simp [RepresentsSearchOutput, searchOutput, hflag], rfl⟩
-  | some i =>
-    obtain ⟨hflag, hindex⟩ := hr
-    have hi : i < input.data.size := ho.1
-    have hiw : i < 2 ^ w := by lia
-    let t := s.writeRegister index (BitVec.ofNat w i)
-    have hsub : BitVec.ofNat w (i + 1) - BitVec.ofNat w 1 = BitVec.ofNat w i := by
-      rw [BitVec.ofNat_add]
-      exact BitVec.add_sub_cancel _ _
-    refine ⟨t, ⟨2, ?_⟩, ?_, by simp [t]⟩
-    · simp [finish, Prog.ifThenElse, flag, t, hflag, hindex, hone, BinOp.eval, hsub]
-    · simp [RepresentsSearchOutput, searchOutput, t, hflag, BitVec.toNat_ofNat,
-        Nat.mod_eq_of_lt hiw]
+    (hr : AtResult output s) (hone : s.Registers one = 1) (initial : RAMCost w) (fuel : Nat) :
+    ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 2⟩ ⦄ (finish w)
+      ⦃ fun _ cost final => cost = initial + ⟨1, ∅⟩ ∧ RepresentsSearchOutput index output
+        final.machine ∧ final.machine.Memory = s.Memory ∧ final.fuel = fuel;
+        fun _ => False ⦄ := by
+  cases output <;> vcgen [finish, Prog.ifThenElse, flag]
+  all_goals simp_all [RepresentsSearchOutput, searchOutput, AtResult, BinOp.eval,
+    BitVec.ofNat_add, BitVec.add_sub_cancel, BitVec.toNat_ofNat]
+  all_goals grind [Search.linearSearch, Search.IsFirstMatch]
+
+/-- A fixed initial state, zero accumulated cost, and a sufficient interpreter budget. -/
+def SearchPre (input : Search.Input (Word w)) (s : RAMState w 5) (spare : Nat)
+    (cost : RAMCost w) (current : ExecutionState w 5) : Prop :=
+  cost = 0 ∧ current = ⟨s, 7 * input.data.size + 9 + spare⟩
+
+/-- Correct first-match output together with preservation of the entire memory. -/
+def SolvesInput (input : Search.Input (Word w)) (memory : Memory w) (final : RAMState w 5) : Prop :=
+  searchOutput index final ∈ Search.linearSearch input ∧ final.Memory = memory
+
+/-- Exact total time as a function of the decoded answer. -/
+def searchTime (size : Nat) : Option Nat → Nat
+  | none => 4 * size + 7
+  | some i => 4 * i + 10
+
+/-- Exact and worst-case time, no auxiliary cells, and total input space. -/
+def ComplexityBound (input : Search.Input (Word w)) (cost : RAMCost w)
+    (final : RAMState w 5) : Prop :=
+  cost.time = searchTime input.data.size (searchOutput index final) ∧
+    cost.time ≤ 4 * input.data.size + 7 ∧
+    cost.auxiliarySpace (sizedInputRegion input.data) = 0 ∧
+    cost.totalSpace (sizedInputRegion input.data) = input.data.size + 1
 
 /-- Exact loop time, measured from the first position considered by this invocation. -/
 def loopTime (size start : Nat) : Option Nat → Nat
@@ -199,18 +169,13 @@ def LoopInvariant (input : Search.Input (Word w)) (start : Nat) (memory : Memory
     (current : ExecutionState w 5) : Prop :=
   (∃ position, Running input start memory initial reserve position cost current) ∨
     (LoopPost input start memory initial cost current ∧ current.machine.Flags .ult = false ∧
-      0 < current.fuel)
+      reserve + 1 ≤ current.fuel)
 
 private theorem exclude_next {input : Search.Input (Word w)} {j : Nat}
     (hj : j < input.data.size) (before : ∀ k, k < j → input.data[k]? ≠ some input.key)
     (miss : input.data[j] ≠ input.key) :
     ∀ k, k < j + 1 → input.data[k]? ≠ some input.key := by
-  intro k hk
-  by_cases hkj : k < j
-  · exact before k hkj
-  · have : k = j := by lia
-    subst k
-    simpa [hj] using miss
+  grind [Array.getElem?_eq_getElem]
 
 private theorem cursor_advance {input : Search.Input (Word w)} {j : Nat} {s : RAMState w 5}
     (h : Cursor input j s) : Cursor input (j + 1) (advanceState s) := by
@@ -252,11 +217,8 @@ private theorem hit_preserves
     · simpa [hitState] using h.memory_eq
     · simpa [hitState, value, one] using h.cursor.2.2.1
     · change cost.time + 3 = initial.time + (4 * (j - start) + 3)
-      rw [h.time_eq]
-      lia
-  · have := h.fuel_eq
-    have := h.in_bounds
-    lia
+      grind
+  · grind
 
 private theorem advance_preserves
     (h : Running input start memory initial reserve j cost ⟨s, fuel + 1⟩)
@@ -264,17 +226,14 @@ private theorem advance_preserves
     LoopInvariant input start memory initial reserve
       (cost + ⟨4, {s.Registers index}⟩) ⟨advanceState s, fuel - 6⟩ := by
   refine Or.inl ⟨j + 1, ?_⟩
-  refine ⟨by have := h.from_start; lia, more, cursor_advance h.cursor,
+  refine ⟨by grind, more, cursor_advance h.cursor,
     exclude_next h.in_bounds h.before miss, by simp [advanceState], ?_, ?_, ?_,
     probe_footprint h 4⟩
   · simpa [advanceState] using h.memory_eq
   · change cost.time + 4 = initial.time + 4 * (j + 1 - start)
-    have := h.time_eq
-    have := h.from_start
-    lia
+    grind
   · change fuel - 6 = 7 * (input.data.size - (j + 1)) + 1 + reserve
-    have := h.fuel_eq
-    lia
+    grind
 
 private theorem exhausted_preserves
     (h : Running input start memory initial reserve j cost ⟨s, fuel + 1⟩)
@@ -292,13 +251,8 @@ private theorem exhausted_preserves
     · simpa [exhaustedState] using h.memory_eq
     · simpa [exhaustedState, value, one] using h.cursor.2.2.1
     · change cost.time + 4 = initial.time + 4 * (input.data.size - start)
-      have := h.time_eq
-      have := h.from_start
-      have := h.in_bounds
-      lia
-  · have := h.fuel_eq
-    have := h.in_bounds
-    lia
+      grind
+  · grind
 
 end Transitions
 
@@ -307,19 +261,18 @@ private theorem invariant_enough (input : Search.Input (Word w)) (start : Nat)
     ∀ cost current, LoopInvariant input start memory initial reserve cost current →
       0 < current.fuel := by
   rintro cost current (⟨j, h⟩ | ⟨_, _, hf⟩)
-  · have := h.fuel_eq
-    lia
-  · exact hf
+  · grind
+  · lia
 
 private theorem invariant_exit (input : Search.Input (Word w)) (start : Nat)
     (memory : Memory w) (initial : RAMCost w) (reserve : Nat) :
     ∀ cost current, LoopInvariant input start memory initial reserve cost current →
       current.machine.Flags .ult = false →
-      LoopPost input start memory initial cost { current with fuel := current.fuel - 1 } := by
-  rintro cost current (⟨j, h⟩ | ⟨hp, _, _⟩) hf
-  · have := h.running
-    simp_all
-  · exact hp
+      LoopPost input start memory initial cost { current with fuel := current.fuel - 1 } ∧
+        reserve ≤ current.fuel - 1 := by
+  rintro cost current (⟨j, h⟩ | ⟨hp, _, hbudget⟩) hf
+  · grind
+  · exact ⟨hp, by lia⟩
 
 /-- One probe preserves the resource invariant after the loop test has consumed its fuel. -/
 @[spec] theorem body_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
@@ -332,48 +285,38 @@ private theorem invariant_exit (input : Search.Input (Word w)) (start : Nat)
   apply Triple.intro
   rintro cost ⟨s, fuel⟩ ⟨hinv, hflag⟩
   rcases hinv with ⟨j, h⟩ | ⟨_, hstopped, _⟩
-  · have hf : 6 ≤ fuel := by have := h.fuel_eq; have := h.in_bounds; lia
+  · have hf : 6 ≤ fuel := by grind
     have hj : j < input.data.size := h.in_bounds
     have hread : s.Memory (s.Registers index) = input.data[j] := by
       rw [h.cursor.2.1]
-      exact h.cursor.1.read j h.in_bounds
-    have hkey : s.Registers key = input.key := h.cursor.1.key_eq
-    by_cases found : input.data[j] = input.key
-    · have heq : s.Memory (s.Registers index) = s.Registers key := by rwa [hread, hkey]
-      refine (probe_hit_spec s cost (fuel - 4) heq).entails_wp_of_post ?_
-        cost ⟨s, fuel⟩ ⟨rfl, ?_⟩
-      · rintro _ total final ⟨rfl, rfl⟩
-        exact hit_preserves h found
-      · congr 1; lia
-    · have hne : s.Memory (s.Registers index) ≠ s.Registers key := by rwa [hread, hkey]
-      have hidxn : (s.Registers index).toNat = j + 1 := by
-        rw [h.cursor.2.1]
-        exact Nat.mod_eq_of_lt (by have := h.cursor.1.fits; have := h.in_bounds; lia)
-      have hlastn : (s.Registers last).toNat = input.data.size := by
-        rw [h.cursor.2.2.2]
-        exact Nat.mod_eq_of_lt h.cursor.1.fits
-      by_cases more : j + 1 < input.data.size
-      · have hlt : (s.Registers index).toNat < (s.Registers last).toNat := by
-          rwa [hidxn, hlastn]
-        refine (probe_advance_spec s cost (fuel - 6) hne hlt).entails_wp_of_post ?_
-          cost ⟨s, fuel⟩ ⟨rfl, ?_⟩
-        · rintro _ total final ⟨rfl, rfl⟩
-          exact advance_preserves h found more
-        · congr 1; lia
-      · have hnlt : ¬(s.Registers index).toNat < (s.Registers last).toNat := by
-          rwa [hidxn, hlastn]
-        refine (probe_exhausted_spec s cost (fuel - 6) hne hnlt).entails_wp_of_post ?_
-          cost ⟨s, fuel⟩ ⟨rfl, ?_⟩
-        · rintro _ total final ⟨rfl, rfl⟩
-          exact exhausted_preserves h found more
-        · congr 1; lia
+      exact h.cursor.1.read j hj
+    have hidxn : (s.Registers index).toNat = j + 1 := by
+      rw [h.cursor.2.1]
+      exact Nat.mod_eq_of_lt (by have := h.cursor.1.fits; lia)
+    have hlastn : (s.Registers last).toNat = input.data.size := by
+      rw [h.cursor.2.2.2]
+      exact Nat.mod_eq_of_lt h.cursor.1.fits
+    refine (probe_spec s cost (fuel - 6) _ ?_ ?_ ?_).le_wp cost ⟨s, fuel⟩ ⟨rfl, ?_⟩
+    · intro found
+      simpa only [show fuel - 6 + 2 = fuel - 4 by lia] using
+        hit_preserves h ((hread.symm.trans found).trans h.cursor.1.key_eq)
+    · intro miss more
+      apply advance_preserves h
+      · exact fun heq => miss (hread.trans (heq.trans h.cursor.1.key_eq.symm))
+      · simpa only [hidxn, hlastn] using more
+    · intro miss lastCell
+      apply exhausted_preserves h
+      · exact fun heq => miss (hread.trans (heq.trans h.cursor.1.key_eq.symm))
+      · simpa only [hidxn, hlastn] using lastCell
+    · congr 1; lia
   · simp_all
 
 /-- Verify the whole loop through the shared fuel-aware WordRAM loop rule. -/
 theorem loop_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
     (initial : RAMCost w) (reserve : Nat) :
     Triple (whileLoop .ult (body w)) (LoopInvariant input start memory initial reserve)
-      (fun _ => LoopPost input start memory initial) (fun _ => False) := by
+      (fun _ cost final => LoopPost input start memory initial cost final ∧
+        reserve ≤ final.fuel) (fun _ => False) := by
   vcgen invariants
   · LoopInvariant input start memory initial reserve
   all_goals first
@@ -381,22 +324,56 @@ theorem loop_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory
     | exact invariant_exit input start memory initial reserve _ _ ‹_› ‹_›
     | assumption
 
-/-- The verified loop terminates after an excluded prefix, with exact time and footprint. -/
-theorem loop_run (input : Search.Input (Word w)) (i : Nat) (s : RAMState w 5)
-    (hcursor : Cursor input i s) (hi : i < input.data.size) (hflag : s.Flags .ult = true)
-    (before : ∀ j, j < i → input.data[j]? ≠ some input.key) :
-    ∃ output cost t, Completes (whileLoop .ult (body w)) s cost t ∧
-      output ∈ Search.linearSearch input ∧ AtResult output t ∧ t.Memory = s.Memory ∧
-      t.Registers one = 1 ∧
-      cost.time = (match output with
-        | none => 4 * (input.data.size - i)
-        | some j => 4 * (j - i) + 3) ∧ cost.addresses ⊆ sizedInputRegion input.data := by
-  have hp : LoopInvariant input i s.Memory 0 0 0 ⟨s, 7 * (input.data.size - i) + 1⟩ := by
-    exact Or.inl ⟨i, ⟨le_rfl, hi, hcursor, before, hflag, rfl, by simp, by simp, by simp⟩⟩
-  obtain ⟨cost, final, hc, output, ho, hr, hm, hone, ht, ha⟩ :=
-    WordRAM.Spec.completes (loop_spec input i s.Memory 0 0) hp
-  refine ⟨output, cost, final.machine, hc, ho, hr, hm, hone, ?_, ?_⟩
-  · cases output <;> simpa [loopTime] using ht
-  · simpa using ha
+/-- The final phase's decoded answer and exact resources, before choosing a public postcondition. -/
+def FinishedPost (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
+    (initial : RAMCost w) (cost : RAMCost w) (current : ExecutionState w 5) : Prop :=
+  ∃ output, output ∈ Search.linearSearch input ∧ RepresentsSearchOutput index output
+    current.machine ∧ current.machine.Memory = memory ∧
+    cost.time = initial.time + loopTime input.data.size start output + 1 ∧
+    cost.addresses ⊆ initial.addresses ∪ sizedInputRegion input.data
+
+/-- Finish a verified loop, preserving its answer and accounting for the final operation. -/
+theorem finish_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
+    (initial : RAMCost w) (reserve : Nat) (hfits : input.data.size < 2 ^ w) :
+    ⦃ fun cost current => LoopPost input start memory initial cost current ∧
+        reserve + 2 ≤ current.fuel ⦄ (finish w)
+      ⦃ fun _ cost final => FinishedPost input start memory initial cost final ∧
+        reserve ≤ final.fuel; fun _ => False ⦄ := by
+  apply Triple.intro
+  rintro cost ⟨s, fuel⟩ ⟨⟨output, ho, hr, hm, hone, ht, ha⟩, hf⟩
+  refine (finish_at_spec input output s hfits ho hr hone cost (fuel - 2)).entails_wp_of_post
+    ?_ cost ⟨s, fuel⟩ ⟨rfl, ?_⟩
+  · rintro _ total final ⟨rfl, hout, hmem, hfuel⟩
+    refine ⟨⟨output, ho, hout, hmem.trans hm, ?_, ?_⟩, by lia⟩
+    · change cost.time + 1 = _
+      rw [ht]
+    · simpa only [RAMCost.add_addresses, Finset.union_empty] using ha
+  · congr 1; lia
+
+private theorem initialized (input : Search.Input (Word w)) (memory : Memory w) (spare : Nat)
+    (current : ExecutionState w 5) (hcursor : Cursor input 0 current.machine)
+    (heq : current.machine.Flags .eq = false)
+    (hult : current.machine.Flags .ult = decide (0 < input.data.size))
+    (hm : current.machine.Memory = memory) (hf : current.fuel = 7 * input.data.size + 3 + spare) :
+    LoopInvariant input 0 memory ⟨6, {0}⟩ (2 + spare) ⟨6, {0}⟩ current := by
+  by_cases hn : input.data.size = 0
+  · refine Or.inr ⟨?_, by simpa [hn] using hult, by lia⟩
+    refine ⟨none, ?_, heq, hm, hcursor.2.2.1, by simp [loopTime, hn], Finset.subset_union_left⟩
+    grind [Search.linearSearch, Array.mem_iff_getElem]
+  · refine Or.inl ⟨0, ⟨le_rfl, by lia, hcursor, by simp, ?_, hm,
+      by simp, by lia, Finset.subset_union_left⟩⟩
+    simpa [show 0 < input.data.size by lia] using hult
+
+/-- Setup establishes the loop invariant, including the empty-array case. -/
+theorem setup_loop_spec (input : Search.Input (Word w)) (s : RAMState w 5)
+    (h : RepresentsSizedSearchInput input key s) (spare : Nat) :
+    ⦃ SearchPre input s spare ⦄ (setup w)
+      ⦃ fun _ => LoopInvariant input 0 s.Memory ⟨6, {0}⟩ (2 + spare); fun _ => False ⦄ := by
+  have hs := setup_spec input s h 0 (7 * input.data.size + 3 + spare)
+  vcgen [hs]
+  · grind [SearchPre]
+  · rename_i cost current hp
+    rcases hp with ⟨rfl, hc, heq, hult, hm, hf⟩
+    exact initialized input s.Memory spare current hc heq hult hm hf
 
 end Algolean.Algorithms.WordRAM.LinearSearch
