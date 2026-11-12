@@ -175,6 +175,7 @@ public import Algolean.Models.SingleTapeTM.Verification
 public import Algolean.Models.SingleTapeTMSyntax
 public import Algolean.Models.UniformSample
 public import Algolean.Models.WordRAM
+public import Algolean.Models.WordRAM.Verification
 public import Algolean.Models.WordRAMSyntax
 public import Algolean.Problems.Basic
 public import Algolean.Problems.SAT.Basic
