@@ -11,6 +11,7 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.MetaTMs.Comparison
 public import Algolean.Complexity.Classes.NP
 public import Algolean.Problems.Encodings.Certificates
 public import Algolean.Models.SingleTapeTM.BoundedVerificationCompiler
+import Mathlib.Logic.Equiv.List
 
 /-!
 # Fixed verifiers for languages in NP
@@ -36,6 +37,8 @@ the original verifier accepts the empty word.
 
 @[expose] public section
 
+attribute [local instance 100] Fintype.toEncodable Encodable.decidableEqOfEncodable
+
 namespace Algolean.Algorithms
 
 open Cslib.Turing Alphabet Polynomial SingleTapeTM.BoundedVerification
@@ -55,7 +58,6 @@ theorem NP.exists_single_symbol_verifier {L : Language Γ} (h : L ∈ NP) (yes :
       ∀ input, input ∈ L ↔ ∃ certificate : List Γ,
         certificate.length ≤ q.eval input.length ∧
           f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
-  classical
   obtain ⟨A, q, ⟨g, accepted, ⟨computer⟩, hg⟩, hL⟩ := h
   let f := fun word => [if g word = accepted then (.inl yes : Extended Γ 1) else .inr 0]
   refine ⟨f, q, ⟨computer.compareOutput accepted (.inl yes) (.inr 0)⟩, ?_, ?_⟩
@@ -102,7 +104,6 @@ theorem NP.exists_exact_length_verifier {L : Language Γ} (h : L ∈ NP) (yes : 
       ∀ input, input ∈ L ↔ ∃ certificate : List Γ,
         certificate.length = q.eval input.length ∧
           f ((wordPair Γ).encode (input, certificate)) = [.inl yes] := by
-  classical
   obtain ⟨stop, hstop⟩ := exists_ne yes
   have hne : yes ≠ stop := Ne.symm hstop
   obtain ⟨f, q, ⟨computer⟩, answers, hcorrect⟩ :=
@@ -139,7 +140,6 @@ theorem NP.exists_bounded_verifier {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
       ∀ input, input ∈ L ↔
         (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
           SingleTapeTM.BoundedVerification Γ) ∈ accepted yes := by
-  classical
   obtain ⟨f, certificate, ⟨computer⟩, _, hcorrect⟩ := NP.exists_exact_length_verifier h yes
   let := computer.symbolDecidableEq
   let := computer.stateDecidableEq

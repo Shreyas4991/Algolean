@@ -52,7 +52,11 @@ symbol and stays halted without moving, so later rows repeat the halted configur
 
 instance instDecidableMoved {width : Nat} (first : Fin width)
     (movement : Option Bool) (second : Fin width) :
-    Decidable (Moved first movement second) := by unfold Moved; split <;> infer_instance
+    Decidable (Moved first movement second) :=
+  match movement with
+  | none => inferInstanceAs (Decidable (second = first))
+  | some false => inferInstanceAs (Decidable (second.val + 1 = first.val))
+  | some true => inferInstanceAs (Decidable (second.val = first.val + 1))
 
 /-- This checks the next state and head position selected by one table entry. -/
 @[expose] def controlAllowed (problem : BoundedVerification Γ)

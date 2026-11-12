@@ -336,20 +336,20 @@ at recorded position `time`, which represents position zero of the original tape
 -/
 def initialRow (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :
-    Row problem.verifier (width problem) := by
+    Row problem.verifier (width problem) :=
   let word := (wordPair Γ).encode (problem.input, certificate.val)
-  refine {
+  {
     state := some problem.verifier.initial
     left := List.replicate problem.time none
     symbol := word.head?
     right := (word.drop 1).map some ++ List.replicate problem.time none
-    length_eq := ?_ }
-  have hlength : word.length = problem.input.length + problem.certificateLength + 1 := by
-    simp [word, wordPair_encode, certificate.property]
-    lia
-  simp only [List.length_replicate, List.length_append, List.length_map, List.length_drop,
-    hlength, width]
-  lia
+    length_eq := by
+      have hlength : word.length = problem.input.length + problem.certificateLength + 1 := by
+        simp [word, wordPair_encode, certificate.property]
+        lia
+      simp only [List.length_replicate, List.length_append, List.length_map, List.length_drop,
+        hlength, width]
+      lia }
 
 private theorem initialRow_toCfg (problem : BoundedVerification Γ)
     (certificate : List.Vector Γ problem.certificateLength) :

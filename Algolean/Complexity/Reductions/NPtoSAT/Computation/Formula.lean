@@ -25,7 +25,7 @@ open BoundedVerification
 
 public section
 
-attribute [local instance 100] Fintype.toEncodable
+attribute [local instance 100] Fintype.toEncodable Encodable.decidableEqOfEncodable
 
 namespace Algolean.Algorithms.NPToSAT.Computation
 
@@ -104,7 +104,6 @@ open Formula
 
 variable [Fintype Γ]
 
-open Classical in
 /--
 This constructs a CNF formula whose satisfying assignments describe an accepting computation
 of the given bounded verification. Its binary variable names record their indices separately.
@@ -125,7 +124,6 @@ variable {Γ : Type} [Fintype Γ]
 /-- The formula is satisfiable exactly when the verifier accepts a certificate within its bounds. -/
 theorem formula_satisfiable_iff (problem : BoundedVerification Γ) (yes : Γ) :
     formula problem yes ∈ CNF.satisfiable ↔ problem ∈ accepted yes := by
-  classical
   exact (CNF.rename_mem_satisfiable_iff _ _ Variable.name_injective).trans
     (indexedFormula_satisfiable_iff problem yes)
 

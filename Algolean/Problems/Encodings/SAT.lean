@@ -321,7 +321,7 @@ theorem length_eq_of_decodeOver {word : List Γ} {formula : CNF Variable}
 This is SAT represented over `Γ`. A word belongs when it decodes to a satisfiable formula;
 words that fail to decode do not belong.
 -/
-noncomputable def languageOver : Language Γ := encodedLanguage CNF.satisfiable encodingOver
+def languageOver : Language Γ := encodedLanguage CNF.satisfiable encodingOver
 
 /-- Encoding a formula over `Γ` preserves whether it has a satisfying assignment. -/
 @[simp] theorem encode_mem_languageOver (formula : CNF Variable) :

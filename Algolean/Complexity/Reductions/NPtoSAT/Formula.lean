@@ -6,7 +6,6 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.Complexity.Classes.NP.Verification
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Formula
 public import Algolean.Complexity.Reductions.NPtoSAT.Computation.Size
 import Mathlib.Data.List.Perm.Basic
@@ -17,8 +16,8 @@ import Mathlib.Data.List.Perm.Basic
 * `formula` describes the bounded computation of one fixed verifier on the given input and
   an unknown certificate. Its satisfying assignments describe accepting computations.
 * `encode` writes that formula in the existing SAT encoding over the input alphabet.
-* `NP.exists_sat_formulas` chooses a verifier and polynomial bounds for an NP language.
-  The encoded formula is satisfiable exactly when the original input belongs to that language.
+* `encode_mem_languageOver` states that the encoded formula is satisfiable exactly when the
+  verifier accepts a certificate within the time bound.
 
 The verifier and both polynomials are fixed for the language. The construction reuses the
 existing computation clauses and their correctness proof. The output is a SAT instance over
@@ -30,7 +29,7 @@ open BoundedVerification
 
 public section
 
-attribute [local instance 100] Fintype.toEncodable
+attribute [local instance 100] Fintype.toEncodable Encodable.decidableEqOfEncodable
 
 namespace Algolean.Algorithms.NPToSAT
 
@@ -38,7 +37,6 @@ open Cslib.Turing Computability Problems
 
 variable {Γ : Type} [Fintype Γ]
 
-open Classical in
 /--
 These clauses exclude forbidden next heads. The next head is chosen before the scanned symbol,
 so the machine can write all fixed symbol cases during one visit to a pair of head choices.
@@ -66,7 +64,6 @@ private theorem flatMap_comm_perm {α β γ : Type*} (first : List α) (second :
 
 private theorem controlClauses_perm (problem : BoundedVerification Γ) :
     (controlClauses problem).Perm (NPToSAT.Computation.controlClauses problem) := by
-  classical
   apply List.Perm.flatMap_left (List.finRange problem.time)
   intro time _
   apply List.Perm.flatMap_left (NPToSAT.Computation.controlChoices problem)
@@ -107,7 +104,6 @@ order written by the direct reduction machine.
 
 private theorem indexedFormula_perm [DecidableEq Γ] (problem : BoundedVerification Γ) (yes : Γ) :
     (indexedFormula problem yes).Perm (NPToSAT.Computation.Formula.indexedFormula problem yes) := by
-  classical
   have h := (controlClauses_perm problem).append_right
     (NPToSAT.Computation.unchangedClauses problem ++
       NPToSAT.Computation.Formula.finalClauses problem yes)
@@ -117,7 +113,6 @@ private theorem indexedFormula_perm [DecidableEq Γ] (problem : BoundedVerificat
       (NPToSAT.Computation.initialClauses problem)).append_left
         (NPToSAT.Computation.choiceClauses problem)
 
-open Classical in
 /-- This describes the accepting computations of the fixed verifier on one input word. -/
 @[expose] noncomputable def formula (verifier : SingleTapeTM.Description (TapeSymbol Γ))
     (certificate time : Polynomial Nat) (yes : Γ) (input : List Γ) : SAT.CNF SAT.Variable :=
@@ -133,7 +128,6 @@ private theorem formula_perm (verifier : SingleTapeTM.Description (TapeSymbol Γ
       (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
         BoundedVerification Γ)
         yes) := by
-  classical
   simpa only [formula, NPToSAT.Computation.formula, SAT.CNF.rename] using
     (indexedFormula_perm
       (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
@@ -191,28 +185,3 @@ theorem encode_length_le [Nontrivial Γ]
     NPToSAT.Computation.Size.fixedVerifier_length_le verifier certificate time yes input
 
 end Algolean.Algorithms.NPToSAT
-
-namespace Algolean.Algorithms
-
-open Cslib.Turing Problems
-
-variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [Nontrivial Γ]
-
-/--
-Every NP language has one fixed verifier and polynomial bounds whose computation formulas
-are satisfiable exactly on the language's inputs. Their encodings have polynomial length.
--/
-theorem NP.exists_sat_formulas {L : Language Γ} (h : L ∈ NP) (yes : Γ) :
-    ∃ (verifier : SingleTapeTM.Description (TapeSymbol Γ))
-      (certificate time bound : Polynomial Nat),
-      (∀ input, input ∈ L ↔
-        NPToSAT.encode verifier certificate time yes input ∈ SAT.languageOver) ∧
-      ∀ input, (NPToSAT.encode verifier certificate time yes input).length ≤
-        bound.eval input.length := by
-  obtain ⟨verifier, certificate, time, hcorrect⟩ := NP.exists_bounded_verifier h yes
-  exact ⟨verifier, certificate, time,
-    NPToSAT.Computation.Size.fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time,
-    fun input => (hcorrect input).trans (NPToSAT.encode_mem_languageOver _ _ _ _ input).symm,
-    NPToSAT.encode_length_le verifier certificate time yes⟩
-
-end Algolean.Algorithms

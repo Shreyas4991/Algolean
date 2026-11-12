@@ -444,11 +444,11 @@ This packages the certificate decoder as a polynomial-time Turing machine. The c
 alphabet determines its symbol comparisons; all inputs run the same program.
 -/
 noncomputable def computer (next stop : Γ) (hne : next ≠ stop) :
-    PolyTimeComputable (result next stop) := by
-  classical
-  apply Computes.polyTimeComputable (tm := control Γ)
+    PolyTimeComputable (result next stop) :=
+  Computes.polyTimeComputable (tm := control Γ)
     (p := unpad (control Γ) Finset.univ.toList next stop)
     (poly := 8 * (Polynomial.X + 2) ^ 2)
-  simpa using unpad_computes (tm := control Γ) (Finset.univ.toList) (by simp) next stop hne
+    (by
+      simpa using unpad_computes (tm := control Γ) (Finset.univ.toList) (by simp) next stop hne)
 
 end Algolean.Algorithms.SingleTapeTuringMachines.CertificatePadding

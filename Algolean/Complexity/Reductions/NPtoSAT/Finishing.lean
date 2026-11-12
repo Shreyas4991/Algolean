@@ -36,7 +36,7 @@ variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] [Encodable Γ]
 variable {tm : SingleTapeTM Γ} [DecidableEq tm.State]
 
 /-- This writes the acceptance clauses and leaves only the completed SAT word on the tape. -/
-noncomputable def finish (tm : SingleTapeTM Γ)
+def finish (tm : SingleTapeTM Γ)
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (yes : Γ) : Prog (TMQuery tm) Unit :=
     do [TMQuery tm]
   FinalWriting.writeFinalClauses tm zero one tick code yes

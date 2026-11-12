@@ -967,8 +967,7 @@ theorem word_eq_headClauses [Encodable Γ] (code : CodeSymbol → List Γ)
     funext clause
     congr 1
     funext literal
-    cases literal <;> simp [Literal.rename, numericName, controlCode,
-      Naming.bits_head_eq_name]
+    cases literal <;> simp [Literal.rename, numericName, controlCode, Naming.bits, Variable.name]
   have hformula : (headClauses problem).rename Variable.name =
       (List.finRange (problem.time + 1)).flatMap (fun time =>
         rowFormula time.val (NPToSAT.Computation.width problem) (problem.verifier.states + 2)) := by

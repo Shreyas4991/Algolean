@@ -31,6 +31,8 @@ open BoundedVerification
 
 public section
 
+attribute [local instance 100] Encodable.decidableEqOfEncodable
+
 namespace Algolean.Algorithms.NPToSAT.Writing
 
 open Cslib Cslib.Turing TMQuery SingleTapeTuringMachines Computability Problems Problems.SAT
@@ -625,7 +627,6 @@ private theorem scannedWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
     scannedWord problem.verifier code (verifierStates problem.verifier) symbols
       problem.time (NPToSAT.Computation.width problem) (problem.verifier.states + 2) =
       (formulaPrefix ((writeClauses problem).rename Variable.name)).flatMap code := by
-  classical
   have hfirst (count : Nat) (hcount : 0 < count) (text : List Γ) :
       (List.range count).flatMap (fun index => if index = 0 then text else []) = text := by
     obtain ⟨count, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (by lia : count ≠ 0)
@@ -1150,7 +1151,6 @@ private theorem selectedCodes {α β : Type} [Encodable α] (cases : List α)
     (hnodup : cases.Nodup) (actual : α) (hmem : actual ∈ cases) (part : α → List β) :
     cases.flatMap (fun value => if Encodable.encode actual = Encodable.encode value
       then part value else []) = part actual := by
-  classical
   have hf : (cases.filter (fun value => decide (value = actual))) = [actual] := by
     rw [List.filter_eq]
     simp [hnodup.count, hmem]
@@ -1230,7 +1230,6 @@ private theorem controlWord_eq (code : CodeSymbol → List Γ) (problem : Bounde
     controlWord problem.verifier code problem.time (NPToSAT.Computation.width problem)
       (problem.verifier.states + 2) =
       (formulaPrefix ((NPToSAT.controlClauses problem).rename Variable.name)).flatMap code := by
-  classical
   have hindices (count : Nat) : (List.finRange count).map Fin.val = List.range count := by
     ext index
     simp

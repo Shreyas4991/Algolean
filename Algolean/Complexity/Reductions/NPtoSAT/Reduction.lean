@@ -7,6 +7,7 @@ Authors: Shreyas Srinivas
 module
 
 public import Algolean.Complexity.Reductions.NPtoSAT.Computer
+public import Algolean.Complexity.Classes.NP.Verification
 public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 
 /-!
@@ -20,6 +21,7 @@ public import Algolean.Models.SingleTapeTM.Composition.KarpReduction
 The reduction fixes a verifier for the source language and writes a formula describing its
 accepting computations. One finite single-tape Query program performs this conversion on
 every input length. Its input is the original word, and its output is the encoded SAT formula.
+Choosing a verifier from the existence statement in NP membership uses classical choice.
 -/
 
 public section
@@ -37,14 +39,17 @@ This fixed polynomial-time program converts a word to a SAT instance with the sa
 The input, output, and reduction machine use the original finite alphabet.
 -/
 noncomputable def NP.satReduction {L : Language Γ} (h : L ∈ NP) :
-    KarpReduction L SAT.languageOver := by
-  classical
-  choose verifier certificate time bound hcorrect hlength using
-    NP.exists_sat_formulas h (default : Γ)
-  exact {
+    KarpReduction L SAT.languageOver :=
+  let ⟨verifier, hv⟩ := Classical.indefiniteDescription _
+    (NP.exists_bounded_verifier h (default : Γ))
+  let ⟨certificate, hc⟩ := Classical.indefiniteDescription _ hv
+  let ⟨time, hcorrect⟩ := Classical.indefiniteDescription _ hc
+  {
     transform := NPToSAT.encode verifier certificate time default
     computer := NPToSAT.computer verifier certificate time default
-    correct := fun input => by simpa using hcorrect input }
+    correct := fun input => by
+      simpa using (hcorrect input).trans
+        (NPToSAT.encode_mem_languageOver verifier certificate time default input).symm }
 
 /-- Every language in NP has a polynomial-time Karp reduction to SAT over the same alphabet. -/
 theorem NP.karpReducible_sat {L : Language Γ} (h : L ∈ NP) :
@@ -54,15 +59,18 @@ end
 
 /-- This converts every input of an NP language to SAT in its original formula encoding. -/
 noncomputable def NP.satReductionToSAT {L : Language SAT.CodeSymbol} (h : L ∈ NP) :
-    KarpReduction L SAT := by
-  classical
-  choose verifier certificate time bound hcorrect hlength using
-    NP.exists_sat_formulas h (default : SAT.CodeSymbol)
-  exact {
+    KarpReduction L SAT :=
+  let ⟨verifier, hv⟩ := Classical.indefiniteDescription _
+    (NP.exists_bounded_verifier h (default : SAT.CodeSymbol))
+  let ⟨certificate, hc⟩ := Classical.indefiniteDescription _ hv
+  let ⟨time, hcorrect⟩ := Classical.indefiniteDescription _ hc
+  {
     transform := fun input => SAT.encoding.encode
       (NPToSAT.formula verifier certificate time default input)
     computer := NPToSAT.formulaComputer verifier certificate time default
-    correct := fun input => by simpa [NPToSAT.encode] using hcorrect input }
+    correct := fun input => by
+      simpa [NPToSAT.encode] using (hcorrect input).trans
+        (NPToSAT.encode_mem_languageOver verifier certificate time default input).symm }
 
 /-- Every NP language over the formula alphabet has a polynomial-time Karp reduction to SAT. -/
 theorem NP.karpReducible_SAT {L : Language SAT.CodeSymbol} (h : L ∈ NP) :

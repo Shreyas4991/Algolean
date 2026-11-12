@@ -133,9 +133,7 @@ end Algolean.Algorithms.NPToSAT.Computation
 
 namespace Algolean.Algorithms.NPToSAT.Computation.Naming
 
-open Cslib.Turing Computability Problems
-
-variable {Γ : Type} [Inhabited Γ] [Fintype Γ] [DecidableEq Γ]
+open Problems
 
 /-- These are the three kinds of variables used to describe a bounded computation. -/
 inductive Kind where
@@ -145,7 +143,6 @@ inductive Kind where
   | tape
   /-- This describes the head position and state at one time. -/
   | head
-deriving DecidableEq
 
 /-- This gives the binary name obtained from the three words, ignoring time for certificates. -/
 @[expose] def bits (kind : Kind) (time position value : List Bool) : List Bool :=
@@ -155,15 +152,5 @@ deriving DecidableEq
     BooleanTapeEncoding.pair time (BooleanTapeEncoding.pair position value)
   | .head => true :: true ::
     BooleanTapeEncoding.pair time (BooleanTapeEncoding.pair position value)
-
-omit [Inhabited Γ] [Fintype Γ] [DecidableEq Γ] in
-/-- The head name formed from these fields is the existing bounded-computation variable name. -/
-theorem bits_head_eq_name [Encodable Γ] (problem : BoundedVerification Γ)
-    (time : Fin (problem.time + 1))
-    (control : Fin (NPToSAT.Computation.width problem) ×
-      Option (Fin (problem.verifier.states + 1))) :
-    bits .head (encodingNatBool.encode time.val) (encodingNatBool.encode control.1.val)
-      (encodingNatBool.encode (Encodable.encode control.2)) =
-        Variable.name (.head time control) := rfl
 
 end Algolean.Algorithms.NPToSAT.Computation.Naming

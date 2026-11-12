@@ -123,7 +123,7 @@ end TMQuery
 variable [Nontrivial Symbol]
 
 /--
-For a language in `P`, this theorem supplies a polynomial-time verifier language over the
+For a language in `P`, this theorem gives a polynomial-time verifier language over the
 extended alphabet. Its Turing machine program keeps the word before the first separator and
 runs the original decider on that word. The verifier is defined on all extended-alphabet words,
 including malformed pair encodings.

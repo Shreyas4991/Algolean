@@ -23,7 +23,7 @@ program is constructed. The tape initially contains only the input word.
 -/
 
 
-attribute [local instance 100] Fintype.toEncodable
+attribute [local instance 100] Fintype.toEncodable Encodable.decidableEqOfEncodable
 
 
 open Cslib.Turing.SingleTapeTM Cslib.Turing.SingleTapeTM.BoundedVerification
@@ -50,7 +50,6 @@ private noncomputable def bounds (states : Nat)
   let width := X + certificate + 2 * time + 1
   [time + 1, width, C (states + 2), width, C (states + 2)]
 
-open Classical in
 /-- This is the encoded certificate, head, and tape choice prefix for the fixed verifier. -/
 @[expose] noncomputable def choiceWord
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -66,13 +65,11 @@ private theorem choiceWord_length_le
     (symbols : CodeSymbol → List Γ) :
     (choiceWord verifier certificate time input symbols).length ≤
       ((encoding.encode (formula verifier certificate time yes input)).flatMap symbols).length := by
-  classical
   simp only [encoding_encode_eq_formulaPrefix, List.flatMap_append]
   simp only [choiceWord, Choices.word, formula, indexedFormula, CNF.rename, formulaPrefix,
     List.map_append, List.flatMap_append, List.length_append]
   lia
 
-open Classical in
 /-- This polynomial bounds preparation and all three choice writers together. -/
 noncomputable def timeBound
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -80,7 +77,6 @@ noncomputable def timeBound
   Preparation.timeBound tick separator certificate (bounds verifier.states certificate time) +
     (Choices.timeBound (Γ := Γ) width).comp (sizeBound verifier certificate time)
 
-open Classical in
 /-- This program prepares the input and writes the choices for one fixed verifier. -/
 noncomputable def program (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (verifier : SingleTapeTM.Description (TapeSymbol Γ))
@@ -91,7 +87,6 @@ noncomputable def program (tm : SingleTapeTM Γ) [DecidableEq tm.State]
     (bounds verifier.states certificate time)
   Choices.writeChoices tm zero one tick symbols different equal extra
 
-open Classical in
 /--
 The program preserves the input and writes exactly the choice prefix. It finishes on the first
 unary time cell, after removing the certificate count, within the stated polynomial bound.
@@ -117,7 +112,6 @@ unary time cell, after removing the certificate count, within the stated polynom
         final.headPos = origin + input.length + 1 + problem.certificateLength + 1 ∧
         cost.steps ≤ elapsed + (timeBound verifier certificate time tick separator width).eval
           input.length ⦄ := by
-  classical
   let problem : BoundedVerification Γ :=
     ⟨verifier, input, certificate.eval input.length, time.eval input.length⟩
   let clock := elapsed +

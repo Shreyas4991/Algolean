@@ -85,13 +85,6 @@ and the head is at the blank marking the second state. The original input and ou
     (label : Option tm.State) (origin : ℤ) (current : TMState tm) : Prop :=
   current.config = ⟨label, pairTape tick choice input output counter⟩ ∧ current.headPos = origin
 
-/-- Clearing the temporary counter gives the usual selected-choice configuration. -/
-@[simp, grind =] theorem AtPairCounter_nil (tick : Γ) (choice : ActiveChoices)
-    (input output : List Γ) (label : Option tm.State) (origin : ℤ) (current : TMState tm) :
-    AtPairCounter tick choice input output [] label origin current ↔
-      AtPair tick choice input output label origin current := Iff.rfl
-
-
 omit [Inhabited Γ] [Fintype Γ] in
 /-- The source words contain all ten unary parts, the input, and ten separating blanks. -/
 @[simp, grind =] theorem ActiveChoices.source_span (tick : Γ) (choice : ActiveChoices)

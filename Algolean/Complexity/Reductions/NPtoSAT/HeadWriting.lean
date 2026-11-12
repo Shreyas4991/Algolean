@@ -58,7 +58,7 @@ private theorem word_eq (code : CodeSymbol → List Γ) (initialCode time : Nat)
         ending code initialCode := by
   simp [word, front, ending, List.append_assoc]
 
-private noncomputable def writeAtMark (zero one tick : Γ) (code : CodeSymbol → List Γ)
+private def writeAtMark (zero one tick : Γ) (code : CodeSymbol → List Γ)
     (initialCode : Nat) : Prog (TMQuery tm) Unit := do [TMQuery tm]
   appendAcross tm (front code) 6
   moveₜ .Right
@@ -67,7 +67,7 @@ private noncomputable def writeAtMark (zero one tick : Γ) (code : CodeSymbol �
   appendAcross tm (ending code initialCode) 6
 
 /-- This writes the initial head clause using the transition bound already on the tape. -/
-noncomputable def writeHead (tm : SingleTapeTM Γ)
+def writeHead (tm : SingleTapeTM Γ)
     (zero one tick : Γ) (code : CodeSymbol → List Γ) (initialCode : Nat) :
     Prog (TMQuery tm) Unit := do [TMQuery tm]
   markFirst tick (writeAtMark zero one tick code initialCode)

@@ -22,7 +22,7 @@ open BoundedVerification
 
 public section
 
-attribute [local instance 100] Fintype.toEncodable
+attribute [local instance 100] Fintype.toEncodable Encodable.decidableEqOfEncodable
 
 namespace Algolean.Algorithms.NPToSAT.Computation
 
@@ -32,7 +32,7 @@ variable {Γ : Type}
 
 open Formula
 
-private noncomputable def alphabetCodeBound [Fintype Γ] [Encodable Γ] : Nat :=
+private def alphabetCodeBound [Fintype Γ] [Encodable Γ] : Nat :=
   max ((Finset.univ : Finset Γ).sup fun symbol => (Encodable.encode symbol).size)
     ((Finset.univ : Finset (Option (TapeSymbol Γ))).sup
       fun symbol => (Encodable.encode symbol).size)
@@ -41,7 +41,6 @@ private theorem variableName_length_le [Fintype Γ] [Encodable Γ] {problem : Bo
     (entry : Variable problem) :
     (Variable.name entry).length ≤ 2 * (problem.certificateLength + problem.time +
       width problem + problem.verifier.states + alphabetCodeBound (Γ := Γ) + 2) := by
-  classical
   have hsize (n : Nat) : n.size ≤ n := Nat.size_le.mpr Nat.lt_two_pow_self
   have hsymbol (symbol : Γ) : (Encodable.encode symbol).size ≤ alphabetCodeBound (Γ := Γ) :=
     (Finset.le_sup (f := fun value : Γ => (Encodable.encode value).size)
@@ -180,7 +179,6 @@ theorem fixedVerifier_length_le [Nontrivial Γ]
         BoundedVerification Γ)
       yes)).length ≤
         (fixedVerifierLengthBound (Γ := Γ) verifier.states certificate time).eval input.length := by
-  classical
   have h := indexedFormula_encoded_length
     (⟨verifier, input, certificate.eval input.length, time.eval input.length⟩ :
       BoundedVerification Γ) yes
