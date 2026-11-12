@@ -6,31 +6,35 @@ Authors: Shreyas Srinivas
 
 module
 
-public import Algolean.ModelM
+public import Algolean.QueryModel
 public import Mathlib.Data.Finset.Card
 
 /-!
-# Word-RAM queries
+# Strict Word-RAM queries
 
-`WordRAM w` provides memory access, arithmetic, bitwise operations, and comparisons on
-`w`-bit words. `WordRAM.natCost` interprets these queries in mutable memory and
-charges one per query. Algorithms use the usual `Prog (WordRAM w)` combinators.
-`WordRAM.timeAndSpaceCost` also records the set of addresses accessed. Its cost algebra adds time
-and unions address sets, so repeated accesses increase time without counting a cell more than once.
+`WordRAM w k` describes a machine with `k` registers and `2 ^ w` memory cells.
+Each register and memory cell holds a `w`-bit word. `RAMState` holds the memory,
+register file, and comparison flags.
+
+Inputs are supplied through the initial machine state. Instructions access words through
+register identifiers, and comparisons write machine-local flags. Structured branches and
+loops inspect flags inside the model. Every query returns `Unit`, so machine data
+cannot enter a Lean continuation.
 
 Words and addresses have the same fixed width. Arithmetic wraps modulo `2 ^ w`; comparisons
 are unsigned; shifts are logical and return zero when the shift amount is at least `w`.
-All `2 ^ w` addresses are available. The caller supplies initial memory, with `Memory.zero`
-as a convenient starting point. Allocation and input encoding are not part of this query type.
+All `2 ^ w` addresses are available. `RAMState.zero` initializes memory, registers, and flags.
+Allocation and input encoding are not part of this query type.
 The definitions also support the degenerate width zero; ordinary word-RAM applications use `w > 0`.
 
-Costs count primitive queries. Sequencing and branching are supplied by `Prog` combinators and carry
-no additional cost. Runtime word operations must be exposed as queries to contribute to this count;
-arbitrary Lean computation in continuations is not charged.
+Uniform algorithms use a fixed `Prog (WordRAM w k) Unit` across inputs at a given word width
+and register count, with outputs observed in the final machine state. Unit-valued queries
+prevent runtime data from escaping the model; they do not prevent Lean code from constructing
+different programs for different inputs or input lengths.
 
 `RAMCost.space` counts distinct accessed cells in words. `RAMCost.auxiliarySpace` excludes an input
 region. `RAMCost.totalSpace` includes that region even if some input cells are unread.
-This is an accessed-memory footprint, not peak live allocation or storage in Lean continuations.
+Registers and flags do not contribute to this accessed-memory footprint.
 
 ## References
 
@@ -48,6 +52,9 @@ namespace WordRAM
 
 /-- A fixed-width word, used for both data and addresses. -/
 abbrev Word (w : Nat) := BitVec w
+
+/-- A register identifier, not a word value. There are exactly `k` available registers. -/
+abbrev Register (k : Nat) := Fin k
 
 /-- The contents of every address in the word-sized address space. -/
 abbrev Memory (w : Nat) := Word w → Word w
@@ -67,6 +74,27 @@ inductive CmpOp where
   | eq | ult
   deriving DecidableEq, Repr
 
+/-- Physical memory, word registers, and machine-local comparison flags. -/
+@[ext, grind]
+structure RAMState (w k : Nat) where
+  /-- The word stored at each memory address. -/
+  Memory : WordRAM.Memory w
+  /-- The words held in the fixed register file. -/
+  Registers : Register k → Word w
+  /-- One flag per comparison operation, separate from word registers. -/
+  Flags : CmpOp → Bool := fun _ => false
+
+/-- Zero-initialized memory and registers, with cleared comparison flags. -/
+def RAMState.zero : RAMState w k := ⟨Memory.zero, fun _ => 0, fun _ => false⟩
+
+/-- Update a register with a value computed from the incoming state. -/
+def RAMState.writeRegister (s : RAMState w k) (r : Register k) (value : Word w) : RAMState w k :=
+  { s with Registers := Function.update s.Registers r value }
+
+/-- Update one flag, retaining memory, registers, and the other flags. -/
+def RAMState.writeFlag (s : RAMState w k) (op : CmpOp) (value : Bool) : RAMState w k :=
+  { s with Flags := Function.update s.Flags op value }
+
 /-- Evaluate a binary operation. Shift amounts use the full unsigned value of the second word. -/
 def BinOp.eval : BinOp → Word w → Word w → Word w
   | .add, x, y => x + y
@@ -84,43 +112,32 @@ def CmpOp.eval : CmpOp → Word w → Word w → Bool
 
 end WordRAM
 
-/-- Primitive word-RAM queries, indexed by the type of their result. -/
-inductive WordRAM (w : Nat) : Type → Type where
-  | load (addr : WordRAM.Word w) : WordRAM w (WordRAM.Word w)
-  | store (addr value : WordRAM.Word w) : WordRAM w Unit
-  | binop (op : WordRAM.BinOp) (x y : WordRAM.Word w) : WordRAM w (WordRAM.Word w)
-  | bnot (x : WordRAM.Word w) : WordRAM w (WordRAM.Word w)
-  | cmp (op : WordRAM.CmpOp) (x y : WordRAM.Word w) : WordRAM w Bool
+/-- Register instructions and structured control. Every query returns `Unit`, keeping
+computed words and comparison results inside the machine state. -/
+inductive WordRAM (w k : Nat) : Type → Type where
+  /-- Leave the machine state unchanged, costing one time unit. -/
+  | nop : WordRAM w k Unit
+  | set (dst : WordRAM.Register k) (value : WordRAM.Word w) : WordRAM w k Unit
+  | copy (dst src : WordRAM.Register k) : WordRAM w k Unit
+  | load (dst addr : WordRAM.Register k) : WordRAM w k Unit
+  | store (addr src : WordRAM.Register k) : WordRAM w k Unit
+  | binop (op : WordRAM.BinOp) (dst x y : WordRAM.Register k) : WordRAM w k Unit
+  | bnot (dst src : WordRAM.Register k) : WordRAM w k Unit
+  | cmp (op : WordRAM.CmpOp) (x y : WordRAM.Register k) : WordRAM w k Unit
+  | clearFlag (op : WordRAM.CmpOp) : WordRAM w k Unit
+  | branchCode (op : WordRAM.CmpOp) (yes no : List (WordRAM w k Unit)) : WordRAM w k Unit
+  | whileCode (op : WordRAM.CmpOp) (body : List (WordRAM w k Unit)) : WordRAM w k Unit
 
 namespace WordRAM
 
-/-- Stateful word-RAM semantics with unit cost for every primitive query. -/
-@[simps]
-def natCost : ModelM (WordRAM w) (StateM (Memory w)) Nat where
-  evalQuery
-    | .load addr => do
-      let mem ← get
-      pure (mem addr)
-    | .store addr value => modify (fun mem => Function.update mem addr value)
-    | .binop op x y => pure (op.eval x y)
-    | .bnot x => pure (~~~x)
-    | .cmp op x y => pure (op.eval x y)
-  cost _ := 1
-
-/-- Concrete-state semantics of each word-RAM query. -/
-@[simp] theorem natCost_evalQuery_state (q : WordRAM w α) (mem : Memory w) :
-    natCost.evalQuery q mem = match q with
-      | .load addr => (mem addr, mem)
-      | .store addr value => ((), Function.update mem addr value)
-      | .binop op x y => (op.eval x y, mem)
-      | .bnot x => (~~~x, mem)
-      | .cmp op x y => (op.eval x y, mem) := by
+/-- Machine data cannot pass to a continuation through an instruction's result. -/
+theorem result_type (q : WordRAM w k α) : α = Unit := by
   cases q <;> rfl
 
 /-- Time and the set of memory addresses accessed by an execution. -/
 @[ext]
 structure RAMCost (w : Nat) where
-  /-- Number of primitive queries executed. -/
+  /-- Number of primitive word and flag operations; branch and loop selection are free. -/
   time : Nat
   /-- Distinct addresses loaded from or stored to. -/
   addresses : Finset (Word w)
@@ -160,22 +177,6 @@ def totalSpace (c : RAMCost w) (inputRegion : Finset (Word w)) : Nat :=
   (c.addresses ∪ inputRegion).card
 
 end RAMCost
-
-/-- The unit-time model augmented with the set of addresses accessed by each query. -/
-@[simps]
-def timeAndSpaceCost : ModelM (WordRAM w) (StateM (Memory w)) (RAMCost w) where
-  evalQuery := natCost.evalQuery
-  cost
-    | .load addr => ⟨1, {addr}⟩
-    | .store addr _ => ⟨1, {addr}⟩
-    | .binop _ _ _ => ⟨1, ∅⟩
-    | .bnot _ => ⟨1, ∅⟩
-    | .cmp _ _ _ => ⟨1, ∅⟩
-
-/-- Tracking the memory footprint does not change a program's evaluation or final memory. -/
-@[simp]
-theorem evalM_timeAndSpaceCost (P : Prog (WordRAM w) α) :
-    P.evalM timeAndSpaceCost = P.evalM natCost := rfl
 
 end WordRAM
 

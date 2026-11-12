@@ -72,7 +72,6 @@ public import Algolean.Algorithms.SingleTapeTuringMachines.SAT.Verifier
 public import Algolean.Algorithms.Strassen
 public import Algolean.Algorithms.VecBubbleSort
 public import Algolean.Algorithms.VecSearch
-public import Algolean.Algorithms.WordRAMLinearSearch
 public import Algolean.Complexity.Basic
 public import Algolean.Complexity.Classes.NP
 public import Algolean.Complexity.Classes.NP.Verification
