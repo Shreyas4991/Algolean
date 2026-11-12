@@ -177,6 +177,62 @@ def timeAndSpaceCost : ModelM (WordRAM w) (StateM (Memory w)) (RAMCost w) where
 theorem evalM_timeAndSpaceCost (P : Prog (WordRAM w) α) :
     P.evalM timeAndSpaceCost = P.evalM natCost := rfl
 
+/-! ### Hoare specifications for `vcgen`
+
+Assertions are predicates on the accumulated `RAMCost` and memory. Each query has a `@[spec]` lemma
+stating its result, its effect on memory, and its cost, so `vcgen` steps through word-RAM programs
+automatically. Correctness-only specifications ignore the cost argument with `_`. -/
+
+section Specs
+
+open Cslib Cslib.FreeM Lean.Order Std.WP
+
+/-- Reason about word-RAM programs through `timeAndSpaceCost`, with assertions that see the
+accumulated time and accessed addresses as well as memory. -/
+instance : HasHandler (WordRAM w) (RAMCost w → Memory w → Prop) EStack⟨⟩ :=
+  timeAndSpaceCost.hasCostHandler
+
+/-- `load` returns the contents of the cell, leaves memory unchanged, and costs one query at
+address `a`. -/
+@[spec high]
+theorem cost_load_spec (a : Word w) {Q : Word w → RAMCost w → Memory w → Prop} :
+    Triple (FreeM.lift (WordRAM.load a) : Prog (WordRAM w) (Word w))
+      (fun c mem => Q (mem a) (c + ⟨1, {a}⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.load a)
+
+/-- `store` overwrites one cell and costs one query at address `a`. -/
+@[spec high]
+theorem cost_store_spec (a v : Word w) {Q : Unit → RAMCost w → Memory w → Prop} :
+    Triple (FreeM.lift (WordRAM.store a v) : Prog (WordRAM w) Unit)
+      (fun c mem => Q () (c + ⟨1, {a}⟩) (Function.update mem a v)) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.store a v)
+
+/-- `binop` returns the arithmetic result, leaves memory unchanged, and costs one query with no
+memory access. -/
+@[spec high]
+theorem cost_binop_spec (op : BinOp) (x y : Word w) {Q : Word w → RAMCost w → Memory w → Prop} :
+    Triple (FreeM.lift (WordRAM.binop op x y) : Prog (WordRAM w) (Word w))
+      (fun c mem => Q (op.eval x y) (c + ⟨1, ∅⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.binop op x y)
+
+/-- `bnot` returns the bitwise complement, leaves memory unchanged, and costs one query with no
+memory access. -/
+@[spec high]
+theorem cost_bnot_spec (x : Word w) {Q : Word w → RAMCost w → Memory w → Prop} :
+    Triple (FreeM.lift (WordRAM.bnot x) : Prog (WordRAM w) (Word w))
+      (fun c mem => Q (~~~x) (c + ⟨1, ∅⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.bnot x)
+
+/-- `cmp` returns the comparison result, leaves memory unchanged, and costs one query with no
+memory access. -/
+@[spec high]
+theorem cost_cmp_spec (op : CmpOp) (x y : Word w) {Q : Bool → RAMCost w → Memory w → Prop} :
+    Triple (FreeM.lift (WordRAM.cmp op x y) : Prog (WordRAM w) Bool)
+      (fun c mem => Q (op.eval x y) (c + ⟨1, ∅⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.cmp op x y)
+
+end Specs
+
 end WordRAM
 
 end Algolean.Algorithms
