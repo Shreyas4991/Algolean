@@ -39,7 +39,7 @@ def AtResult (output : Option Nat) (s : RAMState w 5) : Prop :=
   | some i => s.Flags .eq = true ∧ s.Registers index = BitVec.ofNat w (i + 1)
 
 /-- Setup initializes its working state and charges the header read to any initial cost. -/
-theorem setup_spec (input : Search.Input (Word w)) (s : RAMState w 5)
+@[spec] theorem setup_spec (input : Search.Input (Word w)) (s : RAMState w 5)
     (h : RepresentsSizedSearchInput input key s) (initial : RAMCost w) (fuel : Nat) :
     ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 6⟩ ⦄ (setup w)
       ⦃ fun _ cost final => cost = initial + ⟨6, {0}⟩ ∧ Cursor input 0 final.machine ∧
@@ -312,7 +312,7 @@ private theorem invariant_exit (input : Search.Input (Word w)) (start : Nat)
   · simp_all
 
 /-- Verify the whole loop through the shared fuel-aware WordRAM loop rule. -/
-theorem loop_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
+@[spec] theorem loop_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
     (initial : RAMCost w) (reserve : Nat) :
     Triple (whileLoop .ult (body w)) (LoopInvariant input start memory initial reserve)
       (fun _ cost final => LoopPost input start memory initial cost final ∧
@@ -333,7 +333,7 @@ def FinishedPost (input : Search.Input (Word w)) (start : Nat) (memory : Memory 
     cost.addresses ⊆ initial.addresses ∪ sizedInputRegion input.data
 
 /-- Finish a verified loop, preserving its answer and accounting for the final operation. -/
-theorem finish_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
+@[spec] theorem finish_spec (input : Search.Input (Word w)) (start : Nat) (memory : Memory w)
     (initial : RAMCost w) (reserve : Nat) (hfits : input.data.size < 2 ^ w) :
     ⦃ fun cost current => LoopPost input start memory initial cost current ∧
         reserve + 2 ≤ current.fuel ⦄ (finish w)
@@ -365,7 +365,7 @@ private theorem initialized (input : Search.Input (Word w)) (memory : Memory w) 
     simpa [show 0 < input.data.size by lia] using hult
 
 /-- Setup establishes the loop invariant, including the empty-array case. -/
-theorem setup_loop_spec (input : Search.Input (Word w)) (s : RAMState w 5)
+@[spec] theorem setup_loop_spec (input : Search.Input (Word w)) (s : RAMState w 5)
     (h : RepresentsSizedSearchInput input key s) (spare : Nat) :
     ⦃ SearchPre input s spare ⦄ (setup w)
       ⦃ fun _ => LoopInvariant input 0 s.Memory ⟨6, {0}⟩ (2 + spare); fun _ => False ⦄ := by

@@ -40,7 +40,7 @@ private theorem finished_bound (input : Search.Input (Word w)) (memory : Memory 
       sizedInputRegion_card input.data hfits]
 
 /-- Exact and worst-case time, zero auxiliary memory, and exact total input space. -/
-theorem linearSearch_complexity (input : Search.Input (Word w)) (s : RAMState w 5)
+@[spec] theorem linearSearch_complexity (input : Search.Input (Word w)) (s : RAMState w 5)
     (h : RepresentsSizedSearchInput input key s) (spare : Nat) :
     ⦃ SearchPre input s spare ⦄ (linearSearch w)
       ⦃ fun _ cost final => ComplexityBound input cost final.machine; fun _ => False ⦄ := by

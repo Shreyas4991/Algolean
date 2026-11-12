@@ -26,7 +26,7 @@ open scoped WordRAM.Spec
 set_option experimental.vcgen true
 
 /-- First-match correctness and preservation of all input and background memory. -/
-theorem linearSearch_correct (input : Search.Input (Word w)) (s : RAMState w 5)
+@[spec] theorem linearSearch_correct (input : Search.Input (Word w)) (s : RAMState w 5)
     (h : RepresentsSizedSearchInput input key s) (spare : Nat) :
     ⦃ SearchPre input s spare ⦄ (linearSearch w)
       ⦃ fun _ _ final => SolvesInput input s.Memory final.machine; fun _ => False ⦄ := by
