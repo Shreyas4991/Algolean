@@ -44,3 +44,4 @@ public import AlgoleanTests.VerifierNormalization
 public import AlgoleanTests.WordRAM
 public import AlgoleanTests.WordRAMSolves
 public import AlgoleanTests.WordRAMSyntax
+public import AlgoleanTests.WordRAMWP
