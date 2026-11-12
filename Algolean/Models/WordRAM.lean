@@ -179,52 +179,57 @@ theorem evalM_timeAndSpaceCost (P : Prog (WordRAM w) α) :
 
 /-! ### Hoare specifications for `vcgen`
 
-Assertions are predicates on memory. Each query has a `@[spec]` lemma stating its result and its
-effect on memory, so `vcgen` steps through word-RAM programs automatically. -/
+Assertions are predicates on the accumulated `RAMCost` and memory. Each query has a `@[spec]` lemma
+stating its result, its effect on memory, and its cost, so `vcgen` steps through word-RAM programs
+automatically. Correctness-only specifications ignore the cost argument with `_`. -/
 
 section Specs
 
 open Cslib Cslib.FreeM Lean.Order Std.WP
 
-/-- Reason about word-RAM programs through the model's semantics,
-with memory predicates as assertions. -/
-instance : HasHandler (WordRAM w) (Memory w → Prop) EStack⟨⟩ :=
-  timeAndSpaceCost.hasHandler
+/-- Reason about word-RAM programs through `timeAndSpaceCost`, with assertions that see the
+accumulated time and accessed addresses as well as memory. -/
+instance : HasHandler (WordRAM w) (RAMCost w → Memory w → Prop) EStack⟨⟩ :=
+  timeAndSpaceCost.hasCostHandler
 
-/-- `load` returns the contents of the cell and leaves memory unchanged. -/
+/-- `load` returns the contents of the cell, leaves memory unchanged, and costs one query at
+address `a`. -/
 @[spec high]
-theorem load_spec (a : Word w) {Q : Word w → Memory w → Prop} :
+theorem cost_load_spec (a : Word w) {Q : Word w → RAMCost w → Memory w → Prop} :
     Triple (FreeM.lift (WordRAM.load a) : Prog (WordRAM w) (Word w))
-      (fun mem => Q (mem a) mem) Q () :=
-  ModelM.query_spec timeAndSpaceCost (WordRAM.load a)
+      (fun c mem => Q (mem a) (c + ⟨1, {a}⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.load a)
 
-/-- `store` returns nothing and overwrites one cell. -/
+/-- `store` overwrites one cell and costs one query at address `a`. -/
 @[spec high]
-theorem store_spec (a v : Word w) {Q : Unit → Memory w → Prop} :
+theorem cost_store_spec (a v : Word w) {Q : Unit → RAMCost w → Memory w → Prop} :
     Triple (FreeM.lift (WordRAM.store a v) : Prog (WordRAM w) Unit)
-      (fun mem => Q () (Function.update mem a v)) Q () :=
-  ModelM.query_spec timeAndSpaceCost (WordRAM.store a v)
+      (fun c mem => Q () (c + ⟨1, {a}⟩) (Function.update mem a v)) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.store a v)
 
-/-- `binop` returns the result and leaves memory unchanged. -/
+/-- `binop` returns the arithmetic result, leaves memory unchanged, and costs one query with no
+memory access. -/
 @[spec high]
-theorem binop_spec (op : BinOp) (x y : Word w) {Q : Word w → Memory w → Prop} :
+theorem cost_binop_spec (op : BinOp) (x y : Word w) {Q : Word w → RAMCost w → Memory w → Prop} :
     Triple (FreeM.lift (WordRAM.binop op x y) : Prog (WordRAM w) (Word w))
-      (fun mem => Q (op.eval x y) mem) Q () :=
-  ModelM.query_spec timeAndSpaceCost (WordRAM.binop op x y)
+      (fun c mem => Q (op.eval x y) (c + ⟨1, ∅⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.binop op x y)
 
-/-- `bnot` returns the bitwise complement and leaves memory unchanged. -/
+/-- `bnot` returns the bitwise complement, leaves memory unchanged, and costs one query with no
+memory access. -/
 @[spec high]
-theorem bnot_spec (x : Word w) {Q : Word w → Memory w → Prop} :
+theorem cost_bnot_spec (x : Word w) {Q : Word w → RAMCost w → Memory w → Prop} :
     Triple (FreeM.lift (WordRAM.bnot x) : Prog (WordRAM w) (Word w))
-      (fun mem => Q (~~~x) mem) Q () :=
-  ModelM.query_spec timeAndSpaceCost (WordRAM.bnot x)
+      (fun c mem => Q (~~~x) (c + ⟨1, ∅⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.bnot x)
 
-/-- `cmp` returns the comparison result and leaves memory unchanged. -/
+/-- `cmp` returns the comparison result, leaves memory unchanged, and costs one query with no
+memory access. -/
 @[spec high]
-theorem cmp_spec (op : CmpOp) (x y : Word w) {Q : Bool → Memory w → Prop} :
+theorem cost_cmp_spec (op : CmpOp) (x y : Word w) {Q : Bool → RAMCost w → Memory w → Prop} :
     Triple (FreeM.lift (WordRAM.cmp op x y) : Prog (WordRAM w) Bool)
-      (fun mem => Q (op.eval x y) mem) Q () :=
-  ModelM.query_spec timeAndSpaceCost (WordRAM.cmp op x y)
+      (fun c mem => Q (op.eval x y) (c + ⟨1, ∅⟩) mem) Q () :=
+  ModelM.cost_query_spec timeAndSpaceCost (WordRAM.cmp op x y)
 
 end Specs
 

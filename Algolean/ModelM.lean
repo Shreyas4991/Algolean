@@ -7,6 +7,7 @@ Authors: Tanner Duve
 module
 
 public import Algolean.AddWriter.Transformer
+public import Algolean.AddWriter.WP
 public import Algolean.QueryModel
 
 /-!
@@ -308,6 +309,30 @@ theorem wp_le_wp_evalM [Monad m] [WPMonad m Pred EPred]
     (wpH M.handler P).apply post epost ⊑ wp (P.evalM M) post epost :=
   wpH_ofInterp_le_wp_liftM (m := m) (fun _ q => M.evalQuery q) P post epost
 
+/-- A handler exposing both query results and accumulated costs to postconditions.
+Assertions take the cost accumulated so far as their first argument. -/
+def costHandler [Functor m] [Add Cost] [∀ α, WP (m α) α Pred EPred] (M : ModelM Q m Cost) :
+    LHandler Q (Cost → Pred) EPred :=
+  LHandler.ofInterp (m := AddWriterT Cost m) (fun _ q => M.runQuery q)
+
+/-- For a `StateM` model, a query runs `evalQuery` and adds the query's cost. -/
+@[simp] theorem costHandler_apply_state {σ α : Type u} [Add Cost]
+    (M : ModelM Q (StateM σ) Cost) (q : Q α)
+    (post : α → Cost → σ → Prop) (epost : EStack⟨⟩) (initial : Cost) (s : σ) :
+    (M.costHandler q).apply post epost initial s =
+      post ((M.evalQuery q).run s).1 (initial + M.cost q) ((M.evalQuery q).run s).2 := rfl
+
+/-- Use `M.costHandler` as the logical handler for `Prog Q`, for cost-aware `vcgen` reasoning. -/
+@[reducible] def hasCostHandler [Functor m] [Add Cost] [∀ α, WP (m α) α Pred EPred]
+    (M : ModelM Q m Cost) : HasHandler Q (Cost → Pred) EPred where
+  handler := M.costHandler
+
+/-- The cost-aware handler WP entails the WP of `Prog.runM M`, which tracks result and cost. -/
+theorem wp_le_wp_runM [Monad m] [AddMonoid Cost] [WPMonad m Pred EPred]
+    (M : ModelM Q m Cost) (P : Prog Q α) (post : α → Cost → Pred) (epost : EPred) :
+    (wpH M.costHandler P).apply post epost ⊑ wp (P.runM M) post epost :=
+  wpH_ofInterp_le_wp_liftM (m := AddWriterT Cost m) (fun _ q => M.runQuery q) P post epost
+
 end ModelM
 
 /-- The `ModelM` query rule stated directly through the semantic monad's weakest precondition. -/
@@ -318,7 +343,9 @@ theorem ModelM.query_spec [Monad m] [WPMonad m Pred EPred]
   let _inst := M.hasHandler
   exact Cslib.FreeM.Spec.lift_FreeM q
 
-
+/-- Adequacy for stateful models: a Hoare triple proved over `M.handler` (for example with `vcgen`)
+gives the postcondition of the result and final state of `P.evalM M`, run from any starting state
+that satisfies the precondition. -/
 theorem ModelM.evalM_of_triple {σ α : Type u} (M : ModelM Q (StateM σ) Cost) {P : Prog Q α}
     {pre : σ → Prop} {post : α → σ → Prop}
     (h : let _ : HasHandler Q (σ → Prop) EStack⟨⟩ := M.hasHandler
@@ -327,6 +354,29 @@ theorem ModelM.evalM_of_triple {σ α : Type u} (M : ModelM Q (StateM σ) Cost) 
     post (P.evalM M s₀).1 (P.evalM M s₀).2 := by
   let _ : HasHandler Q (σ → Prop) EStack⟨⟩ := M.hasHandler
   exact M.wp_le_wp_evalM P post () s₀ (h.le_wp s₀ hpre)
+
+/-- The cost-aware query rule: postconditions also see the query's cost added to the running
+total. Instantiate it per query to get `@[spec]` lemmas for `vcgen`. -/
+theorem ModelM.cost_query_spec [Monad m] [AddMonoid Cost] [WPMonad m Pred EPred]
+    (M : ModelM Q m Cost) (q : Q α) {Q' : α → Cost → Pred} {E : EPred} :
+    let _ : HasHandler Q (Cost → Pred) EPred := M.hasCostHandler
+    Triple (FreeM.lift q : Prog Q α) (wp (M.runQuery q) Q' E) Q' E := by
+  let _inst := M.hasCostHandler
+  exact Cslib.FreeM.Spec.lift_FreeM q
+
+/-- Cost-aware adequacy for stateful models: a Hoare triple proved over `M.costHandler` gives the
+postcondition of the result, the starting cost plus `P.costM M`, and the final state, run from any
+starting cost and state that satisfy the precondition. -/
+theorem ModelM.costM_of_triple {σ α : Type u} [AddMonoid Cost] (M : ModelM Q (StateM σ) Cost)
+    {P : Prog Q α} {pre : Cost → σ → Prop} {post : α → Cost → σ → Prop}
+    (h : let _ : HasHandler Q (Cost → σ → Prop) EStack⟨⟩ := M.hasCostHandler
+      Triple P pre post ())
+    (c₀ : Cost) (s₀ : σ) (hpre : pre c₀ s₀) :
+    post (P.evalM M s₀).1 (c₀ + (P.costM M s₀).1) (P.evalM M s₀).2 := by
+  let _ : HasHandler Q (Cost → σ → Prop) EStack⟨⟩ := M.hasCostHandler
+  have hrun := M.wp_le_wp_runM P post () c₀ s₀ (h.le_wp c₀ s₀ hpre)
+  rw [← Prog.runM_value]
+  exact hrun
 
 end WeakestPrecondition
 
