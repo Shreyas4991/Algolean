@@ -320,6 +320,7 @@ abbrev ExecutionM (w k : Nat) := FuelExecMonad (RAMState w k)
 
 /-- Execute one instruction; structured control schedules its body before the continuation.
 All source registers and memory addresses are read from the incoming state. -/
+@[simp, grind]
 def step (q : WordRAM w k α) (next : α → Prog (WordRAM w k) β) (s : RAMState w k) :
     FuelExecMonad.Step (WordRAM w k) (RAMState w k) (RAMCost w) β :=
   match q with
@@ -361,58 +362,6 @@ abbrev timeAndSpaceCost : ModelStateM (WordRAM w k) (ExecutionM w k) (RAMCost w)
 abbrev execute (fuel : Nat) (p : Prog (WordRAM w k) α) (s : RAMState w k) :
     Option (AddWriter (RAMCost w) α × ExecutionState w k) :=
   FuelExecMonad.execute timeAndSpaceCost fuel p s
-
-/-- A no-op preserves state and costs one time unit and one unit of interpreter fuel. -/
-@[simp, grind =] theorem execute_nop_succ (fuel : Nat) (s : RAMState w k) :
-    execute (fuel + 1) (FreeM.lift (.nop : WordRAM w k Unit)) s =
-      some (⟨(), ⟨1, ∅⟩⟩, ⟨s, fuel⟩) := by simp [step]
-
-@[simp, grind =] theorem execute_set_succ (fuel : Nat) (s : RAMState w k)
-    (dst : Register k) (value : Word w) :
-    execute (fuel + 1) (FreeM.lift (.set dst value)) s =
-      some (⟨(), ⟨1, ∅⟩⟩, ⟨s.writeRegister dst value, fuel⟩) := by simp [step]
-
-@[simp, grind =] theorem execute_copy_succ (fuel : Nat) (s : RAMState w k)
-    (dst src : Register k) :
-    execute (fuel + 1) (FreeM.lift (.copy dst src)) s =
-      some (⟨(), ⟨1, ∅⟩⟩, ⟨s.writeRegister dst (s.Registers src), fuel⟩) := by simp [step]
-
-/-- Loading an address register into itself records its incoming value in the footprint. -/
-@[simp, grind =] theorem execute_load_succ (fuel : Nat) (s : RAMState w k)
-    (dst addr : Register k) :
-    execute (fuel + 1) (FreeM.lift (.load dst addr)) s =
-      some (⟨(), ⟨1, {s.Registers addr}⟩⟩,
-        ⟨s.writeRegister dst (s.Memory (s.Registers addr)), fuel⟩) := by simp [step]
-
-@[simp, grind =] theorem execute_store_succ (fuel : Nat) (s : RAMState w k)
-    (addr src : Register k) :
-    execute (fuel + 1) (FreeM.lift (.store addr src)) s =
-      some (⟨(), ⟨1, {s.Registers addr}⟩⟩,
-        ⟨{s with Memory := Function.update s.Memory (s.Registers addr) (s.Registers src)},
-          fuel⟩) := by
-  simp [step]
-
-@[simp, grind =] theorem execute_binop_succ (fuel : Nat) (s : RAMState w k)
-    (op : BinOp) (dst x y : Register k) :
-    execute (fuel + 1) (FreeM.lift (.binop op dst x y)) s =
-      some (⟨(), ⟨1, ∅⟩⟩,
-        ⟨s.writeRegister dst (op.eval (s.Registers x) (s.Registers y)), fuel⟩) := by
-  simp [step]
-
-@[simp, grind =] theorem execute_bnot_succ (fuel : Nat) (s : RAMState w k)
-    (dst src : Register k) :
-    execute (fuel + 1) (FreeM.lift (.bnot dst src)) s =
-      some (⟨(), ⟨1, ∅⟩⟩, ⟨s.writeRegister dst (~~~s.Registers src), fuel⟩) := by simp [step]
-
-@[simp, grind =] theorem execute_cmp_succ (fuel : Nat) (s : RAMState w k)
-    (op : CmpOp) (x y : Register k) :
-    execute (fuel + 1) (FreeM.lift (.cmp op x y)) s =
-      some (⟨(), ⟨1, ∅⟩⟩,
-        ⟨s.writeFlag op (op.eval (s.Registers x) (s.Registers y)), fuel⟩) := by simp [step]
-
-@[simp, grind =] theorem execute_clearFlag_succ (fuel : Nat) (s : RAMState w k) (op : CmpOp) :
-    execute (fuel + 1) (FreeM.lift (.clearFlag op)) s =
-      some (⟨(), ⟨1, ∅⟩⟩, ⟨s.writeFlag op false, fuel⟩) := by simp [step]
 
 /-- Branch selection consumes one unit of fuel and executes only the selected body. -/
 @[simp, grind =] theorem execute_branch_succ (fuel : Nat) (op : CmpOp)

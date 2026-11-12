@@ -39,10 +39,10 @@ theorem increment_computes : ComputesIn increment (· + 1) inRegister inRegister
   simp only [inRegister, r0] at hi
   let t := s.writeRegister r1 1
   let final := t.writeRegister r0 (input + 1)
-  have hs : Completes (FreeM.lift (.set r1 1)) s ⟨1, ∅⟩ t := ⟨1, execute_set_succ 0 s r1 1⟩
+  have hs : Completes (FreeM.lift (.set r1 1)) s ⟨1, ∅⟩ t := ⟨1, by simp [t]⟩
   have hb : Completes (FreeM.lift (.binop .add r0 r0 r1)) t ⟨1, ∅⟩ final := by
     refine ⟨1, ?_⟩
-    simpa [t, final, BinOp.eval, r0, r1, hi] using execute_binop_succ 0 t .add r0 r0 r1
+    simp [t, final, BinOp.eval, r0, r1, hi]
   refine ⟨input + 1, ⟨2, ∅⟩, final, ?_, ?_, rfl, ?_⟩
   · simpa [increment] using hs.seq hb
   · simp [inRegister, final]

@@ -139,19 +139,20 @@ example : (execute 2 (branch .eq (FreeM.lift (.set r0 42)) (whileLoop .eq (pure 
 example (s : RAMState w k) :
     Completes (do (nop : WordRAM w k Unit); (nop : WordRAM w k Unit)) s ⟨2, ∅⟩ s := by
   have h : Completes (FreeM.lift (.nop : WordRAM w k Unit)) s ⟨1, ∅⟩ s :=
-    ⟨1, execute_nop_succ 0 s⟩
+    ⟨1, by simp⟩
   simpa using h.seq h
 
 example : Completes stop (RAMState.zero.writeFlag .ult true) ⟨1, ∅⟩
     ((RAMState.zero : RAMState 8 4).writeFlag .ult false) := by
   apply Completes.while_stop (t := (RAMState.zero : RAMState 8 4).writeFlag .ult false)
-  · exact ⟨1, by simpa using execute_clearFlag_succ 0 (RAMState.zero.writeFlag .ult true) .ult⟩
+  · exact ⟨1, by simp⟩
   · simp
   · simp
 
 example (s : RAMState w k) :
-    Completes (FreeM.lift (.nop : WordRAM w k Unit)) s ⟨1, ∅⟩ s :=
-  completes_of_execute (execute_nop_succ 7 s)
+    Completes (FreeM.lift (.nop : WordRAM w k Unit)) s ⟨1, ∅⟩ s := by
+  apply completes_of_execute (fuel := 8) (result := ⟨(), ⟨1, ∅⟩⟩) (final := ⟨s, 7⟩)
+  simp
 
 example : (execute 1 (FreeM.lift (.nop : WordRAM 0 0 Unit)) RAMState.zero).map
     (fun r => (r.fst.tell, r.snd.fuel)) = some (⟨1, ∅⟩, 0) := rfl
