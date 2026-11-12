@@ -25,7 +25,7 @@ The failure postcondition must be false to establish completion within the suppl
 
 namespace Algolean.Algorithms.WordRAM.Spec
 
-open Cslib Cslib.FreeM Std.WP Lean.Order
+open Cslib Cslib.FreeM Std.WP
 
 /-- Reuse the joint state-and-cost handler, including the interpreter's fuel and failure. -/
 scoped instance costHandler :
@@ -33,14 +33,6 @@ scoped instance costHandler :
   timeAndSpaceCost.hasCostHandler
 
 open scoped Algolean.Algorithms.WordRAM.Spec
-
-/-- Sequencing uses the existing free-monad handler's bind law. -/
-@[simp] theorem wp_bind (p : Prog (WordRAM w k) α) (next : α → Prog (WordRAM w k) β)
-    (post : β → RAMCost w → ExecutionState w k → Prop) (epost : Unit → Prop) :
-    wp (p >>= next) post epost = wp p (fun a => wp (next a) post epost) epost := by
-  change (wpH HasHandler.handler (p >>= next)).apply post epost = _
-  rw [wpH_bind]
-  rfl
 
 /-- Query verification observes the exact joint execution or its failure postcondition. -/
 @[simp] theorem costHandler_apply (q : WordRAM w k α)
@@ -66,12 +58,9 @@ theorem execute {p : Prog (WordRAM w k) α}
   have hw := timeAndSpaceCost.wp_le_wp_runStateM p post (fun _ => False)
     initial ⟨s, fuel⟩ (h.le_wp initial ⟨s, fuel⟩ hp)
   rw [AddWriterT.wp_apply_state_option] at hw
-  cases hr : WordRAM.execute fuel p s with
-  | none => simp [WordRAM.execute, FuelExecMonad.execute] at hr; simp [hr] at hw
-  | some pair =>
-    refine ⟨pair.1, pair.2, rfl, ?_⟩
-    simp only [WordRAM.execute, FuelExecMonad.execute] at hr
-    simpa [hr] using hw
+  cases hr : (p.runStateM timeAndSpaceCost).run ⟨s, fuel⟩ with
+  | none => simp only [hr] at hw
+  | some pair => exact ⟨pair.1, pair.2, hr, by simpa only [hr] using hw⟩
 
 /-- A total verification proof yields the existing completion relation and its postcondition. -/
 theorem completes {p : Prog (WordRAM w k) Unit}
@@ -83,46 +72,26 @@ theorem completes {p : Prog (WordRAM w k) Unit}
   obtain ⟨result, final, hr, hpost⟩ := execute h hp
   exact ⟨result.tell, final, completes_of_execute hr, by simpa using hpost⟩
 
-/-- One instruction consumes fuel, adds its exact cost, and verifies the program scheduled by
-the existing small-step semantics. For a primitive instruction that program is `pure`, so `vcgen`
-gets its concrete register, flag, or memory update by simplification. -/
-theorem step_spec (q : WordRAM w k α)
-    (post : α → RAMCost w → ExecutionState w k → Prop) (epost : Unit → Prop) :
-    Triple (FreeM.lift q : Prog (WordRAM w k) α)
-      (fun initial s => 0 < s.fuel ∧
-        wp (step q pure s.machine).program post epost (initial + (step q pure s.machine).cost)
-          ⟨(step q pure s.machine).machine, s.fuel - 1⟩) post epost := by
-  apply Triple.intro
-  rintro initial ⟨ram, fuel⟩ ⟨hf, hp⟩
-  cases fuel with
-  | zero => contradiction
-  | succ fuel =>
-    have hp' : wp (step q pure ram).program post epost (initial + (step q pure ram).cost)
-        ⟨(step q pure ram).machine, fuel⟩ := by simpa using hp
-    have hw := timeAndSpaceCost.wp_le_wp_runStateM (step q pure ram).program post epost
-      (initial + (step q pure ram).cost) ⟨(step q pure ram).machine, fuel⟩ hp'
-    rw [AddWriterT.wp_apply_state_option] at hw
-    change (HasHandler.handler q).apply post epost initial ⟨ram, fuel + 1⟩
-    rw [costHandler_apply]
-    have hstep : WordRAM.execute (fuel + 1) (FreeM.lift q) ram = _ :=
-      FuelExecMonad.execute_lift_succ (I := interpreter w k) fuel q ram
-    rw [hstep]
-    cases hr : FuelExecMonad.execute (interpreter w k).toModel fuel
-        ((interpreter w k).step q pure ram).program ((interpreter w k).step q pure ram).machine
-    all_goals
-      simp only [FuelExecMonad.execute] at hr
-      simpa only [hr, Option.bind_eq_bind, Option.bind_none, Option.bind_some,
-        Option.pure_def, add_assoc] using hw
-
-/-- Primitive instructions finish their step without scheduling another program. Keeping their
-postcondition explicit lets `vcgen` continue directly into the following instruction. -/
+/-- Primitive instructions consume one fuel unit and add their exact cost. The existing step
+semantics supplies their register, flag, and memory updates by simplification. -/
 @[spec] theorem primitive_spec (q : WordRAM w k Unit)
     (primitive : ∀ s, (step q pure s).program = pure ())
     (post : Unit → RAMCost w → ExecutionState w k → Prop) (epost : Unit → Prop) :
     Triple (FreeM.lift q : Prog (WordRAM w k) Unit)
       (fun initial s => 0 < s.fuel ∧ post () (initial + (step q pure s.machine).cost)
         ⟨(step q pure s.machine).machine, s.fuel - 1⟩) post epost := by
-  simpa only [primitive, Cslib.FreeM.wp_pure] using step_spec q post epost
+  apply Triple.intro
+  rintro initial ⟨ram, fuel⟩ ⟨hf, hp⟩
+  cases fuel with
+  | zero => contradiction
+  | succ fuel =>
+    change (HasHandler.handler q).apply post epost initial ⟨ram, fuel + 1⟩
+    rw [costHandler_apply]
+    have hstep : WordRAM.execute (fuel + 1) (FreeM.lift q) ram = _ :=
+      FuelExecMonad.execute_lift_succ (I := interpreter w k) fuel q ram
+    rw [hstep]
+    simpa only [primitive, FuelExecMonad.execute_pure, Option.bind_eq_bind, Option.bind_some,
+      Option.pure_def, add_zero, Nat.add_one_sub_one] using hp
 
 /-- A branch consumes one unit of interpreter fuel and verifies only its selected body. -/
 @[spec] theorem branch_spec (op : CmpOp) (yes no : Prog (WordRAM w k) Unit)
@@ -144,20 +113,12 @@ postcondition explicit lets `vcgen` continue directly into the following instruc
     change (HasHandler.handler (WordRAM.branchCode op (Internal.instructions yes)
       (Internal.instructions no))).apply post epost initial ⟨ram, fuel + 1⟩
     rw [costHandler_apply]
-    rw [← branch, execute_branch_succ]
-    cases hflag : ram.Flags op with
-    | false =>
-      simp only [hflag, Bool.false_eq_true, ↓reduceIte] at hw ⊢
-      cases hr : WordRAM.execute fuel no ram
-      all_goals
-        simp only [WordRAM.execute, FuelExecMonad.execute] at hr
-        simpa only [hr] using hw
-    | true =>
-      simp only [hflag, ↓reduceIte] at hw ⊢
-      cases hr : WordRAM.execute fuel yes ram
-      all_goals
-        simp only [WordRAM.execute, FuelExecMonad.execute] at hr
-        simpa only [hr] using hw
+    rw [← branch, execute_branch_succ,
+      ← apply_ite (fun p => WordRAM.execute fuel p ram)]
+    cases hr : WordRAM.execute fuel (if ram.Flags op then yes else no) ram
+    all_goals
+      simp only [WordRAM.execute, FuelExecMonad.execute] at hr
+      simpa only [hr] using hw
 
 /-- A loop invariant records accumulated resources, machine state, and the remaining fuel. -/
 @[spec_invariant_type] def Invariant (w k : Nat) := RAMCost w → ExecutionState w k → Prop

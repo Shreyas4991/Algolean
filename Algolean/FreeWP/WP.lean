@@ -153,6 +153,14 @@ instance instWPMonadFreeM [HasHandler F Pred EPred] : WPMonad (FreeM F) Pred EPr
 @[simp] theorem wp_pure [HasHandler F Pred EPred] (a : α) (Q : α → Pred) (E : EPred) :
     wp (pure a : FreeM F α) Q E = Q a := rfl
 
+/-- Sequencing composes the weakest preconditions selected by the logical handler. -/
+@[simp] theorem wp_bind [HasHandler F Pred EPred]
+    (x : FreeM F α) (f : α → FreeM F β) (Q : β → Pred) (E : EPred) :
+    wp (x >>= f) Q E = wp x (fun a => wp (f a) Q E) E := by
+  change (wpH HasHandler.handler (x >>= f)).apply Q E = _
+  rw [wpH_bind]
+  rfl
+
 /-- The WP of a primitive query is the transformer selected by its logical handler. -/
 @[simp] theorem wp_lift [HasHandler F Pred EPred] (op : F α) (Q : α → Pred) (E : EPred) :
     wp (lift op : FreeM F α) Q E = (HasHandler.handler op).apply Q E := by

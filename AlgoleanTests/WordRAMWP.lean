@@ -20,7 +20,7 @@ budget. Initial costs and state-dependent memory footprints are retained by the 
 
 namespace AlgoleanTests.WordRAMWP
 
-open Algolean Algolean.Algorithms Algolean.Algorithms.WordRAM Cslib Cslib.FreeM Std.WP Lean.Order
+open Algolean Algolean.Algorithms Algolean.Algorithms.WordRAM Cslib Cslib.FreeM Std.WP
 open scoped WordRAM Prog WordRAM.Spec
 
 set_option experimental.vcgen true
@@ -62,6 +62,15 @@ example (s : RAMState 8 2) (initial : RAMCost 8) (fuel : Nat) :
   vcgen
   split
   all_goals simp_all [add_assoc]
+
+-- The unselected body would diverge under the same flag state.
+example (s : RAMState 8 2) (hflag : s.Flags .eq = true) (initial : RAMCost 8) (fuel : Nat) :
+    ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 2⟩ ⦄
+      (branch .eq (FreeM.lift .nop) (whileLoop .eq (pure ())))
+      ⦃ fun _ cost final => cost = initial + ⟨1, ∅⟩ ∧ final = ⟨s, fuel⟩;
+        fun _ => False ⦄ := by
+  vcgen
+  all_goals simp_all
 
 def stop : Prog (WordRAM 8 2) Unit := do [WordRAM 8 2]
   whileₚ .ult do
@@ -117,12 +126,26 @@ example (s : RAMState 8 2) (initial : RAMCost 8) (fuel : Nat) :
   vcgen [invertCell]
   all_goals simp_all [add_assoc]
 
+-- Cover immediate assignment, copying, and arithmetic with an aliased destination together.
+example (s : RAMState 8 2) (x : Word 8) (initial : RAMCost 8) (fuel : Nat) :
+    ⦃ fun cost current => cost = initial ∧ current = ⟨s, fuel + 3⟩ ⦄
+      (do [WordRAM 8 2]
+        r0 ←ᵣ imm[x]
+        r1 ←ᵣ r0
+        r0 ←ᵣ r0 + r1)
+      ⦃ fun _ cost final => cost = initial + ⟨3, ∅⟩ ∧
+        final.machine.Registers r0 = x + x ∧ final.machine.Registers r1 = x ∧
+        final.machine.Memory = s.Memory ∧ final.machine.Flags = s.Flags ∧ final.fuel = fuel;
+        fun _ => False ⦄ := by
+  vcgen
+  all_goals simp_all [add_assoc, BinOp.eval]
+
 section Evaluation
 
 local instance : HasHandler (WordRAM 8 2) (ExecutionState 8 2 → Prop) (Unit → Prop) :=
   timeAndSpaceCost.hasHandler
 
-example (s : RAMState 8 2) (fuel : Nat) :
+theorem nop_spec (s : RAMState 8 2) (fuel : Nat) :
     ⦃ fun current => current = ⟨s, fuel + 1⟩ ⦄ (FreeM.lift (.nop : WordRAM 8 2 Unit))
       ⦃ fun _ current => current = ⟨s, fuel⟩; fun _ => False ⦄ := by
   vcgen
@@ -131,11 +154,17 @@ example (s : RAMState 8 2) (fuel : Nat) :
   change wp (timeAndSpaceCost.evalQuery (.nop : WordRAM 8 2 Unit)) _ _ ⟨s, fuel + 1⟩
   cases fuel <;> rfl
 
-example (p : Prog (WordRAM 8 2) α) (post : α → ExecutionState 8 2 → Prop)
-    (epost : Unit → Prop) :
-    (wpH timeAndSpaceCost.handler p).apply post epost ⊑
-      wp (p.evalStateM timeAndSpaceCost) post epost :=
-  timeAndSpaceCost.wp_le_wp_evalStateM p post epost
+example (s : RAMState 8 2) (fuel : Nat) :
+    ∃ final, Prog.evalStateM (FreeM.lift (.nop : WordRAM 8 2 Unit)) timeAndSpaceCost
+      ⟨s, fuel + 1⟩ = some ((), final) ∧ final = ⟨s, fuel⟩ := by
+  have hw := timeAndSpaceCost.wp_le_wp_evalStateM _ _ (fun _ => False)
+    ⟨s, fuel + 1⟩ ((nop_spec s fuel).le_wp _ rfl)
+  cases hr : Prog.evalStateM (FreeM.lift (.nop : WordRAM 8 2 Unit)) timeAndSpaceCost ⟨s, fuel + 1⟩
+  · simp only [Prog.evalStateM_lift] at hr
+    simp [wp, WP.wpTrans, StateT.run, hr] at hw
+  · rename_i pair
+    simp only [Prog.evalStateM_lift] at hr
+    exact ⟨pair.2, by cases pair.1; rfl, by simpa [wp, WP.wpTrans, StateT.run, hr] using hw⟩
 
 end Evaluation
 
