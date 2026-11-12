@@ -42,6 +42,7 @@ public import AlgoleanTests.SymbolCopying
 public import AlgoleanTests.Tape
 public import AlgoleanTests.VerifierNormalization
 public import AlgoleanTests.WordRAM
+public import AlgoleanTests.WordRAMLinearSearch
 public import AlgoleanTests.WordRAMSolves
 public import AlgoleanTests.WordRAMSyntax
 public import AlgoleanTests.WordRAMWP
