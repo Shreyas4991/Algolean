@@ -144,6 +144,12 @@ def blockWords (code : Encoding α Γ) (width : Nat) (hwidth : 0 < width)
     rw [hlength]
     exact Nat.le_mul_of_pos_right _ hwidth
 
+/-- Encoding a word concatenates the fixed code words of its symbols. -/
+theorem encode_blockWords (code : Encoding α Γ) (width : Nat) (hwidth : 0 < width)
+    (hcode : ∀ symbol, (code.encode symbol).length = width) (word : List α) :
+    (blockWords code width hwidth hcode).encode word = word.flatMap code.encode := by
+  simp [blockWords]
+
 /-- The fixed symbol length makes the length of an encoded word exactly multiplicative. -/
 @[simp] theorem length_blockWords (code : Encoding α Γ) (width : Nat) (hwidth : 0 < width)
     (hcode : ∀ symbol, (code.encode symbol).length = width) (word : List α) :

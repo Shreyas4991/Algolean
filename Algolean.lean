@@ -146,6 +146,10 @@ public import Algolean.Models.SingleTapeTM.Alphabet.Encoding
 public import Algolean.Models.SingleTapeTM.Alphabet.Lift
 public import Algolean.Models.SingleTapeTM.Alphabet.List
 public import Algolean.Models.SingleTapeTM.Alphabet.Pair
+public import Algolean.Models.SingleTapeTM.Alphabet.Reduction
+public import Algolean.Models.SingleTapeTM.Alphabet.Reduction.Basic
+public import Algolean.Models.SingleTapeTM.Alphabet.Reduction.Logarithmic
+public import Algolean.Models.SingleTapeTM.Alphabet.Reduction.Machine
 public import Algolean.Models.SingleTapeTM.BoundedVerification
 public import Algolean.Models.SingleTapeTM.BoundedVerificationCompiler
 public import Algolean.Models.SingleTapeTM.Compiler
