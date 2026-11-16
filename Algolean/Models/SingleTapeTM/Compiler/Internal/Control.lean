@@ -9,17 +9,44 @@ module
 public import Algolean.Models.SingleTapeTM.Compiler.Size
 
 /-!
-# Choosing finite control states for compiled programs
+# Compiling query-program positions into transition-table states
 
-This file finds a finite set of execution positions for a query program. Each position is
-represented by the program that would run from that position.
+This file prepares the state set for compiling a query program into a transition-table Turing
+machine. A transition-table entry is selected by the current state and the scanned symbol.
+The compiler constructs states of the form `(position, label)`: `position` identifies the query
+instruction to execute, and `label : Option tm.State` is the state value used by the query
+program's state tests and updates. Thus the instruction position is part of the table's state
+argument.
 
-* Branches include positions from both alternatives.
-* Loops reuse the same positions on every iteration.
-* A step from any position leads to another position in the set.
+Here, a position is represented by the whole program still to run. For example, the program
+"write `a`, then move right" has these positions:
 
-The compiler pairs a program position with a source logical label to form a compiled control state.
-The source type `tm.State` supplies the labels. Program positions are stored separately.
+* Write `a`, then move right.
+* Move right.
+* Finish, represented by `pure ()`.
+
+The write and move leave `label` unchanged. They get different position numbers, so their
+compiled transitions can perform different actions even with the same label and scanned symbol.
+`Machine.lean` builds those transitions using the finite set of positions collected here.
+
+A position inside a branch includes the work to do after that branch finishes. A position
+inside a loop includes the return to the loop test. Repeating a loop therefore reuses the
+same positions; it does not create a new position for each iteration. Both alternatives of a
+branch are included, since the choice depends on the tape and state during execution.
+
+The definitions build and use this set as follows:
+
+* `assemble code next` runs the instruction list `code`, then runs the program `next`.
+  The argument `next` is called the **continuation**: it is what to do after `code` finishes.
+* `residuals code next` collects the programs still to run at positions in `code`, including
+  positions in its branch and loop bodies. It also includes `next` itself, but does not
+  collect positions inside `next`. The name "residual" means the program remaining to run.
+* `programPositions program` applies this construction to the whole program, with `pure ()`
+  as the continuation. There are at most `instructionCount program + 1` positions, counting
+  instructions inside branches and loop bodies once.
+* `advance pending label symbol` chooses the program still to run after one query. The
+  theorem `advance_mem_programPositions` proves that this stays in the finite set.
+
 -/
 
 @[expose] public section
@@ -34,7 +61,7 @@ variable {tm : SingleTapeTM Symbol}
 /-- A query program performs tape operations and returns no information through its Lean result. -/
 abbrev Program (tm : SingleTapeTM Symbol) := Prog (TMQuery tm) Unit
 
-/-- This function places a list of query instructions before the supplied continuation program. -/
+/-- Run the instructions in `code`, then run `next`, the program to execute when the list ends. -/
 def assemble : List (TMQuery tm Unit) → Program tm → Program tm
   | [], next => next
   | query :: rest, next => .liftBind query (fun _ => assemble rest next)
@@ -62,7 +89,7 @@ theorem assemble_instructions (program : Program tm) :
 
 variable [DecidableEq Symbol] [DecidableEq tm.State]
 
-/-- A condition needs only the logical label and the symbol under the head. -/
+/-- Evaluate a query condition using the stored state value and the symbol under the head. -/
 def test (condition : TMCondition tm) (label : Option tm.State) (symbol : Option Symbol) : Bool :=
   condition.eval ⟨label, ⟨symbol, ∅, ∅⟩⟩
 
@@ -75,8 +102,10 @@ theorem test_eq_eval (condition : TMCondition tm) (cfg : tm.Cfg) :
   | not condition ih => simpa only [test, TMCondition.eval] using congrArg Bool.not ih
 
 /--
-This function determines which program runs after one query. A selected branch runs before its
-continuation. A successful loop test runs the body and then returns to the same loop test.
+Compute the program still to run after the first query of `program`. A write, state update,
+or move continues with the following instructions. A branch prepends the chosen body to those
+instructions. A true loop test prepends the body to the loop itself, so finishing the body
+tests the loop again; a false test continues after the loop.
 -/
 def advance (program : Program tm) (label : Option tm.State) (symbol : Option Symbol) :
     Program tm :=
@@ -93,8 +122,12 @@ def advance (program : Program tm) (label : Option tm.State) (symbol : Option Sy
       if test condition label symbol then assemble body program else next ()
 
 /--
-This set contains the execution positions within the instructions and their branch and loop
-bodies. It also contains the continuation, where execution proceeds after the instructions end.
+Collect the programs still to run at each position in `code`, including positions inside
+branch and loop bodies. Each of these programs includes the work to do after leaving its body:
+a branch returns to the following instructions, and a loop body returns to its loop test.
+
+The set includes `next`, the program to run when `code` finishes. It does not enumerate positions
+inside `next`; a step from that boundary is handled separately by `advance_mem_or_boundary`.
 -/
 noncomputable def residuals (code : List (TMQuery tm Unit)) (next : Program tm) :
     Finset (Program tm) := by
@@ -121,7 +154,7 @@ theorem assemble_mem_residuals (code : List (TMQuery tm Unit)) (next : Program t
   | cons query rest => cases query <;> simp [residuals]
 
 omit [DecidableEq Symbol] [DecidableEq tm.State] in
-/-- The continuation is one of the positions reached when the instruction list finishes. -/
+/-- The program `next` is included as the position where execution of `code` has finished. -/
 theorem next_mem_residuals (code : List (TMQuery tm Unit)) (next : Program tm) :
     next ∈ residuals code next := by
   classical
@@ -130,7 +163,10 @@ theorem next_mem_residuals (code : List (TMQuery tm Unit)) (next : Program tm) :
   | cons query rest ih => cases query <;> simp [residuals, ih]
 
 omit [DecidableEq Symbol] [DecidableEq tm.State] in
-/-- There is at most one execution position per instruction, plus the continuation position. -/
+/--
+There is at most one position per instruction in `code`, counting its branch and loop bodies
+once, plus the position `next` where the instruction list has finished.
+-/
 theorem card_residuals_le (code : List (TMQuery tm Unit)) (next : Program tm) :
     (residuals code next).card ≤ codeSize code + 1 := by
   classical
@@ -200,8 +236,9 @@ theorem advance_assemble_mem (query : TMQuery tm Unit) (rest : List (TMQuery tm 
     · exact Finset.mem_union_left _ (Finset.mem_insert_of_mem (assemble_mem_residuals rest next))
 
 /--
-A step within an instruction list stays among its execution positions. If execution has already
-reached the continuation, the next step is a step of that continuation.
+Advancing a position collected for `code` either stays in the set or gives the same next program
+as advancing `next`. The second case handles the boundary where `code` has finished and
+execution continues with `next`, whose internal positions need not belong to this set.
 -/
 theorem advance_mem_or_boundary (code : List (TMQuery tm Unit)) (next pending : Program tm)
     (h : pending ∈ residuals code next) (label : Option tm.State) (symbol : Option Symbol) :
@@ -263,7 +300,10 @@ theorem advance_mem_or_boundary (code : List (TMQuery tm Unit)) (next pending : 
         · exact Or.inl (heq ▸ hroot)
 termination_by sizeOf code
 
-/-- These are all execution positions used to compile the complete query program. -/
+/--
+Collect the positions for a whole program, including its finished position `pure ()`.
+Each position is represented by the program still to run from there.
+-/
 noncomputable def programPositions (program : Program tm) : Finset (Program tm) :=
   residuals (Internal.instructions program) (pure ())
 
