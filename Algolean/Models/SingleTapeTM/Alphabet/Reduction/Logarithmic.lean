@@ -53,7 +53,7 @@ noncomputable def logarithmicCode [Nontrivial Δ] : BlockCode Γ Δ (payloadWidt
   Classical.choice ((payloadWidth_le_iff Γ Δ _).mp le_rfl)
 
 /-- The exact word length is the input length times the ceiling logarithm plus one separator. -/
-@[simp] theorem length_logarithmicCode [Nontrivial Δ] (word : List Γ) :
+theorem length_logarithmicCode [Nontrivial Δ] (word : List Γ) :
     ((logarithmicCode Γ Δ).encoding.encode word).length =
       word.length * (Nat.clog (Fintype.card Δ) (Fintype.card Γ) + 1) :=
   BlockCode.length_encode _ _
