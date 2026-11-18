@@ -65,16 +65,6 @@ def relabelReduction (f : source.State → target.State) :
     Reduction (TMQuery source) (TMQuery target) where
   reduce q := FreeM.lift (q.relabel f)
 
-private theorem relabel_forM (f : source.State → target.State)
-    (body : List (TMQuery source Unit)) :
-    FreeM.liftM (m := Prog (TMQuery target))
-      (fun {α} (q : TMQuery source α) => FreeM.lift (q.relabel f))
-      (forM body (fun q => FreeM.lift q)) =
-      forM body (fun q => FreeM.lift (q.relabel f)) := by
-  induction body with
-  | nil => rfl
-  | cons q rest ih => simp only [List.forM_cons, FreeM.liftM_bind, FreeM.liftM_lift, ih]
-
 variable [DecidableEq Symbol] [DecidableEq source.State] [DecidableEq target.State]
 
 @[simp] theorem eval_relabel (f : source.State → target.State) (hf : Function.Injective f)
@@ -102,11 +92,11 @@ theorem step_relabel (f : source.State → target.State) (hf : Function.Injectiv
   | branchCode condition yes no =>
     cases h : condition.eval s.config <;>
       simp [relabel, step, relabelStep, eval_relabel f hf, h,
-        Prog.reduceProg, relabelReduction, FreeM.liftM_bind, relabel_forM]
+        Prog.reduceProg, relabelReduction, Internal.liftM_assemble]
   | whileCode condition body =>
     cases h : condition.eval s.config <;>
       simp [relabel, step, relabelStep, eval_relabel f hf, h,
-        Prog.reduceProg, relabelReduction, FreeM.liftM_bind, relabel_forM]
+        Prog.reduceProg, relabelReduction, FreeM.liftM_bind, Internal.liftM_assemble]
   | _ => simp [relabel, step, relabelStep, TMState.relabel]
 
 /-- Relabeling preserves program execution, including the exact cost and remaining fuel. -/

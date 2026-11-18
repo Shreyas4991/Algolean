@@ -70,7 +70,7 @@ inductive Dir where
   | Right
   | Stop
 
-/-- Conditions are syntax, evaluated only inside the machine model. -/
+/-- Conditions are syntax objects, evaluated only inside the machine model. -/
 inductive TMCondition (tm : SingleTapeTM Symbol) where
   /-- Test the symbol under the head against a fixed symbol or blank. -/
   | tapeIs (symbol : Option Symbol)
@@ -199,7 +199,7 @@ variable {tm : SingleTapeTM Symbol}
 theorem result_type (q : TMQuery tm α) : α = Unit := by
   cases q <;> rfl
 
--- Only structured control stores bodies as lists. Programs and their execution use `Prog`.
+-- Structured control stores bodies as lists. This namespace supplies their shared conversions.
 namespace Internal
 
 /-- Store a fixed program as the body of a structured control instruction. -/
@@ -208,13 +208,54 @@ def instructions : Prog (TMQuery tm) Unit → List (TMQuery tm Unit)
   | .liftBind q next =>
     (result_type q ▸ q) :: instructions (next ((result_type q).symm ▸ ()))
 
-private theorem forM_instructions (p : Prog (TMQuery tm) Unit) :
-    (instructions p).forM (fun q => FreeM.lift q) = p := by
-  induction p with
-  | pure a => cases a; rfl
-  | liftBind q next ih =>
-    cases q <;> simp_all only [instructions, List.forM_eq_forM, List.forM_cons]
-    all_goals rw [FreeM.liftBind_eq]; congr 1
+/-- Run the instruction list `code`, followed by the program `next`. -/
+def assemble : List (TMQuery tm Unit) → Prog (TMQuery tm) α → Prog (TMQuery tm) α
+  | [], next => next
+  | query :: rest, next => .liftBind query (fun _ => assemble rest next)
+
+/-- Reconstructing a program's instructions before `next` runs that program and then `next`. -/
+theorem assemble_instructions_seq (program : Prog (TMQuery tm) Unit)
+    (next : Prog (TMQuery tm) α) :
+    assemble (instructions program) next = (do program; next) := by
+  induction program with
+  | pure value => cases value; rfl
+  | liftBind query rest ih =>
+    cases query <;>
+      simp_all [instructions, assemble, ← FreeM.bind_eq_bind, FreeM.bind, -FreeM.liftBind_eq]
+
+/-- Extracting and reconstructing a program's instructions recovers the program. -/
+theorem assemble_instructions (program : Prog (TMQuery tm) Unit) :
+    assemble (instructions program) (pure ()) = program := by
+  simpa using assemble_instructions_seq program (pure ())
+
+/-- A continuation after reconstruction can be included in the reconstructed program. -/
+theorem assemble_bind (code : List (TMQuery tm Unit)) (next : Prog (TMQuery tm) α)
+    (cont : α → Prog (TMQuery tm) β) :
+    assemble code next >>= cont = assemble code (next >>= cont) := by
+  induction code with
+  | nil => rfl
+  | cons query rest ih =>
+    simp only [assemble, ← FreeM.bind_eq_bind, FreeM.bind]
+    congr 1
+    funext _
+    exact ih
+
+/-- Translating queries commutes with reconstructing their list and continuation. -/
+theorem liftM_assemble {TargetSymbol : Type} [Inhabited TargetSymbol] [Fintype TargetSymbol]
+    {target : SingleTapeTM TargetSymbol}
+    (translate : ∀ {β}, TMQuery tm β → TMQuery target β)
+    (code : List (TMQuery tm Unit)) (next : Prog (TMQuery tm) α) :
+    FreeM.liftM (m := Prog (TMQuery target))
+        (fun {β} (query : TMQuery tm β) => FreeM.lift (translate query))
+        (assemble code next) =
+      assemble (code.map translate)
+        (FreeM.liftM (m := Prog (TMQuery target))
+          (fun {β} (query : TMQuery tm β) => FreeM.lift (translate query)) next) := by
+  induction code with
+  | nil => rfl
+  | cons query rest ih =>
+    simp only [assemble, List.map_cons, FreeM.liftBind_eq, FreeM.bind_eq_bind,
+      FreeM.liftM_bind, FreeM.liftM_lift, ih]
 
 end Internal
 
@@ -270,11 +311,10 @@ def step (q : TMQuery tm α) (next : α → Prog (TMQuery tm) β) (s : TMState t
         cellsAllocated := insert pos s.cellsAllocated
         cellsVisited := insert pos s.cellsVisited}, next ()⟩
   | .branchCode condition yes no =>
-    ⟨0, s, (if condition.eval s.config then yes else no).forM (fun q => FreeM.lift q) >>= next⟩
+    ⟨0, s, assemble (if condition.eval s.config then yes else no) (next ())⟩
   | .whileCode condition body =>
-    ⟨0, s, if condition.eval s.config then do
-      body.forM (fun q => FreeM.lift q)
-      FreeM.lift (.whileCode condition body) >>= next
+    ⟨0, s, if condition.eval s.config then
+      assemble body (FreeM.lift (.whileCode condition body) >>= next)
     else next ()⟩
 
 end TMQuery
@@ -286,8 +326,8 @@ abbrev TMQuery.interpreter (tm : SingleTapeTM Symbol)
   step := TMQuery.step
   step_bind := by
     intro α β γ q next cont s
-    cases q <;> simp [TMQuery.step, bind_assoc]
-    split <;> simp
+    cases q <;> simp [TMQuery.step, TMQuery.Internal.assemble_bind]
+    split <;> simp [TMQuery.Internal.assemble_bind, bind_assoc]
 
 /-- Stateful execution and costs for deeply embedded single-tape programs. -/
 abbrev TMModel (tm : SingleTapeTM Symbol) [DecidableEq Symbol] [DecidableEq tm.State] :
@@ -317,10 +357,10 @@ abbrev execute (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm) :
     (.branchCode condition (instructions yes) (instructions no)) pure s]
   simp only [step]
   split
-  · simp only [forM_instructions, bind_pure, zero_add]
+  · simp only [assemble_instructions, zero_add]
     change (execute fuel yes s).bind some = _
     simp
-  · simp only [forM_instructions, bind_pure, zero_add]
+  · simp only [assemble_instructions, zero_add]
     change (execute fuel no s).bind some = _
     simp
 
@@ -339,7 +379,7 @@ abbrev execute (fuel : ℕ) (p : Prog (TMQuery tm) α) (s : TMState tm) :
     (.liftBind (.whileCode condition (instructions body)) pure) s = _
   rw [FuelExecMonad.execute_liftBind_succ (I := interpreter tm) fuel
     (.whileCode condition (instructions body)) pure s]
-  simp only [step, forM_instructions]
+  simp only [step, assemble_instructions_seq]
   split
   · simp only [bind_pure, zero_add]
     change (execute fuel (do body; whileLoop condition body) s).bind some = _

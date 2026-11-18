@@ -198,15 +198,6 @@ def alphabetReduction :
     Reduction (TMQuery tm) (TMQuery (tm.extendAlphabet (markers := markers))) where
   reduce q := FreeM.lift q.extendAlphabet
 
-private theorem extendAlphabet_forM (body : List (TMQuery tm Unit)) :
-    FreeM.liftM (m := Prog (TMQuery (tm.extendAlphabet (markers := markers))))
-      (fun {α} (q : TMQuery tm α) => FreeM.lift q.extendAlphabet)
-      (forM body (fun q => FreeM.lift q)) =
-      forM body (fun q => FreeM.lift q.extendAlphabet) := by
-  induction body with
-  | nil => rfl
-  | cons q rest ih => simp only [List.forM_cons, FreeM.liftM_bind, FreeM.liftM_lift, ih]
-
 variable [DecidableEq Symbol] [DecidableEq tm.State]
 
 @[simp] theorem eval_extendAlphabet (condition : TMCondition tm) (s : TMState tm) :
@@ -241,14 +232,14 @@ theorem step_extendAlphabet (q : TMQuery tm α) (next : α → Prog (TMQuery tm)
     cases h : condition.eval s.config <;>
       simp [extendAlphabet, step, extendAlphabetStep, TMState.extendAlphabet,
         he, h, Prog.reduceProg, alphabetReduction,
-        FreeM.liftM_bind, extendAlphabet_forM]
+        Internal.liftM_assemble]
   | whileCode condition body =>
     have he := eval_extendAlphabet (markers := markers) condition s
     simp only [TMState.extendAlphabet] at he
     cases h : condition.eval s.config <;>
       simp [extendAlphabet, step, extendAlphabetStep, TMState.extendAlphabet,
         he, h, Prog.reduceProg, alphabetReduction,
-        FreeM.liftM_bind, extendAlphabet_forM]
+        FreeM.liftM_bind, Internal.liftM_assemble]
   | _ => simp [extendAlphabet, step, extendAlphabetStep, TMState.extendAlphabet]
 
 /--
