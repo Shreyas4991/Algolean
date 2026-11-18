@@ -119,8 +119,10 @@ abbrev interpreter (interface : OracleInterface tm) (oracle : List Symbol → Bo
   step := interface.step oracle
   step_bind := by
     intro α β γ q next cont s
-    cases q <;> simp [step, TMQuery.step, bind_assoc]
-    all_goals split <;> simp
+    have ordinary := (TMQuery.interpreter tm).step_bind q next cont s
+    cases q with
+    | update label => simp only [step]; split <;> rfl
+    | _ => exact ordinary
 
 /-- This model records the results and costs of executing programs with access to the solver. -/
 abbrev model (interface : OracleInterface tm) (oracle : List Symbol → Bool) :

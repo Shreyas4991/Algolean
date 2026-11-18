@@ -26,39 +26,13 @@ The source type `tm.State` supplies the labels. Program positions are stored sep
 
 namespace Algolean.Algorithms.TMQuery.Compiler.Internal
 
-open Cslib Cslib.Turing
+open Cslib Cslib.Turing TMQuery.Internal
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol}
 
 /-- A query program performs tape operations and returns no information through its Lean result. -/
 abbrev Program (tm : SingleTapeTM Symbol) := Prog (TMQuery tm) Unit
-
-/-- This function places a list of query instructions before the supplied continuation program. -/
-def assemble : List (TMQuery tm Unit) → Program tm → Program tm
-  | [], next => next
-  | query :: rest, next => .liftBind query (fun _ => assemble rest next)
-
-/-- Assembling instructions agrees with running them in order and then running the continuation. -/
-theorem assemble_eq_forM (code : List (TMQuery tm Unit)) (next : Program tm) :
-    assemble code next = (do code.forM (fun query => FreeM.lift query); next) := by
-  induction code with
-  | nil => simp [assemble]
-  | cons query rest ih =>
-    simp only [List.forM_eq_forM] at ih
-    simp only [assemble, List.forM_eq_forM, List.forM_cons, bind_assoc]
-    rw [FreeM.liftBind_eq]
-    congr 1
-    funext _
-    exact ih
-
-/-- Extracting and reassembling a program's instructions recovers the original program. -/
-theorem assemble_instructions (program : Program tm) :
-    assemble (Internal.instructions program) (pure ()) = program := by
-  induction program with
-  | pure value => cases value; rfl
-  | liftBind query next ih =>
-    cases query <;> simp_all [Internal.instructions, assemble, -FreeM.liftBind_eq]
 
 variable [DecidableEq Symbol] [DecidableEq tm.State]
 

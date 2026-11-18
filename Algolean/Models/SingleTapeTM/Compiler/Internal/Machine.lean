@@ -30,7 +30,7 @@ The source machine's transition table is unused.
 
 namespace Algolean.Algorithms.TMQuery.Compiler.Internal
 
-open Cslib Cslib.Turing
+open Cslib Cslib.Turing TMQuery.Internal
 
 variable {Symbol : Type} [Inhabited Symbol] [Fintype Symbol]
 variable {tm : SingleTapeTM Symbol} [DecidableEq Symbol] [DecidableEq tm.State]
@@ -101,12 +101,11 @@ theorem advance_eq_step_program (query : TMQuery tm α) (next : α → Program t
   | update state => rfl
   | move direction => rfl
   | branchCode condition yes no =>
-    simp only [advance, test_eq_eval, assemble_eq_forM, TMQuery.step]
+    simp only [advance, test_eq_eval, TMQuery.step]
   | whileCode condition body =>
     simp only [advance, test_eq_eval, TMQuery.step]
     split
-    · rw [assemble_eq_forM]
-      congr 1
+    · congr 1
     · rfl
 
 /-- Applying the compiled tape action gives exactly the configuration produced by the query. -/

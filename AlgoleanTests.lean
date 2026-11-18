@@ -32,7 +32,6 @@ public import AlgoleanTests.SAT
 public import AlgoleanTests.Serialization
 public import AlgoleanTests.SingleTapeTMAlphabet
 public import AlgoleanTests.SingleTapeTMAlphabetReduction
-public import AlgoleanTests.SingleTapeTMCompiler
 public import AlgoleanTests.SingleTapeTMComposition
 public import AlgoleanTests.SingleTapeTMExamples
 public import AlgoleanTests.SingleTapeTMReductions
