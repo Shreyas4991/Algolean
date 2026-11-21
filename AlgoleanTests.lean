@@ -28,6 +28,7 @@ public import AlgoleanTests.QuantumExamples
 public import AlgoleanTests.QueryExamples
 public import AlgoleanTests.RandomQuicksortExamples
 public import AlgoleanTests.RandomSampleExamples
+public import AlgoleanTests.ResourceBounds
 public import AlgoleanTests.SAT
 public import AlgoleanTests.Serialization
 public import AlgoleanTests.SingleTapeTMAlphabet

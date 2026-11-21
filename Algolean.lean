@@ -77,9 +77,12 @@ public import Algolean.Algorithms.WordRAM.LinearSearch.Common
 public import Algolean.Algorithms.WordRAM.LinearSearch.Complexity
 public import Algolean.Algorithms.WordRAM.LinearSearch.Correctness
 public import Algolean.Complexity.Basic
+public import Algolean.Complexity.Classes.DSPACE
+public import Algolean.Complexity.Classes.DTIME
 public import Algolean.Complexity.Classes.NP
 public import Algolean.Complexity.Classes.NP.Verification
 public import Algolean.Complexity.Classes.P
+public import Algolean.Complexity.Constructibility
 public import Algolean.Complexity.HeadlineResults.CookLevin
 public import Algolean.Complexity.Membership.NP.SAT
 public import Algolean.Complexity.Reductions.NPtoSAT.Choices
