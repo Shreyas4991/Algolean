@@ -31,7 +31,7 @@ def DSPACE [_symbols : Nontrivial Symbol] (space : ℕ → ℕ) : Set (Language 
   {L | ∃ (f : List Symbol → List Symbol) (yes : List Symbol),
     TMQuery.SpaceComputableIn f space ∧ ∀ input, f input = yes ↔ input ∈ L}
 
-/-- Increasing the total space bound enlarges the class. -/
+/-- A program that fits within a space bound also fits within any larger bound. -/
 theorem DSPACE.mono [Nontrivial Symbol] {space space' : ℕ → ℕ} (hle : ∀ n, space n ≤ space' n) :
     DSPACE (Symbol := Symbol) space ⊆ DSPACE space' := by
   rintro _ ⟨f, yes, hcomputer, hcorrect⟩
