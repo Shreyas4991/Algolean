@@ -6,8 +6,7 @@ Authors: Tanner Duve, Shreyas Srinivas
 
 module
 
-public import Algolean.Models.SingleTapeTM.Computability
-public import Algolean.Problems.Basic
+public import Algolean.Complexity.Classes.DTIME
 
 /-!
 # Polynomial-time decision problems
@@ -16,8 +15,8 @@ public import Algolean.Problems.Basic
   The program produces a chosen word exactly when the input belongs to the language.
 
 The tape alphabet is finite and contains at least two distinct symbols. The computation
-records use CSLib's output convention: only the output word remains on the tape, starting at
-the original input position, where the head also finishes.
+records use CSLib's output convention: only the output word remains on the tape, with the head
+at its first cell. The absolute final head position is unrestricted.
 -/
 
 @[expose] public section
@@ -35,5 +34,21 @@ The alphabet must contain at least two distinct symbols.
 def P [_symbols : Nontrivial Symbol] : Set (Language Symbol) :=
   {L | ∃ (f : List Symbol → List Symbol) (yes : List Symbol),
     Nonempty (TMQuery.PolyTimeComputable f) ∧ ∀ x, f x = yes ↔ x ∈ L}
+
+/-- Polynomial time is the union of `DTIME` over natural-coefficient polynomial bounds. -/
+theorem mem_P_iff_exists_DTIME [Nontrivial Symbol] {L : Language Symbol} :
+    L ∈ P ↔ ∃ poly : Polynomial ℕ, L ∈ DTIME poly.eval := by
+  constructor
+  · rintro ⟨f, yes, ⟨computer⟩, hcorrect⟩
+    refine ⟨computer.poly, f, yes, ⟨computer.toTimeComputable, 1, ?_⟩, hcorrect⟩
+    intro n
+    simpa using (computer.bounds n).trans (Nat.le_add_right (computer.poly.eval n) 1)
+  · rintro ⟨poly, f, yes, ⟨computer, C, hbound⟩, hcorrect⟩
+    refine ⟨f, yes, ⟨{
+      toTimeComputable := computer
+      poly := Polynomial.C C * poly + Polynomial.C C
+      bounds := ?_ }⟩, hcorrect⟩
+    intro n
+    simpa using hbound n
 
 end Algolean.Algorithms

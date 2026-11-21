@@ -15,6 +15,9 @@ public import Mathlib.Algebra.Polynomial.Eval.Defs
 
 `TimeComputable` stores a program that computes a word-valued function on every input, with a
 running-time bound depending on input length. `PolyTimeComputable` adds a bounding polynomial.
+`SpaceComputable` adds a bound on total tape space, retaining an unrestricted time bound to
+express termination. `TimeComputableIn` and `SpaceComputableIn` specify a prescribed resource
+bound up to a constant factor and additive constant, both independent of the input.
 The final tape contains exactly the output word, with its first cell under the head. These
 are the output and bound conventions of CSLib's transition-table computation records.
 
@@ -95,6 +98,34 @@ structure PolyTimeComputable (f : List Symbol → List Symbol) extends TimeCompu
   /-- The allowed time is at most the polynomial's value at every input length. -/
   bounds : ∀ n, timeBound n ≤ poly.eval n
 
+/--
+One fixed program computes `f` within the stored total space bound. The inherited time bound
+has no growth restriction; it witnesses termination on all inputs. Space includes the input,
+the initial head cell, and every cell reached, even if subsequently erased.
+-/
+structure SpaceComputable (f : List Symbol → List Symbol) extends TimeComputable f where
+  /-- The allowed total number of tape cells as a function of input length. -/
+  spaceBound : ℕ → ℕ
+  /-- The inherited program satisfies this space bound as well as its time bound. -/
+  computesWithinSpace : ComputesWithin program f timeBound spaceBound
+
+/--
+The function is computable by one fixed single-tape program in time at most `C * time(n) + C`
+for some constant `C`. The final tape contains only the output word, with the head at its
+first cell. The additive constant accommodates empty inputs and affine compilation overhead.
+For bounds at least one, this is the usual `O(time(n))` convention.
+-/
+def TimeComputableIn (f : List Symbol → List Symbol) (time : ℕ → ℕ) : Prop :=
+  ∃ (computer : TimeComputable f) (C : ℕ), ∀ n, computer.timeBound n ≤ C * time n + C
+
+/--
+The function is computable by one fixed terminating single-tape program using at most
+`C * space(n) + C` total tape cells for some constant `C`. Running time is unrestricted.
+The input and every cell reached count toward space, and the output is a clean word.
+-/
+def SpaceComputableIn (f : List Symbol → List Symbol) (space : ℕ → ℕ) : Prop :=
+  ∃ (computer : SpaceComputable f) (C : ℕ), ∀ n, computer.spaceBound n ≤ C * space n + C
+
 /-- A completed execution also satisfies any larger time bound. -/
 theorem OutputsWithinTime.mono {tm : SingleTapeTM Symbol}
     [DecidableEq Symbol] [DecidableEq tm.State] {program : Prog (TMQuery tm) Unit}
@@ -169,6 +200,13 @@ def ComputesWithin.timeComputable (h : ComputesWithin program f time space) :
   timeBound := time
   computesWithin := ComputesWithin.of_outputsWithinTime h.outputsWithinTime
 
+/-- Package the same program and resource bounds as a space-bounded computation. -/
+def ComputesWithin.spaceComputable (h : ComputesWithin program f time space) :
+    SpaceComputable f where
+  toTimeComputable := h.timeComputable
+  spaceBound := space
+  computesWithinSpace := h
+
 /-- A polynomial bound packages the same program as a polynomial-time computation record. -/
 def ComputesWithin.polyTimeComputable (h : ComputesWithin program f time space)
     (poly : Polynomial ℕ) (bound : ∀ n, time n ≤ poly.eval n) : PolyTimeComputable f where
@@ -211,6 +249,36 @@ noncomputable def PolyTimeComputable.id : PolyTimeComputable (Symbol := Symbol) 
   toTimeComputable := TimeComputable.id
   poly := 0
   bounds _ := by simp [TimeComputable.id]
+
+/-- Increasing the prescribed time bound preserves computability. -/
+theorem TimeComputableIn.mono {f : List Symbol → List Symbol} {time time' : ℕ → ℕ}
+    (h : TimeComputableIn f time) (hle : ∀ n, time n ≤ time' n) :
+    TimeComputableIn f time' := by
+  obtain ⟨computer, C, hbound⟩ := h
+  exact ⟨computer, C, fun n => (hbound n).trans
+    (Nat.add_le_add_right (Nat.mul_le_mul_left C (hle n)) C)⟩
+
+/-- Increasing the prescribed space bound preserves computability. -/
+theorem SpaceComputableIn.mono {f : List Symbol → List Symbol} {space space' : ℕ → ℕ}
+    (h : SpaceComputableIn f space) (hle : ∀ n, space n ≤ space' n) :
+    SpaceComputableIn f space' := by
+  obtain ⟨computer, C, hbound⟩ := h
+  exact ⟨computer, C, fun n => (hbound n).trans
+    (Nat.add_le_add_right (Nat.mul_le_mul_left C (hle n)) C)⟩
+
+/-- A time bound also bounds total space after accounting for the initialized input tape. -/
+theorem TimeComputableIn.spaceComputableIn {f : List Symbol → List Symbol} {time : ℕ → ℕ}
+    (h : TimeComputableIn f time) :
+    SpaceComputableIn f (fun n => max 1 n + time n) := by
+  obtain ⟨computer, C, hbound⟩ := h
+  let := computer.symbolDecidableEq
+  let := computer.stateDecidableEq
+  refine ⟨computer.computesWithin.spaceComputable, C + 1, ?_⟩
+  intro n
+  change max 1 n + computer.timeBound n ≤ (C + 1) * (max 1 n + time n) + (C + 1)
+  have := hbound n
+  simp only [Nat.add_mul, Nat.mul_add, Nat.one_mul]
+  omega
 
 end TMQuery
 
