@@ -109,6 +109,10 @@ abbrev Memory (w : Nat) := Word w → Word w
 /-- Initial memory with every cell set to zero. -/
 def Memory.zero : Memory w := fun _ => 0
 
+/-- Unary word operations in the basic instruction set. -/
+inductive UnOp where
+  | inc | dec
+
 /-- Binary word operations in the basic instruction set. -/
 inductive BinOp where
   | add | sub
@@ -190,6 +194,10 @@ def BinOp.eval : BinOp → Word w → Word w → Word w
   | .shl, x, y => x <<< y.toNat
   | .shr, x, y => x >>> y.toNat
 
+def UnOp.eval : UnOp → Word w → Word w
+  | .inc, x => x + 1
+  | .dec, x => x - 1
+
 /-- Evaluate an equality or unsigned less-than comparison. -/
 def CmpOp.eval : CmpOp → Word w → Word w → Bool
   | .eq, x, y => decide (x = y)
@@ -206,6 +214,7 @@ inductive WordRAM (w k : Nat) : Type → Type where
   | copy (dst src : WordRAM.Register k) : WordRAM w k Unit
   | load (dst addr : WordRAM.Register k) : WordRAM w k Unit
   | store (addr src : WordRAM.Register k) : WordRAM w k Unit
+  | unop (op : WordRAM.UnOp) (dst : WordRAM.Register k) : WordRAM w k Unit
   | binop (op : WordRAM.BinOp) (dst x y : WordRAM.Register k) : WordRAM w k Unit
   | bnot (dst src : WordRAM.Register k) : WordRAM w k Unit
   | cmp (op : WordRAM.CmpOp) (x y : WordRAM.Register k) : WordRAM w k Unit
@@ -332,6 +341,8 @@ def step (q : WordRAM w k α) (next : α → Prog (WordRAM w k) β) (s : RAMStat
   | .store addr src =>
     ⟨⟨1, {s.Registers addr}⟩,
       {s with Memory := Function.update s.Memory (s.Registers addr) (s.Registers src)}, next ()⟩
+  | .unop op dst =>
+    ⟨⟨1, ∅⟩, s.writeRegister dst (op.eval (s.Registers dst)), next ()⟩
   | .binop op dst x y =>
     ⟨⟨1, ∅⟩, s.writeRegister dst (op.eval (s.Registers x) (s.Registers y)), next ()⟩
   | .bnot dst src => ⟨⟨1, ∅⟩, s.writeRegister dst (~~~s.Registers src), next ()⟩
