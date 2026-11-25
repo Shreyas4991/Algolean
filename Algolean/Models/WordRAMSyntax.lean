@@ -92,6 +92,14 @@ scoped notation:10 (name := ramAdd) dst:max " ←ᵣ " x:max " + " y:max =>
 scoped notation:10 (name := ramSub) dst:max " ←ᵣ " x:max " - " y:max =>
   WordRAM.binop BinOp.sub dst x y
 
+/-- Increase the word in the destination register by one. -/
+scoped notation:10 (name := ramInc) dst:max " ++ᵣ " =>
+  WordRAM.unop UnOp.inc dst
+
+/-- Decrease the word in the destination register by one. -/
+scoped notation:10 (name := ramDec) dst:max " --ᵣ " =>
+  WordRAM.unop UnOp.dec dst
+
 /-- Bitwise AND of two source registers into the destination. -/
 scoped notation:10 (name := ramAnd) dst:max " ←ᵣ " x:max " &&& " y:max =>
   WordRAM.binop BinOp.band dst x y
@@ -166,4 +174,3 @@ macro_rules (kind := ramBlock)
     `((do $body : Prog $queryType Unit))
 
 end Algolean.Algorithms.WordRAM
-
