@@ -194,6 +194,7 @@ def BinOp.eval : BinOp → Word w → Word w → Word w
   | .shl, x, y => x <<< y.toNat
   | .shr, x, y => x >>> y.toNat
 
+/-- Evaluate a unary operation. -/
 def UnOp.eval : UnOp → Word w → Word w
   | .inc, x => x + 1
   | .dec, x => x - 1
