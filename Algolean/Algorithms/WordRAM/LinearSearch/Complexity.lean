@@ -11,7 +11,7 @@ public import Algolean.Algorithms.WordRAM.LinearSearch.Correctness
 /-!
 # Linear-search complexity
 
-Search takes at most `4 * n + 7` primitive operations and attains this bound on absent keys.
+Search takes at most `4 * n + 6` primitive operations and attains this bound on absent keys.
 All accessed cells belong to the input, so auxiliary memory is zero. Total space is `n + 1`,
 including the header and unread input cells. Interpreter fuel is accounted for separately.
 -/
@@ -26,8 +26,8 @@ open scoped WordRAM.Spec
 set_option experimental.vcgen true
 
 private theorem finished_bound (input : Search.Input (Word w)) (memory : Memory w)
-    (hfits : input.data.size < 2 ^ w) (cost : RAMCost w) (current : ExecutionState w 5)
-    (h : FinishedPost input 0 memory ⟨6, {0}⟩ cost current) :
+    (hfits : input.data.size < 2 ^ w) (cost : RAMCost w) (current : ExecutionState w 4)
+    (h : FinishedPost input 0 memory ⟨5, {0}⟩ cost current) :
     ComplexityBound input cost current.machine := by
   obtain ⟨output, ho, hout, _, ht, ha⟩ := h
   change searchOutput index current.machine = output at hout
@@ -40,13 +40,13 @@ private theorem finished_bound (input : Search.Input (Word w)) (memory : Memory 
       sizedInputRegion_card input.data hfits]
 
 /-- Exact and worst-case time, zero auxiliary memory, and exact total input space. -/
-@[spec] theorem linearSearch_complexity (input : Search.Input (Word w)) (s : RAMState w 5)
+@[spec] theorem linearSearch_complexity (input : Search.Input (Word w)) (s : RAMState w 4)
     (h : RepresentsSizedSearchInput input key s) (spare : Nat) :
     ⦃ SearchPre input s spare ⦄ (linearSearch w)
       ⦃ fun _ cost final => ComplexityBound input cost final.machine; fun _ => False ⦄ := by
   have hs := setup_loop_spec input s h spare
-  have hl := loop_spec input 0 s.Memory ⟨6, {0}⟩ (2 + spare)
-  have hf := finish_spec input 0 s.Memory ⟨6, {0}⟩ spare h.fits
+  have hl := loop_spec input 0 s.Memory ⟨5, {0}⟩ (2 + spare)
+  have hf := finish_spec input 0 s.Memory ⟨5, {0}⟩ spare h.fits
   vcgen [linearSearch, hs, hl, hf]
   all_goals first
     | grind only
@@ -72,7 +72,7 @@ theorem linearSearch_runsWithin (w : Nat) : SearchRunsWithin w := by
 theorem linearSearch_worstCase (w n : Nat) (hw : 0 < w) (hn : n < 2 ^ w) :
     ∃ input : Search.Input (Word w), input.data.size = n ∧ ∃ cost final,
       Completes (linearSearch w) (linearSearchState input.data input.key key) cost final ∧
-        cost.time = 4 * n + 7 := by
+        cost.time = 4 * n + 6 := by
   let input : Search.Input (Word w) := ⟨Array.replicate n 0, 1⟩
   have hi := linearSearchState_represents input.data input.key key (by simpa [input] using hn)
   obtain ⟨output, cost, final, hc, ho, hs, hb⟩ := linearSearch_runsWithin w input _ hi
