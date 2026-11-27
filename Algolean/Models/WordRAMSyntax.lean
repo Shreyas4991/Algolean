@@ -92,6 +92,14 @@ scoped notation:10 (name := ramAdd) dst:max " ←ᵣ " x:max " + " y:max =>
 scoped notation:10 (name := ramSub) dst:max " ←ᵣ " x:max " - " y:max =>
   WordRAM.binop BinOp.sub dst x y
 
+/-- Increase the word in the destination register by one. -/
+scoped notation:10 (name := ramInc) "inc" dst:max =>
+  WordRAM.unop UnOp.inc dst
+
+/-- Decrease the word in the destination register by one. -/
+scoped notation:10 (name := ramDec) "dec" dst:max =>
+  WordRAM.unop UnOp.dec dst
+
 /-- Bitwise AND of two source registers into the destination. -/
 scoped notation:10 (name := ramAnd) dst:max " ←ᵣ " x:max " &&& " y:max =>
   WordRAM.binop BinOp.band dst x y
@@ -154,7 +162,7 @@ private meta partial def annotateInstructions (queryType : Term)
     | other => pure other
   if [``ramAdd, ``ramSub, ``ramAnd, ``ramOr, ``ramXor, ``ramShl, ``ramShr,
       ``ramNop, ``ramNot, ``ramCopy, ``ramSet, ``ramLoad, ``ramStore,
-      ``ramReset].contains stx.getKind then
+      ``ramReset, ``ramInc, ``ramDec].contains stx.getKind then
     let instruction : Term := ⟨stx⟩
     return ← `(($instruction : $queryType Unit))
   return stx
@@ -166,4 +174,3 @@ macro_rules (kind := ramBlock)
     `((do $body : Prog $queryType Unit))
 
 end Algolean.Algorithms.WordRAM
-

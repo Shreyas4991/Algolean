@@ -27,6 +27,8 @@ open scoped Prog WordRAM
 -- Each word operation is one instruction, with width and register count fixed by the block.
 example (dst x y : Register k) (value : Word w) : (do [WordRAM w k]
     dst ←ᵣ imm[value]
+    inc dst
+    dec dst
     dst ←ᵣ x
     dst ←ᵣ x + y
     dst ←ᵣ x - y
@@ -41,6 +43,8 @@ example (dst x y : Register k) (value : Word w) : (do [WordRAM w k]
     reset .eq
     nop) = (do
       set (w := w) dst value
+      unop (w := w) .inc dst
+      unop (w := w) .dec dst
       copy (w := w) dst x
       binop (w := w) .add dst x y
       binop (w := w) .sub dst x y
